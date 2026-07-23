@@ -1,66 +1,83 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+import { AppClimbShell } from "@/components/app-climb-shell";
+import type { DashboardSnapshot } from "@/lib/contracts";
+import {
+  type BackendIdentity,
+  readBackend,
+} from "@/lib/backend";
+import { demoSnapshot } from "@/lib/demo-data";
 
-export default function Home() {
+export const dynamic = "force-dynamic";
+
+interface GrowthEnvelope {
+  data?: DashboardSnapshot;
+  meta?: { mode?: "empty" | "live" };
+}
+
+interface IdentityEnvelope {
+  data?: BackendIdentity;
+}
+
+function isSnapshot(value: unknown): value is DashboardSnapshot {
+  if (!value || typeof value !== "object") return false;
+  const snapshot = value as Partial<DashboardSnapshot>;
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>To get started, edit the page.tsx file.</h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    typeof snapshot.workspaceName === "string" &&
+    Array.isArray(snapshot.stages) &&
+    Array.isArray(snapshot.sources)
+  );
+}
+
+export default async function Home() {
+  let snapshot = demoSnapshot;
+  let session: BackendIdentity | undefined;
+
+  try {
+    const [growthResponse, identityResponse] = await Promise.all([
+      readBackend("/v1/growth-map"),
+      readBackend("/v1/me"),
+    ]);
+
+    if (identityResponse?.ok) {
+      session = ((await identityResponse.json()) as IdentityEnvelope).data;
+    }
+
+    if (growthResponse?.ok) {
+      const payload = (await growthResponse.json()) as GrowthEnvelope;
+      if (isSnapshot(payload.data)) {
+        snapshot =
+          payload.meta?.mode === "live"
+            ? { ...payload.data, mode: "live" }
+            : {
+                ...demoSnapshot,
+                generatedAt: payload.data.generatedAt,
+                workspaceName: payload.data.workspaceName,
+                app: payload.data.app,
+                confidence: payload.data.confidence,
+                sources: payload.data.sources,
+                mode: "demo",
+              };
+      }
+    }
+  } catch {
+    // The public demo stays available during a temporary backend outage.
+  }
+
+  return (
+    <AppClimbShell
+      initialSnapshot={snapshot}
+      session={session}
+      trialDaysRemaining={
+        session
+          ? Math.max(
+              0,
+              Math.ceil(
+                (new Date(session.trialEndsAt).getTime() -
+                  new Date(snapshot.generatedAt).getTime()) /
+                  (24 * 60 * 60 * 1000),
+              ),
+            )
+          : undefined
+      }
+    />
   );
 }

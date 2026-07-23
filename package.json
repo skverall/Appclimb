@@ -6,19 +6,40 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "PLAYWRIGHT_BROWSERS_PATH=${PLAYWRIGHT_BROWSERS_PATH:-/Volumes/LexarDev/Developer/Caches/ms-playwright} playwright test",
+    "check": "npm run lint && npm run typecheck && npm run test && npm run build",
+    "worker:test": "cd worker && go test ./...",
+    "worker:run": "cd worker && go run ./cmd/appclimb-worker"
   },
   "dependencies": {
+    "@paddle/paddle-js": "^1.6.4",
+    "clsx": "^2.1.1",
+    "d3-shape": "^3.2.0",
+    "lucide-react": "^1.26.0",
+    "motion": "^12.42.2",
     "next": "16.2.11",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
+    "@types/d3-shape": "^3.1.8",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@vitest/coverage-v8": "^4.1.10",
     "eslint": "^9",
     "eslint-config-next": "16.2.11",
-    "typescript": "^5"
+    "jsdom": "^29.1.1",
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }

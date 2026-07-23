@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily AppClimb backup
+
+[Timer]
+OnCalendar=*-*-* 03:35:00 UTC
+Persistent=true
+RandomizedDelaySec=10m
+
+[Install]
+WantedBy=timers.target

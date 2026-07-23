@@ -1,0 +1,9 @@
+[Unit]
+Description=Back up AppClimb PostgreSQL
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/apps/appclimb/ops/backup.sh
+User=root
