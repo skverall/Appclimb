@@ -46,7 +46,7 @@ export function InsightPanel({
           <span className="eyebrow">Diagnose</span>
           <h2 id="opportunities-heading">What to fix next</h2>
         </div>
-        <span className="opportunity-count">3</span>
+        <span className="opportunity-count">{insights.length}</span>
       </div>
 
       <div className="opportunity-list">
@@ -66,7 +66,9 @@ export function InsightPanel({
             </span>
             <span className="opportunity-copy">
               <span className="opportunity-meta">
-                <i>{insight.kind}</i>
+                <i className={`kind-${insight.kind.toLowerCase()}`}>
+                  {insight.kind}
+                </i>
                 <i>{insight.confidence} confidence</i>
               </span>
               <strong>{insight.title}</strong>

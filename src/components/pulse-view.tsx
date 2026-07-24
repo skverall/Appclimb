@@ -94,6 +94,10 @@ export function PulseView({
             replayIndex={replayIndex}
             onReplayIndexChange={onReplayIndexChange}
           />
+          <div className="supporting-grid">
+            <RetentionHeatmap rows={snapshot.retention} />
+            <VoiceClusters clusters={snapshot.customerClusters} />
+          </div>
         </div>
         <InsightPanel
           insights={snapshot.insights}
@@ -103,11 +107,6 @@ export function PulseView({
           onSelectInsight={onSelectInsight}
           onOpenInsight={onOpenInsight}
         />
-      </div>
-
-      <div className="supporting-grid">
-        <RetentionHeatmap rows={snapshot.retention} />
-        <VoiceClusters clusters={snapshot.customerClusters} />
       </div>
     </section>
   );

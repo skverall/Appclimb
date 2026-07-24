@@ -6,6 +6,7 @@ import {
   FlaskConical,
   Gauge,
   HelpCircle,
+  LogIn,
   LogOut,
   PlugZap,
   Settings,
@@ -173,7 +174,7 @@ export function AppClimbShell({
                 <strong>Start your trial</strong>
                 <small>No card required</small>
               </span>
-              <LogOut size={16} />
+              <LogIn size={16} />
             </Link>
           )}
         </div>

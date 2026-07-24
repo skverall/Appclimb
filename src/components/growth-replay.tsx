@@ -97,45 +97,48 @@ export function GrowthReplay({
         </button>
 
         <div className="timeline">
-          <div className="timeline-track">
-            <span
-              className="timeline-progress"
-              style={{
-                width: `${(replayIndex / Math.max(events.length, 1)) * 100}%`,
-              }}
-            />
-          </div>
-          {events.map((event, index) => {
-            const Icon = EVENT_ICONS[event.type];
-            const active = index < replayIndex;
-
-            return (
-              <button
-                type="button"
-                className={[
-                  "timeline-event",
-                  `event-${event.color}`,
-                  active ? "active" : "",
-                ].join(" ")}
-                key={event.id}
+          <div className="timeline-scale">
+            <div className="timeline-track">
+              <span
+                className="timeline-progress"
                 style={{
-                  left: `${((index + 1) / events.length) * 100}%`,
+                  width: `${(replayIndex / Math.max(events.length, 1)) * 100}%`,
                 }}
-                onClick={() => {
-                  setIsPlaying(false);
-                  onReplayIndexChange(index + 1);
-                }}
-              >
-                <span className="event-dot">
-                  <Icon size={14} />
-                </span>
-                <span className="event-copy">
-                  <strong>{event.label}</strong>
-                  <small>{event.detail}</small>
-                </span>
-              </button>
-            );
-          })}
+              />
+            </div>
+            {events.map((event, index) => {
+              const Icon = EVENT_ICONS[event.type];
+              const active = index < replayIndex;
+
+              return (
+                <button
+                  type="button"
+                  className={[
+                    "timeline-event",
+                    `event-${event.color}`,
+                    active ? "active" : "",
+                  ].join(" ")}
+                  key={event.id}
+                  style={{
+                    left: `${((index + 1) / events.length) * 100}%`,
+                  }}
+                  title={`${event.label} — ${event.detail}`}
+                  onClick={() => {
+                    setIsPlaying(false);
+                    onReplayIndexChange(index + 1);
+                  }}
+                >
+                  <span className="event-dot">
+                    <Icon size={14} />
+                  </span>
+                  <span className="event-copy">
+                    <strong>{event.label}</strong>
+                    <small>{event.detail}</small>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         <button

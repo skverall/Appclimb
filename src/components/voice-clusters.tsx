@@ -2,6 +2,10 @@ import { MessageCircleMore } from "lucide-react";
 
 import type { CustomerCluster } from "@/lib/contracts";
 
+/**
+ * Bubbles are HTML (not SVG) so the field scales to any card width without
+ * aspect-ratio letterboxing or distorted circles.
+ */
 export function VoiceClusters({
   clusters,
 }: {
@@ -20,53 +24,34 @@ export function VoiceClusters({
         Review themes, sized by mentions and colored by sentiment
       </p>
       <div className="cluster-field">
-        <svg
-          viewBox="0 0 600 250"
-          role="img"
-          aria-label="Customer feedback clusters"
-        >
-          <defs>
-            <filter id="clusterShadow" x="-20%" y="-20%" width="140%" height="140%">
-              <feDropShadow
-                dx="0"
-                dy="5"
-                stdDeviation="7"
-                floodColor="#2b3e49"
-                floodOpacity=".08"
-              />
-            </filter>
-          </defs>
-          {clusters.map((cluster) => {
-            const x = (cluster.x / 100) * 600;
-            const y = (cluster.y / 100) * 250;
-            return (
-              <g key={cluster.id} filter="url(#clusterShadow)">
-                <circle
-                  cx={x}
-                  cy={y}
-                  r={cluster.radius}
-                  className={`cluster-circle ${cluster.sentiment}`}
-                />
-                <text
-                  x={x}
-                  y={y - 4}
-                  textAnchor="middle"
-                  className="cluster-label"
-                >
-                  {cluster.label}
-                </text>
-                <text
-                  x={x}
-                  y={y + 16}
-                  textAnchor="middle"
-                  className="cluster-count"
-                >
-                  {cluster.mentions} mentions
-                </text>
-              </g>
-            );
-          })}
-        </svg>
+        {clusters.map((cluster) => (
+          <div
+            key={cluster.id}
+            className={`cluster-bubble ${cluster.sentiment}`}
+            style={{
+              left: `${cluster.x}%`,
+              top: `${cluster.y}%`,
+              width: cluster.radius * 2,
+              height: cluster.radius * 2,
+            }}
+            role="img"
+            aria-label={`${cluster.label}: ${cluster.mentions} mentions, ${cluster.sentiment} sentiment`}
+          >
+            <strong>{cluster.label}</strong>
+            <span>{cluster.mentions} mentions</span>
+          </div>
+        ))}
+        <div className="cluster-legend" aria-label="Sentiment legend">
+          <span>
+            <i className="cluster-key positive" /> Positive
+          </span>
+          <span>
+            <i className="cluster-key mixed" /> Mixed
+          </span>
+          <span>
+            <i className="cluster-key negative" /> Negative
+          </span>
+        </div>
         <div className="cluster-source">
           <MessageCircleMore size={14} />
           App Store reviews · last 90 days
