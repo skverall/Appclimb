@@ -56,7 +56,7 @@ func New(
 		Logger:     logger,
 		DB:         db,
 		Config:     cfg,
-		Connectors: connectors.NewClient(),
+		Connectors: connectors.NewClient().WithConfig(cfg.AppleBaseURL, cfg.AppleReportLagDays),
 		Tokens: auth.TokenIssuer{
 			Key:       cfg.JWTSigningKey,
 			AccessTTL: cfg.AccessTokenTTL,

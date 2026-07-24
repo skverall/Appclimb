@@ -47,7 +47,7 @@ func main() {
 	runner := &runner{
 		logger:     logger,
 		db:         db,
-		connectors: connectors.NewClient(),
+		connectors: connectors.NewClient().WithConfig(cfg.AppleBaseURL, cfg.AppleReportLagDays),
 		cfg:        cfg,
 	}
 	var lastSuccess atomic.Int64

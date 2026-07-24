@@ -1,6 +1,7 @@
 package connectors
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/x509"
@@ -47,6 +48,12 @@ func (e ProviderError) Error() string {
 type Client struct {
 	HTTP *http.Client
 	Now  func() time.Time
+	// AppleBaseURL is the App Store Connect API root used for analytics
+	// navigation. Configurable so tests can point it at httptest.
+	AppleBaseURL string
+	// AppleReportLagDays reflects Apple's analytics processing delay and drives
+	// the completeness of recently-imported days.
+	AppleReportLagDays int
 }
 
 func NewClient() *Client {
@@ -87,8 +94,21 @@ func NewClient() *Client {
 				return validateExternalHTTPS(request.URL)
 			},
 		},
-		Now: time.Now,
+		Now:               time.Now,
+		AppleBaseURL:      "https://api.appstoreconnect.apple.com",
+		AppleReportLagDays: 2,
 	}
+}
+
+// WithConfig applies provider-specific configuration from the runtime config.
+func (c *Client) WithConfig(appleBaseURL string, appleReportLagDays int) *Client {
+	if strings.TrimSpace(appleBaseURL) != "" {
+		c.AppleBaseURL = strings.TrimRight(appleBaseURL, "/")
+	}
+	if appleReportLagDays >= 0 {
+		c.AppleReportLagDays = appleReportLagDays
+	}
+	return c
 }
 
 func Supported(provider string) bool {
@@ -331,6 +351,83 @@ func (c *Client) getJSON(
 		return nil, ProviderError{Status: 502, Retryable: true, Code: "provider_response_too_large"}
 	}
 	return body, nil
+}
+
+// get opens a streaming GET for large provider payloads (e.g. gzip-compressed
+// analytics segments). Unlike getJSON it does not cap the body or buffer it in
+// memory; the caller owns the returned ReadCloser and must close it. The same
+// SSRF and redirect hardening applies.
+func (c *Client) get(
+	ctx context.Context,
+	endpoint, bearerToken string,
+) (io.ReadCloser, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, ProviderError{Status: 400, Code: "invalid_provider_request"}
+	}
+	if err := validateExternalHTTPS(request.URL); err != nil {
+		return nil, ProviderError{Status: 400, Code: "invalid_provider_host"}
+	}
+	request.Header.Set("Authorization", "Bearer "+bearerToken)
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("User-Agent", "AppClimb/1.0")
+	response, err := c.HTTP.Do(request)
+	if err != nil {
+		return nil, ProviderError{Status: 502, Retryable: true, Code: "provider_unavailable"}
+	}
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 8<<10))
+		response.Body.Close()
+		return nil, ProviderError{
+			Status:    response.StatusCode,
+			Retryable: response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= 500,
+			Code:      "provider_query_failed",
+		}
+	}
+	return response.Body, nil
+}
+
+// post performs a provider POST and discards the response body. Used for
+// idempotent create operations where only the status matters.
+func (c *Client) post(
+	ctx context.Context,
+	endpoint, bearerToken string,
+	payload []byte,
+) error {
+	request, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		endpoint,
+		bytes.NewReader(payload),
+	)
+	if err != nil {
+		return ProviderError{Status: 400, Code: "invalid_provider_request"}
+	}
+	if err := validateExternalHTTPS(request.URL); err != nil {
+		return ProviderError{Status: 400, Code: "invalid_provider_host"}
+	}
+	request.Header.Set("Authorization", "Bearer "+bearerToken)
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("User-Agent", "AppClimb/1.0")
+	response, err := c.HTTP.Do(request)
+	if err != nil {
+		return ProviderError{Status: 502, Retryable: true, Code: "provider_unavailable"}
+	}
+	defer response.Body.Close()
+	// 2xx and 409 (already exists) are both acceptable for idempotent creates.
+	if response.StatusCode == http.StatusConflict {
+		return nil
+	}
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 8<<10))
+		return ProviderError{
+			Status:    response.StatusCode,
+			Retryable: response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= 500,
+			Code:      "provider_query_failed",
+		}
+	}
+	return nil
 }
 
 func require2(

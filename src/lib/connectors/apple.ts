@@ -7,6 +7,10 @@ import {
 } from "@/lib/connectors/types";
 
 export interface AppleCredentials {
+  // appId is required for sync (the worker needs it to navigate analytics
+  // reports) but optional for credential verification, which calls the generic
+  // /v1/apps endpoint and does not need a specific app.
+  appId?: string;
   issuerId: string;
   keyId: string;
   privateKey: string;
