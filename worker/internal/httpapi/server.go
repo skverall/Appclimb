@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math"
 	"net/http"
 	"net/mail"
 	"strconv"
@@ -20,6 +19,7 @@ import (
 	"appclimb.app/backend/internal/config"
 	"appclimb.app/backend/internal/connectors"
 	"appclimb.app/backend/internal/database"
+	"appclimb.app/backend/internal/diagnoser"
 	"appclimb.app/backend/internal/secure"
 	"appclimb.app/backend/internal/syncer"
 	"github.com/google/uuid"
@@ -489,7 +489,7 @@ func (s *Server) queueSync(w http.ResponseWriter, r *http.Request) {
 func (s *Server) growthMap(w http.ResponseWriter, r *http.Request) {
 	current := currentAuth(r)
 	from := s.Now().UTC().AddDate(0, 0, -30)
-	workspace, metrics, events, insights, evidence, err := s.DB.GrowthInputs(
+	workspace, metrics, events, insights, evidence, actions, err := s.DB.GrowthInputs(
 		r.Context(),
 		current.WorkspaceID,
 		from,
@@ -513,6 +513,7 @@ func (s *Server) growthMap(w http.ResponseWriter, r *http.Request) {
 			events,
 			insights,
 			evidence,
+			actions,
 			sources,
 		),
 		"meta": map[string]any{
@@ -810,25 +811,6 @@ func expandSources(connected []database.Source) []map[string]any {
 	return result
 }
 
-type stageDefinition struct {
-	ID        string
-	Label     string
-	MetricKey string
-	Source    string
-	Benchmark float64
-}
-
-var stages = []stageDefinition{
-	{ID: "discover", Label: "Discover", MetricKey: "impressions", Source: "app-store-connect"},
-	{ID: "store", Label: "Store", MetricKey: "product_page_views", Source: "app-store-connect", Benchmark: 0.52},
-	{ID: "install", Label: "Install", MetricKey: "downloads", Source: "app-store-connect", Benchmark: 0.26},
-	{ID: "activate", Label: "Activate", MetricKey: "activation_24h", Source: "posthog", Benchmark: 0.41},
-	{ID: "paywall", Label: "Paywall", MetricKey: "paywall_views", Source: "superwall", Benchmark: 0.73},
-	{ID: "trial", Label: "Trial", MetricKey: "trials_new", Source: "revenuecat", Benchmark: 0.49},
-	{ID: "paid", Label: "Paid", MetricKey: "paid_new", Source: "revenuecat", Benchmark: 0.43},
-	{ID: "renew", Label: "Renew", MetricKey: "renewals", Source: "revenuecat", Benchmark: 0.56},
-}
-
 func growthSnapshot(
 	now time.Time,
 	workspace database.Workspace,
@@ -836,64 +818,46 @@ func growthSnapshot(
 	events []database.ReplayEvent,
 	insights []database.InsightRecord,
 	evidence []database.EvidenceRecord,
+	actions []database.ActionProposalRecord,
 	sources []database.Source,
 ) map[string]any {
-	sums := map[string]float64{}
-	freshnessTotal := 0.0
-	completenessTotal := 0.0
-	for _, metric := range metrics {
-		sums[metric.Key] += metric.Value
-		freshnessTotal += metric.Freshness
-		completenessTotal += metric.Completeness
-	}
-	stagePayload := make([]map[string]any, 0, len(stages))
-	previous := 0.0
-	for index, stage := range stages {
-		value := sums[stage.MetricKey]
-		var conversion any
-		health := "unknown"
-		flowWidth := 30.0
-		if value > 0 {
-			health = "healthy"
-			flowWidth = math.Max(30, 155*math.Sqrt(value/math.Max(sums[stages[0].MetricKey], value)))
+	// Stage classification and confidence come from the single canonical source
+	// (diagnoser), so the live API and the worker generator can never drift.
+	stages := diagnoser.Stages()
+	stageMetrics := make([]diagnoser.Metric, len(metrics))
+	for i, m := range metrics {
+		stageMetrics[i] = diagnoser.Metric{
+			Provider:     m.Provider,
+			Key:          m.Key,
+			OccurredAt:   m.OccurredAt,
+			Value:        m.Value,
+			Unit:         m.Unit,
+			Freshness:    m.Freshness,
+			Completeness: m.Completeness,
 		}
-		if index > 0 && previous > 0 {
-			rate := math.Max(0, math.Min(1, value/previous))
-			conversion = rate
-			if stage.Benchmark > 0 && rate < stage.Benchmark*0.75 {
-				health = "critical"
-			} else if stage.Benchmark > 0 && rate < stage.Benchmark {
-				health = "watch"
-			}
+	}
+	sums := diagnoser.AggregateByMetric(stageMetrics)
+	classified := diagnoser.ClassifyStages(sums)
+	confidence := diagnoser.ComputeConfidence(stageMetrics)
+
+	stagePayload := make([]map[string]any, 0, len(stages))
+	for _, result := range classified {
+		var conversion any
+		if result.ConversionRate != nil {
+			conversion = *result.ConversionRate
 		}
 		stagePayload = append(stagePayload, map[string]any{
-			"id":             stage.ID,
-			"label":          stage.Label,
-			"value":          value,
-			"formattedValue": compactNumber(value),
+			"id":             string(result.Definition.ID),
+			"label":          result.Definition.Label,
+			"value":          result.Value,
+			"formattedValue": compactNumber(result.Value),
 			"conversionRate": conversion,
-			"health":         health,
-			"source":         stage.Source,
+			"health":         result.Health,
+			"source":         result.Definition.Source,
 			"evidenceIds":    []string{},
-			"flowWidth":      math.Round(flowWidth),
-			"benchmark":      stage.Benchmark,
+			"flowWidth":      result.FlowWidth,
+			"benchmark":      result.Definition.Benchmark,
 		})
-		previous = value
-	}
-	confidenceScore := 0
-	if len(metrics) > 0 {
-		avgCompleteness := completenessTotal / float64(len(metrics))
-		avgFreshness := freshnessTotal / float64(len(metrics))
-		freshnessFactor := math.Max(0, 1-avgFreshness/72)
-		confidenceScore = int(math.Round(
-			math.Max(0, math.Min(1, avgCompleteness*0.72+freshnessFactor*0.28)) * 100,
-		))
-	}
-	confidenceLevel := "low"
-	if confidenceScore >= 80 {
-		confidenceLevel = "high"
-	} else if confidenceScore >= 55 {
-		confidenceLevel = "medium"
 	}
 	eventPayload := make([]map[string]any, 0, len(events))
 	for _, event := range events {
@@ -930,6 +894,18 @@ func growthSnapshot(
 			"after":      item.After,
 		})
 	}
+	actionPayload := make([]map[string]any, 0, len(actions))
+	for _, action := range actions {
+		actionPayload = append(actionPayload, map[string]any{
+			"id":                      action.ID,
+			"insightId":               action.InsightID,
+			"title":                   action.Title,
+			"rationale":               action.Rationale,
+			"experimentTemplate":      action.ExperimentTemplate,
+			"status":                  action.Status,
+			"externalMutationAllowed": action.ExternalMutationAllowed,
+		})
+	}
 	return map[string]any{
 		"generatedAt":   now,
 		"workspaceName": workspace.Name,
@@ -941,15 +917,15 @@ func growthSnapshot(
 			"period":     "Last 30 days",
 		},
 		"confidence": map[string]any{
-			"score": confidenceScore,
-			"level": confidenceLevel,
+			"score": confidence.Score,
+			"level": confidence.Level,
 			"note":  strconv.Itoa(len(sources)) + " sources connected",
 		},
 		"stages":           stagePayload,
 		"events":           eventPayload,
 		"evidence":         evidencePayload,
 		"insights":         insights,
-		"actionProposals":  []any{},
+		"actionProposals":  actionPayload,
 		"experiments":      []any{},
 		"sources":          expandSources(sources),
 		"retention":        []any{},

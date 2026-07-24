@@ -21,6 +21,7 @@ type Config struct {
 	AccessTokenTTL      time.Duration
 	RefreshTokenTTL     time.Duration
 	SyncInterval        time.Duration
+	DiagnosisInterval   time.Duration
 	HistoryDays         int
 	Version             string
 }
@@ -35,6 +36,10 @@ func Load() (Config, error) {
 		return Config{}, err
 	}
 	syncInterval, err := duration("SYNC_INTERVAL", 6*time.Hour)
+	if err != nil {
+		return Config{}, err
+	}
+	diagnosisInterval, err := duration("DIAGNOSIS_INTERVAL", syncInterval)
 	if err != nil {
 		return Config{}, err
 	}
@@ -68,6 +73,7 @@ func Load() (Config, error) {
 		AccessTokenTTL:      accessTTL,
 		RefreshTokenTTL:     refreshTTL,
 		SyncInterval:        syncInterval,
+		DiagnosisInterval:   diagnosisInterval,
 		HistoryDays:         historyDays,
 		Version:             env("APP_VERSION", "dev"),
 	}
