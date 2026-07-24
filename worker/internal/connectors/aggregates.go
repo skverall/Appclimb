@@ -13,7 +13,31 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"appclimb.app/backend/internal/connectors/appleanalytics"
 )
+
+// Compile-time assertion that the appleNav adapter satisfies the navigation
+// interface the appleanalytics package requires.
+var _ appleanalytics.Navigator = appleNav{}
+
+// appleNav adapts *Client to the appleanalytics.Navigator interface. The
+// underlying methods are package-private, so a thin adapter lets the
+// appleanalytics package depend on an interface without exporting the client's
+// internals.
+type appleNav struct{ c *Client }
+
+func (n appleNav) GetJSON(ctx context.Context, endpoint, token string) ([]byte, error) {
+	return n.c.getJSON(ctx, endpoint, token)
+}
+
+func (n appleNav) Get(ctx context.Context, endpoint, token string) (io.ReadCloser, error) {
+	return n.c.get(ctx, endpoint, token)
+}
+
+func (n appleNav) Post(ctx context.Context, endpoint, token string, payload []byte) error {
+	return n.c.post(ctx, endpoint, token, payload)
+}
 
 type Aggregate struct {
 	MetricKey       string
@@ -309,7 +333,7 @@ func (c *Client) readSuperwall(
 func (c *Client) readApple(
 	ctx context.Context,
 	credentials map[string]any,
-	_, _ time.Time,
+	from, to time.Time,
 ) ([]Aggregate, error) {
 	issuerID, keyID, privateKey, err := require3(
 		credentials,
@@ -320,39 +344,49 @@ func (c *Client) readApple(
 	if err != nil {
 		return nil, err
 	}
-	appID, _ := credentials["appId"].(string)
-	if strings.TrimSpace(appID) == "" {
-		verification, err := c.verifyApple(ctx, credentials)
-		if err != nil {
-			return nil, err
-		}
-		_ = verification
-		return []Aggregate{}, nil
+	appID := strings.TrimSpace(credentials["appId"].(string))
+	if appID == "" {
+		return nil, ProviderError{Status: 400, Code: "apple_app_id_required"}
 	}
-	token, err := appleToken(
-		issuerID,
-		keyID,
-		privateKey,
+	token, err := appleToken(issuerID, keyID, privateKey, c.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	baseURL := c.AppleBaseURL
+	if baseURL == "" {
+		baseURL = "https://api.appstoreconnect.apple.com"
+	}
+	lagDays := c.AppleReportLagDays
+	if lagDays < 0 {
+		lagDays = 2
+	}
+	rows, err := appleanalytics.Fetch(
+		ctx,
+		appleNav{c},
+		baseURL,
+		token,
+		appID,
+		from,
+		to,
+		lagDays,
 		c.Now().UTC(),
 	)
 	if err != nil {
 		return nil, err
 	}
-	_, err = c.getJSON(
-		ctx,
-		"https://api.appstoreconnect.apple.com/v1/apps/"+
-			url.PathEscape(strings.TrimSpace(appID))+
-			"/analyticsReportRequests?limit=50",
-		token,
-	)
-	if err != nil {
-		return nil, err
+	result := make([]Aggregate, len(rows))
+	for i, row := range rows {
+		result[i] = Aggregate{
+			MetricKey:       row.MetricKey,
+			OccurredAt:      row.OccurredAt,
+			Value:           row.Value,
+			Unit:            row.Unit,
+			Dimensions:      row.Dimensions,
+			SourceUpdatedAt: row.SourceUpdatedAt,
+			Completeness:    row.Completeness,
+		}
 	}
-	// Apple exposes compressed TSV segments. The worker intentionally does not
-	// create report requests: it only reads an existing ONGOING request. Segment
-	// normalization is activated once the connection includes the app ID and
-	// Apple has generated the first report (normally after 24-48 hours).
-	return []Aggregate{}, nil
+	return result, nil
 }
 
 func (c *Client) doJSON(

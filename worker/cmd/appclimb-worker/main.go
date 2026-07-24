@@ -15,6 +15,7 @@ import (
 	"appclimb.app/backend/internal/config"
 	"appclimb.app/backend/internal/connectors"
 	"appclimb.app/backend/internal/database"
+	"appclimb.app/backend/internal/diagnoser"
 	"appclimb.app/backend/internal/secure"
 	"appclimb.app/backend/internal/syncer"
 )
@@ -46,7 +47,7 @@ func main() {
 	runner := &runner{
 		logger:     logger,
 		db:         db,
-		connectors: connectors.NewClient(),
+		connectors: connectors.NewClient().WithConfig(cfg.AppleBaseURL, cfg.AppleReportLagDays),
 		cfg:        cfg,
 	}
 	var lastSuccess atomic.Int64
@@ -123,6 +124,11 @@ func (r *runner) cycle(ctx context.Context) error {
 		}
 		r.process(ctx, job)
 	}
+	if err := r.diagnose(ctx); err != nil {
+		// Diagnosis is non-fatal: a failure must not poison the cycle's
+		// healthz stamp the way a sync failure would.
+		r.logger.Error("diagnosis phase failed", "error_code", "diagnosis_phase_failed")
+	}
 	deleted, err := r.db.DeleteExpiredMetrics(ctx, time.Now().UTC(), r.cfg.HistoryDays)
 	if err != nil {
 		return err
@@ -197,6 +203,80 @@ func (r *runner) process(ctx context.Context, job database.SyncJob) {
 		"provider", job.Provider,
 		"job_id", job.ID,
 		"points", len(points),
+	)
+}
+
+// diagnose runs the deterministic generator for every app due for a fresh
+// diagnosis. It mirrors the sync claim loop: queue due runs, claim each with
+// FOR UPDATE SKIP LOCKED, generate, and persist. When the underlying metrics
+// are unchanged since the last successful run it skips recomputation.
+func (r *runner) diagnose(ctx context.Context) error {
+	queued, err := r.db.QueueDueDiagnoses(ctx, time.Now().UTC(), r.cfg.DiagnosisInterval)
+	if err != nil {
+		return err
+	}
+	if queued > 0 {
+		r.logger.Info("diagnosis runs scheduled", "queued", queued)
+	}
+	for processed := 0; processed < 50; processed++ {
+		run, err := r.db.ClaimDiagnosisRun(ctx)
+		if errors.Is(err, database.ErrNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		r.diagnoseRun(ctx, run)
+	}
+	return nil
+}
+
+func (r *runner) diagnoseRun(ctx context.Context, run database.DiagnosisRun) {
+	now := time.Now().UTC()
+	from := now.AddDate(0, 0, -diagnoser.DiagnosisWindowDays)
+	metrics, err := r.db.MetricsForApp(ctx, run.WorkspaceID, run.AppID, from)
+	if err != nil {
+		r.logger.Error(
+			"diagnosis metric read failed",
+			"app_id", run.AppID,
+			"run_id", run.ID,
+			"error_code", "diagnosis_metric_read_failed",
+		)
+		_ = r.db.FailDiagnosisRun(ctx, run, "diagnosis_metric_read_failed", true)
+		return
+	}
+	// Idempotency: skip when the input hash is unchanged since the last
+	// successful run. Cuts repeated work when several connections sync the
+	// same app within one interval.
+	if prev, err := r.db.LastSucceededInputHash(ctx, run.WorkspaceID, run.AppID); err == nil && prev != "" {
+		preview := database.DiagnoseMetrics(metrics, now)
+		if preview.InputHash == prev {
+			_ = r.db.MarkDiagnosisSkipped(ctx, run, preview.Version, preview.InputHash)
+			r.logger.Info(
+				"diagnosis skipped, inputs unchanged",
+				"app_id", run.AppID,
+				"run_id", run.ID,
+			)
+			return
+		}
+	}
+	diag := database.DiagnoseMetrics(metrics, now)
+	if err := r.db.RecordDiagnosis(ctx, run, diag); err != nil {
+		r.logger.Error(
+			"diagnosis persist failed",
+			"app_id", run.AppID,
+			"run_id", run.ID,
+			"error_code", "diagnosis_persist_failed",
+		)
+		_ = r.db.FailDiagnosisRun(ctx, run, "diagnosis_persist_failed", true)
+		return
+	}
+	r.logger.Info(
+		"diagnosis completed",
+		"app_id", run.AppID,
+		"run_id", run.ID,
+		"insights", len(diag.Insights),
+		"evidence", len(diag.Evidence),
 	)
 }
 

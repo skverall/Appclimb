@@ -103,6 +103,18 @@ type EvidenceRecord struct {
 	After      map[string]any `json:"after"`
 }
 
+// ActionProposalRecord mirrors the action_proposals row the diagnosis generator
+// writes. ExternalMutationAllowed is always false (DB CHECK forces it).
+type ActionProposalRecord struct {
+	ID                    string `json:"id"`
+	InsightID             string `json:"insightId"`
+	Title                 string `json:"title"`
+	Rationale             string `json:"rationale"`
+	ExperimentTemplate    string `json:"experimentTemplate"`
+	Status                string `json:"status"`
+	ExternalMutationAllowed bool  `json:"externalMutationAllowed"`
+}
+
 func (db *DB) CreateIdentity(
 	ctx context.Context,
 	email, passwordHash, workspaceName string,
@@ -620,12 +632,13 @@ func (db *DB) GrowthInputs(
 	ctx context.Context,
 	workspaceID string,
 	from time.Time,
-) (Workspace, []Metric, []ReplayEvent, []InsightRecord, []EvidenceRecord, error) {
+) (Workspace, []Metric, []ReplayEvent, []InsightRecord, []EvidenceRecord, []ActionProposalRecord, error) {
 	var workspace Workspace
 	metrics := []Metric{}
 	events := []ReplayEvent{}
 	insights := []InsightRecord{}
 	evidence := []EvidenceRecord{}
+	actions := []ActionProposalRecord{}
 	err := db.WithWorkspace(ctx, workspaceID, func(tx pgx.Tx) error {
 		if err := tx.QueryRow(
 			ctx,
@@ -800,9 +813,55 @@ func (db *DB) GrowthInputs(
 			}
 			evidence = append(evidence, item)
 		}
-		return evidenceRows.Err()
+		if err := evidenceRows.Err(); err != nil {
+			return err
+		}
+		evidenceRows.Close()
+
+		actionRows, err := tx.Query(
+			ctx,
+			`select
+			   id::text,
+			   insight_id::text,
+			   title,
+			   rationale,
+			   experiment_template,
+			   status,
+			   external_mutation_allowed
+			 from action_proposals
+			 where workspace_id=$1 and app_id=$2
+			 order by created_at desc
+			 limit 9`,
+			workspaceID,
+			workspace.DefaultAppID,
+		)
+		if err != nil {
+			return err
+		}
+		for actionRows.Next() {
+			var item ActionProposalRecord
+			if err := actionRows.Scan(
+				&item.ID,
+				&item.InsightID,
+				&item.Title,
+				&item.Rationale,
+				&item.ExperimentTemplate,
+				&item.Status,
+				&item.ExternalMutationAllowed,
+			); err != nil {
+				actionRows.Close()
+				return err
+			}
+			actions = append(actions, item)
+		}
+		if err := actionRows.Err(); err != nil {
+			actionRows.Close()
+			return err
+		}
+		actionRows.Close()
+		return nil
 	})
-	return workspace, metrics, events, insights, evidence, err
+	return workspace, metrics, events, insights, evidence, actions, err
 }
 
 func (db *DB) RecordBillingEvent(

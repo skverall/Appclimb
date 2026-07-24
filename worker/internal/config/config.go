@@ -21,7 +21,10 @@ type Config struct {
 	AccessTokenTTL      time.Duration
 	RefreshTokenTTL     time.Duration
 	SyncInterval        time.Duration
+	DiagnosisInterval   time.Duration
 	HistoryDays         int
+	AppleBaseURL        string
+	AppleReportLagDays  int
 	Version             string
 }
 
@@ -38,12 +41,23 @@ func Load() (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	diagnosisInterval, err := duration("DIAGNOSIS_INTERVAL", syncInterval)
+	if err != nil {
+		return Config{}, err
+	}
 	historyDays, err := integer("HISTORY_DAYS", 90)
 	if err != nil {
 		return Config{}, err
 	}
 	if historyDays < 1 || historyDays > 90 {
 		return Config{}, errors.New("HISTORY_DAYS must be between 1 and 90")
+	}
+	appleLagDays, err := integer("APPLE_REPORT_LAG_DAYS", 2)
+	if err != nil {
+		return Config{}, err
+	}
+	if appleLagDays < 0 || appleLagDays > 14 {
+		return Config{}, errors.New("APPLE_REPORT_LAG_DAYS must be between 0 and 14")
 	}
 
 	encodedJWTKey := strings.TrimSpace(os.Getenv("JWT_SIGNING_KEY_B64"))
@@ -68,7 +82,10 @@ func Load() (Config, error) {
 		AccessTokenTTL:      accessTTL,
 		RefreshTokenTTL:     refreshTTL,
 		SyncInterval:        syncInterval,
+		DiagnosisInterval:   diagnosisInterval,
 		HistoryDays:         historyDays,
+		AppleBaseURL:        env("APPLE_BASE_URL", "https://api.appstoreconnect.apple.com"),
+		AppleReportLagDays:  appleLagDays,
 		Version:             env("APP_VERSION", "dev"),
 	}
 	if cfg.DatabaseURL == "" {
