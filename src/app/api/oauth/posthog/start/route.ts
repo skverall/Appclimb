@@ -1,28 +1,25 @@
 import { randomBytes, createHash } from "node:crypto";
-import { redirect } from "next/navigation";
+import { NextResponse } from "next/server";
 
 import { requestWithSession } from "@/lib/backend";
 import {
   POSTHOG_CLIENT_ID,
   POSTHOG_OAUTH_SCOPES,
   POSTHOG_REDIRECT_URI,
-  setPostHogOAuthStart,
+  redirectWithPostHogOAuthStart,
 } from "@/lib/posthog-oauth";
 
-export async function GET() {
+export async function GET(request: Request) {
   const identity = await requestWithSession("/v1/me");
-  if (!identity?.ok) redirect("/login");
+  if (!identity?.ok) {
+    return NextResponse.redirect(new URL("/login", request.url), 302);
+  }
 
   const state = randomBytes(32).toString("base64url");
   const verifier = randomBytes(48).toString("base64url");
   const challenge = createHash("sha256")
     .update(verifier)
     .digest("base64url");
-  await setPostHogOAuthStart({
-    state,
-    verifier,
-    createdAt: Date.now(),
-  });
 
   const authorize = new URL("https://oauth.posthog.com/oauth/authorize/");
   authorize.searchParams.set("client_id", POSTHOG_CLIENT_ID);
@@ -32,5 +29,10 @@ export async function GET() {
   authorize.searchParams.set("state", state);
   authorize.searchParams.set("code_challenge", challenge);
   authorize.searchParams.set("code_challenge_method", "S256");
-  redirect(authorize.toString());
+
+  return redirectWithPostHogOAuthStart(authorize.toString(), {
+    state,
+    verifier,
+    createdAt: Date.now(),
+  });
 }

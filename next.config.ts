@@ -23,6 +23,13 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       {
+        // Keep OAuth cookies and CIMD client_id on a single host.
+        source: "/:path*",
+        has: [{ type: "host", value: "www.appclimb.app" }],
+        destination: "https://appclimb.app/:path*",
+        permanent: true,
+      },
+      {
         source: "/blog/what-is-app-store-conversion-rate.html",
         destination: "/blog/app-store-conversion-rate",
         permanent: true,

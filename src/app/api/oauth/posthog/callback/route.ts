@@ -1,12 +1,11 @@
-import { redirect } from "next/navigation";
-
 import {
-  clearPostHogOAuthStart,
   POSTHOG_CLIENT_ID,
   POSTHOG_REDIRECT_URI,
+  parsePostHogOAuthToken,
+  postHogOAuthErrorRedirect,
+  postHogOAuthReadyRedirect,
   readPostHogOAuthStart,
   resolvePostHogHost,
-  setPostHogOAuthPending,
 } from "@/lib/posthog-oauth";
 
 export async function GET(request: Request) {
@@ -15,17 +14,26 @@ export async function GET(request: Request) {
   const state = url.searchParams.get("state")?.trim();
   const providerError = url.searchParams.get("error");
   const started = await readPostHogOAuthStart();
-  await clearPostHogOAuthStart();
 
-  if (
-    providerError ||
-    !code ||
-    !state ||
-    !started ||
-    state !== started.state ||
-    Date.now() - started.createdAt > 10 * 60 * 1000
-  ) {
-    redirect("/?view=sources&source=posthog&oauth=error");
+  if (providerError) {
+    return postHogOAuthErrorRedirect("provider_denied");
+  }
+  if (!code) {
+    return postHogOAuthErrorRedirect("missing_code");
+  }
+  if (!state) {
+    return postHogOAuthErrorRedirect("missing_state");
+  }
+  if (!started) {
+    // Most common failure: OAuth started on www/localhost, or start cookie was
+    // dropped before the browser returned from PostHog.
+    return postHogOAuthErrorRedirect("missing_start");
+  }
+  if (state !== started.state) {
+    return postHogOAuthErrorRedirect("state_mismatch");
+  }
+  if (Date.now() - started.createdAt > 10 * 60 * 1000) {
+    return postHogOAuthErrorRedirect("start_expired");
   }
 
   const body = new URLSearchParams({
@@ -35,37 +43,45 @@ export async function GET(request: Request) {
     redirect_uri: POSTHOG_REDIRECT_URI,
     code_verifier: started.verifier,
   });
-  const response = await fetch("https://oauth.posthog.com/oauth/token/", {
-    method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body,
-    cache: "no-store",
-    signal: AbortSignal.timeout(12_000),
-  });
+
+  let response: Response;
+  try {
+    response = await fetch("https://oauth.posthog.com/oauth/token/", {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body,
+      cache: "no-store",
+      signal: AbortSignal.timeout(12_000),
+    });
+  } catch {
+    return postHogOAuthErrorRedirect("token_exchange");
+  }
+
   if (!response.ok) {
-    redirect("/?view=sources&source=posthog&oauth=error");
+    return postHogOAuthErrorRedirect("token_exchange");
   }
-  const token = (await response.json()) as {
-    access_token?: string;
-    refresh_token?: string;
-    expires_in?: number;
-    scope?: string;
-  };
-  if (!token.access_token || !token.refresh_token) {
-    redirect("/?view=sources&source=posthog&oauth=error");
+
+  let tokenPayload: unknown;
+  try {
+    tokenPayload = await response.json();
+  } catch {
+    return postHogOAuthErrorRedirect("token_incomplete");
   }
-  const host = await resolvePostHogHost(token.access_token);
+  const token = parsePostHogOAuthToken(tokenPayload);
+  if (!token) {
+    return postHogOAuthErrorRedirect("token_incomplete");
+  }
+
+  const host = await resolvePostHogHost(token.accessToken);
   if (!host) {
-    redirect("/?view=sources&source=posthog&oauth=error");
+    return postHogOAuthErrorRedirect("host_unresolved");
   }
-  await setPostHogOAuthPending({
-    accessToken: token.access_token,
-    refreshToken: token.refresh_token,
-    expiresAt: new Date(
-      Date.now() + Math.max(60, token.expires_in ?? 3600) * 1000,
-    ).toISOString(),
+
+  return postHogOAuthReadyRedirect({
+    accessToken: token.accessToken,
+    refreshToken: token.refreshToken,
+    expiresAt: new Date(Date.now() + token.expiresIn * 1000).toISOString(),
     host,
-    scope: token.scope ?? "",
+    scope: token.scope,
   });
-  redirect("/?view=sources&source=posthog&oauth=ready");
 }

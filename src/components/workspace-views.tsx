@@ -434,6 +434,31 @@ export function LabView({
   );
 }
 
+function postHogOAuthErrorMessage(reason: string | null) {
+  switch (reason) {
+    case "provider_denied":
+      return "PostHog access was declined. No credentials were saved.";
+    case "missing_start":
+      return "PostHog returned, but the AppClimb login step expired. Start again from appclimb.app (not www or a local preview), stay signed in, and retry.";
+    case "start_expired":
+      return "PostHog authorization took too long and expired. Try Connect again.";
+    case "state_mismatch":
+      return "PostHog authorization could not be verified (state mismatch). Try again in the same browser.";
+    case "token_exchange":
+    case "token_incomplete":
+      return "PostHog approved access, but token exchange failed. Try again in a minute.";
+    case "token_storage":
+      return "PostHog returned credentials that could not be stored safely in this browser. No connection was saved.";
+    case "host_unresolved":
+      return "PostHog authorized AppClimb, but no US/EU project host could be resolved.";
+    case "missing_code":
+    case "missing_state":
+      return "PostHog did not return a complete authorization code. Try again.";
+    default:
+      return "PostHog authorization did not finish. No access was saved; try again from https://appclimb.app while signed in.";
+  }
+}
+
 export function SourcesView({
   snapshot,
   authenticated,
@@ -495,6 +520,7 @@ export function SourcesView({
     const params = new URLSearchParams(window.location.search);
     const requestedProvider = params.get("source");
     const oauthResult = params.get("oauth");
+    const oauthReason = params.get("oauth_reason");
     const sourceExists =
       requestedProvider &&
       sources.some((source) => source.provider === requestedProvider);
@@ -502,6 +528,7 @@ export function SourcesView({
 
     if (sourceExists) params.delete("source");
     if (oauthResult) params.delete("oauth");
+    if (oauthReason) params.delete("oauth_reason");
     if (requestedProvider || oauthResult) {
       const query = params.toString();
       window.history.replaceState(
@@ -523,9 +550,7 @@ export function SourcesView({
       }
       if (oauthResult === "error") {
         setConnectionState("error");
-        setConnectionMessage(
-          "PostHog authorization did not finish. No access was saved; try again.",
-        );
+        setConnectionMessage(postHogOAuthErrorMessage(oauthReason));
         setOauthState("error");
         return;
       }

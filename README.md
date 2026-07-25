@@ -149,6 +149,11 @@ new Go route or migration is live.
   <https://www.revenuecat.com/docs/api-v2>
 - PostHog scheduled exports must not misuse the ad-hoc `/query` endpoint:
   <https://posthog.com/docs/api/queries>
+- PostHog OAuth is a public PKCE client identified by the canonical CIMD
+  document at `https://appclimb.app/api/oauth/posthog/client`. Keep the
+  `appclimb.app` origin, metadata URL, callback URI, and scoped OAuth cookie
+  path aligned; `www.appclimb.app` redirects to the canonical host before the
+  flow starts.
 - Superwall uses API v2: <https://api.superwall.com/docs>
 - Paddle webhook signatures cover the exact `timestamp:rawBody` bytes:
   <https://developer.paddle.com/webhooks/about/signature-verification>

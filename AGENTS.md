@@ -35,3 +35,8 @@ direction.
   SaaS roadmap complete.
 - Do not add DataFast for AppClimb's first-party acquisition analytics unless
   the founder explicitly reverses that product decision.
+- PostHog OAuth uses PKCE and a URL-form CIMD client ID at
+  `https://appclimb.app/api/oauth/posthog/client`. Preserve the canonical
+  `appclimb.app` host redirect, the exact callback URI, PostHog's nested
+  `"com.posthog": { "scopes": [...] }` metadata shape, and the allow-listed
+  US/EU host validation when changing this flow.
