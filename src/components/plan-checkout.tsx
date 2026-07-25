@@ -5,6 +5,7 @@ import { Check, LoaderCircle, ShieldCheck } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { BILLING_PLANS } from "@/lib/billing";
+import { trackWebConversion } from "@/lib/browser-analytics";
 import { ModalDialog } from "@/components/modal-dialog";
 
 type BillingInterval = keyof typeof BILLING_PLANS;
@@ -156,6 +157,7 @@ export function PlanCheckout({
         checkout.Checkout.close();
         return;
       }
+      trackWebConversion("checkout_started");
       setOpen(false);
       setCheckoutState("idle");
     } catch {

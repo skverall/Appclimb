@@ -131,5 +131,21 @@
       }
     },
   };
+
+  var conversionParams = new URLSearchParams(window.location.search);
+  var conversionGoal = conversionParams.get("appclimb_conversion");
+  if (conversionGoal && /^[a-z0-9_]{1,120}$/.test(conversionGoal)) {
+    send("conversion", { goal: conversionGoal });
+    conversionParams.delete("appclimb_conversion");
+    var cleanQuery = conversionParams.toString();
+    window.history.replaceState(
+      window.history.state,
+      "",
+      window.location.pathname +
+        (cleanQuery ? "?" + cleanQuery : "") +
+        window.location.hash,
+    );
+  }
+  window.dispatchEvent(new Event("appclimb:ready"));
   pageview();
 })();

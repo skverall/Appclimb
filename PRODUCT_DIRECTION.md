@@ -92,10 +92,16 @@ Implemented in the current repository:
 - signed property tokens, hostname validation, duplicate protection,
   rate-limiting, forced workspace RLS, and no stored visitor IP address.
 
-Acquisition Atlas is only **live** for a workspace after the backend migration
-and API are deployed, a web property is created, its token is installed on the
-site, and real events are observed. Until then its public view is an explicitly
-labeled synthetic demo. User-agent crawler detection must not be described as
+AppClimb's own `appclimb.app` property passed the live workspace gate on
+2026-07-25: migration `006_web_analytics.sql` and the collector API were
+deployed, the signed property token was installed in Vercel, and first-party
+human and crawler events were accepted in production. The public demo remains
+an explicitly labeled synthetic view; authenticated workspace data and public
+demo data must not be confused.
+
+Any other workspace is only **live** after the backend API is available, a web
+property is created, its token is installed on the tracked domain, and a real
+event is observed. User-agent crawler detection must not be described as
 provider identity verification; provider IP-range verification is future work.
 
 What must not be misrepresented as complete:
@@ -128,8 +134,8 @@ the iOS wedge and not evidence that Stage 3 is complete. The delivery sequence
 is:
 
 1. finish one truthful iOS subscription journey and its source reliability;
-2. productionize first-party acquisition collection for AppClimb's own site
-   and instrument explicit account and paid-conversion goals;
+2. use the production first-party acquisition stream and explicit account,
+   checkout, and paid-activation goals to establish a trustworthy baseline;
 3. connect website-to-app evidence only through a documented attribution and
    identity contract;
 4. expand acquisition intelligence and SaaS journeys after the Stage 1 proof.

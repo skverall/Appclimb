@@ -3,6 +3,7 @@ import Link from "next/link";
 import { CheckCircle2, Clock3 } from "lucide-react";
 import { redirect } from "next/navigation";
 
+import { AnalyticsConversion } from "@/components/analytics-conversion";
 import { readBackend } from "@/lib/backend";
 import { isBackendIdentity } from "@/lib/identity-schema";
 
@@ -30,6 +31,7 @@ export default async function CheckoutSuccessPage() {
 
   return (
     <main className="checkout-success-page">
+      {active && <AnalyticsConversion goal="paid_activated" />}
       <section className="checkout-success-card">
         <span className="checkout-success-icon">
           {active ? <CheckCircle2 size={30} /> : <Clock3 size={30} />}

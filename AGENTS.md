@@ -26,6 +26,10 @@ direction.
 - For any live-data claim, verify repository code, frontend deployment,
   backend route/migration, property configuration, and first accepted real
   event separately.
+- Current production checkpoint (2026-07-25): `appclimb.app` has migration
+  `006_web_analytics.sql`, a real signed property token in Vercel, and verified
+  human plus user-agent-detected crawler events. Reverify mutable production
+  state before relying on this checkpoint in a new release.
 - Acquisition Atlas is a Pulse projection and a bounded acquisition primitive.
   It does not change the initial iOS subscription-app wedge or make the broader
   SaaS roadmap complete.

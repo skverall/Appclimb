@@ -6,10 +6,10 @@ AppClimb helps a builder see where a product's growth journey first becomes cons
 
 ## Product status
 
-- Shipped: interactive River Atlas demo; authentication; 14-day no-card trial; pricing and Paddle checkout; account controls; secure connector setup foundation.
-- Implemented release candidate: first-party Acquisition Atlas UI and contracts for web referrers, UTM campaigns, landing pages, explicit conversion goals, and separately counted crawler requests.
+- Shipped: interactive River Atlas demo; authentication; 14-day no-card trial; pricing and Paddle checkout; account controls; secure connector setup foundation; production first-party Acquisition Atlas collection for AppClimb's own website.
+- Production-verified Acquisition Atlas scope: web referrers, UTM campaigns, landing pages, account/checkout/paid-activation goals, and separately counted crawler requests for the appclimb.app property.
 - Prototype: most visible Growth River and public Acquisition Atlas metrics use clearly labeled synthetic sample data.
-- In development: production Acquisition Atlas property/token rollout plus complete live imports and reliable end-to-end diagnosis across App Store Connect, RevenueCat, PostHog, and Superwall.
+- In development: complete live imports and reliable end-to-end diagnosis across App Store Connect, RevenueCat, PostHog, and Superwall.
 - Roadmap: keyword monitoring, competitor intelligence, complete Voice of Customer analysis, and broader SaaS support.
 
 AppClimb must not be described as a completed live-data analytics platform yet. It is currently an early-access interactive product prototype and technical foundation.

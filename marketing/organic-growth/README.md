@@ -33,14 +33,15 @@ Preferred one-sentence description:
 Product truth:
 
 - Shipped: interactive demo, auth, no-card trial, pricing, billing, account
-  controls, secure connector setup, and production foundation.
-- Implemented release candidate: first-party Acquisition Atlas UI, referrer
-  and UTM collection, explicit web goals, and separately counted AI crawler
-  requests.
+  controls, secure connector setup, production foundation, and first-party
+  Acquisition Atlas collection for AppClimb's own website.
+- Production-verified acquisition scope: referrer and UTM collection, landing
+  pages, account/checkout/paid-activation goals, and separately counted AI
+  crawler requests for the `appclimb.app` property.
 - Prototype: most visible Growth River and public Acquisition Atlas metrics use
   clearly labeled synthetic data.
-- In development: complete live imports, end-to-end diagnosis, and production
-  property/token rollout for real AppClimb website acquisition.
+- In development: complete live source imports and reliable end-to-end growth
+  diagnosis across the initial iOS subscription-app journey.
 - Roadmap: keyword monitoring, competitor intelligence, complete Voice of
   Customer analysis, and broader SaaS support.
 
@@ -117,8 +118,8 @@ The active outreach and listing backlog is tracked in
 - Bing Webmaster Tools: sitemap status, IndexNow submissions, indexed URLs.
 - Organic product funnel: landing page -> demo -> account -> first source
   connection -> first evidence-backed bottleneck.
-- Acquisition Atlas, after its live rollout gates pass: qualified visitor
-  source, landing page, engagement, and explicitly instrumented conversion.
+- Acquisition Atlas: qualified visitor source, landing page, engagement, and
+  explicitly instrumented account, checkout, and paid-activation conversion.
 - AI crawler requests by agent category and requested public page, reported
   separately from human AI referral sessions.
 

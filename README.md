@@ -27,10 +27,12 @@ Read it before changing product direction or expanding the feature set.
   source of truth.
 
 The current public workspace is an interactive product demo. Growth River data
-is primarily synthetic. Acquisition Atlas includes a tested first-party
-collector and backend contract, but a private workspace becomes live only
-after migration, property creation, token installation, and receipt of real
-events. See [docs/acquisition-atlas.md](./docs/acquisition-atlas.md).
+is primarily synthetic. Acquisition Atlas collection is live for AppClimb's
+own `appclimb.app` property: the production migration, collector API, signed
+property token, and first human/crawler events were verified on 2026-07-25.
+The public Atlas remains labeled demo data, while authenticated workspaces show
+their own collected data after completing the live workspace gate. See
+[docs/acquisition-atlas.md](./docs/acquisition-atlas.md).
 
 ## Documentation map
 
@@ -104,12 +106,16 @@ Required Vercel server-only value:
 
 - `APPCLIMB_API_URL=https://appclimb.srv1300823.hstgr.cloud`
 
-Required after creating the production `appclimb.app` web property:
+Configured in production after creating the `appclimb.app` web property:
 
 - `APPCLIMB_TRACKING_TOKEN=acwa1_...`
 
 The tracking token is a signed public property identifier, not an account
 credential. Do not invent a token or reuse an authenticated session token.
+
+The website records `account_created` after successful signup,
+`checkout_started` after Paddle opens a checkout, and `paid_activated` only
+after the backend confirms an active paid entitlement.
 
 Required public checkout values:
 

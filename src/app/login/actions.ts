@@ -71,5 +71,5 @@ export async function signup(
     return { error: "Could not create the account. Try another email." };
   }
 
-  redirect("/");
+  redirect("/?appclimb_conversion=account_created");
 }

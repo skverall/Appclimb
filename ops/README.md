@@ -56,6 +56,13 @@ workspace RLS, and adds no new backend secret: signed property tokens reuse the
 existing JWT signing key. The Vercel `APPCLIMB_TRACKING_TOKEN` must only be set
 after a real property is created through the authenticated API.
 
+Production checkpoint (2026-07-25): migration `006_web_analytics.sql` is
+applied under `/opt/apps/appclimb`; API, worker, and database health checks
+passed; the `appclimb.app` property token is installed in Vercel; and separate
+human plus user-agent-detected crawler events were accepted. The pre-release
+bundle and database dump are retained under
+`/opt/backups/appclimb-deploys/20260725T155739Z`.
+
 ## Backup and restore
 
 `./ops/backup.sh` writes root-only compressed logical dumps with SHA-256

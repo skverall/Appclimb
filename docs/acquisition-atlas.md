@@ -18,6 +18,9 @@ It is a design reference, not evidence of production data.
   through `POST /api/track/crawler`.
 - **Storage and reads:** implemented in the Go API and PostgreSQL migration
   `006_web_analytics.sql`.
+- **AppClimb production property:** live since 2026-07-25 with the migration,
+  collector API, signed Vercel token, and first accepted human and crawler
+  events verified independently.
 - **Live workspace gate:** backend migration and API deployed, property
   created, signed token installed on the tracked domain, and a real event
   accepted and visible.
@@ -105,6 +108,13 @@ window.appclimbAnalytics?.track("conversion", {
 });
 ```
 
+The AppClimb website currently emits:
+
+- `account_created` after a successful account signup;
+- `checkout_started` after Paddle successfully opens the checkout;
+- `paid_activated` only when the checkout success page receives a
+  server-confirmed active paid entitlement.
+
 ## Data boundary
 
 The tracking token is a signed public property identifier. It is not an account
@@ -153,5 +163,12 @@ Treat these as separate release gates:
 9. Add explicit conversion calls for account creation, checkout start, and
    successful paid activation before interpreting conversion rate.
 
-Until all applicable gates pass, describe the feature as implemented or
-partially deployed, not as complete live analytics.
+All nine gates passed for the `appclimb.app` property on 2026-07-25. Production
+proof included an accepted campaign page view, a separate GPTBot crawler event,
+healthy API/worker services, and the three explicit website goal hooks. The
+public `?demo=1&atlas=1` workspace intentionally remains synthetic and labeled;
+it is not evidence from the production property.
+
+For every other property, apply the same gates independently. Until its
+applicable gates pass, describe that property as implemented or partially
+deployed, not as complete live analytics.
