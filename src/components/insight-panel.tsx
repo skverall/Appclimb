@@ -50,6 +50,15 @@ export function InsightPanel({
       </div>
 
       <div className="opportunity-list">
+        {insights.length === 0 && (
+          <div className="opportunity-empty" role="status">
+            <strong>No diagnosis yet.</strong>
+            <span>
+              Once a source syncs enough data, AppClimb identifies your
+              earliest growth constraint here.
+            </span>
+          </div>
+        )}
         {insights.slice(0, 3).map((insight) => (
           <button
             className={

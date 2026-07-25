@@ -133,8 +133,20 @@ export interface CustomerCluster {
   radius: number;
 }
 
+export type DataStateMode = "empty" | "partial" | "live";
+
+export interface DataState {
+  mode: DataStateMode;
+  stale: boolean;
+  lowVolume: boolean;
+  stalenessHours: number;
+  funnelTopVolume: number;
+  reason: string;
+}
+
 export interface DashboardSnapshot {
-  mode?: "demo" | "live";
+  mode?: "demo" | "empty" | "partial" | "live";
+  dataState?: DataState;
   generatedAt: string;
   workspaceName: string;
   app: {

@@ -505,6 +505,21 @@ func (s *Server) growthMap(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "growth_map_failed")
 		return
 	}
+	// Honest data state (empty/partial/live) computed from read-time staleness,
+	// not the frozen freshness_hours column. Drives the workspace banner.
+	stateMetrics := make([]diagnoser.Metric, len(metrics))
+	for i, m := range metrics {
+		stateMetrics[i] = diagnoser.Metric{
+			Provider:     m.Provider,
+			Key:          m.Key,
+			OccurredAt:   m.OccurredAt,
+			Value:        m.Value,
+			Unit:         m.Unit,
+			Freshness:    m.Freshness,
+			Completeness: m.Completeness,
+		}
+	}
+	dataState := diagnoser.AssessDataState(stateMetrics, s.Now().UTC())
 	writeJSON(w, http.StatusOK, map[string]any{
 		"data": growthSnapshot(
 			s.Now().UTC(),
@@ -517,9 +532,17 @@ func (s *Server) growthMap(w http.ResponseWriter, r *http.Request) {
 			sources,
 		),
 		"meta": map[string]any{
-			"mode":                     map[bool]string{true: "empty", false: "live"}[len(metrics) == 0],
+			"mode":                     dataState.Mode,
 			"externalMutationsAllowed": false,
 			"windowDays":               30,
+			"dataState": map[string]any{
+				"mode":            dataState.Mode,
+				"stale":           dataState.Stale,
+				"lowVolume":       dataState.LowVolume,
+				"stalenessHours":  dataState.StalenessHours,
+				"funnelTopVolume": dataState.FunnelTopVolume,
+				"reason":          dataState.Reason,
+			},
 		},
 	})
 }

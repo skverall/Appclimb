@@ -963,6 +963,64 @@ a {
   font-weight: 750;
 }
 
+/* Honest data-state badges: calm, neutral tones (no red/coral per §5). */
+.confidence-good.confidence-demo {
+  color: #6b7c86;
+  background: #eef2f4;
+}
+.confidence-good.confidence-medium {
+  color: #8a6d2f;
+  background: #f6efdc;
+}
+
+/* Workspace data-state banner (empty CTA + partial reason). */
+.state-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 12px 0 4px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.state-banner > svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  opacity: 0.85;
+}
+.state-banner div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.state-banner span {
+  color: #5b6b73;
+}
+.state-banner strong {
+  color: #1f2d34;
+  font-weight: 700;
+}
+.state-banner-cta {
+  background: #eef5f4;
+  color: #1f2d34;
+}
+.state-banner-cta > svg {
+  color: #277a63;
+}
+.state-banner-partial {
+  background: #f6efdc;
+  color: #1f2d34;
+}
+.state-banner-partial > svg {
+  color: #8a6d2f;
+}
+@media (prefers-reduced-motion: reduce) {
+  .state-banner {
+    animation: none;
+  }
+}
+
 .pulse-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 336px;
@@ -1466,6 +1524,31 @@ a {
   display: grid;
   gap: 8px;
   margin-top: 14px;
+}
+
+.opportunity-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 18px 16px;
+  border-radius: 12px;
+  background: #eef2f4;
+  color: #5b6b73;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.opportunity-empty strong {
+  color: #1f2d34;
+  font-weight: 700;
+}
+
+.support-empty {
+  padding: 18px 16px;
+  border-radius: 12px;
+  background: #eef2f4;
+  color: #5b6b73;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .opportunity-card {

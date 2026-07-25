@@ -1,5 +1,5 @@
 import { AppClimbShell } from "@/components/app-climb-shell";
-import type { DashboardSnapshot } from "@/lib/contracts";
+import type { DashboardSnapshot, DataState } from "@/lib/contracts";
 import {
   type BackendIdentity,
   readBackend,
@@ -10,7 +10,10 @@ export const dynamic = "force-dynamic";
 
 interface GrowthEnvelope {
   data?: DashboardSnapshot;
-  meta?: { mode?: "empty" | "live" };
+  meta?: {
+    mode?: "empty" | "partial" | "live";
+    dataState?: DataState;
+  };
 }
 
 interface IdentityEnvelope {
@@ -28,7 +31,7 @@ function isSnapshot(value: unknown): value is DashboardSnapshot {
 }
 
 export default async function Home() {
-  let snapshot = demoSnapshot;
+  let snapshot: DashboardSnapshot = { ...demoSnapshot, mode: "demo" };
   let session: BackendIdentity | undefined;
 
   try {
@@ -44,20 +47,22 @@ export default async function Home() {
     if (growthResponse?.ok) {
       const payload = (await growthResponse.json()) as GrowthEnvelope;
       if (isSnapshot(payload.data)) {
-        snapshot =
-          payload.meta?.mode === "live"
-            ? { ...payload.data, mode: "live" }
-            : {
-                ...demoSnapshot,
-                generatedAt: payload.data.generatedAt,
-                workspaceName: payload.data.workspaceName,
-                app: payload.data.app,
-                confidence: payload.data.confidence,
-                sources: payload.data.sources,
-                mode: "demo",
-              };
+        const mode = payload.meta?.mode ?? "live";
+        // Honest data state: a workspace with no data, stale data, or low
+        // volume renders the backend snapshot directly (which may have empty
+        // stages/insights/evidence) instead of overlaying the demo funnel.
+        // The demo fallback only applies when the backend is unreachable,
+        // which leaves `snapshot` as demoSnapshot from the initial value above.
+        snapshot = {
+          ...payload.data,
+          mode,
+          dataState: payload.meta?.dataState,
+        };
       }
     }
+    // If growthResponse is missing or not ok, snapshot stays as the public
+    // demo — preserving the demo landing page for unauthenticated visitors
+    // and during a temporary backend outage.
   } catch {
     // The public demo stays available during a temporary backend outage.
   }
