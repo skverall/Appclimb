@@ -2,7 +2,7 @@ import {
   relayBackendResponse,
   requestWithSession,
 } from "@/lib/backend";
-import { demoAcquisitionSnapshot } from "@/lib/acquisition-demo";
+import { demoAcquisitionSnapshotForWindow } from "@/lib/acquisition-demo";
 
 export const dynamic = "force-dynamic";
 
@@ -21,8 +21,9 @@ export async function GET(request: Request) {
   if (response) {
     return relayBackendResponse(response);
   }
+  const windowDays = Number(days) as 7 | 30 | 90;
   const data = Object.fromEntries(
-    Object.entries(demoAcquisitionSnapshot).filter(
+    Object.entries(demoAcquisitionSnapshotForWindow(windowDays)).filter(
       ([key]) => key !== "mode" && key !== "windowDays",
     ),
   );
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
     data,
     meta: {
       mode: "demo",
-      windowDays: Number(days),
+      windowDays,
       externalMutationsAllowed: false,
     },
   });

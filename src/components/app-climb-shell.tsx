@@ -71,6 +71,15 @@ const NAV_ITEMS: {
   { id: "sources", label: "Sources", icon: PlugZap },
 ];
 
+/**
+ * Both Pulse projections report on the same workspace, so the Atlas opens on
+ * the window the Growth River filter row already shows.
+ */
+function analyticsWindowDays(period: string): 7 | 30 | 90 {
+  const days = Number(period.match(/\d+/)?.[0]);
+  return days === 7 || days === 90 ? days : 30;
+}
+
 export function AppClimbShell({
   initialSnapshot,
   initialSection = "pulse",
@@ -597,6 +606,9 @@ export function AppClimbShell({
             <AcquisitionAtlas
               authenticated={Boolean(session)}
               demo={initialSnapshot.mode === "demo"}
+              defaultWindowDays={analyticsWindowDays(
+                initialSnapshot.app.period,
+              )}
             />
           ) : activeSection === "pulse" &&
             initialSnapshot.mode === "empty" ? (

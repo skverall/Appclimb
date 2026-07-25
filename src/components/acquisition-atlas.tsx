@@ -1,10 +1,14 @@
 "use client";
 
+import { area, curveCatmullRom, line } from "d3-shape";
 import {
+  AreaChart,
+  BarChart3,
   Bot,
   CalendarDays,
   Check,
   ChevronDown,
+  ChevronRight,
   CircleHelp,
   Clipboard,
   CloudCog,
@@ -12,12 +16,15 @@ import {
   ExternalLink,
   Filter,
   Globe2,
+  LineChart,
   LoaderCircle,
   MousePointerClick,
   RefreshCw,
   Search,
   ShieldCheck,
   Sparkles,
+  TrendingDown,
+  TrendingUp,
 } from "lucide-react";
 import {
   useCallback,
@@ -36,7 +43,7 @@ import type {
 } from "@/lib/acquisition";
 import { isAcquisitionEnvelope } from "@/lib/acquisition";
 import {
-  demoAcquisitionSnapshot,
+  demoAcquisitionSnapshotForWindow,
   emptyAcquisitionSnapshot,
 } from "@/lib/acquisition-demo";
 
@@ -71,18 +78,78 @@ const CRAWLER_TAB_LABELS: Record<CrawlerCategory, string> = {
 };
 
 type BreakdownTab = "channel" | "referrer" | "campaign" | "utm";
+type CrawlerChartShape = "area" | "bars" | "line";
+
+/** Sankey geometry. The funnel headings derive their position from these too. */
+const FLOW = {
+  viewWidth: 940,
+  viewHeight: 220,
+  bandTop: 70,
+  bandHeight: 124,
+  nodeWidth: 9,
+  entryX: 8,
+  // Channels enter across a taller, gapped span than they occupy at the
+  // visitors node, so the ribbons visibly converge instead of running flat.
+  entryTop: 46,
+  entrySpan: 162,
+  entryGap: 8,
+  visitorsX: 352,
+  engagedX: 654,
+  convertedX: 872,
+} as const;
+
+const FLOW_BAND_CENTER = FLOW.bandTop + FLOW.bandHeight / 2;
+
+function channelColor(label: string) {
+  return (
+    CHANNEL_COLORS[label as AcquisitionChannel] ?? CHANNEL_COLORS.Referral
+  );
+}
+
+function flowNodeCenterPercent(x: number) {
+  return `${(((x + FLOW.nodeWidth / 2) / FLOW.viewWidth) * 100).toFixed(2)}%`;
+}
+
+/** Closed path between two vertical edges, eased so channels read as ribbons. */
+function ribbonPath(
+  startX: number,
+  startTop: number,
+  startBottom: number,
+  endX: number,
+  endTop: number,
+  endBottom: number,
+) {
+  const span = endX - startX;
+  const control = startX + span * 0.44;
+  const controlEnd = startX + span * 0.56;
+  return [
+    `M ${startX},${startTop}`,
+    `C ${control},${startTop} ${controlEnd},${endTop} ${endX},${endTop}`,
+    `L ${endX},${endBottom}`,
+    `C ${controlEnd},${endBottom} ${control},${startBottom} ${startX},${startBottom}`,
+    "Z",
+  ].join(" ");
+}
 
 export function AcquisitionAtlas({
   authenticated,
   demo,
+  defaultWindowDays = 30,
 }: {
   authenticated: boolean;
   demo: boolean;
+  /**
+   * Keeps the Atlas on the same reporting window as the Growth River
+   * projection it shares the Pulse screen with.
+   */
+  defaultWindowDays?: 7 | 30 | 90;
 }) {
+  const [windowDays, setWindowDays] = useState<7 | 30 | 90>(defaultWindowDays);
   const [snapshot, setSnapshot] = useState<AcquisitionSnapshot>(
-    demo ? demoAcquisitionSnapshot : emptyAcquisitionSnapshot(),
+    demo
+      ? demoAcquisitionSnapshotForWindow(defaultWindowDays)
+      : emptyAcquisitionSnapshot(),
   );
-  const [windowDays, setWindowDays] = useState<7 | 30 | 90>(7);
   const [loading, setLoading] = useState(authenticated && !demo);
   const [error, setError] = useState("");
   const [setupOpen, setSetupOpen] = useState(false);
@@ -94,10 +161,7 @@ export function AcquisitionAtlas({
 
   const loadSnapshot = useCallback(async () => {
     if (!authenticated || demo) {
-      setSnapshot({
-        ...demoAcquisitionSnapshot,
-        windowDays,
-      });
+      setSnapshot(demoAcquisitionSnapshotForWindow(windowDays));
       return;
     }
     setLoading(true);
@@ -312,6 +376,62 @@ function AcquisitionFlow({
       ? snapshot.totals.converted / snapshot.totals.visitors
       : 0;
 
+  const engagedHeight = Math.max(5, engagedRate * FLOW.bandHeight);
+  const convertedHeight = Math.max(3, convertedRate * FLOW.bandHeight);
+
+  /**
+   * Each channel enters as its own band and lands stacked against the visitors
+   * node, so ribbon thickness stays proportional to visitors on both edges.
+   */
+  const ribbons = useMemo(() => {
+    const entryTotalGap = FLOW.entryGap * Math.max(channels.length - 1, 0);
+    const entryHeight = Math.max(FLOW.entrySpan - entryTotalGap, 24);
+    let entryCursor = FLOW.entryTop;
+    let stackCursor = FLOW.bandTop;
+
+    return channels.map((channel) => {
+      const share = channel.visitors / total;
+      const entrySpan = Math.max(2.5, share * entryHeight);
+      const stackSpan = Math.max(2.5, share * FLOW.bandHeight);
+      const entryTop = entryCursor;
+      const stackTop = stackCursor;
+      entryCursor += entrySpan + FLOW.entryGap;
+      stackCursor += stackSpan;
+
+      return {
+        key: channel.key,
+        title: `${channel.label}: ${formatNumber(
+          channel.visitors,
+        )} visitors (${formatPercent(share)})`,
+        path: ribbonPath(
+          FLOW.entryX,
+          entryTop,
+          entryTop + entrySpan,
+          FLOW.visitorsX,
+          stackTop,
+          stackTop + stackSpan,
+        ),
+      };
+    });
+  }, [channels, total]);
+
+  const engagedRibbon = ribbonPath(
+    FLOW.visitorsX + FLOW.nodeWidth,
+    FLOW.bandTop,
+    FLOW.bandTop + FLOW.bandHeight,
+    FLOW.engagedX,
+    FLOW_BAND_CENTER - engagedHeight / 2,
+    FLOW_BAND_CENTER + engagedHeight / 2,
+  );
+  const convertedRibbon = ribbonPath(
+    FLOW.engagedX + FLOW.nodeWidth,
+    FLOW_BAND_CENTER - engagedHeight / 2,
+    FLOW_BAND_CENTER + engagedHeight / 2,
+    FLOW.convertedX,
+    FLOW_BAND_CENTER - convertedHeight / 2,
+    FLOW_BAND_CENTER + convertedHeight / 2,
+  );
+
   return (
     <article className={`atlas-flow-card ${loading ? "atlas-loading" : ""}`}>
       {loading && (
@@ -351,30 +471,23 @@ function AcquisitionFlow({
           </div>
         )}
         <div className="atlas-flow-legend">
-          <span>
-            <i className="healthy" /> Human traffic
-          </span>
-          <span>
-            <i className="ai" /> AI referral
-          </span>
-          <span>
-            <i className="campaign" /> Campaign
-          </span>
+          <span>Band width = visitors · colour = channel above</span>
+          <span>Human traffic only — crawlers are charted separately</span>
         </div>
       </div>
       <div className="atlas-sankey-wrap">
         <div className="atlas-funnel-headings" aria-hidden="true">
-          <div>
+          <div style={{ left: flowNodeCenterPercent(FLOW.visitorsX) }}>
             <span>Visitors</span>
             <strong>{formatNumber(snapshot.totals.visitors)}</strong>
             <small>100% of total</small>
           </div>
-          <div>
+          <div style={{ left: flowNodeCenterPercent(FLOW.engagedX) }}>
             <span>Engaged</span>
             <strong>{formatNumber(snapshot.totals.engaged)}</strong>
             <small>{formatPercent(engagedRate)} of visitors</small>
           </div>
-          <div>
+          <div style={{ left: flowNodeCenterPercent(FLOW.convertedX) }}>
             <span>Converted</span>
             <strong>{formatNumber(snapshot.totals.converted)}</strong>
             <small>{formatPercent(convertedRate)} of visitors</small>
@@ -382,72 +495,84 @@ function AcquisitionFlow({
         </div>
         <svg
           className="atlas-sankey"
-          viewBox="0 0 940 220"
+          viewBox={`0 0 ${FLOW.viewWidth} ${FLOW.viewHeight}`}
           role="img"
           aria-label={`${snapshot.totals.visitors} visitors, ${snapshot.totals.engaged} engaged, ${snapshot.totals.converted} converted`}
         >
           <defs>
+            {channels.map((channel) => (
+              <linearGradient
+                key={channel.key}
+                id={`atlas-ribbon-${channel.key}`}
+                x1="0"
+                x2="1"
+              >
+                <stop
+                  offset="0%"
+                  stopColor={channelColor(channel.label)}
+                  stopOpacity=".9"
+                />
+                <stop
+                  offset="100%"
+                  stopColor={channelColor(channel.label)}
+                  stopOpacity=".45"
+                />
+              </linearGradient>
+            ))}
             <linearGradient id="atlas-engaged-gradient" x1="0" x2="1">
-              <stop offset="0%" stopColor="#26928c" stopOpacity=".82" />
-              <stop offset="100%" stopColor="#58a9a2" stopOpacity=".34" />
+              <stop offset="0%" stopColor="#2b978f" stopOpacity=".55" />
+              <stop offset="100%" stopColor="#54a9a1" stopOpacity=".72" />
+            </linearGradient>
+            <linearGradient id="atlas-converted-gradient" x1="0" x2="1">
+              <stop offset="0%" stopColor="#2f9a92" stopOpacity=".72" />
+              <stop offset="100%" stopColor="#1c7f79" stopOpacity=".92" />
             </linearGradient>
           </defs>
-          {channels.map((channel, index) => {
-            const y = 78 + index * 22;
-            const width = Math.max(3, (channel.visitors / total) * 54);
-            const color =
-              CHANNEL_COLORS[channel.label as AcquisitionChannel] ??
-              CHANNEL_COLORS.Referral;
-            return (
-              <path
-                key={channel.key}
-                d={`M 10 ${y} C 150 ${y}, 225 ${108 + index * 2}, 365 ${
-                  108 + index * 2
-                }`}
-                fill="none"
-                stroke={color}
-                strokeOpacity=".72"
-                strokeWidth={width}
-              />
-            );
-          })}
+
+          {ribbons.map((ribbon) => (
+            <path
+              key={ribbon.key}
+              d={ribbon.path}
+              fill={`url(#atlas-ribbon-${ribbon.key})`}
+            >
+              <title>{ribbon.title}</title>
+            </path>
+          ))}
+
+          <path d={engagedRibbon} fill="url(#atlas-engaged-gradient)">
+            <title>
+              {`${formatNumber(snapshot.totals.engaged)} engaged visitors`}
+            </title>
+          </path>
+          <path d={convertedRibbon} fill="url(#atlas-converted-gradient)">
+            <title>
+              {`${formatNumber(snapshot.totals.converted)} converted visitors`}
+            </title>
+          </path>
+
           <rect
-            x="365"
-            y="56"
-            width="8"
-            height="112"
-            rx="4"
+            x={FLOW.visitorsX}
+            y={FLOW.bandTop}
+            width={FLOW.nodeWidth}
+            height={FLOW.bandHeight}
+            rx={FLOW.nodeWidth / 2}
             fill="#278f8a"
           />
-          <path
-            d="M 373 112 C 510 112, 550 112, 672 112"
-            fill="none"
-            stroke="#53a49d"
-            strokeOpacity=".52"
-            strokeWidth={Math.max(6, engagedRate * 94)}
-          />
           <rect
-            x="672"
-            y="82"
-            width="8"
-            height="60"
-            rx="4"
+            x={FLOW.engagedX}
+            y={FLOW_BAND_CENTER - engagedHeight / 2}
+            width={FLOW.nodeWidth}
+            height={engagedHeight}
+            rx={FLOW.nodeWidth / 2}
             fill="#278f8a"
           />
-          <path
-            d="M 680 112 C 775 112, 825 112, 924 112"
-            fill="none"
-            stroke="#278f8a"
-            strokeOpacity=".52"
-            strokeWidth={Math.max(3, convertedRate * 95)}
-          />
           <rect
-            x="924"
-            y="108"
-            width="7"
-            height="8"
-            rx="2"
-            fill="#278f8a"
+            x={FLOW.convertedX}
+            y={FLOW_BAND_CENTER - convertedHeight / 2}
+            width={FLOW.nodeWidth}
+            height={convertedHeight}
+            rx={FLOW.nodeWidth / 2}
+            fill="#1c7f79"
           />
         </svg>
         <div className="atlas-flow-footer">
@@ -464,15 +589,41 @@ function AcquisitionFlow({
   );
 }
 
+const COLLAPSED_ROWS = 6;
+
+/** Footer control that reveals the rows a card hides behind its top slice. */
+function ExpandRows({
+  expanded,
+  hidden,
+  label,
+  onToggle,
+}: {
+  expanded: boolean;
+  hidden: number;
+  label: string;
+  onToggle: () => void;
+}) {
+  if (hidden <= 0 && !expanded) return null;
+  return (
+    <button className="atlas-expand" type="button" onClick={onToggle}>
+      {expanded ? "Show fewer" : `View all ${label}`}
+      {!expanded && <em>{hidden}</em>}
+      <ChevronRight size={13} className={expanded ? "flip" : ""} />
+    </button>
+  );
+}
+
 function BreakdownCard({ snapshot }: { snapshot: AcquisitionSnapshot }) {
   const [tab, setTab] = useState<BreakdownTab>("channel");
+  const [expanded, setExpanded] = useState(false);
   const rows: Record<BreakdownTab, AcquisitionBreakdownRow[]> = {
     channel: snapshot.channels,
     referrer: snapshot.referrers,
     campaign: snapshot.campaigns,
     utm: snapshot.utmSources,
   };
-  const activeRows = rows[tab].slice(0, 6);
+  const allRows = rows[tab];
+  const activeRows = expanded ? allRows : allRows.slice(0, COLLAPSED_ROWS);
   const maxVisitors = Math.max(
     ...activeRows.map((row) => row.visitors),
     1,
@@ -495,7 +646,10 @@ function BreakdownCard({ snapshot }: { snapshot: AcquisitionSnapshot }) {
             role="tab"
             aria-selected={tab === id}
             className={tab === id ? "active" : ""}
-            onClick={() => setTab(id)}
+            onClick={() => {
+              setTab(id);
+              setExpanded(false);
+            }}
           >
             {label}
           </button>
@@ -521,10 +675,12 @@ function BreakdownCard({ snapshot }: { snapshot: AcquisitionSnapshot }) {
                       10,
                       (row.visitors / maxVisitors) * 100,
                     )}%`,
+                    // Referrers and campaigns carry their channel in `detail`,
+                    // so a row keeps its channel colour on every tab.
                     background:
-                      CHANNEL_COLORS[
-                        row.label as AcquisitionChannel
-                      ] ?? "#5ca8a1",
+                      CHANNEL_COLORS[row.label as AcquisitionChannel] ??
+                      CHANNEL_COLORS[row.detail as AcquisitionChannel] ??
+                      "#5ca8a1",
                   }}
                 />
                 <strong>{formatNumber(row.visitors)}</strong>
@@ -536,11 +692,21 @@ function BreakdownCard({ snapshot }: { snapshot: AcquisitionSnapshot }) {
           <CardEmpty label={`No ${tab} data yet`} />
         )}
       </div>
+      <ExpandRows
+        expanded={expanded}
+        hidden={allRows.length - COLLAPSED_ROWS}
+        label={tab === "utm" ? "UTM sources" : `${tab}s`}
+        onToggle={() => setExpanded((current) => !current)}
+      />
     </article>
   );
 }
 
 function LandingPagesCard({ snapshot }: { snapshot: AcquisitionSnapshot }) {
+  const [expanded, setExpanded] = useState(false);
+  const visiblePages = expanded
+    ? snapshot.landingPages
+    : snapshot.landingPages.slice(0, COLLAPSED_ROWS);
   const maxVisitors = Math.max(
     ...snapshot.landingPages.map((page) => page.visitors),
     1,
@@ -564,8 +730,8 @@ function LandingPagesCard({ snapshot }: { snapshot: AcquisitionSnapshot }) {
         <span>Conversion rate</span>
       </div>
       <div className="atlas-table-body">
-        {snapshot.landingPages.length > 0 ? (
-          snapshot.landingPages.slice(0, 6).map((page) => (
+        {visiblePages.length > 0 ? (
+          visiblePages.map((page) => (
             <div className="atlas-page-row" key={page.path}>
               <strong title={page.path}>{page.path}</strong>
               <strong>{formatNumber(page.visitors)}</strong>
@@ -588,12 +754,25 @@ function LandingPagesCard({ snapshot }: { snapshot: AcquisitionSnapshot }) {
           <CardEmpty label="Landing pages will appear after the first visit" />
         )}
       </div>
+      <ExpandRows
+        expanded={expanded}
+        hidden={snapshot.landingPages.length - COLLAPSED_ROWS}
+        label="landing pages"
+        onToggle={() => setExpanded((current) => !current)}
+      />
     </article>
   );
 }
 
+const COLLAPSED_VISITORS = 6;
+
 function VisitorJourneys({ snapshot }: { snapshot: AcquisitionSnapshot }) {
   const [query, setQuery] = useState("");
+  const [expanded, setExpanded] = useState(false);
+  // Rows age against the snapshot they belong to, not wall-clock time: the
+  // figures beside them are frozen at `generatedAt`, and the header already
+  // reports how stale the snapshot itself is.
+  const reference = Date.parse(snapshot.generatedAt);
   const visitors = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     if (!normalized) return snapshot.visitors;
@@ -637,7 +816,8 @@ function VisitorJourneys({ snapshot }: { snapshot: AcquisitionSnapshot }) {
       </div>
       <div className="atlas-visitor-list">
         {visitors.length > 0 ? (
-          visitors.slice(0, 14).map((visitor) => (
+          (expanded ? visitors : visitors.slice(0, COLLAPSED_VISITORS)).map(
+            (visitor) => (
             <div className="atlas-visitor-row" key={visitor.id}>
               <div className="atlas-visitor-name">
                 <span className="atlas-anonymous-avatar">
@@ -673,7 +853,7 @@ function VisitorJourneys({ snapshot }: { snapshot: AcquisitionSnapshot }) {
                   <small>{visitor.source}</small>
                 </span>
               </span>
-              <span>{relativeTime(visitor.lastSeen)}</span>
+              <span>{relativeTime(visitor.lastSeen, reference)}</span>
               <span
                 className="atlas-journey-dots"
                 title={visitor.journey.join(" → ")}
@@ -693,7 +873,8 @@ function VisitorJourneys({ snapshot }: { snapshot: AcquisitionSnapshot }) {
                 ))}
               </span>
             </div>
-          ))
+            ),
+          )
         ) : (
           <CardEmpty label="No matching visitor journeys" />
         )}
@@ -702,6 +883,12 @@ function VisitorJourneys({ snapshot }: { snapshot: AcquisitionSnapshot }) {
         <span>
           Session-scoped IDs by default · no IP addresses are stored
         </span>
+        <ExpandRows
+          expanded={expanded}
+          hidden={visitors.length - COLLAPSED_VISITORS}
+          label="visitors"
+          onToggle={() => setExpanded((current) => !current)}
+        />
       </div>
     </article>
   );
@@ -710,20 +897,38 @@ function VisitorJourneys({ snapshot }: { snapshot: AcquisitionSnapshot }) {
 function CrawlerCurrent({ snapshot }: { snapshot: AcquisitionSnapshot }) {
   const availableCategories = snapshot.crawlers.categories;
   const [tab, setTab] = useState<CrawlerCategory>("ai_answer");
+  const [shape, setShape] = useState<CrawlerChartShape>("area");
+  const [pagesExpanded, setPagesExpanded] = useState(false);
   const activeCount =
     availableCategories.find((item) => item.category === tab)?.requests ?? 0;
-  const activeSeries = snapshot.crawlers.series
-    .filter((item) => item.category === tab)
-    .sort((a, b) => a.date.localeCompare(b.date));
-  const chartValues = activeSeries.map((item) => item.requests);
-  const maxValue = Math.max(...chartValues, 1);
-  const points = activeSeries
-    .map((item, index, all) => {
-      const x = all.length <= 1 ? 0 : (index / (all.length - 1)) * 100;
-      const y = 52 - (item.requests / maxValue) * 44;
-      return `${x},${y}`;
-    })
-    .join(" ");
+  const activeSeries = useMemo(
+    () =>
+      snapshot.crawlers.series
+        .filter((item) => item.category === tab)
+        .sort((a, b) => a.date.localeCompare(b.date)),
+    [snapshot.crawlers.series, tab],
+  );
+
+  /**
+   * Trend compares the most recent half of the window with the half before it,
+   * which is the only period-over-period comparison this snapshot can support
+   * without a second request.
+   */
+  const trend = useMemo(() => {
+    if (activeSeries.length < 4) return null;
+    const half = Math.floor(activeSeries.length / 2);
+    const previous = activeSeries
+      .slice(0, half)
+      .reduce((sum, item) => sum + item.requests, 0);
+    const recent = activeSeries
+      .slice(activeSeries.length - half)
+      .reduce((sum, item) => sum + item.requests, 0);
+    if (previous === 0) return null;
+    return {
+      change: (recent - previous) / previous,
+      days: half,
+    };
+  }, [activeSeries]);
 
   return (
     <article className="atlas-card atlas-crawler-card">
@@ -769,44 +974,60 @@ function CrawlerCurrent({ snapshot }: { snapshot: AcquisitionSnapshot }) {
         ))}
       </div>
       <div className="atlas-crawler-metric">
-        <span>{CRAWLER_TAB_LABELS[tab]} requests</span>
-        <strong>{formatNumber(activeCount)}</strong>
-        <small>
-          {formatNumber(snapshot.crawlers.requests)} total crawler requests
-        </small>
-      </div>
-      <div className="atlas-crawler-chart">
-        {activeSeries.length > 1 ? (
-          <svg viewBox="0 0 100 56" preserveAspectRatio="none">
-            <defs>
-              <linearGradient id="crawler-area" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#278f8a" stopOpacity=".2" />
-                <stop offset="100%" stopColor="#278f8a" stopOpacity="0" />
-              </linearGradient>
-            </defs>
-            <polyline
-              points={`0,54 ${points} 100,54`}
-              fill="url(#crawler-area)"
-              stroke="none"
-            />
-            <polyline
-              points={points}
-              fill="none"
-              stroke="#18877f"
-              strokeWidth="1.2"
-              vectorEffect="non-scaling-stroke"
-            />
-          </svg>
-        ) : (
-          <div className="atlas-crawler-chart-empty">
-            <Bot size={24} />
-            <span>No crawler requests in this window</span>
-          </div>
+        <div>
+          <span>{CRAWLER_TAB_LABELS[tab]} requests</span>
+          <strong>{formatNumber(activeCount)}</strong>
+          <small>
+            {formatNumber(snapshot.crawlers.requests)} total crawler requests
+          </small>
+        </div>
+        {trend && (
+          <span
+            className={`atlas-trend ${trend.change >= 0 ? "up" : "down"}`}
+            title={`Last ${trend.days} days compared with the ${trend.days} days before`}
+          >
+            {trend.change >= 0 ? (
+              <TrendingUp size={12} />
+            ) : (
+              <TrendingDown size={12} />
+            )}
+            {`${trend.change >= 0 ? "+" : ""}${formatPercent(trend.change)}`}
+            <small>{`vs prev ${trend.days}d`}</small>
+          </span>
         )}
       </div>
+      <div className="atlas-chart-shapes" role="group" aria-label="Chart style">
+        {(
+          [
+            ["area", "Area", AreaChart],
+            ["bars", "Bars", BarChart3],
+            ["line", "Line", LineChart],
+          ] as [CrawlerChartShape, string, typeof AreaChart][]
+        ).map(([id, label, Glyph]) => (
+          <button
+            key={id}
+            type="button"
+            className={shape === id ? "active" : ""}
+            aria-pressed={shape === id}
+            title={`${label} chart`}
+            onClick={() => setShape(id)}
+          >
+            <Glyph size={13} />
+            <span className="sr-only">{label} chart</span>
+          </button>
+        ))}
+      </div>
+      {activeSeries.length > 1 ? (
+        <CrawlerChart series={activeSeries} shape={shape} />
+      ) : (
+        <div className="atlas-crawler-chart-empty">
+          <Bot size={24} />
+          <span>No crawler requests in this window</span>
+        </div>
+      )}
       <div className="atlas-crawler-details">
         <div>
-          <span>By provider</span>
+          <span>By provider · all categories</span>
           {snapshot.crawlers.providers.length > 0 ? (
             snapshot.crawlers.providers.slice(0, 6).map((provider) => (
               <div className="atlas-provider-row" key={provider.provider}>
@@ -821,14 +1042,25 @@ function CrawlerCurrent({ snapshot }: { snapshot: AcquisitionSnapshot }) {
           )}
         </div>
         <div>
-          <span>Top requested public pages</span>
+          <span>Top requested public pages · all categories</span>
           {snapshot.crawlers.pages.length > 0 ? (
-            snapshot.crawlers.pages.slice(0, 6).map((page) => (
-              <div className="atlas-crawler-page" key={page.path}>
-                <strong title={page.path}>{page.path}</strong>
-                <span>{page.requests}</span>
-              </div>
-            ))
+            <>
+              {(pagesExpanded
+                ? snapshot.crawlers.pages
+                : snapshot.crawlers.pages.slice(0, COLLAPSED_ROWS)
+              ).map((page) => (
+                <div className="atlas-crawler-page" key={page.path}>
+                  <strong title={page.path}>{page.path}</strong>
+                  <span>{page.requests}</span>
+                </div>
+              ))}
+              <ExpandRows
+                expanded={pagesExpanded}
+                hidden={snapshot.crawlers.pages.length - COLLAPSED_ROWS}
+                label="requested pages"
+                onToggle={() => setPagesExpanded((current) => !current)}
+              />
+            </>
           ) : (
             <CardEmpty label="No requested pages yet" />
           )}
@@ -855,6 +1087,136 @@ function CrawlerCurrent({ snapshot }: { snapshot: AcquisitionSnapshot }) {
       </div>
     </article>
   );
+}
+
+/**
+ * Crawler requests per day, drawn as an area, bars or a plain line.
+ *
+ * The plot stretches to whatever width the card gets (`preserveAspectRatio`
+ * is off, so the SVG uses a flat 0–100 space on both axes), while gridlines
+ * and axis labels live in HTML around it — that keeps type at a fixed size
+ * and correctly proportioned at every card width.
+ */
+function CrawlerChart({
+  series,
+  shape,
+}: {
+  series: { date: string; requests: number }[];
+  shape: CrawlerChartShape;
+}) {
+  const peak = Math.max(...series.map((item) => item.requests), 1);
+  const ceiling = niceCeiling(peak);
+
+  const points = series.map((item, index) => ({
+    x: (index / (series.length - 1)) * 100,
+    y: 100 - (item.requests / ceiling) * 100,
+    item,
+  }));
+
+  const curve = curveCatmullRom.alpha(0.5);
+  const linePath =
+    line<(typeof points)[number]>()
+      .x((point) => point.x)
+      .y((point) => point.y)
+      .curve(curve)(points) ?? "";
+  const areaPath =
+    area<(typeof points)[number]>()
+      .x((point) => point.x)
+      .y0(100)
+      .y1((point) => point.y)
+      .curve(curve)(points) ?? "";
+
+  const labelIndexes = [
+    0,
+    Math.floor((series.length - 1) / 2),
+    series.length - 1,
+  ];
+  const barWidth = Math.min(4.2, (100 / series.length) * 0.6);
+
+  return (
+    <div className="atlas-crawler-chart">
+      <div className="atlas-chart-scale" aria-hidden="true">
+        <span>{formatNumber(ceiling)}</span>
+        <span>{formatNumber(Math.round(ceiling / 2))}</span>
+        <span>0</span>
+      </div>
+      <div className="atlas-chart-plot">
+        <svg
+          viewBox="0 0 100 100"
+          preserveAspectRatio="none"
+          role="img"
+          aria-label={`Crawler requests per day across ${series.length} days, peaking at ${peak}`}
+        >
+          <defs>
+            <linearGradient id="crawler-area" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#278f8a" stopOpacity=".28" />
+              <stop offset="100%" stopColor="#278f8a" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+
+          {shape === "bars" ? (
+            points.map((point) => (
+              <rect
+                key={point.item.date}
+                x={Math.min(
+                  100 - barWidth,
+                  Math.max(0, point.x - barWidth / 2),
+                )}
+                y={point.y}
+                width={barWidth}
+                height={Math.max(0.8, 100 - point.y)}
+                fill="#2f9a92"
+                fillOpacity=".82"
+              >
+                <title>{`${point.item.date}: ${point.item.requests}`}</title>
+              </rect>
+            ))
+          ) : (
+            <>
+              {shape === "area" && (
+                <path d={areaPath} fill="url(#crawler-area)" />
+              )}
+              <path
+                d={linePath}
+                fill="none"
+                stroke="#18877f"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                vectorEffect="non-scaling-stroke"
+              />
+            </>
+          )}
+        </svg>
+      </div>
+      <div className="atlas-chart-dates" aria-hidden="true">
+        {labelIndexes.map((index) => (
+          <span key={series[index].date}>{shortDate(series[index].date)}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Rounds an axis maximum up to a readable step. */
+function niceCeiling(value: number) {
+  if (value <= 5) return 5;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(value)));
+  for (const step of [1, 2, 2.5, 5, 10]) {
+    const candidate = step * magnitude;
+    if (candidate >= value) return candidate;
+  }
+  return 10 * magnitude;
+}
+
+function shortDate(value: string) {
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return value;
+  return new Date(timestamp).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
 }
 
 function ConnectWebsite({
@@ -1057,10 +1419,15 @@ function formatPercent(value: number) {
   }).format(Number.isFinite(value) ? value : 0);
 }
 
-function relativeTime(value: string) {
+/**
+ * `reference` lets the demo snapshot age its rows against its own frozen
+ * `generatedAt` instead of wall-clock time, so authored sample journeys do not
+ * drift to "31d ago" inside a seven-day window as the months pass.
+ */
+function relativeTime(value: string, reference = Date.now()) {
   const timestamp = Date.parse(value);
   if (!Number.isFinite(timestamp)) return "just now";
-  const minutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60_000));
+  const minutes = Math.max(0, Math.floor((reference - timestamp) / 60_000));
   if (minutes < 1) return "just now";
   if (minutes < 60) return `${minutes}m ago`;
   const hours = Math.floor(minutes / 60);

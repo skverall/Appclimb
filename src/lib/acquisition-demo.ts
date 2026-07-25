@@ -1,4 +1,9 @@
-import type { AcquisitionSnapshot } from "@/lib/acquisition";
+import type {
+  AcquisitionBreakdownRow,
+  AcquisitionSeriesPoint,
+  AcquisitionSnapshot,
+  CrawlerCategory,
+} from "@/lib/acquisition";
 
 export const demoAcquisitionSnapshot: AcquisitionSnapshot = {
   mode: "demo",
@@ -113,6 +118,54 @@ export const demoAcquisitionSnapshot: AcquisitionSnapshot = {
       engagedRate: 0.52,
       conversions: 2,
     },
+    {
+      key: "reddit.com",
+      label: "reddit.com",
+      detail: "Social",
+      visitors: 37,
+      engagedRate: 0.44,
+      conversions: 2,
+    },
+    {
+      key: "news.ycombinator.com",
+      label: "news.ycombinator.com",
+      detail: "Referral",
+      visitors: 31,
+      engagedRate: 0.68,
+      conversions: 4,
+    },
+    {
+      key: "linkedin.com",
+      label: "linkedin.com",
+      detail: "Social",
+      visitors: 28,
+      engagedRate: 0.5,
+      conversions: 2,
+    },
+    {
+      key: "bing.com",
+      label: "bing.com",
+      detail: "Organic Search",
+      visitors: 24,
+      engagedRate: 0.58,
+      conversions: 2,
+    },
+    {
+      key: "producthunt.com",
+      label: "producthunt.com",
+      detail: "Referral",
+      visitors: 19,
+      engagedRate: 0.61,
+      conversions: 2,
+    },
+    {
+      key: "claude.ai",
+      label: "claude.ai",
+      detail: "AI Referral",
+      visitors: 11,
+      engagedRate: 0.55,
+      conversions: 1,
+    },
   ],
   campaigns: [
     {
@@ -156,6 +209,13 @@ export const demoAcquisitionSnapshot: AcquisitionSnapshot = {
     { path: "/features", visitors: 148, conversionRate: 0.068 },
     { path: "/blog/best-crm-2024", visitors: 92, conversionRate: 0.043 },
     { path: "/about", visitors: 67, conversionRate: 0.052 },
+    { path: "/integrations", visitors: 54, conversionRate: 0.061 },
+    { path: "/blog/dealer-inventory-sync", visitors: 48, conversionRate: 0.038 },
+    { path: "/changelog", visitors: 41, conversionRate: 0.029 },
+    { path: "/docs/api/overview", visitors: 36, conversionRate: 0.055 },
+    { path: "/compare/vs-spreadsheets", visitors: 33, conversionRate: 0.084 },
+    { path: "/blog/lead-response-time", visitors: 27, conversionRate: 0.033 },
+    { path: "/security", visitors: 21, conversionRate: 0.047 },
   ],
   visitors: [
     {
@@ -223,6 +283,97 @@ export const demoAcquisitionSnapshot: AcquisitionSnapshot = {
       journey: ["/", "/features", "/pricing"],
       converted: false,
     },
+    {
+      id: "demo-basalt-heron",
+      alias: "Basalt Heron",
+      countryCode: "SG",
+      browser: "Chrome",
+      os: "Windows",
+      device: "Desktop",
+      channel: "Referral",
+      source: "news.ycombinator.com",
+      lastSeen: "2026-07-25T03:12:00.000Z",
+      journey: ["/blog/dealer-inventory-sync", "/", "/pricing", "/checkout"],
+      converted: true,
+    },
+    {
+      id: "demo-cobalt-marten",
+      alias: "Cobalt Marten",
+      countryCode: "FR",
+      browser: "Firefox",
+      os: "Linux",
+      device: "Desktop",
+      channel: "Organic Search",
+      source: "Bing",
+      lastSeen: "2026-07-25T02:48:00.000Z",
+      journey: ["/docs/api/overview", "/integrations"],
+      converted: false,
+    },
+    {
+      id: "demo-russet-marlin",
+      alias: "Russet Marlin",
+      countryCode: "BR",
+      browser: "Chrome",
+      os: "Android",
+      device: "Mobile",
+      channel: "Social",
+      source: "reddit.com",
+      lastSeen: "2026-07-25T02:19:00.000Z",
+      journey: ["/blog/best-crm-2024", "/features"],
+      converted: false,
+    },
+    {
+      id: "demo-slate-ibis",
+      alias: "Slate Ibis",
+      countryCode: "IN",
+      browser: "Chrome",
+      os: "Windows",
+      device: "Desktop",
+      channel: "AI Referral",
+      source: "Perplexity",
+      lastSeen: "2026-07-25T01:57:00.000Z",
+      journey: ["/compare/vs-spreadsheets", "/pricing", "/checkout"],
+      converted: true,
+    },
+    {
+      id: "demo-umber-shrike",
+      alias: "Umber Shrike",
+      countryCode: "JP",
+      browser: "Safari",
+      os: "iOS",
+      device: "Mobile",
+      channel: "Direct",
+      source: "Direct / none",
+      lastSeen: "2026-07-25T01:24:00.000Z",
+      journey: ["/", "/changelog"],
+      converted: false,
+    },
+    {
+      id: "demo-verdant-quail",
+      alias: "Verdant Quail",
+      countryCode: "UZ",
+      browser: "Chrome",
+      os: "Android",
+      device: "Mobile",
+      channel: "Campaigns",
+      source: "launch_x",
+      lastSeen: "2026-07-25T00:51:00.000Z",
+      journey: ["/", "/features", "/security", "/pricing"],
+      converted: false,
+    },
+    {
+      id: "demo-ochre-tapir",
+      alias: "Ochre Tapir",
+      countryCode: "CA",
+      browser: "Edge",
+      os: "Windows",
+      device: "Desktop",
+      channel: "Referral",
+      source: "producthunt.com",
+      lastSeen: "2026-07-24T23:38:00.000Z",
+      journey: ["/", "/pricing"],
+      converted: false,
+    },
   ],
   crawlers: {
     requests: 225,
@@ -264,6 +415,10 @@ export const demoAcquisitionSnapshot: AcquisitionSnapshot = {
       { path: "/features", requests: 21 },
       { path: "/blog/best-crm-2024", requests: 18 },
       { path: "/docs/api/overview", requests: 12 },
+      { path: "/integrations", requests: 11 },
+      { path: "/compare/vs-spreadsheets", requests: 9 },
+      { path: "/changelog", requests: 7 },
+      { path: "/about", requests: 6 },
     ],
     categories: [
       { category: "ai_answer", requests: 95 },
@@ -272,6 +427,209 @@ export const demoAcquisitionSnapshot: AcquisitionSnapshot = {
     ],
   },
 };
+
+const DAY_MS = 86_400_000;
+
+// Weekday rhythm for synthetic traffic, indexed by UTC day of week.
+const WEEKDAY_WEIGHT = [0.74, 1.08, 1.12, 1.09, 1.05, 0.95, 0.78];
+
+// Deterministic on both the server and the client, so a server-rendered demo
+// window hydrates to exactly the same numbers.
+function stableNoise(index: number) {
+  const value = Math.sin(index * 12.9898) * 43758.5453;
+  return value - Math.floor(value);
+}
+
+// Largest-remainder split, so every scaled breakdown still sums to its total.
+function distribute(total: number, weights: number[]): number[] {
+  const weightSum = weights.reduce((sum, weight) => sum + weight, 0);
+  if (weights.length === 0 || weightSum <= 0) {
+    return weights.map(() => 0);
+  }
+  const exact = weights.map((weight) => (weight / weightSum) * total);
+  const shares = exact.map((value) => Math.floor(value));
+  let remainder = total - shares.reduce((sum, value) => sum + value, 0);
+  const byFraction = exact
+    .map((value, index) => ({ index, fraction: value - Math.floor(value) }))
+    .sort((a, b) => b.fraction - a.fraction);
+  for (let step = 0; step < byFraction.length && remainder > 0; step += 1) {
+    shares[byFraction[step].index] += 1;
+    remainder -= 1;
+  }
+  return shares;
+}
+
+function demoSeries(windowDays: number, endMs: number) {
+  const peakVisitors = 255;
+  const series: AcquisitionSeriesPoint[] = [];
+  for (let offset = windowDays - 1; offset >= 0; offset -= 1) {
+    const dayMs = endMs - offset * DAY_MS;
+    const day = new Date(dayMs);
+    const trend = Math.pow(0.9885, offset);
+    const weekday = WEEKDAY_WEIGHT[day.getUTCDay()];
+    const jitter = 0.86 + stableNoise(Math.round(dayMs / DAY_MS)) * 0.28;
+    const visitors = Math.max(
+      12,
+      Math.round(peakVisitors * trend * weekday * jitter),
+    );
+    const engaged = Math.round(visitors * 0.571);
+    series.push({
+      date: day.toISOString().slice(0, 10),
+      visitors,
+      engaged,
+      converted: Math.round(engaged * 0.118),
+    });
+  }
+  return series;
+}
+
+function scaleRows(
+  rows: AcquisitionBreakdownRow[],
+  visitorTotal: number,
+  conversionTotal: number,
+): AcquisitionBreakdownRow[] {
+  const visitorShares = distribute(
+    visitorTotal,
+    rows.map((row) => row.visitors),
+  );
+  const conversionShares = distribute(
+    conversionTotal,
+    rows.map((row) => row.conversions),
+  );
+  return rows.map((row, index) => ({
+    ...row,
+    visitors: visitorShares[index],
+    conversions: conversionShares[index],
+  }));
+}
+
+/**
+ * Demo traffic for the selected analytics window.
+ *
+ * The seven-day snapshot is the authored baseline; longer windows are derived
+ * from a deterministic daily series so that every total, breakdown and crawler
+ * figure moves together instead of the window selector only relabelling an
+ * unchanged snapshot.
+ */
+export function demoAcquisitionSnapshotForWindow(
+  windowDays: 7 | 30 | 90,
+): AcquisitionSnapshot {
+  if (windowDays === 7) {
+    return demoAcquisitionSnapshot;
+  }
+
+  const base = demoAcquisitionSnapshot;
+  const endMs = Date.parse(base.generatedAt);
+  const series = demoSeries(windowDays, endMs);
+  const visitors = series.reduce((sum, point) => sum + point.visitors, 0);
+  const engaged = series.reduce((sum, point) => sum + point.engaged, 0);
+  const converted = series.reduce((sum, point) => sum + point.converted, 0);
+  const ratio = visitors / base.totals.visitors;
+
+  const crawlerRequests = Math.round(base.crawlers.requests * ratio);
+  const crawlerCategories = distribute(
+    crawlerRequests,
+    base.crawlers.categories.map((entry) => entry.requests),
+  );
+  const crawlerProviders = distribute(
+    crawlerRequests,
+    base.crawlers.providers.map((entry) => entry.requests),
+  );
+
+  const categoryTotals = new Map<CrawlerCategory, number>(
+    base.crawlers.categories.map((entry, index) => [
+      entry.category,
+      crawlerCategories[index],
+    ]),
+  );
+  const crawlerSeries = [...categoryTotals.entries()].flatMap(
+    ([category, total]) => {
+      const shape = series.map((point) => point.visitors);
+      const perDay = distribute(total, shape);
+      return series.map((point, index) => ({
+        date: point.date,
+        category,
+        requests: perDay[index],
+      }));
+    },
+  );
+
+  return {
+    ...base,
+    windowDays,
+    series,
+    totals: {
+      ...base.totals,
+      visitors,
+      engaged,
+      converted,
+      sessions: Math.round(base.totals.sessions * ratio),
+      pageviews: Math.round(base.totals.pageviews * ratio),
+    },
+    channels: scaleRows(base.channels, visitors, converted),
+    referrers: scaleRows(
+      base.referrers,
+      Math.round(
+        base.referrers.reduce((sum, row) => sum + row.visitors, 0) * ratio,
+      ),
+      Math.round(
+        base.referrers.reduce((sum, row) => sum + row.conversions, 0) * ratio,
+      ),
+    ),
+    campaigns: scaleRows(
+      base.campaigns,
+      Math.round(
+        base.campaigns.reduce((sum, row) => sum + row.visitors, 0) * ratio,
+      ),
+      Math.round(
+        base.campaigns.reduce((sum, row) => sum + row.conversions, 0) * ratio,
+      ),
+    ),
+    utmSources: scaleRows(
+      base.utmSources,
+      Math.round(
+        base.utmSources.reduce((sum, row) => sum + row.visitors, 0) * ratio,
+      ),
+      Math.round(
+        base.utmSources.reduce((sum, row) => sum + row.conversions, 0) * ratio,
+      ),
+    ),
+    landingPages: base.landingPages.map((page, index) => ({
+      ...page,
+      visitors: distribute(
+        Math.round(
+          base.landingPages.reduce((sum, row) => sum + row.visitors, 0) * ratio,
+        ),
+        base.landingPages.map((row) => row.visitors),
+      )[index],
+    })),
+    crawlers: {
+      ...base.crawlers,
+      requests: crawlerRequests,
+      series: crawlerSeries,
+      categories: base.crawlers.categories.map((entry, index) => ({
+        ...entry,
+        requests: crawlerCategories[index],
+      })),
+      providers: base.crawlers.providers.map((entry, index) => ({
+        ...entry,
+        requests: crawlerProviders[index],
+        share:
+          crawlerRequests > 0 ? crawlerProviders[index] / crawlerRequests : 0,
+      })),
+      pages: base.crawlers.pages.map((page, index) => ({
+        ...page,
+        requests: distribute(
+          Math.round(
+            base.crawlers.pages.reduce((sum, row) => sum + row.requests, 0) *
+              ratio,
+          ),
+          base.crawlers.pages.map((row) => row.requests),
+        )[index],
+      })),
+    },
+  };
+}
 
 export function emptyAcquisitionSnapshot(
   mode: "empty" | "unavailable" = "empty",

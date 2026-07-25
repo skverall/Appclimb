@@ -7369,32 +7369,13 @@ a {
 
 .atlas-flow-legend {
   display: flex;
-  gap: 11px;
+  flex-direction: column;
+  gap: 3px;
   margin-top: auto;
   padding-top: 9px;
   color: #869496;
   font-size: 7.5px;
-}
-
-.atlas-flow-legend span {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.atlas-flow-legend i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--teal);
-}
-
-.atlas-flow-legend i.ai {
-  background: #9485dc;
-}
-
-.atlas-flow-legend i.campaign {
-  background: #d99a2b;
+  line-height: 1.35;
 }
 
 .atlas-sankey-wrap {
@@ -7403,19 +7384,26 @@ a {
   padding: 15px 18px 10px;
 }
 
+/*
+ * Inset matches .atlas-sankey-wrap's horizontal padding so that the percentage
+ * offsets React derives from the Sankey viewBox land over their own nodes.
+ */
 .atlas-funnel-headings {
   position: absolute;
   z-index: 2;
-  top: 18px;
-  right: 30px;
-  left: 30px;
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  top: 16px;
+  right: 18px;
+  left: 18px;
+  height: 0;
   pointer-events: none;
 }
 
 .atlas-funnel-headings > div {
+  position: absolute;
+  top: 0;
   text-align: center;
+  transform: translateX(-50%);
+  white-space: nowrap;
 }
 
 .atlas-funnel-headings span,
@@ -7896,7 +7884,123 @@ a {
 }
 
 .atlas-crawler-metric {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
   padding: 4px 14px 0;
+}
+
+.atlas-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 7px;
+  border-radius: 7px;
+  color: #2c7a5f;
+  background: #eaf5ef;
+  font-size: 8px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.atlas-trend.down {
+  color: #a4553f;
+  background: #fbeee9;
+}
+
+.atlas-trend small {
+  color: inherit;
+  font-weight: 600;
+  opacity: 0.66;
+}
+
+.atlas-chart-shapes {
+  display: flex;
+  justify-content: flex-end;
+  gap: 3px;
+  padding: 5px 14px 0;
+}
+
+.atlas-chart-shapes button {
+  display: inline-flex;
+  width: 22px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: #8b999b;
+  background: none;
+  cursor: pointer;
+  transition:
+    color 0.16s ease,
+    background 0.16s ease;
+}
+
+.atlas-chart-shapes button:hover {
+  color: var(--teal);
+  background: #f1f5f4;
+}
+
+.atlas-chart-shapes button.active {
+  border-color: var(--line);
+  color: var(--teal);
+  background: #eef4f3;
+}
+
+.atlas-axis-label {
+  fill: #93a1a3;
+  font-size: 7px;
+  font-weight: 600;
+}
+
+.atlas-expand {
+  display: inline-flex;
+  width: 100%;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 5px;
+  padding: 8px 0 2px;
+  border: 0;
+  color: var(--teal);
+  background: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.atlas-expand:hover {
+  text-decoration: underline;
+}
+
+.atlas-expand em {
+  padding: 1px 5px;
+  border-radius: 20px;
+  color: #6d8082;
+  background: #eef2f1;
+  font-size: 7px;
+  font-style: normal;
+  font-weight: 700;
+}
+
+.atlas-expand svg {
+  transition: transform 0.16s ease;
+}
+
+.atlas-expand svg.flip {
+  transform: rotate(-90deg);
+}
+
+.atlas-card > .atlas-expand {
+  padding: 0 14px 11px;
+}
+
+.atlas-card-footer .atlas-expand {
+  width: auto;
+  margin-left: auto;
+  padding: 0;
 }
 
 .atlas-crawler-metric span,
@@ -7922,28 +8026,65 @@ a {
   font-size: 7.5px;
 }
 
+/* Axis type sits in HTML so it keeps a fixed size while the plot itself
+   stretches to the card width. */
 .atlas-crawler-chart {
-  height: 112px;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  grid-template-rows: 104px auto;
   margin: 0 14px;
   border-bottom: 1px solid var(--line);
-  background:
-    repeating-linear-gradient(
-      to bottom,
-      transparent,
-      transparent 36px,
-      #edf2f0 37px
-    );
 }
 
-.atlas-crawler-chart svg {
+.atlas-chart-scale {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding-right: 5px;
+  color: #93a1a3;
+  font-size: 7.5px;
+  font-weight: 600;
+  text-align: right;
+}
+
+.atlas-chart-scale span {
+  transform: translateY(-3px);
+}
+
+.atlas-chart-scale span:last-child {
+  transform: translateY(3px);
+}
+
+.atlas-chart-plot {
+  position: relative;
+  border-left: 1px solid var(--line);
+  background:
+    linear-gradient(#e8efed, #e8efed) 0 0 / 100% 1px no-repeat,
+    linear-gradient(#e8efed, #e8efed) 0 50% / 100% 1px no-repeat,
+    linear-gradient(#e8efed, #e8efed) 0 100% / 100% 1px no-repeat;
+}
+
+.atlas-chart-plot svg {
+  display: block;
   width: 100%;
   height: 100%;
-  overflow: visible;
+}
+
+.atlas-chart-dates {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0 9px;
+  color: #93a1a3;
+  font-size: 7.5px;
+  font-weight: 600;
+  grid-column: 2;
 }
 
 .atlas-crawler-chart-empty {
   display: flex;
-  height: 100%;
+  height: 112px;
+  margin: 0 14px;
+  border-bottom: 1px solid var(--line);
   align-items: center;
   justify-content: center;
   flex-direction: column;
@@ -8354,7 +8495,7 @@ a {
   }
 
   .atlas-crawler-chart {
-    height: 150px;
+    grid-template-rows: 140px auto;
   }
 
   .atlas-connect-card {
@@ -8428,8 +8569,14 @@ a {
   }
 
   .atlas-sankey-wrap {
-    min-height: 245px;
+    min-height: 0;
     overflow: hidden;
+  }
+
+  /* The flow scales to the narrow card width, so the tall desktop box would
+     otherwise letterbox it with dead space. */
+  .atlas-sankey {
+    height: 112px;
   }
 
   .atlas-sankey,
@@ -8437,6 +8584,31 @@ a {
   .atlas-flow-footer {
     min-width: 0;
     width: 100%;
+  }
+
+  /* A narrow card cannot centre a label over its node without overflowing,
+     so the funnel headings drop to an evenly spaced row above the flow. */
+  .atlas-funnel-headings {
+    position: static;
+    display: flex;
+    height: auto;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 4px;
+  }
+
+  .atlas-funnel-headings > div {
+    position: static;
+    min-width: 0;
+    transform: none;
+  }
+
+  .atlas-funnel-headings > div:first-child {
+    text-align: left;
+  }
+
+  .atlas-funnel-headings > div:last-child {
+    text-align: right;
   }
 
   .atlas-summary-grid {

@@ -75,6 +75,13 @@ Current crawler categories include answer retrieval, search indexing, and model
 training. A provider label means the request user agent matched a maintained
 rule; it is not yet proof that the source IP belongs to that provider.
 
+The category tabs scope the headline count and the daily chart. The provider
+and requested-page breakdowns are aggregated across all categories, and the
+Atlas labels them that way, because `/v1/web-analytics` returns those two
+rollups without a category dimension. Scoping them per category needs a backend
+change in `worker/internal/database/webanalytics.go` and a matching field in
+`CrawlerSnapshot`; do not present them as category-specific until then.
+
 AppClimb does not persist visitor IP addresses. The browser tracker respects Do
 Not Track and uses session storage by default. Persistent storage is available
 only when a site deliberately changes `data-storage` after handling consent.
@@ -126,6 +133,14 @@ row-level security.
 The public demo uses synthetic sample data and labels it as demo traffic. A
 private workspace shows an explicit setup or waiting state until real events
 arrive.
+
+The seven-day demo snapshot in `src/lib/acquisition-demo.ts` is the authored
+baseline; `demoAcquisitionSnapshotForWindow` derives the 30- and 90-day windows
+from a deterministic daily series so the window selector moves every total,
+breakdown and crawler figure together. It must stay deterministic — the public
+Atlas is server-rendered on `?atlas=1`, so any wall-clock or random input would
+break hydration. For the same reason demo rows age against the snapshot's own
+frozen `generatedAt` rather than the current time.
 
 ## Architecture and ownership
 
