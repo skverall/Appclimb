@@ -156,6 +156,120 @@ func TestFetch_EndToEndThroughNavigationChain(t *testing.T) {
 	}
 }
 
+func TestFetch_ProcessesEveryAppStoreReportAndMergesDimensions(t *testing.T) {
+	mux := http.NewServeMux()
+	var server *httptest.Server
+
+	mux.HandleFunc("/v1/analyticsReportRequests", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			w.WriteHeader(http.StatusCreated)
+			return
+		}
+		fmt.Fprint(w, `{"data":[{"id":"req-1","attributes":{"accessType":"ONGOING"}}]}`)
+	})
+	mux.HandleFunc("/v1/analyticsReportRequests/req-1/reports", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("page") == "2" {
+			fmt.Fprint(w, `{"data":[{"id":"rep-downloads","attributes":{"category":"APP_STORE"}}]}`)
+			return
+		}
+		next := server.URL + "/v1/analyticsReportRequests/req-1/reports?page=2"
+		fmt.Fprintf(
+			w,
+			`{"data":[`+
+				`{"id":"rep-discovery","attributes":{"category":"APP_STORE"}},`+
+				`{"id":"rep-other","attributes":{"category":"PERFORMANCE"}}`+
+				`],"links":{"next":%q}}`,
+			next,
+		)
+	})
+	mux.HandleFunc("/v1/analyticsReports/", func(w http.ResponseWriter, r *http.Request) {
+		reportID := strings.Split(strings.TrimPrefix(r.URL.Path, "/v1/analyticsReports/"), "/")[0]
+		out, _ := json.Marshal(map[string]any{
+			"data": []map[string]any{
+				{
+					"id": "inst-" + reportID,
+					"attributes": map[string]any{
+						"reportingDate": "2026-07-20",
+						"frequency":     "DAILY",
+					},
+				},
+			},
+		})
+		w.Write(out)
+	})
+	mux.HandleFunc("/v1/analyticsReportInstances/", func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/segments"):
+			downloadURL := server.URL + strings.TrimSuffix(r.URL.Path, "/segments") + "/download"
+			out, _ := json.Marshal(map[string]any{
+				"data": []map[string]any{
+					{"attributes": map[string]any{"url": downloadURL, "sizeInBytes": 128}},
+				},
+			})
+			w.Write(out)
+		case strings.HasSuffix(r.URL.Path, "/download"):
+			var tsv string
+			switch {
+			case strings.Contains(r.URL.Path, "rep-discovery"):
+				// totalDownloads is deliberately repeated by another report.
+				// Cross-report reconciliation must choose one app total rather
+				// than sum the same semantic metric twice.
+				tsv = "Date\timpressionsTotal\tpageViewCount\ttotalDownloads\tDevice\tTerritory\n" +
+					"2026-07-20\t100\t40\t8\tiPhone\tUS\n" +
+					"2026-07-20\t70\t30\t6\tiPad\tGB\n"
+			case strings.Contains(r.URL.Path, "rep-downloads"):
+				tsv = "Date\tunits\tDevice\tTerritory\n" +
+					"2026-07-20\t10\tiPhone\tUS\n" +
+					"2026-07-20\t5\tiPad\tGB\n"
+			default:
+				http.NotFound(w, r)
+				return
+			}
+			w.Header().Set("Content-Type", "application/gzip")
+			gw := gzip.NewWriter(w)
+			_, _ = gw.Write([]byte(tsv))
+			_ = gw.Close()
+		default:
+			http.NotFound(w, r)
+		}
+	})
+
+	server = httptest.NewServer(mux)
+	defer server.Close()
+
+	rows, err := Fetch(
+		context.Background(),
+		serverNav{client: server.Client()},
+		server.URL,
+		"test-token",
+		"app-123",
+		day("2026-07-20"),
+		day("2026-07-21"),
+		2,
+		time.Now(),
+	)
+	if err != nil {
+		t.Fatalf("Fetch: %v", err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("all APP_STORE reports should yield 3 merged metrics, got %d", len(rows))
+	}
+	want := map[string]float64{
+		"impressions":        170,
+		"product_page_views": 70,
+		"downloads":          15,
+	}
+	for _, row := range rows {
+		if row.Value != want[row.MetricKey] {
+			t.Fatalf("%s: want %v, got %v", row.MetricKey, want[row.MetricKey], row.Value)
+		}
+		delete(want, row.MetricKey)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing metrics from APP_STORE reports: %+v", want)
+	}
+}
+
 // TestFetch_ReturnsEmptyWhenNoOngoingRequestYet covers the 24-48h window where
 // Apple has not yet created the first report after the ONGOING request.
 func TestFetch_ReturnsEmptyWhenNoOngoingRequestYet(t *testing.T) {

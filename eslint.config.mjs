@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Local parallel-agent worktrees contain their own generated output.
+    ".claude/**",
   ]),
 ]);
 

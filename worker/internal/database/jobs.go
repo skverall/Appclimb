@@ -23,12 +23,99 @@ type SyncJob struct {
 	MaxAttempts        int
 }
 
+const workerLease = time.Hour
+
+func reapStaleSyncJobs(
+	ctx context.Context,
+	tx pgx.Tx,
+	workspaceID string,
+	now time.Time,
+) error {
+	if _, err := tx.Exec(
+		ctx,
+		`update sync_jobs set
+		   status=case
+		     when attempt < max_attempts then 'retrying'::sync_status
+		     else 'failed'::sync_status
+		   end,
+		   run_after=$3,
+		   locked_at=null,
+		   last_error_code='worker_lease_expired',
+		   updated_at=now()
+		 where workspace_id=$1
+		   and status='running'
+		   and locked_at < $2`,
+		workspaceID,
+		now.UTC().Add(-workerLease),
+		now.UTC(),
+	); err != nil {
+		return err
+	}
+	_, err := tx.Exec(
+		ctx,
+		`update source_connections sc set
+		   status='needs-attention',
+		   last_error_code='worker_lease_expired',
+		   updated_at=now()
+		 where sc.workspace_id=$1
+		   and exists(
+		     select 1
+		     from sync_jobs sj
+		     where sj.connection_id=sc.id
+		       and sj.status='failed'
+		       and sj.last_error_code='worker_lease_expired'
+		   )`,
+		workspaceID,
+	)
+	return err
+}
+
+func reapStaleDiagnosisRuns(
+	ctx context.Context,
+	tx pgx.Tx,
+	workspaceID string,
+	now time.Time,
+) error {
+	_, err := tx.Exec(
+		ctx,
+		`update diagnosis_runs set
+		   status=case
+		     when attempt < max_attempts then 'retrying'::sync_status
+		     else 'failed'::sync_status
+		   end,
+		   run_after=$3,
+		   locked_at=null,
+		   last_error_code='worker_lease_expired',
+		   updated_at=now()
+		 where workspace_id=$1
+		   and status='running'
+		   and locked_at < $2`,
+		workspaceID,
+		now.UTC().Add(-workerLease),
+		now.UTC(),
+	)
+	return err
+}
+
 func (db *DB) QueueDueSyncs(
 	ctx context.Context,
 	now time.Time,
 	historyDays int,
 ) (int64, error) {
-	rows, err := db.Pool.Query(ctx, "select id::text from workspaces order by id")
+	rows, err := db.Pool.Query(
+		ctx,
+		`select id::text
+		 from workspaces
+		 where (
+		   subscription_status='trialing'
+		   and (trial_ends_at > $1 or entitlement_ends_at > $1)
+		 ) or (
+		   subscription_status='active'
+		   and entitlement_ends_at > $1
+		 )
+		 order by id`,
+		now.UTC(),
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -51,6 +138,14 @@ func (db *DB) QueueDueSyncs(
 	var total int64
 	for _, workspaceID := range workspaceIDs {
 		err := db.WithWorkspace(ctx, workspaceID, func(tx pgx.Tx) error {
+			if err := reapStaleSyncJobs(
+				ctx,
+				tx,
+				workspaceID,
+				now,
+			); err != nil {
+				return err
+			}
 			result, err := tx.Exec(
 				ctx,
 				`insert into sync_jobs(
@@ -67,17 +162,30 @@ func (db *DB) QueueDueSyncs(
 				   $2,
 				   $3
 				 from source_connections sc
+				 join workspaces w on w.id=sc.workspace_id
 				 where sc.workspace_id=$1
 				   and sc.status='connected'
-				   and coalesce(sc.next_sync_at,now()) <= now()
-				   and not exists(
-				     select 1 from sync_jobs sj
-				     where sj.connection_id=sc.id
-				       and sj.status in ('queued','running','retrying')
-				   )`,
+				   and coalesce(sc.next_sync_at,$4) <= $4
+				   and (
+				     (
+				       w.subscription_status='trialing'
+				       and (
+				         w.trial_ends_at > $4
+				         or w.entitlement_ends_at > $4
+				       )
+				     )
+				     or (
+				       w.subscription_status='active'
+				       and w.entitlement_ends_at > $4
+				     )
+				   )
+				 on conflict (connection_id)
+				   where status in ('queued','running','retrying')
+				 do nothing`,
 				workspaceID,
 				from,
 				to,
+				now.UTC(),
 			)
 			if err != nil {
 				return err
@@ -93,7 +201,22 @@ func (db *DB) QueueDueSyncs(
 }
 
 func (db *DB) ClaimSyncJob(ctx context.Context) (SyncJob, error) {
-	rows, err := db.Pool.Query(ctx, "select id::text from workspaces order by id")
+	rows, err := db.Pool.Query(
+		ctx,
+		`select id::text
+		 from workspaces
+		 where (
+		   subscription_status='trialing'
+		   and (
+		     trial_ends_at > now()
+		     or entitlement_ends_at > now()
+		   )
+		 ) or (
+		   subscription_status='active'
+		   and entitlement_ends_at > now()
+		 )
+		 order by id`,
+	)
 	if err != nil {
 		return SyncJob{}, err
 	}
@@ -118,13 +241,27 @@ func (db *DB) ClaimSyncJob(ctx context.Context) (SyncJob, error) {
 			return tx.QueryRow(
 				ctx,
 				`with candidate as (
-				   select id
-				   from sync_jobs
-				   where workspace_id=$1
-				     and status in ('queued','retrying')
-				     and run_after <= now()
-				   order by created_at
-				   for update skip locked
+				   select sj.id
+				   from sync_jobs sj
+				   join workspaces w on w.id=sj.workspace_id
+				   where sj.workspace_id=$1
+				     and sj.status in ('queued','retrying')
+				     and sj.run_after <= now()
+				     and (
+				       (
+				         w.subscription_status='trialing'
+				         and (
+				           w.trial_ends_at > now()
+				           or w.entitlement_ends_at > now()
+				         )
+				       )
+				       or (
+				         w.subscription_status='active'
+				         and w.entitlement_ends_at > now()
+				       )
+				     )
+				   order by sj.created_at
+				   for update of sj skip locked
 				   limit 1
 				 )
 				 update sync_jobs sj set
@@ -176,6 +313,7 @@ func (db *DB) CompleteSyncJob(
 	pointCount int,
 	nextSync time.Time,
 ) error {
+	connectionStatus, connectionError := syncConnectionOutcome(pointCount)
 	return db.WithWorkspace(ctx, job.WorkspaceID, func(tx pgx.Tx) error {
 		if _, err := tx.Exec(
 			ctx,
@@ -193,15 +331,17 @@ func (db *DB) CompleteSyncJob(
 		if _, err := tx.Exec(
 			ctx,
 			`update source_connections set
-			   status='connected',
+			   status=$3,
 			   last_synced_at=now(),
-			   next_sync_at=$3,
-			   last_error_code=null,
+			   next_sync_at=$4,
+			   last_error_code=$5,
 			   updated_at=now()
 			 where id=$1 and workspace_id=$2`,
 			job.ConnectionID,
 			job.WorkspaceID,
+			connectionStatus,
 			nextSync,
+			connectionError,
 		); err != nil {
 			return err
 		}
@@ -219,6 +359,14 @@ func (db *DB) CompleteSyncJob(
 		)
 		return err
 	})
+}
+
+func syncConnectionOutcome(pointCount int) (string, *string) {
+	if pointCount == 0 {
+		code := "no_data_in_window"
+		return "needs-attention", &code
+	}
+	return "connected", nil
 }
 
 func (db *DB) FailSyncJob(

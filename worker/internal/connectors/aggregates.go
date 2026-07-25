@@ -21,6 +21,12 @@ import (
 // interface the appleanalytics package requires.
 var _ appleanalytics.Navigator = appleNav{}
 
+const (
+	rangeCountUnit        = "range_count"
+	rangeRatioUnit        = "range_ratio"
+	superwallSnapshotDays = 30
+)
+
 // appleNav adapts *Client to the appleanalytics.Navigator interface. The
 // underlying methods are package-private, so a thin adapter lets the
 // appleanalytics package depend on an interface without exporting the client's
@@ -170,9 +176,8 @@ func (c *Client) readPostHog(
 		Default    string
 		Metric     string
 	}{
-		{Credential: "activationEvent", Default: "app_activated", Metric: "activation_24h"},
-		{Credential: "paywallEvent", Default: "paywall_viewed", Metric: "paywall_views"},
-		{Credential: "sessionEvent", Default: "$session_start", Metric: "sessions"},
+		{Credential: "activationEvent", Default: "app_activated", Metric: "activated_users"},
+		{Credential: "sessionEvent", Default: "$session_start", Metric: "active_users"},
 	}
 	events := make([]string, 0, len(eventKeys))
 	metricByEvent := map[string]string{}
@@ -196,7 +201,7 @@ func (c *Client) readPostHog(
 		`select
 		   toStartOfDay(timestamp) as day,
 		   event,
-		   count() as total
+		   count(distinct person_id) as total
 		 from events
 		 where timestamp >= toDateTime('%s','UTC')
 		   and timestamp < toDateTime('%s','UTC')
@@ -269,9 +274,13 @@ func (c *Client) readSuperwall(
 		// as soon as applicationId is added to the encrypted credential payload.
 		return []Aggregate{}, nil
 	}
+	snapshotFrom := to.UTC().AddDate(0, 0, -superwallSnapshotDays)
+	if from.UTC().After(snapshotFrom) {
+		snapshotFrom = from.UTC()
+	}
 	query := url.Values{}
 	query.Set("environment", "PRODUCTION")
-	query.Set("from", from.UTC().Format(time.RFC3339))
+	query.Set("from", snapshotFrom.Format(time.RFC3339))
 	query.Set("to", to.UTC().Format(time.RFC3339))
 	endpoint := "https://api.superwall.com/v2/projects/" +
 		url.PathEscape(projectID) +
@@ -300,13 +309,17 @@ func (c *Client) readSuperwall(
 	for _, statistic := range response.Statistics {
 		key := strings.ToLower(statistic.Key + " " + statistic.Name)
 		metricKey := ""
-		unit := "count"
+		// Superwall's statistics endpoint returns one overview value for the
+		// entire requested date range, not a daily observation. Persist it with
+		// a non-additive unit so the diagnoser selects the newest snapshot rather
+		// than summing overlapping windows from every sync.
+		unit := rangeCountUnit
 		switch {
 		case strings.Contains(key, "paywall") && strings.Contains(key, "view"):
 			metricKey = "paywall_views"
 		case strings.Contains(key, "paywall") && strings.Contains(key, "conversion"):
 			metricKey = "paywall_conversion"
-			unit = "ratio"
+			unit = rangeRatioUnit
 		case strings.Contains(key, "trial"):
 			metricKey = "superwall_trials"
 		}
@@ -314,15 +327,20 @@ func (c *Client) readSuperwall(
 			continue
 		}
 		value := statistic.Value.Value
-		if unit == "ratio" && value > 1 {
+		if unit == rangeRatioUnit && value > 1 {
 			value /= 100
 		}
 		result = append(result, Aggregate{
-			MetricKey:       metricKey,
-			OccurredAt:      to.UTC().Add(-time.Nanosecond),
-			Value:           value,
-			Unit:            unit,
-			Dimensions:      map[string]string{"statistic": statistic.Key},
+			MetricKey:  metricKey,
+			OccurredAt: to.UTC().Add(-time.Nanosecond),
+			Value:      value,
+			Unit:       unit,
+			Dimensions: map[string]string{
+				"aggregation": "range_snapshot",
+				"statistic":   statistic.Key,
+				"window_from": snapshotFrom.Format(time.RFC3339Nano),
+				"window_to":   to.UTC().Format(time.RFC3339Nano),
+			},
 			SourceUpdatedAt: c.Now().UTC(),
 			Completeness:    1,
 		})
@@ -344,9 +362,9 @@ func (c *Client) readApple(
 	if err != nil {
 		return nil, err
 	}
-	appID := strings.TrimSpace(credentials["appId"].(string))
-	if appID == "" {
-		return nil, ProviderError{Status: 400, Code: "apple_app_id_required"}
+	appID, err := requiredAppleAppID(credentials)
+	if err != nil {
+		return nil, err
 	}
 	token, err := appleToken(issuerID, keyID, privateKey, c.Now().UTC())
 	if err != nil {

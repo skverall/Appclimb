@@ -8,15 +8,21 @@ import (
 	"strings"
 	"time"
 
+	"appclimb.app/backend/internal/billing"
+	"appclimb.app/backend/internal/diagnoser"
+	"appclimb.app/backend/internal/entitlement"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
 var (
-	ErrConflict       = errors.New("resource already exists")
-	ErrNotFound       = errors.New("resource not found")
-	ErrRefreshInvalid = errors.New("refresh token is invalid")
+	ErrConflict            = errors.New("resource already exists")
+	ErrNotFound            = errors.New("resource not found")
+	ErrRefreshInvalid      = errors.New("refresh token is invalid")
+	ErrEntitlementRequired = errors.New("workspace entitlement is required")
+	ErrCheckoutPending     = errors.New("a checkout is already pending")
+	ErrSubscriptionExists  = errors.New("a Paddle subscription already exists")
 )
 
 type Identity struct {
@@ -38,6 +44,30 @@ type Workspace struct {
 	DefaultAppID       string     `json:"defaultAppId"`
 	DefaultAppName     string     `json:"defaultAppName"`
 	DefaultStorefront  string     `json:"defaultStorefront"`
+}
+
+func (db *DB) WorkspaceEntitlement(
+	ctx context.Context,
+	workspaceID string,
+) (entitlement.State, error) {
+	var state entitlement.State
+	err := db.WithWorkspace(ctx, workspaceID, func(tx pgx.Tx) error {
+		return tx.QueryRow(
+			ctx,
+			`select subscription_status, trial_ends_at, entitlement_ends_at
+			 from workspaces
+			 where id=$1`,
+			workspaceID,
+		).Scan(
+			&state.Status,
+			&state.TrialEndsAt,
+			&state.EntitlementEndsAt,
+		)
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return entitlement.State{}, ErrNotFound
+	}
+	return state, err
 }
 
 type Source struct {
@@ -106,13 +136,151 @@ type EvidenceRecord struct {
 // ActionProposalRecord mirrors the action_proposals row the diagnosis generator
 // writes. ExternalMutationAllowed is always false (DB CHECK forces it).
 type ActionProposalRecord struct {
-	ID                    string `json:"id"`
-	InsightID             string `json:"insightId"`
-	Title                 string `json:"title"`
-	Rationale             string `json:"rationale"`
-	ExperimentTemplate    string `json:"experimentTemplate"`
-	Status                string `json:"status"`
-	ExternalMutationAllowed bool  `json:"externalMutationAllowed"`
+	ID                      string `json:"id"`
+	InsightID               string `json:"insightId"`
+	Title                   string `json:"title"`
+	Rationale               string `json:"rationale"`
+	ExperimentTemplate      string `json:"experimentTemplate"`
+	Status                  string `json:"status"`
+	ExternalMutationAllowed bool   `json:"externalMutationAllowed"`
+}
+
+type BillingSubscriptionUpdate struct {
+	SubscriptionID    string
+	CustomerID        string
+	TransactionID     string
+	CustomWorkspaceID string
+	CheckoutBinding   string
+	Status            string
+	ProductID         string
+	PriceID           string
+	EntitlementEndsAt *time.Time
+}
+
+type PaddleCheckoutBinding struct {
+	ID                     string
+	WorkspaceID            string
+	PriceID                string
+	ExpiresAt              time.Time
+	ConsumedAt             *time.Time
+	SupersededAt           *time.Time
+	ExpectedSubscriptionID string
+	ExpectedCustomerID     string
+	ExpectedTransactionID  string
+	ExpectedStatus         string
+	SubscriptionID         string
+	CustomerID             string
+	TransactionID          string
+	ProductID              string
+	Status                 string
+	LastOccurredAt         *time.Time
+}
+
+type BillingEventResult struct {
+	Inserted               bool
+	Applied                bool
+	Bound                  bool
+	Stale                  bool
+	ReconciliationRequired bool
+	Reason                 string
+}
+
+type paddleBinding struct {
+	workspaceID    string
+	subscriptionID string
+	customerID     string
+	transactionID  string
+	productID      string
+	lastOccurredAt *time.Time
+}
+
+func evaluatePaddleBinding(
+	bindings []paddleBinding,
+	update BillingSubscriptionUpdate,
+	occurredAt time.Time,
+) (paddleBinding, string, bool) {
+	if len(bindings) == 0 {
+		return paddleBinding{}, "unbound", false
+	}
+	if len(bindings) != 1 {
+		return paddleBinding{}, "binding_conflict", false
+	}
+	bound := bindings[0]
+	if (update.CustomWorkspaceID != "" && update.CustomWorkspaceID != bound.workspaceID) ||
+		(bound.subscriptionID != "" && bound.subscriptionID != update.SubscriptionID) ||
+		(bound.customerID != "" && bound.customerID != update.CustomerID) ||
+		(bound.productID != "" && bound.productID != update.ProductID) {
+		return bound, "binding_mismatch", false
+	}
+	if bound.lastOccurredAt != nil && !occurredAt.After(bound.lastOccurredAt.UTC()) {
+		return bound, "stale_event", false
+	}
+	return bound, "apply", true
+}
+
+func evaluateCheckoutBinding(
+	binding PaddleCheckoutBinding,
+	update BillingSubscriptionUpdate,
+	eventID string,
+	occurredAt time.Time,
+) (paddleBinding, string, bool) {
+	if binding.ID == "" {
+		return paddleBinding{}, "checkout_binding_not_found", false
+	}
+	if binding.ConsumedAt != nil {
+		return paddleBinding{}, "checkout_binding_consumed", false
+	}
+	if binding.SupersededAt != nil {
+		return paddleBinding{}, "checkout_binding_superseded", false
+	}
+	if eventID == "" ||
+		update.CustomWorkspaceID == "" ||
+		update.CustomWorkspaceID != binding.WorkspaceID ||
+		update.PriceID == "" ||
+		update.PriceID != binding.PriceID {
+		return paddleBinding{}, "checkout_binding_mismatch", false
+	}
+	if binding.SubscriptionID != binding.ExpectedSubscriptionID ||
+		binding.CustomerID != binding.ExpectedCustomerID ||
+		binding.TransactionID != binding.ExpectedTransactionID ||
+		binding.Status != binding.ExpectedStatus {
+		return paddleBinding{}, "checkout_binding_state_changed", false
+	}
+	if binding.SubscriptionID != "" &&
+		binding.Status != "canceled" &&
+		binding.Status != "cancelled" &&
+		binding.Status != "expired" {
+		return paddleBinding{}, "subscription_already_bound", false
+	}
+	return paddleBinding{
+		workspaceID:    binding.WorkspaceID,
+		subscriptionID: binding.SubscriptionID,
+		customerID:     binding.CustomerID,
+		transactionID:  binding.TransactionID,
+		productID:      binding.ProductID,
+		lastOccurredAt: binding.LastOccurredAt,
+	}, "apply", true
+}
+
+func markBillingEventProcessing(
+	ctx context.Context,
+	tx pgx.Tx,
+	eventID, status, reason, workspaceID string,
+) error {
+	_, err := tx.Exec(
+		ctx,
+		`update billing_events set
+		   processing_status=$2,
+		   processing_reason=nullif($3,''),
+		   workspace_id=nullif($4,'')::uuid,
+		   processed_at=now()
+		 where paddle_event_id=$1`,
+		eventID,
+		status,
+		reason,
+		workspaceID,
+	)
+	return err
 }
 
 func (db *DB) CreateIdentity(
@@ -599,10 +767,29 @@ func (db *DB) DeleteSource(ctx context.Context, workspaceID, provider string) er
 func (db *DB) QueueSourceSync(
 	ctx context.Context,
 	workspaceID, provider string,
+	now time.Time,
 	from, to time.Time,
 ) (string, error) {
 	var jobID string
 	err := db.WithWorkspace(ctx, workspaceID, func(tx pgx.Tx) error {
+		var state entitlement.State
+		if err := tx.QueryRow(
+			ctx,
+			`select subscription_status, trial_ends_at, entitlement_ends_at
+			 from workspaces
+			 where id=$1
+			 for update`,
+			workspaceID,
+		).Scan(
+			&state.Status,
+			&state.TrialEndsAt,
+			&state.EntitlementEndsAt,
+		); err != nil {
+			return err
+		}
+		if !state.Allowed(now) {
+			return ErrEntitlementRequired
+		}
 		return tx.QueryRow(
 			ctx,
 			`insert into sync_jobs(
@@ -615,6 +802,9 @@ func (db *DB) QueueSourceSync(
 			 select workspace_id,id,provider,$3,$4
 			 from source_connections
 			 where workspace_id=$1 and provider=$2 and status='connected'
+			 on conflict (connection_id)
+			   where status in ('queued','running','retrying')
+			 do update set updated_at=sync_jobs.updated_at
 			 returning id::text`,
 			workspaceID,
 			provider,
@@ -745,11 +935,12 @@ func (db *DB) GrowthInputs(
 			   array(select unnest(evidence_ids)::text),
 			   confidence::text,impact,effort,rank
 			 from insights
-			 where workspace_id=$1 and app_id=$2
+				 where workspace_id=$1 and app_id=$2 and diagnosis_version=$3
 			 order by created_at desc,rank
 			 limit 3`,
 			workspaceID,
 			workspace.DefaultAppID,
+			diagnoser.Version,
 		)
 		if err != nil {
 			return err
@@ -785,11 +976,12 @@ func (db *DB) GrowthInputs(
 			   id::text,provider::text,title,finding,metric_keys,
 			   window_from,window_to,confidence::text,before_value,after_value
 			 from evidence
-			 where workspace_id=$1 and app_id=$2
+				 where workspace_id=$1 and app_id=$2 and calculation_version=$3
 			 order by created_at desc
 			 limit 12`,
 			workspaceID,
 			workspace.DefaultAppID,
+			diagnoser.Version,
 		)
 		if err != nil {
 			return err
@@ -821,19 +1013,23 @@ func (db *DB) GrowthInputs(
 		actionRows, err := tx.Query(
 			ctx,
 			`select
-			   id::text,
-			   insight_id::text,
-			   title,
-			   rationale,
-			   experiment_template,
-			   status,
-			   external_mutation_allowed
-			 from action_proposals
-			 where workspace_id=$1 and app_id=$2
-			 order by created_at desc
+				   ap.id::text,
+				   ap.insight_id::text,
+				   ap.title,
+				   ap.rationale,
+				   ap.experiment_template,
+				   ap.status,
+				   ap.external_mutation_allowed
+				 from action_proposals ap
+				 join insights i on i.id=ap.insight_id
+				 where ap.workspace_id=$1
+				   and ap.app_id=$2
+				   and i.diagnosis_version=$3
+				 order by ap.created_at desc
 			 limit 9`,
 			workspaceID,
 			workspace.DefaultAppID,
+			diagnoser.Version,
 		)
 		if err != nil {
 			return err
@@ -864,20 +1060,134 @@ func (db *DB) GrowthInputs(
 	return workspace, metrics, events, insights, evidence, actions, err
 }
 
+func (db *DB) CreateCheckoutBinding(
+	ctx context.Context,
+	workspaceID, priceID string,
+	tokenHash []byte,
+	expiresAt time.Time,
+) error {
+	if workspaceID == "" ||
+		priceID == "" ||
+		len(tokenHash) != 32 ||
+		expiresAt.IsZero() {
+		return errors.New("invalid checkout binding")
+	}
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var status, subscriptionID, customerID, transactionID string
+	if err := tx.QueryRow(
+		ctx,
+		`select
+		   subscription_status,
+		   coalesce(paddle_subscription_id,''),
+		   coalesce(paddle_customer_id,''),
+		   coalesce(paddle_transaction_id,'')
+		 from workspaces
+		 where id=$1
+		 for update`,
+		workspaceID,
+	).Scan(
+		&status,
+		&subscriptionID,
+		&customerID,
+		&transactionID,
+	); errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	} else if err != nil {
+		return err
+	}
+	normalizedStatus := strings.ToLower(strings.TrimSpace(status))
+	hasPaddleBinding := subscriptionID != "" ||
+		customerID != "" ||
+		transactionID != ""
+	if hasPaddleBinding &&
+		normalizedStatus != "canceled" &&
+		normalizedStatus != "cancelled" &&
+		normalizedStatus != "expired" {
+		return ErrSubscriptionExists
+	}
+
+	if _, err := tx.Exec(
+		ctx,
+		`update paddle_checkout_bindings set
+		   superseded_at=now()
+		 where workspace_id=$1
+		   and consumed_at is null
+		   and superseded_at is null
+		   and expires_at <= now()`,
+		workspaceID,
+	); err != nil {
+		return err
+	}
+	var pending bool
+	if err := tx.QueryRow(
+		ctx,
+		`select exists(
+		   select 1
+		   from paddle_checkout_bindings
+		   where workspace_id=$1
+		     and consumed_at is null
+		     and superseded_at is null
+		     and expires_at > now()
+		 )`,
+		workspaceID,
+	).Scan(&pending); err != nil {
+		return err
+	}
+	if pending {
+		return ErrCheckoutPending
+	}
+
+	result, err := tx.Exec(
+		ctx,
+		`insert into paddle_checkout_bindings(
+		   workspace_id,
+		   token_hash,
+		   price_id,
+		   expected_subscription_id,
+		   expected_customer_id,
+		   expected_transaction_id,
+		   expected_status,
+		   expires_at
+		 ) values(
+		   $1,$2,$3,nullif($4,''),nullif($5,''),nullif($6,''),$7,$8
+		 )`,
+		workspaceID,
+		tokenHash,
+		priceID,
+		subscriptionID,
+		customerID,
+		transactionID,
+		normalizedStatus,
+		expiresAt.UTC(),
+	)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() != 1 {
+		return errors.New("checkout binding was not created")
+	}
+	return tx.Commit(ctx)
+}
+
 func (db *DB) RecordBillingEvent(
 	ctx context.Context,
 	eventID, eventType string,
 	occurredAt time.Time,
 	payload json.RawMessage,
-	workspaceID, subscriptionID, status string,
-	entitlementEndsAt *time.Time,
-) (bool, error) {
+	update *BillingSubscriptionUpdate,
+) (BillingEventResult, error) {
+	result := BillingEventResult{}
 	tx, err := db.Pool.Begin(ctx)
 	if err != nil {
-		return false, err
+		return result, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	result, err := tx.Exec(
+	insertResult, err := tx.Exec(
 		ctx,
 		`insert into billing_events(
 		   paddle_event_id,event_type,occurred_at,payload
@@ -889,30 +1199,298 @@ func (db *DB) RecordBillingEvent(
 		payload,
 	)
 	if err != nil {
-		return false, err
+		return result, err
 	}
-	inserted := result.RowsAffected() == 1
-	if inserted && workspaceID != "" && strings.HasPrefix(eventType, "subscription.") {
-		if _, err := tx.Exec(
+	result.Inserted = insertResult.RowsAffected() == 1
+	if !result.Inserted {
+		var processingStatus, processingReason string
+		if err := tx.QueryRow(
 			ctx,
-			`update workspaces set
-			   paddle_subscription_id=nullif($2,''),
-			   subscription_status=coalesce(nullif($3,''),subscription_status),
-			   entitlement_ends_at=$4,
-			   updated_at=now()
-			 where id=$1`,
-			workspaceID,
-			subscriptionID,
-			status,
-			entitlementEndsAt,
+			`select
+			   processing_status,
+			   coalesce(processing_reason,'')
+			 from billing_events
+			 where paddle_event_id=$1
+			 for update`,
+			eventID,
+		).Scan(
+			&processingStatus,
+			&processingReason,
 		); err != nil {
-			return false, err
+			return result, err
+		}
+		if processingStatus != "received" &&
+			processingStatus != "reconciliation_required" {
+			result.Reason = "duplicate"
+			if err := tx.Commit(ctx); err != nil {
+				return result, err
+			}
+			return result, nil
+		}
+	}
+	if update == nil || !strings.HasPrefix(eventType, "subscription.") {
+		result.Reason = "event_not_entitlement_bearing"
+		if err := markBillingEventProcessing(
+			ctx,
+			tx,
+			eventID,
+			"ignored",
+			result.Reason,
+			"",
+		); err != nil {
+			return result, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return result, err
+		}
+		return result, nil
+	}
+
+	rows, err := tx.Query(
+		ctx,
+		`select
+		   id::text,
+		   coalesce(paddle_subscription_id,''),
+		   coalesce(paddle_customer_id,''),
+		   coalesce(paddle_transaction_id,''),
+		   coalesce(paddle_product_id,''),
+		   paddle_last_event_occurred_at
+		 from workspaces
+		 where
+		   ($1 <> '' and paddle_subscription_id=$1)
+		   or ($2 <> '' and paddle_customer_id=$2)
+		   or ($3 <> '' and paddle_transaction_id=$3)
+		 for update`,
+		update.SubscriptionID,
+		update.CustomerID,
+		update.TransactionID,
+	)
+	if err != nil {
+		return result, err
+	}
+	bindings := []paddleBinding{}
+	seen := map[string]bool{}
+	for rows.Next() {
+		var candidate paddleBinding
+		if err := rows.Scan(
+			&candidate.workspaceID,
+			&candidate.subscriptionID,
+			&candidate.customerID,
+			&candidate.transactionID,
+			&candidate.productID,
+			&candidate.lastOccurredAt,
+		); err != nil {
+			rows.Close()
+			return result, err
+		}
+		if !seen[candidate.workspaceID] {
+			bindings = append(bindings, candidate)
+			seen[candidate.workspaceID] = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return result, err
+	}
+	rows.Close()
+	bound, reason, canApply := evaluatePaddleBinding(bindings, *update, occurredAt)
+	checkoutBindingID := ""
+	checkoutWorkspaceID := ""
+	if len(bindings) == 1 {
+		result.Bound = true
+	}
+	if !canApply &&
+		(reason == "unbound" || reason == "binding_mismatch") &&
+		update.CheckoutBinding != "" {
+		tokenHash, hashErr := billing.HashCheckoutBindingToken(
+			update.CheckoutBinding,
+		)
+		if hashErr != nil {
+			reason = "checkout_binding_invalid"
+		} else {
+			var candidate PaddleCheckoutBinding
+			queryErr := tx.QueryRow(
+				ctx,
+				`select
+				   cb.id::text,
+				   cb.workspace_id::text,
+				   cb.price_id,
+				   cb.expires_at,
+				   cb.consumed_at,
+				   cb.superseded_at,
+				   coalesce(cb.expected_subscription_id,''),
+				   coalesce(cb.expected_customer_id,''),
+				   coalesce(cb.expected_transaction_id,''),
+				   cb.expected_status,
+				   coalesce(w.paddle_subscription_id,''),
+				   coalesce(w.paddle_customer_id,''),
+				   coalesce(w.paddle_transaction_id,''),
+				   coalesce(w.paddle_product_id,''),
+				   w.subscription_status,
+				   w.paddle_last_event_occurred_at
+				 from paddle_checkout_bindings cb
+				 join workspaces w on w.id=cb.workspace_id
+				 where cb.token_hash=$1
+				 for update of cb,w`,
+				tokenHash,
+			).Scan(
+				&candidate.ID,
+				&candidate.WorkspaceID,
+				&candidate.PriceID,
+				&candidate.ExpiresAt,
+				&candidate.ConsumedAt,
+				&candidate.SupersededAt,
+				&candidate.ExpectedSubscriptionID,
+				&candidate.ExpectedCustomerID,
+				&candidate.ExpectedTransactionID,
+				&candidate.ExpectedStatus,
+				&candidate.SubscriptionID,
+				&candidate.CustomerID,
+				&candidate.TransactionID,
+				&candidate.ProductID,
+				&candidate.Status,
+				&candidate.LastOccurredAt,
+			)
+			if errors.Is(queryErr, pgx.ErrNoRows) {
+				reason = "checkout_binding_not_found"
+			} else if queryErr != nil {
+				return result, queryErr
+			} else {
+				checkoutWorkspaceID = candidate.WorkspaceID
+				bound, reason, canApply = evaluateCheckoutBinding(
+					candidate,
+					*update,
+					eventID,
+					occurredAt,
+				)
+				if canApply {
+					checkoutBindingID = candidate.ID
+					result.Bound = true
+				}
+			}
+		}
+	}
+	if !canApply {
+		result.Reason = reason
+		result.Stale = reason == "stale_event"
+		workspaceID := checkoutWorkspaceID
+		if workspaceID == "" {
+			workspaceID = bound.workspaceID
+		}
+		processingStatus := "ignored"
+		if checkoutWorkspaceID != "" ||
+			reason == "binding_mismatch" ||
+			reason == "binding_conflict" {
+			processingStatus = "reconciliation_required"
+			result.ReconciliationRequired = true
+		}
+		if err := markBillingEventProcessing(
+			ctx,
+			tx,
+			eventID,
+			processingStatus,
+			reason,
+			workspaceID,
+		); err != nil {
+			return result, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return result, err
+		}
+		return result, nil
+	}
+	updateResult, err := tx.Exec(
+		ctx,
+		`update workspaces set
+		   paddle_subscription_id=case
+		     when $10 then nullif($2,'')
+		     else coalesce(paddle_subscription_id,nullif($2,''))
+		   end,
+		   paddle_customer_id=case
+		     when $10 then nullif($3,'')
+		     else coalesce(paddle_customer_id,nullif($3,''))
+		   end,
+		   paddle_transaction_id=case
+		     when $10 then nullif($4,'')
+		     else coalesce(paddle_transaction_id,nullif($4,''))
+		   end,
+		   paddle_product_id=$5,
+		   paddle_price_id=$6,
+		   paddle_last_event_occurred_at=$7,
+		   subscription_status=$8,
+		   entitlement_ends_at=$9,
+		   updated_at=now()
+		 where id=$1
+		   and (
+		     paddle_last_event_occurred_at is null
+		     or paddle_last_event_occurred_at < $7
+		   )`,
+		bound.workspaceID,
+		update.SubscriptionID,
+		update.CustomerID,
+		update.TransactionID,
+		update.ProductID,
+		update.PriceID,
+		occurredAt.UTC(),
+		update.Status,
+		update.EntitlementEndsAt,
+		checkoutBindingID != "",
+	)
+	if err != nil {
+		return result, err
+	}
+	if updateResult.RowsAffected() != 1 {
+		result.Stale = true
+		result.Reason = "stale_event"
+		if err := markBillingEventProcessing(
+			ctx,
+			tx,
+			eventID,
+			"ignored",
+			result.Reason,
+			bound.workspaceID,
+		); err != nil {
+			return result, err
+		}
+	} else {
+		if checkoutBindingID != "" {
+			consumeResult, err := tx.Exec(
+				ctx,
+				`update paddle_checkout_bindings set
+				 consumed_at=now(),
+				   consumed_by_event_id=$2
+				 where id=$1
+				   and consumed_at is null
+				   and superseded_at is null`,
+				checkoutBindingID,
+				eventID,
+			)
+			if err != nil {
+				return result, err
+			}
+			if consumeResult.RowsAffected() != 1 {
+				return result, errors.New(
+					"checkout binding was not consumed atomically",
+				)
+			}
+		}
+		result.Applied = true
+		result.Reason = "applied"
+		if err := markBillingEventProcessing(
+			ctx,
+			tx,
+			eventID,
+			"applied",
+			result.Reason,
+			bound.workspaceID,
+		); err != nil {
+			return result, err
 		}
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return false, err
+		return result, err
 	}
-	return inserted, nil
+	return result, nil
 }
 
 func (db *DB) Ping(ctx context.Context) error {

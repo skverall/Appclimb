@@ -20,9 +20,9 @@ func TestParse_MapsColumnsToAppClimbMetricKeys(t *testing.T) {
 		t.Fatalf("Parse: %v", err)
 	}
 	wantKeys := map[string]bool{
-		"impressions":         false,
-		"product_page_views":  false,
-		"downloads":           false,
+		"impressions":        false,
+		"product_page_views": false,
+		"downloads":          false,
 	}
 	for _, r := range rows {
 		wantKeys[r.MetricKey] = true
@@ -149,6 +149,45 @@ func TestParse_DimensionsCarryCategory(t *testing.T) {
 	}
 	if rows[0].Dimensions["category"] != "APP_STORE" {
 		t.Fatalf("category dimension: want APP_STORE, got %q", rows[0].Dimensions["category"])
+	}
+}
+
+func TestParse_AggregatesDimensionRowsDeterministically(t *testing.T) {
+	tsv := "Date\timpressionsTotal\tpageViewCount\tunits\tDevice\tTerritory\n" +
+		"2026-07-20\t100\t40\t10\tiPhone\tUS\n" +
+		"2026-07-20\t70\t30\t5\tiPad\tGB\n"
+	rows, err := Parse(
+		strings.NewReader(tsv),
+		day("2026-07-20"),
+		day("2026-07-21"),
+		2,
+		time.Now(),
+	)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("dimension rows must collapse to 3 app/day metrics, got %d", len(rows))
+	}
+	want := []struct {
+		key   string
+		value float64
+	}{
+		{"downloads", 15},
+		{"impressions", 170},
+		{"product_page_views", 70},
+	}
+	for i, expected := range want {
+		if rows[i].MetricKey != expected.key || rows[i].Value != expected.value {
+			t.Fatalf(
+				"row %d: want %s=%v, got %s=%v",
+				i,
+				expected.key,
+				expected.value,
+				rows[i].MetricKey,
+				rows[i].Value,
+			)
+		}
 	}
 }
 

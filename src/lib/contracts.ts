@@ -26,7 +26,13 @@ export interface MetricPoint {
   metricKey: string;
   occurredAt: string;
   value: number;
-  unit: "count" | "currency" | "ratio" | "rank";
+  unit:
+    | "count"
+    | "currency"
+    | "ratio"
+    | "rank"
+    | "range_count"
+    | "range_ratio";
   dimensions: Record<string, string>;
   freshnessHours: number;
   completeness: number;
@@ -112,8 +118,9 @@ export interface SourceConnection {
   provider: SourceProvider;
   label: string;
   status: "connected" | "needs-attention" | "not-connected";
-  lastSyncAt?: string;
-  freshnessHours?: number;
+  lastSyncAt?: string | null;
+  freshnessHours?: number | null;
+  lastErrorCode?: string | null;
   capabilities: string[];
   readOnly: true;
 }
@@ -134,7 +141,7 @@ export interface CustomerCluster {
 }
 
 export interface DashboardSnapshot {
-  mode?: "demo" | "live";
+  mode?: "demo" | "empty" | "live" | "restricted" | "unavailable";
   generatedAt: string;
   workspaceName: string;
   app: {

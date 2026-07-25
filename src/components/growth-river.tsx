@@ -10,10 +10,10 @@ import {
   RefreshCw,
   Sparkles,
   Store,
-  X,
   Zap,
 } from "lucide-react";
 
+import { ModalDialog } from "@/components/modal-dialog";
 import type { GrowthStage, Insight, StageHealth, StageId } from "@/lib/contracts";
 
 const ICONS = {
@@ -61,6 +61,7 @@ export const GrowthRiver = memo(function GrowthRiver({
   replayIndex,
   eventCount,
   onSelectInsight,
+  illustrativeReplay,
 }: {
   stages: GrowthStage[];
   insights: Insight[];
@@ -68,15 +69,18 @@ export const GrowthRiver = memo(function GrowthRiver({
   replayIndex: number;
   eventCount: number;
   onSelectInsight: (insightId: string) => void;
+  illustrativeReplay: boolean;
 }) {
   const [methodologyOpen, setMethodologyOpen] = useState(false);
   const activeInsight = insights.find(
     (insight) => insight.id === activeInsightId,
   );
-  const factorIndex = Math.min(
-    REPLAY_WIDTH_FACTORS.length - 1,
-    Math.round((replayIndex / Math.max(eventCount, 1)) * 4),
-  );
+  const factorIndex = illustrativeReplay
+    ? Math.min(
+        REPLAY_WIDTH_FACTORS.length - 1,
+        Math.round((replayIndex / Math.max(eventCount, 1)) * 4),
+      )
+    : REPLAY_WIDTH_FACTORS.length - 1;
   const stagePoints = useMemo(
     () =>
       stages.map((stage, index) => ({
@@ -169,6 +173,9 @@ export const GrowthRiver = memo(function GrowthRiver({
   }, [stagePoints]);
   const bottleneckStage =
     bottleneckIndex >= 0 ? stagePoints[bottleneckIndex] : undefined;
+  const hasUnknownStage = stagePoints.some(
+    (stage) => stage.health === "unknown",
+  );
 
   /**
    * When a benchmark exists, frame the gap as points below baseline (the most
@@ -190,6 +197,11 @@ export const GrowthRiver = memo(function GrowthRiver({
           <h2 id="growth-river-title">Growth River</h2>
         </div>
         <div className="river-legend" aria-label="River legend">
+          {hasUnknownStage && (
+            <span>
+              <i className="legend-line unknown" /> Awaiting baseline
+            </span>
+          )}
           <span>
             <i className="legend-line healthy" /> Healthy flow
           </span>
@@ -202,8 +214,9 @@ export const GrowthRiver = memo(function GrowthRiver({
         </div>
       </div>
 
-      <div className="river-canvas">
-        <svg
+      <div className="river-scroll-frame">
+        <div className="river-canvas">
+          <svg
           className="river-svg"
           viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
           preserveAspectRatio="none"
@@ -260,75 +273,77 @@ export const GrowthRiver = memo(function GrowthRiver({
             strokeLinecap="round"
             pointerEvents="none"
           />
-        </svg>
+          </svg>
 
-        <div className="stage-overlay">
-          {stages.map((stage, index) => {
-            const Icon = ICONS[stage.id];
-            const stageInsight = insights.find(
-              (insight) => insight.stageId === stage.id,
-            );
-            const isSelected = activeInsight?.stageId === stage.id;
+          <div className="stage-overlay">
+            {stages.map((stage, index) => {
+              const Icon = ICONS[stage.id];
+              const stageInsight = insights.find(
+                (insight) => insight.stageId === stage.id,
+              );
+              const isSelected = activeInsight?.stageId === stage.id;
 
-            return (
-              <button
-                type="button"
-                key={stage.id}
-                className={[
-                  "stage-node",
-                  `stage-${stage.health}`,
-                  isSelected ? "selected" : "",
-                ].join(" ")}
-                style={{ left: `${stageLeftPct(index, stages.length)}%` }}
-                onClick={() =>
-                  stageInsight && onSelectInsight(stageInsight.id)
-                }
-                aria-label={`${stage.label}: ${stage.formattedValue}${
-                  stage.conversionRate === null
-                    ? ""
-                    : `, ${(stage.conversionRate * 100).toFixed(1)}% conversion`
-                }`}
-              >
-                <span className="stage-label">{stage.label}</span>
-                <span className="stage-icon">
-                  <Icon size={18} strokeWidth={2} />
-                </span>
-                <span className="stage-value">{stage.formattedValue}</span>
-                <span className="stage-rate">
-                  {stage.conversionRate === null
-                    ? "Entry volume"
-                    : `${(stage.conversionRate * 100).toFixed(1)}%`}
-                </span>
-              </button>
-            );
-          })}
-        </div>
-
-        {bottleneckStage && (
-          <div
-            className={`bottleneck-callout callout-${bottleneckStage.health}`}
-            style={{
-              left: `${stageLeftPct(bottleneckIndex, stagePoints.length)}%`,
-            }}
-          >
-            <span className="bottleneck-dot" />
-            <div>
-              <strong>
-                {bottleneckStage.health === "critical"
-                  ? "First confirmed bottleneck"
-                  : "Stage to watch"}
-              </strong>
-              <span>
-                {bottleneckStage.label}
-                {bottleneckDelta != null && bottleneckDelta > 0
-                  ? ` · ${bottleneckDelta.toFixed(1)} pts below baseline`
-                  : bottleneckStage.conversionRate != null
-                    ? ` · ${(bottleneckStage.conversionRate * 100).toFixed(1)}% conversion`
-                    : ""}
-              </span>
-            </div>
+              return (
+                <button
+                  type="button"
+                  key={stage.id}
+                  className={[
+                    "stage-node",
+                    `stage-${stage.health}`,
+                    isSelected ? "selected" : "",
+                  ].join(" ")}
+                  style={{ left: `${stageLeftPct(index, stages.length)}%` }}
+                  onClick={() =>
+                    stageInsight && onSelectInsight(stageInsight.id)
+                  }
+                  disabled={!stageInsight}
+                  aria-label={`${stage.label}: ${stage.formattedValue}${
+                    stage.conversionRate === null
+                      ? ""
+                      : `, ${(stage.conversionRate * 100).toFixed(1)}% conversion`
+                  }`}
+                >
+                  <span className="stage-label">{stage.label}</span>
+                  <span className="stage-icon">
+                    <Icon size={18} strokeWidth={2} />
+                  </span>
+                  <span className="stage-value">{stage.formattedValue}</span>
+                  <span className="stage-rate">
+                    {stage.conversionRate === null
+                      ? "Entry volume"
+                      : `${(stage.conversionRate * 100).toFixed(1)}%`}
+                  </span>
+                </button>
+              );
+            })}
           </div>
-        )}
+
+          {bottleneckStage && (
+            <div
+              className={`bottleneck-callout callout-${bottleneckStage.health}`}
+              style={{
+                left: `${stageLeftPct(bottleneckIndex, stagePoints.length)}%`,
+              }}
+            >
+              <span className="bottleneck-dot" />
+              <div>
+                <strong>
+                  {bottleneckStage.health === "critical"
+                    ? "First confirmed bottleneck"
+                    : "Stage to watch"}
+                </strong>
+                <span>
+                  {bottleneckStage.label}
+                  {bottleneckDelta != null && bottleneckDelta > 0
+                    ? ` · ${bottleneckDelta.toFixed(1)} pts below baseline`
+                    : bottleneckStage.conversionRate != null
+                      ? ` · ${(bottleneckStage.conversionRate * 100).toFixed(1)}% conversion`
+                      : ""}
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="river-footer">
@@ -346,70 +361,52 @@ export const GrowthRiver = memo(function GrowthRiver({
       </div>
 
       {methodologyOpen && (
-        <div
-          className="settings-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.currentTarget === event.target) {
-              setMethodologyOpen(false);
-            }
-          }}
+        <ModalDialog
+          labelledBy="methodology-title"
+          onClose={() => setMethodologyOpen(false)}
+          dialogClassName="settings-dialog methodology-dialog"
+          closeLabel="Close methodology"
         >
-          <section
-            className="settings-dialog methodology-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="methodology-title"
-          >
-            <button
-              className="settings-close"
-              type="button"
-              aria-label="Close methodology"
-              onClick={() => setMethodologyOpen(false)}
-            >
-              <X size={18} />
-            </button>
-            <span className="eyebrow">How River Atlas works</span>
-            <h2 id="methodology-title">Evidence before advice</h2>
-            <div className="methodology-grid">
-              <div>
-                <strong>1 · Follow the flow</strong>
-                <p>
-                  Width represents observed volume moving from discovery to
-                  renewal. Stage conversion uses the preceding stage as its
-                  denominator.
-                </p>
-              </div>
-              <div>
-                <strong>2 · Respect source ownership</strong>
-                <p>
-                  Apple owns store metrics, PostHog product behavior,
-                  Superwall paywalls, and RevenueCat subscription lifecycle.
-                </p>
-              </div>
-              <div>
-                <strong>3 · Break ties upstream</strong>
-                <p>
-                  AppClimb surfaces the earliest material loss with sufficient
-                  freshness and volume so downstream symptoms are not blamed.
-                </p>
-              </div>
-              <div>
-                <strong>4 · Keep uncertainty visible</strong>
-                <p>
-                  Every diagnosis is Observed, Derived, or Hypothesis and keeps
-                  its evidence window and confidence attached.
-                </p>
-              </div>
-            </div>
-            <div className="settings-security-note">
+          <span className="eyebrow">How River Atlas works</span>
+          <h2 id="methodology-title">Evidence before advice</h2>
+          <div className="methodology-grid">
+            <div>
+              <strong>1 · Follow the flow</strong>
               <p>
-                AppClimb creates read-only action proposals. It never changes
-                metadata, paywalls, ads, or experiments for you.
+                Width represents observed volume moving from discovery to
+                renewal. Stage conversion uses the preceding stage as its
+                denominator.
               </p>
             </div>
-          </section>
-        </div>
+            <div>
+              <strong>2 · Respect source ownership</strong>
+              <p>
+                Apple owns store metrics, PostHog product behavior,
+                Superwall paywalls, and RevenueCat subscription lifecycle.
+              </p>
+            </div>
+            <div>
+              <strong>3 · Break ties upstream</strong>
+              <p>
+                AppClimb surfaces the earliest material loss with sufficient
+                freshness and volume so downstream symptoms are not blamed.
+              </p>
+            </div>
+            <div>
+              <strong>4 · Keep uncertainty visible</strong>
+              <p>
+                Every diagnosis is Observed, Derived, or Hypothesis and keeps
+                its evidence window and confidence attached.
+              </p>
+            </div>
+          </div>
+          <div className="settings-security-note">
+            <p>
+              AppClimb creates read-only action proposals. It never changes
+              metadata, paywalls, ads, or experiments for you.
+            </p>
+          </div>
+        </ModalDialog>
       )}
     </section>
   );

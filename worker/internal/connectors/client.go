@@ -94,8 +94,8 @@ func NewClient() *Client {
 				return validateExternalHTTPS(request.URL)
 			},
 		},
-		Now:               time.Now,
-		AppleBaseURL:      "https://api.appstoreconnect.apple.com",
+		Now:                time.Now,
+		AppleBaseURL:       "https://api.appstoreconnect.apple.com",
 		AppleReportLagDays: 2,
 	}
 }
@@ -142,6 +142,10 @@ func (c *Client) verifyApple(
 	ctx context.Context,
 	credentials map[string]any,
 ) (Verification, error) {
+	appID, err := requiredAppleAppID(credentials)
+	if err != nil {
+		return Verification{}, err
+	}
 	issuerID, keyID, privateKey, err := require3(
 		credentials,
 		"issuerId",
@@ -155,16 +159,22 @@ func (c *Client) verifyApple(
 	if err != nil {
 		return Verification{}, err
 	}
+	baseURL := c.AppleBaseURL
+	if baseURL == "" {
+		baseURL = "https://api.appstoreconnect.apple.com"
+	}
 	body, err := c.getJSON(
 		ctx,
-		"https://api.appstoreconnect.apple.com/v1/apps?limit=1",
+		strings.TrimRight(baseURL, "/")+
+			"/v1/apps/"+
+			url.PathEscape(appID),
 		token,
 	)
 	if err != nil {
 		return Verification{}, err
 	}
 	var response struct {
-		Data []struct {
+		Data struct {
 			Attributes struct {
 				Name string `json:"name"`
 			} `json:"attributes"`
@@ -173,9 +183,9 @@ func (c *Client) verifyApple(
 	if err := json.Unmarshal(body, &response); err != nil {
 		return Verification{}, ProviderError{Status: 502, Retryable: true, Code: "invalid_provider_response"}
 	}
-	label := ""
-	if len(response.Data) > 0 {
-		label = response.Data[0].Attributes.Name
+	label := strings.TrimSpace(response.Data.Attributes.Name)
+	if label == "" {
+		label = appID
 	}
 	return Verification{
 		Provider:     "app-store-connect",
@@ -183,6 +193,14 @@ func (c *Client) verifyApple(
 		Message:      "Key verified. Apple analytics availability is checked by the worker.",
 		CheckedAt:    c.Now().UTC(),
 	}, nil
+}
+
+func requiredAppleAppID(credentials map[string]any) (string, error) {
+	appID, err := requiredString(credentials, "appId")
+	if err != nil {
+		return "", ProviderError{Status: 400, Code: "apple_app_id_required"}
+	}
+	return appID, nil
 }
 
 func appleToken(

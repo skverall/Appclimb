@@ -12,9 +12,18 @@ export default function RefundPolicyPage() {
       <section>
         <h2>Requesting a refund</h2>
         <p>
-          Contact support with the email used at checkout and the Paddle
-          transaction reference. Eligible requests are reviewed according to
-          applicable consumer law and Paddle&apos;s buyer terms.
+          Open{" "}
+          <a
+            href="https://paddle.net/contact"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Paddle buyer support
+          </a>{" "}
+          and choose <strong>Request refund</strong>. Use the email from
+          checkout and your Paddle transaction reference so the purchase can
+          be located. Eligibility is reviewed under applicable consumer law
+          and Paddle&apos;s buyer terms.
         </p>
       </section>
       <section>
@@ -28,9 +37,9 @@ export default function RefundPolicyPage() {
       <section>
         <h2>Duplicate or incorrect charges</h2>
         <p>
-          Duplicate charges and confirmed billing errors are corrected as soon
-          as they are verified. Paddle may request additional transaction
-          details to complete the review.
+          Report duplicate or unrecognized charges through the same Paddle
+          buyer-support page. Paddle may request additional transaction details
+          to verify and resolve the charge.
         </p>
       </section>
       <p className="legal-note">

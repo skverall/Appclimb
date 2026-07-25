@@ -32,9 +32,10 @@ export function InsightPanel({
 }) {
   const selected =
     insights.find((insight) => insight.id === selectedInsightId) ?? insights[0];
-  const selectedEvidence = evidence.find((item) =>
+  const selectedEvidenceItems = evidence.filter((item) =>
     selected?.evidenceIds.includes(item.id),
   );
+  const selectedEvidence = selectedEvidenceItems[0];
   const proposal = actionProposals.find(
     (item) => item.insightId === selected?.id,
   );
@@ -50,7 +51,7 @@ export function InsightPanel({
       </div>
 
       <div className="opportunity-list">
-        {insights.slice(0, 3).map((insight) => (
+        {insights.map((insight) => (
           <button
             className={
               insight.id === selected?.id
@@ -78,6 +79,17 @@ export function InsightPanel({
           </button>
         ))}
       </div>
+
+      {!selected && (
+        <div className="insight-empty">
+          <Layers3 size={21} />
+          <strong>No ranked opportunity yet</strong>
+          <p>
+            AppClimb will keep this panel empty until a source-backed
+            bottleneck has enough evidence.
+          </p>
+        </div>
+      )}
 
       {selected && selectedEvidence && proposal && (
         <div className="selected-opportunity-detail">
@@ -109,7 +121,7 @@ export function InsightPanel({
 
           <div className="proposal-preview">
             <span className="proposal-icon">
-              <FlaskConical size={17} />
+              <FlaskConical aria-hidden="true" size={18} strokeWidth={2.1} />
             </span>
             <div>
               <span>Recommended experiment</span>
@@ -127,7 +139,9 @@ export function InsightPanel({
           </button>
           <p className="readonly-note">
             <Layers3 size={14} />
-            Proposal only · AppClimb cannot change external systems
+            {selectedEvidenceItems.length} evidence{" "}
+            {selectedEvidenceItems.length === 1 ? "record" : "records"} ·
+            Proposal only · no external changes
           </p>
         </div>
       )}

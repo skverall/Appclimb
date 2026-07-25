@@ -1,23 +1,57 @@
+import type { Metadata } from "next";
 import Link from "next/link";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, Clock3 } from "lucide-react";
+import { redirect } from "next/navigation";
 
-export default function CheckoutSuccessPage() {
+import { readBackend } from "@/lib/backend";
+import { isBackendIdentity } from "@/lib/identity-schema";
+
+export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "Plan status",
+  robots: { index: false, follow: false },
+};
+
+interface IdentityEnvelope {
+  data?: unknown;
+}
+
+export default async function CheckoutSuccessPage() {
+  const response = await readBackend("/v1/me");
+  if (!response?.ok) redirect("/login");
+
+  const identity = ((await response.json()) as IdentityEnvelope).data;
+  if (!isBackendIdentity(identity)) redirect("/login");
+
+  const active =
+    identity.subscriptionStatus.toLowerCase() === "active" ||
+    identity.subscriptionStatus.toLowerCase() === "paid";
+
   return (
     <main className="checkout-success-page">
       <section className="checkout-success-card">
         <span className="checkout-success-icon">
-          <CheckCircle2 size={30} />
+          {active ? <CheckCircle2 size={30} /> : <Clock3 size={30} />}
         </span>
-        <span className="eyebrow">Payment received</span>
-        <h1>AppClimb Pro is being activated</h1>
+        <span className="eyebrow">
+          {active ? "Entitlement confirmed" : "Plan verification"}
+        </span>
+        <h1>
+          {active
+            ? "AppClimb Pro is active"
+            : "We are still confirming your plan"}
+        </h1>
         <p>
-          Paddle has confirmed the checkout. Your workspace entitlement will be
-          updated by the signed billing webhook.
+          {active
+            ? "Your workspace entitlement is active on the AppClimb server."
+            : "This page cannot confirm a payment from its URL alone. Your workspace will update only after the signed billing webhook confirms the entitlement."}
         </p>
         <Link href="/">Return to your Growth River</Link>
         <small>
-          If the workspace still shows the trial state, refresh it in a few
-          seconds.
+          {active
+            ? `Signed in as ${identity.email}.`
+            : "If you just completed checkout, return to the workspace and check again shortly."}
         </small>
         <nav className="checkout-legal-links" aria-label="Checkout legal links">
           <Link href="/privacy">Privacy</Link>

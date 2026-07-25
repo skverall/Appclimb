@@ -19,9 +19,9 @@ import {
   RefreshCw,
   ShieldCheck,
   Sparkles,
-  X,
 } from "lucide-react";
 
+import { ModalDialog } from "@/components/modal-dialog";
 import type {
   DashboardSnapshot,
   Experiment,
@@ -49,6 +49,32 @@ function PageIntro({
   );
 }
 
+function percentPointChange(before: string, after: string) {
+  const beforeValue = Number.parseFloat(before.replace("%", ""));
+  const afterValue = Number.parseFloat(after.replace("%", ""));
+  if (
+    !before.includes("%") ||
+    !after.includes("%") ||
+    !Number.isFinite(beforeValue) ||
+    !Number.isFinite(afterValue)
+  ) {
+    return "Observed change";
+  }
+
+  const delta = afterValue - beforeValue;
+  const sign = delta > 0 ? "+" : delta < 0 ? "−" : "";
+  return `${sign}${Math.abs(delta).toFixed(1)} pts`;
+}
+
+function formatUtcDate(value: string) {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(value));
+}
+
 export function DiagnoseView({
   snapshot,
   selectedInsight,
@@ -61,12 +87,26 @@ export function DiagnoseView({
   onCreateExperiment: () => void;
 }) {
   const insight = selectedInsight ?? snapshot.insights[0];
-  const evidence = snapshot.evidence.find((item) =>
+  const evidenceItems = snapshot.evidence.filter((item) =>
     insight?.evidenceIds.includes(item.id),
   );
+  const evidence = evidenceItems[0];
   const proposal = snapshot.actionProposals.find(
     (item) => item.insightId === insight?.id,
   );
+  const sourceNames = Array.from(
+    new Set(evidenceItems.map((item) => sourceLabel(item.source))),
+  );
+  const metricKeys = Array.from(
+    new Set(evidenceItems.flatMap((item) => item.metricKeys)),
+  );
+  const windowStart = evidenceItems
+    .map((item) => item.window.from)
+    .sort()[0];
+  const windowEnd = evidenceItems
+    .map((item) => item.window.to)
+    .sort()
+    .at(-1);
 
   return (
     <section className="workspace-page">
@@ -112,7 +152,7 @@ export function DiagnoseView({
           </div>
         </aside>
 
-        {insight && evidence && proposal && (
+        {insight && evidence ? (
           <article className="evidence-workbench">
             <div className="evidence-hero">
               <div>
@@ -135,7 +175,10 @@ export function DiagnoseView({
               <div className="comparison-arrow">
                 <ArrowRight size={19} />
                 <span>
-                  {insight.stageId === "activate" ? "−16.2 pts" : "observed"}
+                  {percentPointChange(
+                    evidence.before.value,
+                    evidence.after.value,
+                  )}
                 </span>
               </div>
               <div className="comparison-after">
@@ -151,8 +194,8 @@ export function DiagnoseView({
                 </span>
                 <div>
                   <small>Source of truth</small>
-                  <strong>{sourceLabel(evidence.source)}</strong>
-                  <p>{evidence.metricKeys.join(" + ")}</p>
+                  <strong>{sourceNames.join(" + ")}</strong>
+                  <p>{metricKeys.join(" + ")}</p>
                 </div>
               </div>
               <div className="lineage-connector" />
@@ -162,8 +205,12 @@ export function DiagnoseView({
                 </span>
                 <div>
                   <small>Aligned window</small>
-                  <strong>UTC daily cohorts</strong>
-                  <p>Before and after version 2.4</p>
+                  <strong>UTC aggregate comparison</strong>
+                  <p>
+                    {windowStart && windowEnd
+                      ? `${formatUtcDate(windowStart)} – ${formatUtcDate(windowEnd)}`
+                      : "Window unavailable"}
+                  </p>
                 </div>
               </div>
               <div className="lineage-connector" />
@@ -179,31 +226,47 @@ export function DiagnoseView({
               </div>
             </div>
 
-            <div className="proposal-box">
-              <span className="proposal-large-icon">
-                <FlaskConical size={21} />
-              </span>
-              <div>
-                <span className="eyebrow">Action proposal</span>
-                <h4>{proposal.title}</h4>
-                <p>{proposal.rationale}</p>
-              </div>
-              <button
-                className="primary-action"
-                type="button"
-                onClick={onCreateExperiment}
-              >
-                Create draft <ArrowRight size={17} />
-              </button>
+            <div className="evidence-identifiers">
+              <span>Evidence IDs</span>
+              <code>{evidenceItems.map((item) => item.id).join(" · ")}</code>
             </div>
+
+            {proposal && (
+              <div className="proposal-box">
+                <span className="proposal-large-icon">
+                  <FlaskConical size={21} />
+                </span>
+                <div>
+                  <span className="eyebrow">Action proposal</span>
+                  <h4>{proposal.title}</h4>
+                  <p>{proposal.rationale}</p>
+                </div>
+                <button
+                  className="primary-action"
+                  type="button"
+                  onClick={onCreateExperiment}
+                >
+                  Create local draft <ArrowRight size={17} />
+                </button>
+              </div>
+            )}
 
             <div className="proof-strip">
               <ShieldCheck size={17} />
               <span>
-                AI explanation received aggregate values and evidence IDs only.
+                Deterministic diagnosis from aggregate metrics and evidence IDs.
               </span>
-              <strong>No secrets · no raw user rows</strong>
+              <strong>No AI claim · no secrets · no raw user rows</strong>
             </div>
+          </article>
+        ) : (
+          <article className="evidence-workbench evidence-empty">
+            <DatabaseZap size={24} />
+            <h3>No supported diagnosis yet</h3>
+            <p>
+              AppClimb will not create a recommendation until a source,
+              evidence window and owned metric are available together.
+            </p>
           </article>
         )}
       </div>
@@ -212,41 +275,21 @@ export function DiagnoseView({
 }
 
 export function LabView({
-  snapshot,
   selectedInsight,
+  experiments,
+  latestCreatedExperimentId,
+  onCreateDraft,
 }: {
-  snapshot: DashboardSnapshot;
   selectedInsight?: Insight;
+  experiments: Experiment[];
+  latestCreatedExperimentId: string;
+  onCreateDraft: () => void;
 }) {
-  const suggested = snapshot.actionProposals.find(
-    (proposal) => proposal.insightId === selectedInsight?.id,
-  );
-  const [experiments, setExperiments] = useState<Experiment[]>(
-    snapshot.experiments,
-  );
-  const [created, setCreated] = useState(false);
   const [openedExperiment, setOpenedExperiment] =
     useState<Experiment | null>(null);
-
-  const createDraft = () => {
-    if (created) return;
-    setExperiments((current) => [
-      {
-        id: "experiment-new-draft",
-        title: suggested?.title ?? "Activation experiment",
-        stageId: selectedInsight?.stageId ?? "activate",
-        hypothesis:
-          suggested?.rationale ??
-          "A focused change at the earliest bottleneck will improve growth.",
-        primaryMetric: "Activation within 24h",
-        guardrailMetric: "D7 retention",
-        status: "draft",
-        source: "posthog",
-      },
-      ...current,
-    ]);
-    setCreated(true);
-  };
+  const latestCreated = experiments.find(
+    (experiment) => experiment.id === latestCreatedExperimentId,
+  );
 
   return (
     <section className="workspace-page">
@@ -266,15 +309,22 @@ export function LabView({
             </span>
           ))}
         </div>
-        <button className="primary-action" type="button" onClick={createDraft}>
+        <button
+          className="primary-action"
+          type="button"
+          onClick={onCreateDraft}
+          disabled={!selectedInsight}
+        >
           <Plus size={17} /> New experiment
         </button>
       </div>
 
-      {created && (
-        <div className="success-banner">
+      {latestCreated && (
+        <div className="success-banner" role="status">
           <CheckCircle2 size={18} />
-          Draft created. AppClimb will not launch it in PostHog or Superwall.
+          Session-only draft created from {latestCreated.stageId} evidence.
+          It disappears on reload, and nothing was launched in{" "}
+          {sourceLabel(latestCreated.source)} or another tool.
         </div>
       )}
 
@@ -322,67 +372,53 @@ export function LabView({
             Choose a confirmed bottleneck and AppClimb will prefill the
             hypothesis, metric and guardrail.
           </p>
-          <button type="button" onClick={createDraft}>
+          <button
+            type="button"
+            onClick={onCreateDraft}
+            disabled={!selectedInsight}
+          >
             Use recommendation <ArrowRight size={16} />
           </button>
         </article>
       </div>
 
       {openedExperiment && (
-        <div
-          className="settings-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.currentTarget === event.target) {
-              setOpenedExperiment(null);
-            }
-          }}
+        <ModalDialog
+          labelledBy="experiment-detail-title"
+          onClose={() => setOpenedExperiment(null)}
+          dialogClassName="settings-dialog experiment-dialog"
+          closeLabel="Close experiment"
         >
-          <section
-            className="settings-dialog experiment-dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="experiment-detail-title"
-          >
-            <button
-              className="settings-close"
-              type="button"
-              aria-label="Close experiment"
-              onClick={() => setOpenedExperiment(null)}
-            >
-              <X size={18} />
-            </button>
-            <span className="eyebrow">Experiment · {openedExperiment.status}</span>
-            <h2 id="experiment-detail-title">{openedExperiment.title}</h2>
-            <p className="experiment-detail-hypothesis">
-              {openedExperiment.hypothesis}
+          <span className="eyebrow">Experiment · {openedExperiment.status}</span>
+          <h2 id="experiment-detail-title">{openedExperiment.title}</h2>
+          <p className="experiment-detail-hypothesis">
+            {openedExperiment.hypothesis}
+          </p>
+          <div className="experiment-detail-grid">
+            <div>
+              <small>Stage</small>
+              <strong>{openedExperiment.stageId}</strong>
+            </div>
+            <div>
+              <small>Evidence source</small>
+              <strong>{sourceLabel(openedExperiment.source)}</strong>
+            </div>
+            <div>
+              <small>Primary metric</small>
+              <strong>{openedExperiment.primaryMetric}</strong>
+            </div>
+            <div>
+              <small>Guardrail</small>
+              <strong>{openedExperiment.guardrailMetric}</strong>
+            </div>
+          </div>
+          <div className="settings-security-note">
+            <p>
+              This is a read-only experiment record. Launch and execution
+              remain in your product or paywall tool.
             </p>
-            <div className="experiment-detail-grid">
-              <div>
-                <small>Stage</small>
-                <strong>{openedExperiment.stageId}</strong>
-              </div>
-              <div>
-                <small>Evidence source</small>
-                <strong>{sourceLabel(openedExperiment.source)}</strong>
-              </div>
-              <div>
-                <small>Primary metric</small>
-                <strong>{openedExperiment.primaryMetric}</strong>
-              </div>
-              <div>
-                <small>Guardrail</small>
-                <strong>{openedExperiment.guardrailMetric}</strong>
-              </div>
-            </div>
-            <div className="settings-security-note">
-              <p>
-                This is a read-only experiment record. Launch and execution
-                remain in your product or paywall tool.
-              </p>
-            </div>
-          </section>
-        </div>
+          </div>
+        </ModalDialog>
       )}
     </section>
   );
@@ -391,11 +427,22 @@ export function LabView({
 export function SourcesView({
   snapshot,
   authenticated,
+  entitled,
+  sources,
+  onSourcesChange,
 }: {
   snapshot: DashboardSnapshot;
   authenticated: boolean;
+  entitled: boolean;
+  sources: SourceConnection[];
+  onSourcesChange: (
+    update:
+      | SourceConnection[]
+      | ((current: SourceConnection[]) => SourceConnection[]),
+  ) => void;
 }) {
-  const [sources, setSources] = useState(snapshot.sources);
+  const isDemo = snapshot.mode === "demo";
+  const accessRestricted = !isDemo && !entitled;
   const [selectedProvider, setSelectedProvider] = useState(
     snapshot.sources[0]?.provider,
   );
@@ -414,8 +461,18 @@ export function SourcesView({
       ),
     [selectedProvider, sources],
   );
+  const selectedHasCredentials =
+    selected != null &&
+    selected.provider !== "appclimb-rank" &&
+    selected.status !== "not-connected";
   const connectedCount = sources.filter(
     (source) => source.status === "connected",
+  ).length;
+  const attentionCount = sources.filter(
+    (source) => source.status === "needs-attention",
+  ).length;
+  const availableConnectorCount = sources.filter(
+    (source) => source.provider !== "appclimb-rank",
   ).length;
 
   const requireAccount = () => {
@@ -430,8 +487,17 @@ export function SourcesView({
       return;
     }
     if (!requireAccount()) return;
+    if (accessRestricted) {
+      setConnectionMessage(
+        "An active trial or plan is required before imports can resume.",
+      );
+      setConnectionState("error");
+      return;
+    }
     setSyncing(true);
     setSyncComplete(false);
+    setConnectionMessage("");
+    setConnectionState("idle");
     try {
       const response = await fetch(
         `/api/connections/${selected.provider}/sync`,
@@ -441,6 +507,8 @@ export function SourcesView({
         throw new Error("sync_failed");
       }
       setSyncComplete(true);
+      setConnectionMessage("Sync queued.");
+      setConnectionState("idle");
     } catch {
       setConnectionMessage("Sync could not be queued. Check the connection.");
       setConnectionState("error");
@@ -452,6 +520,13 @@ export function SourcesView({
   const connectSource = async (formData: FormData) => {
     if (!selected || selected.provider === "appclimb-rank") return;
     if (!requireAccount()) return;
+    if (accessRestricted) {
+      setConnectionMessage(
+        "An active trial or plan is required before this source can be verified.",
+      );
+      setConnectionState("error");
+      return;
+    }
 
     setConnectionState("saving");
     setConnectionMessage("");
@@ -477,14 +552,14 @@ export function SourcesView({
       if (!response.ok) {
         throw new Error("connection_failed");
       }
-      setSources((current) =>
+      onSourcesChange((current) =>
         current.map((source) =>
           source.provider === selected.provider
             ? {
                 ...source,
                 status: "connected",
-                freshnessHours: 0,
-                lastSyncAt: new Date().toISOString(),
+                freshnessHours: undefined,
+                lastSyncAt: undefined,
               }
             : source,
         ),
@@ -510,51 +585,101 @@ export function SourcesView({
       return;
     }
 
-    const response = await fetch(
-      `/api/connections/${selected.provider}`,
-      { method: "DELETE" },
-    );
-    if (!response.ok) {
+    setConnectionState("saving");
+    setConnectionMessage("");
+    try {
+      const response = await fetch(
+        `/api/connections/${selected.provider}`,
+        { method: "DELETE" },
+      );
+      if (!response.ok) throw new Error("revoke_failed");
+      onSourcesChange((current) =>
+        current.map((source) =>
+          source.provider === selected.provider
+            ? {
+                ...source,
+                status: "not-connected",
+                freshnessHours: undefined,
+                lastSyncAt: undefined,
+              }
+            : source,
+        ),
+      );
+      setManaging(false);
+      setConnectionState("idle");
+      setConnectionMessage("Credentials deleted.");
+    } catch {
       setConnectionState("error");
       setConnectionMessage("Connection could not be revoked.");
-      return;
     }
-    setSources((current) =>
-      current.map((source) =>
-        source.provider === selected.provider
-          ? {
-              ...source,
-              status: "not-connected",
-              freshnessHours: undefined,
-              lastSyncAt: undefined,
-            }
-          : source,
-      ),
-    );
-    setManaging(false);
-    setConnectionMessage("Credentials deleted.");
   };
 
   return (
     <section className="workspace-page">
       <PageIntro
         eyebrow="Sources"
-        title="Every metric has a named source of truth."
-        description="Credentials stay encrypted server-side. Available connectors are read-only, normalized to UTC and reconciled every six hours."
+        title={
+          isDemo
+            ? "Explore the source model without connecting an account."
+            : "Every metric has a named source of truth."
+        }
+        description={
+          isDemo
+            ? "These are synthetic source profiles for the interactive demo. No credentials exist and no sync is running."
+            : accessRestricted
+              ? "Existing source state remains visible and credentials can still be revoked, but verification and imports are paused until access is restored."
+            : "Credentials stay encrypted server-side. Available connectors are read-only and normalized to UTC."
+        }
       />
+
+      {isDemo && (
+        <div className="sample-notice" role="note">
+          <Sparkles size={17} />
+          <div>
+            <strong>Interactive demo · synthetic source states</strong>
+            <span>
+              Labels, freshness and capabilities below are illustrative, not
+              live connections.
+            </span>
+          </div>
+        </div>
+      )}
+
+      {accessRestricted && (
+        <div className="source-attention-note source-access-note" role="status">
+          <strong>Imports paused · plan required</strong>
+          <span>
+            No source data is being refreshed. You can review or revoke
+            existing connections without reactivating access.
+          </span>
+        </div>
+      )}
 
       <div className="source-summary-strip">
         <span>
-          <CheckCircle2 size={17} /> {connectedCount} of 5 sources connected
+          <CheckCircle2 size={17} />{" "}
+          {isDemo
+            ? `${connectedCount} sample profiles`
+            : `${connectedCount} connected${
+                attentionCount > 0
+                  ? ` · ${attentionCount} needs attention`
+                  : ""
+              } · ${availableConnectorCount} available`}
         </span>
         <span>
           <Clock3 size={17} /> UTC-aligned imports
         </span>
         <span>
-          <ShieldCheck size={17} /> 90-day metric history
+          <ShieldCheck size={17} />{" "}
+          {isDemo ? "No credentials stored" : "Encrypted credentials"}
         </span>
         <span>
-          <RefreshCw size={17} /> 6-hour schedule
+          <RefreshCw size={17} />{" "}
+          {isDemo
+            ? "No live sync"
+            : accessRestricted
+              ? "Background sync paused"
+              : "Background sync queue"}
         </span>
       </div>
 
@@ -568,8 +693,11 @@ export function SourcesView({
               onSelect={() => {
                 setSelectedProvider(source.provider);
                 setManaging(false);
+                setSyncComplete(false);
                 setConnectionMessage("");
               }}
+              isDemo={isDemo}
+              generatedAt={snapshot.generatedAt}
             />
           ))}
         </div>
@@ -580,13 +708,19 @@ export function SourcesView({
               {sourceInitials(selected)}
             </div>
             <span className={`status-pill status-${selected.status}`}>
-              {selected.status === "connected" && <Check size={14} />}
-              {sourceStatusLabel(selected.status)}
+              {!isDemo && selected.status === "connected" && <Check size={14} />}
+              {isDemo ? "Sample profile" : sourceStatusLabel(selected.status)}
             </span>
             <h3>{selected.label}</h3>
             <p>
-              {selected.capabilities.join(", ")}. Imported as aggregate UTC
-              metric points and retained for 90 days.
+              {selected.capabilities.join(", ")}.{" "}
+              {isDemo
+                ? "Shown only to explain source ownership in the demo."
+                : selected.provider === "appclimb-rank"
+                  ? "This is a roadmap surface; no keyword collector is enabled."
+                  : selected.status === "not-connected"
+                    ? "When connected, supported fields are imported as aggregate UTC metric points."
+                    : "Supported fields are imported as aggregate UTC metric points for this workspace."}
             </p>
 
             <div className="source-security">
@@ -594,23 +728,52 @@ export function SourcesView({
                 <KeyRound size={17} />
                 <span>
                   <small>Credentials</small>
-                  <strong>Envelope encrypted</strong>
+                  <strong>
+                    {isDemo
+                      ? "None in demo"
+                      : selected.provider === "appclimb-rank"
+                        ? "Not collected"
+                        : selected.status === "not-connected"
+                          ? "None stored"
+                          : "Envelope encrypted"}
+                  </strong>
                 </span>
               </div>
               <div>
                 <LockKeyhole size={17} />
                 <span>
                   <small>Permissions</small>
-                  <strong>Read-only</strong>
+                  <strong>
+                    {isDemo
+                      ? "Illustrative"
+                      : selected.provider === "appclimb-rank"
+                        ? "Not enabled"
+                        : "Read-only"}
+                  </strong>
                 </span>
               </div>
             </div>
 
+            {!isDemo && selected.status === "needs-attention" && (
+              <div className="source-attention-note" role="status">
+                <strong>Connection needs attention</strong>
+                <span>
+                  {selected.lastErrorCode === "no_data_in_window"
+                    ? "No supported rows were returned for this window. Confirm the selected app, project, and event names, or wait for source data; the credentials may still be valid."
+                    : `${
+                        selected.lastErrorCode
+                          ? `Last import: ${selected.lastErrorCode.replaceAll("_", " ")}.`
+                          : "The last import did not complete."
+                      } Verify the source credentials, scopes, and app selection.`}
+                </span>
+              </div>
+            )}
+
             {selected.provider === "appclimb-rank" && (
               <div className="rank-allowance">
                 <div>
-                  <strong>Private beta</strong>
-                  <span>daily ranking collection</span>
+                  <strong>Roadmap</strong>
+                  <span>daily collection is not enabled</span>
                 </div>
                 <div>
                   <strong>100 · 3</strong>
@@ -650,14 +813,18 @@ export function SourcesView({
                 <button
                   className="primary-action"
                   type="submit"
-                  disabled={connectionState === "saving"}
+                  disabled={
+                    connectionState === "saving" || accessRestricted
+                  }
                 >
                   <ShieldCheck size={17} />
-                  {connectionState === "saving"
+                  {accessRestricted
+                    ? "Plan required to verify"
+                    : connectionState === "saving"
                     ? "Verifying…"
                     : "Verify & connect"}
                 </button>
-                {selected.status === "connected" && (
+                {selectedHasCredentials && (
                   <button
                     className="danger-action"
                     type="button"
@@ -669,7 +836,15 @@ export function SourcesView({
               </form>
             ) : (
               <>
-                {selected.provider === "appclimb-rank" ? (
+                {isDemo ? (
+                  <button
+                    className="primary-action"
+                    type="button"
+                    onClick={() => window.location.assign("/login")}
+                  >
+                    <KeyRound size={17} /> Connect your own data
+                  </button>
+                ) : selected.provider === "appclimb-rank" ? (
                   <div className="source-beta-note">
                     Keyword monitoring is visible in the product model but is
                     not enabled for workspaces yet.
@@ -679,22 +854,35 @@ export function SourcesView({
                     className="primary-action"
                     type="button"
                     onClick={triggerSync}
-                    disabled={syncing}
+                    disabled={syncing || accessRestricted}
                   >
                     <RefreshCw
                       size={17}
                       className={syncing ? "spin" : undefined}
                     />
-                    {syncing
+                    {accessRestricted
+                      ? "Plan required to sync"
+                      : syncing
                       ? "Queueing…"
                       : syncComplete
                         ? "Sync queued"
                         : "Sync now"}
                   </button>
+                ) : selected.status === "needs-attention" ? (
+                  <button
+                    className="primary-action"
+                    type="button"
+                    onClick={() => {
+                      if (requireAccount()) setManaging(true);
+                    }}
+                  >
+                    <KeyRound size={17} /> Review connection
+                  </button>
                 ) : (
                   <button
                     className="primary-action"
                     type="button"
+                    disabled={accessRestricted}
                     onClick={() => {
                       if (requireAccount()) setManaging(true);
                     }}
@@ -729,9 +917,13 @@ export function SourcesView({
               </p>
             )}
             <p className="source-footnote">
-              {selected.provider === "appclimb-rank"
-                ? "No keyword data is collected until the private beta is enabled."
-                : "Revoking the source deletes its stored credentials immediately."}
+              {isDemo
+                ? "Illustrative source profile · no connection or sync exists."
+                : selected.provider === "appclimb-rank"
+                  ? "No keyword data is collected until the private beta is enabled."
+                  : selectedHasCredentials
+                    ? "Revoking the source deletes its stored credentials immediately."
+                    : "No credentials are stored for this source."}
             </p>
           </aside>
         )}
@@ -744,16 +936,21 @@ function SourceCard({
   source,
   selected,
   onSelect,
+  isDemo,
+  generatedAt,
 }: {
   source: SourceConnection;
   selected: boolean;
   onSelect: () => void;
+  isDemo: boolean;
+  generatedAt: string;
 }) {
   return (
     <button
       className={selected ? "source-card selected" : "source-card"}
       type="button"
       onClick={onSelect}
+      aria-pressed={selected}
     >
       <div className={`provider-logo provider-${source.provider}`}>
         {sourceInitials(source)}
@@ -762,27 +959,48 @@ function SourceCard({
         <div>
           <strong>{source.label}</strong>
           <span className={`status-pill status-${source.status}`}>
-            {source.status === "connected" && <Check size={13} />}
-            {sourceStatusLabel(source.status)}
+            {!isDemo && source.status === "connected" && <Check size={13} />}
+            {isDemo
+              ? "Sample"
+              : source.provider === "appclimb-rank"
+                ? "Roadmap"
+                : sourceStatusLabel(source.status)}
           </span>
         </div>
         <p>{source.capabilities.slice(0, 3).join(" · ")}</p>
         <span>
           <Clock3 size={14} />
-          {source.status === "connected"
-            ? source.freshnessHours !== undefined
-              ? `Synced ${
-                  source.freshnessHours < 1
-                    ? `${Math.round(source.freshnessHours * 60)}m ago`
-                    : `${source.freshnessHours}h ago`
-                }`
-              : "Awaiting first sync"
-            : "Ready to connect"}
+          {isDemo
+            ? "Illustrative sync state"
+            : source.provider === "appclimb-rank"
+              ? "Not enabled yet"
+              : source.status === "connected"
+                ? sourceFreshnessLabel(source, generatedAt)
+                : source.status === "needs-attention"
+                  ? "Review connection"
+                  : "Ready to connect"}
         </span>
       </div>
       <ChevronRight size={18} />
     </button>
   );
+}
+
+function sourceFreshnessLabel(
+  source: SourceConnection,
+  generatedAt: string,
+): string {
+  if (!source.lastSyncAt) return "Awaiting first sync";
+  const referenceTime = new Date(generatedAt).getTime();
+  const syncTime = new Date(source.lastSyncAt).getTime();
+  if (!Number.isFinite(referenceTime) || !Number.isFinite(syncTime)) {
+    return "Sync time unavailable";
+  }
+
+  const hours = Math.max(0, (referenceTime - syncTime) / (60 * 60 * 1000));
+  if (hours < 1) return `Synced ${Math.max(1, Math.round(hours * 60))}m ago`;
+  if (hours < 48) return `Synced ${Math.round(hours)}h ago`;
+  return `Synced ${Math.round(hours / 24)}d ago`;
 }
 
 function sourceLabel(provider: SourceConnection["provider"]): string {
@@ -886,6 +1104,18 @@ function connectionFields(
         label: "PostHog host",
         placeholder: "https://us.posthog.com",
         defaultValue: "https://us.posthog.com",
+      },
+      {
+        name: "activationEvent",
+        label: "Activation event · unique users",
+        placeholder: "app_activated",
+        defaultValue: "app_activated",
+      },
+      {
+        name: "sessionEvent",
+        label: "Session event · unique users",
+        placeholder: "$session_start",
+        defaultValue: "$session_start",
       },
     ],
     superwall: [

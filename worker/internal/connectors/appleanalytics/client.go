@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 )
@@ -52,39 +53,43 @@ func Fetch(
 		return []Aggregate{}, nil
 	}
 
-	reportID, err := findReport(ctx, nav, baseURL, bearerToken, requestID, "APP_STORE")
+	reportIDs, err := findReports(ctx, nav, baseURL, bearerToken, requestID, "APP_STORE")
 	if err != nil {
 		return nil, err
 	}
-	if reportID == "" {
+	if len(reportIDs) == 0 {
 		return []Aggregate{}, nil
 	}
 
-	segments, err := dailySegments(ctx, nav, baseURL, bearerToken, reportID, from, to)
-	if err != nil {
-		return nil, err
-	}
-
 	out := []Aggregate{}
-	for _, segURL := range segments {
-		body, err := nav.Get(ctx, segURL, bearerToken)
+	for _, reportID := range reportIDs {
+		segments, err := dailySegments(ctx, nav, baseURL, bearerToken, reportID, from, to)
 		if err != nil {
 			return nil, err
 		}
-		gz, err := gzip.NewReader(body)
-		if err != nil {
+		sort.Strings(segments)
+		reportRows := []Aggregate{}
+		for _, segURL := range segments {
+			body, err := nav.Get(ctx, segURL, bearerToken)
+			if err != nil {
+				return nil, err
+			}
+			gz, err := gzip.NewReader(body)
+			if err != nil {
+				body.Close()
+				return nil, fmt.Errorf("apple segment gunzip: %w", err)
+			}
+			rows, err := Parse(gz, from, to, lagDays, now)
+			gz.Close()
 			body.Close()
-			return nil, fmt.Errorf("apple segment gunzip: %w", err)
+			if err != nil {
+				return nil, err
+			}
+			reportRows = append(reportRows, rows...)
 		}
-		rows, err := Parse(gz, from, to, lagDays, now)
-		gz.Close()
-		body.Close()
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, rows...)
+		out = append(out, mergeAggregates(reportRows)...)
 	}
-	return out, nil
+	return mergeReportAggregates(out), nil
 }
 
 // ensureOngoingRequest creates an ONGOING analytics report request for the app
@@ -154,42 +159,57 @@ func findOngoingRequest(
 	return "", nil
 }
 
-// findReport returns the id of the first analytics report in the requested
-// category for the report request, or "" if none.
-func findReport(
+// findReports returns every analytics report in the requested category for the
+// report request. Apple splits discovery, engagement and downloads across
+// separate APP_STORE reports, so selecting only the first report yields an
+// incomplete funnel. The reports endpoint is paginated.
+func findReports(
 	ctx context.Context,
 	nav Navigator,
 	baseURL, bearerToken, requestID, category string,
-) (string, error) {
+) ([]string, error) {
 	params := url.Values{}
 	params.Set("filter[category]", category)
+	params.Set("limit", "100")
 	endpoint := fmt.Sprintf(
 		"%s/v1/analyticsReportRequests/%s/reports?%s",
 		baseURL,
 		url.PathEscape(requestID),
 		params.Encode(),
 	)
-	body, err := nav.GetJSON(ctx, endpoint, bearerToken)
-	if err != nil {
-		return "", err
-	}
-	var response struct {
-		Data []struct {
-			ID         string `json:"id"`
-			Attributes struct {
-				Category string `json:"category"`
-			} `json:"attributes"`
-		} `json:"data"`
-	}
-	if err := json.Unmarshal(body, &response); err != nil {
-		return "", fmt.Errorf("apple reports parse: %w", err)
-	}
-	for _, item := range response.Data {
-		if strings.EqualFold(item.Attributes.Category, category) {
-			return item.ID, nil
+	ids := []string{}
+	seen := map[string]bool{}
+	for endpoint != "" {
+		body, err := nav.GetJSON(ctx, endpoint, bearerToken)
+		if err != nil {
+			return nil, err
 		}
+		var response struct {
+			Data []struct {
+				ID         string `json:"id"`
+				Attributes struct {
+					Category string `json:"category"`
+				} `json:"attributes"`
+			} `json:"data"`
+			Links struct {
+				Next string `json:"next"`
+			} `json:"links"`
+		}
+		if err := json.Unmarshal(body, &response); err != nil {
+			return nil, fmt.Errorf("apple reports parse: %w", err)
+		}
+		for _, item := range response.Data {
+			if strings.EqualFold(item.Attributes.Category, category) &&
+				item.ID != "" &&
+				!seen[item.ID] {
+				ids = append(ids, item.ID)
+				seen[item.ID] = true
+			}
+		}
+		endpoint = response.Links.Next
 	}
-	return "", nil
+	sort.Strings(ids)
+	return ids, nil
 }
 
 // dailySegments returns the download URLs for every DAILY report instance whose

@@ -26,8 +26,52 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  verify:
+    name: Verify release candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: worker/go.mod
+          cache-dependency-path: worker/go.sum
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck -- --incremental false
+
+      - name: Unit tests and coverage
+        run: npm run test:coverage
+
+      - name: Production build
+        run: npm run build
+
+      - name: Go tests
+        run: npm run worker:test
+
+      - name: Go vet
+        run: npm run worker:vet
+
   deploy:
     name: Build & deploy to appclimb.app
+    needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:

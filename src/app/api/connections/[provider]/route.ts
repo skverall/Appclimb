@@ -13,7 +13,13 @@ export async function POST(
 ) {
   const { provider: rawProvider } = await context.params;
   const provider = connectorProviderSchema.safeParse(rawProvider);
-  const body = connectorCredentialsSchema.safeParse(await request.json());
+  let payload: unknown;
+  try {
+    payload = await request.json();
+  } catch {
+    return Response.json({ error: "Invalid connection request" }, { status: 400 });
+  }
+  const body = connectorCredentialsSchema.safeParse(payload);
 
   if (
     !provider.success ||

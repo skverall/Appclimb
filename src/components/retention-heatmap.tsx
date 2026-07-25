@@ -1,4 +1,4 @@
-import type { RetentionCell } from "@/lib/contracts";
+import type { DashboardSnapshot, RetentionCell } from "@/lib/contracts";
 
 function cellTone(value: number): number {
   if (value === 0) return 0;
@@ -9,7 +9,13 @@ function cellTone(value: number): number {
   return 1;
 }
 
-export function RetentionHeatmap({ rows }: { rows: RetentionCell[] }) {
+export function RetentionHeatmap({
+  rows,
+  mode,
+}: {
+  rows: RetentionCell[];
+  mode?: DashboardSnapshot["mode"];
+}) {
   return (
     <section className="support-card" aria-labelledby="retention-heading">
       <div className="section-heading compact">
@@ -22,6 +28,11 @@ export function RetentionHeatmap({ rows }: { rows: RetentionCell[] }) {
       <p className="support-subtitle">
         Users returning after their first vehicle
       </p>
+      {rows.length === 0 ? (
+        <div className="support-empty">
+          Retention cohorts will appear after enough product events are synced.
+        </div>
+      ) : (
       <div className="heatmap" role="table" aria-label="Weekly retention cohorts">
         <div className="heatmap-row heatmap-header" role="row">
           <span role="columnheader">Cohort</span>
@@ -40,19 +51,24 @@ export function RetentionHeatmap({ rows }: { rows: RetentionCell[] }) {
                 className={`heat-cell tone-${cellTone(value)}`}
                 key={`${row.cohort}-${index}`}
                 aria-label={`${row.cohort}, week ${index}: ${
-                  value === 0 ? "not available" : `${value}%`
+                  `${value}%`
                 }`}
               >
-                {value > 0 ? `${value}%` : "—"}
+                {`${value}%`}
               </span>
             ))}
           </div>
         ))}
       </div>
-      <div className="heatmap-note">
-        <span className="mini-signal warning" />
-        Retention changed with the Jul 9 onboarding release
-      </div>
+      )}
+      {rows.length > 0 && (
+        <div className="heatmap-note">
+          <span className="mini-signal warning" />
+          {mode === "demo"
+            ? "Sample annotation · Jul 9 onboarding release"
+            : "Cohorts are grouped by first-seen UTC week"}
+        </div>
+      )}
     </section>
   );
 }

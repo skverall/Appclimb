@@ -12,6 +12,7 @@ const SOURCE_PRECEDENCE: Record<string, SourceProvider> = {
   downloads: "app-store-connect",
   proceeds: "app-store-connect",
   activation_24h: "posthog",
+  activated_users: "posthog",
   feature_usage: "posthog",
   retention: "posthog",
   paywall_view_rate: "superwall",

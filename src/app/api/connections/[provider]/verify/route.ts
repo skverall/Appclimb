@@ -17,7 +17,16 @@ export async function POST(
     return Response.json({ error: "Unsupported provider" }, { status: 404 });
   }
 
-  const body = connectorCredentialsSchema.safeParse(await request.json());
+  let payload: unknown;
+  try {
+    payload = await request.json();
+  } catch {
+    return Response.json(
+      { error: "Invalid credentials payload" },
+      { status: 400 },
+    );
+  }
+  const body = connectorCredentialsSchema.safeParse(payload);
   if (!body.success || body.data.provider !== provider.data) {
     return Response.json(
       { error: "Invalid credentials payload" },

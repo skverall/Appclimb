@@ -12,7 +12,11 @@ import {
 } from "lucide-react";
 import { useReducedMotion } from "motion/react";
 
-import type { ChangeEvent, ChangeEventType } from "@/lib/contracts";
+import type {
+  ChangeEvent,
+  ChangeEventType,
+  DashboardSnapshot,
+} from "@/lib/contracts";
 
 const EVENT_ICONS: Record<ChangeEventType, typeof Camera> = {
   release: Code2,
@@ -26,10 +30,12 @@ export function GrowthReplay({
   events,
   replayIndex,
   onReplayIndexChange,
+  mode,
 }: {
   events: ChangeEvent[];
   replayIndex: number;
   onReplayIndexChange: (index: number) => void;
+  mode?: DashboardSnapshot["mode"];
 }) {
   const [isPlaying, setIsPlaying] = useState(false);
   const reduceMotion = useReducedMotion();
@@ -57,23 +63,42 @@ export function GrowthReplay({
   const currentEvent =
     replayIndex > 0 ? events[Math.min(replayIndex - 1, events.length - 1)] : null;
 
+  if (events.length === 0) {
+    return (
+      <section className="replay-card replay-empty" aria-labelledby="growth-replay-heading">
+        <div className="replay-heading">
+          <div>
+            <span className="eyebrow">Learn</span>
+            <h2 id="growth-replay-heading">Change timeline</h2>
+          </div>
+        </div>
+        <p>
+          Releases, metadata and paywall changes will appear here after the
+          first supported source sync.
+        </p>
+      </section>
+    );
+  }
+
   return (
     <section className="replay-card" aria-labelledby="growth-replay-heading">
       <div className="replay-heading">
         <div>
           <span className="eyebrow">Learn</span>
-          <h2 id="growth-replay-heading">Growth Replay</h2>
+          <h2 id="growth-replay-heading">
+            {mode === "demo" ? "Illustrative Growth Replay" : "Change timeline"}
+          </h2>
         </div>
         <div className="replay-now">
-          <span>{currentEvent ? currentEvent.label : "Period start"}</span>
+          <span>{currentEvent ? currentEvent.label : "Before first change"}</span>
           <strong>
-            {currentEvent
-              ? new Intl.DateTimeFormat("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  timeZone: "UTC",
-                }).format(new Date(currentEvent.occurredAt))
-              : "Jun 24"}
+            {new Intl.DateTimeFormat("en-US", {
+              month: "short",
+              day: "numeric",
+              timeZone: "UTC",
+            }).format(
+              new Date(currentEvent?.occurredAt ?? events[0].occurredAt),
+            )}
           </strong>
         </div>
       </div>
@@ -153,6 +178,12 @@ export function GrowthReplay({
           <RotateCcw size={16} />
         </button>
       </div>
+      {mode === "demo" && (
+        <p className="replay-disclosure">
+          Illustrative animation · values and health remain the current sample
+          snapshot.
+        </p>
+      )}
     </section>
   );
 }

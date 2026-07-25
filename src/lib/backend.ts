@@ -33,6 +33,12 @@ interface AuthEnvelope {
   };
 }
 
+export type BackendSessionRefreshResult =
+  | "refreshed"
+  | "missing"
+  | "invalid"
+  | "unavailable";
+
 function cookieOptions(expiresAt: string) {
   return {
     httpOnly: true,
@@ -61,6 +67,14 @@ export async function clearBackendSession() {
   const store = await cookies();
   store.delete(ACCESS_COOKIE);
   store.delete(REFRESH_COOKIE);
+}
+
+export async function backendSessionPresence() {
+  const store = await cookies();
+  return {
+    hasAccessToken: Boolean(store.get(ACCESS_COOKIE)?.value),
+    hasRefreshToken: Boolean(store.get(REFRESH_COOKIE)?.value),
+  };
 }
 
 export async function backendRequest(
@@ -97,37 +111,66 @@ export async function requestWithSession(
   init: RequestInit = {},
 ) {
   const store = await cookies();
-  const accessToken = store.get(ACCESS_COOKIE)?.value;
+  let accessToken = store.get(ACCESS_COOKIE)?.value;
   const refreshToken = store.get(REFRESH_COOKIE)?.value;
 
-  if (!accessToken) {
+  if (!accessToken && !refreshToken) {
     return null;
   }
 
-  let response = await backendRequest(path, init, accessToken);
-  if (response.status !== 401 || !refreshToken) {
+  const response = accessToken
+    ? await backendRequest(path, init, accessToken)
+    : undefined;
+  if (response && (response.status !== 401 || !refreshToken)) {
     return response;
   }
 
-  const refreshResponse = await backendRequest("/v1/auth/refresh", {
-    method: "POST",
-    body: JSON.stringify({ refreshToken }),
-  });
+  const refreshResult = await refreshBackendSession();
+  if (refreshResult !== "refreshed") {
+    return response ?? null;
+  }
+
+  accessToken = (await cookies()).get(ACCESS_COOKIE)?.value;
+  if (!accessToken) {
+    return response ?? null;
+  }
+  return backendRequest(path, init, accessToken);
+}
+
+export async function refreshBackendSession(): Promise<BackendSessionRefreshResult> {
+  const refreshToken = (await cookies()).get(REFRESH_COOKIE)?.value;
+  if (!refreshToken) {
+    return "missing";
+  }
+
+  let refreshResponse: Response;
+  try {
+    refreshResponse = await backendRequest("/v1/auth/refresh", {
+      method: "POST",
+      body: JSON.stringify({ refreshToken }),
+    });
+  } catch {
+    return "unavailable";
+  }
   if (!refreshResponse.ok) {
     await clearBackendSession();
-    return response;
+    return "invalid";
   }
 
-  const refreshed = (await refreshResponse.json()) as AuthEnvelope;
+  let refreshed: AuthEnvelope;
+  try {
+    refreshed = (await refreshResponse.json()) as AuthEnvelope;
+  } catch {
+    await clearBackendSession();
+    return "invalid";
+  }
   const tokens = refreshed.data?.tokens;
   if (!tokens) {
     await clearBackendSession();
-    return response;
+    return "invalid";
   }
-
   await setBackendSession(tokens);
-  response = await backendRequest(path, init, tokens.accessToken);
-  return response;
+  return "refreshed";
 }
 
 export async function createSessionFromResponse(response: Response) {

@@ -11,21 +11,24 @@ import (
 )
 
 type Config struct {
-	HTTPAddress         string
-	DatabaseURL         string
-	JWTSigningKey       []byte
-	EnvelopeMasterKey   string
-	InternalToken       string
-	PaddleWebhookSecret string
-	AllowedOrigins      []string
-	AccessTokenTTL      time.Duration
-	RefreshTokenTTL     time.Duration
-	SyncInterval        time.Duration
-	DiagnosisInterval   time.Duration
-	HistoryDays         int
-	AppleBaseURL        string
-	AppleReportLagDays  int
-	Version             string
+	HTTPAddress           string
+	DatabaseURL           string
+	JWTSigningKey         []byte
+	EnvelopeMasterKey     string
+	InternalToken         string
+	PaddleWebhookSecret   string
+	PaddleProductID       string
+	PaddleProductIdentity string
+	PaddleAllowedPriceIDs []string
+	AllowedOrigins        []string
+	AccessTokenTTL        time.Duration
+	RefreshTokenTTL       time.Duration
+	SyncInterval          time.Duration
+	DiagnosisInterval     time.Duration
+	HistoryDays           int
+	AppleBaseURL          string
+	AppleReportLagDays    int
+	Version               string
 }
 
 func Load() (Config, error) {
@@ -78,15 +81,23 @@ func Load() (Config, error) {
 		EnvelopeMasterKey:   masterKey,
 		InternalToken:       strings.TrimSpace(os.Getenv("INTERNAL_TOKEN")),
 		PaddleWebhookSecret: strings.TrimSpace(os.Getenv("PADDLE_WEBHOOK_SECRET")),
-		AllowedOrigins:      splitCSV(env("ALLOWED_ORIGINS", "https://appclimb.app")),
-		AccessTokenTTL:      accessTTL,
-		RefreshTokenTTL:     refreshTTL,
-		SyncInterval:        syncInterval,
-		DiagnosisInterval:   diagnosisInterval,
-		HistoryDays:         historyDays,
-		AppleBaseURL:        env("APPLE_BASE_URL", "https://api.appstoreconnect.apple.com"),
-		AppleReportLagDays:  appleLagDays,
-		Version:             env("APP_VERSION", "dev"),
+		PaddleProductID:     strings.TrimSpace(os.Getenv("PADDLE_PRODUCT_ID")),
+		PaddleProductIdentity: env(
+			"PADDLE_PRODUCT_IDENTITY",
+			"appclimb-pro",
+		),
+		PaddleAllowedPriceIDs: splitCSV(
+			strings.TrimSpace(os.Getenv("PADDLE_ALLOWED_PRICE_IDS")),
+		),
+		AllowedOrigins:     splitCSV(env("ALLOWED_ORIGINS", "https://appclimb.app")),
+		AccessTokenTTL:     accessTTL,
+		RefreshTokenTTL:    refreshTTL,
+		SyncInterval:       syncInterval,
+		DiagnosisInterval:  diagnosisInterval,
+		HistoryDays:        historyDays,
+		AppleBaseURL:       env("APPLE_BASE_URL", "https://api.appstoreconnect.apple.com"),
+		AppleReportLagDays: appleLagDays,
+		Version:            env("APP_VERSION", "dev"),
 	}
 	if cfg.DatabaseURL == "" {
 		return Config{}, errors.New("DATABASE_URL is required")
@@ -95,6 +106,22 @@ func Load() (Config, error) {
 		return Config{}, errors.New("INTERNAL_TOKEN must be at least 32 characters")
 	}
 	return cfg, nil
+}
+
+func (cfg Config) PaddleConfigured() bool {
+	return cfg.PaddleWebhookSecret != "" &&
+		cfg.PaddleProductID != "" &&
+		cfg.PaddleProductIdentity != "" &&
+		len(cfg.PaddleAllowedPriceIDs) > 0
+}
+
+func (cfg Config) PaddlePriceAllowed(priceID string) bool {
+	for _, allowed := range cfg.PaddleAllowedPriceIDs {
+		if priceID == allowed {
+			return true
+		}
+	}
+	return false
 }
 
 func env(key, fallback string) string {

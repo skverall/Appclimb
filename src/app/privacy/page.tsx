@@ -13,8 +13,9 @@ export default function PrivacyPage() {
         <h2>Minimal access</h2>
         <p>
           AppClimb connects to data sources with read-only credentials whenever
-          the provider supports them. Credentials are envelope encrypted and
-          are never returned to the browser or included in AI requests.
+          the provider supports them. After submission, credentials are
+          envelope encrypted at rest, are never returned in source responses
+          and are not included in AI requests.
         </p>
       </section>
       <section>
@@ -34,8 +35,8 @@ export default function PrivacyPage() {
         </p>
       </section>
       <p className="legal-note">
-        Questions about privacy or deletion can be submitted from the account
-        settings in your workspace.
+        Source revocation and permanent account deletion are available from the
+        account settings in an authenticated workspace.
       </p>
     </main>
   );

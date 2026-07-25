@@ -198,9 +198,9 @@ export const demoSnapshot: DashboardSnapshot = {
       id: "ev-discovery",
       title: "Discovery is stable",
       finding:
-        "Impressions and tracked keyword visibility are inside the expected 30-day range.",
-      source: "appclimb-rank",
-      metricKeys: ["impressions", "keyword_visibility"],
+        "App Store impressions are inside the expected 30-day range.",
+      source: "app-store-connect",
+      metricKeys: ["impressions"],
       window: {
         from: "2026-06-24T00:00:00.000Z",
         to: "2026-07-23T00:00:00.000Z",

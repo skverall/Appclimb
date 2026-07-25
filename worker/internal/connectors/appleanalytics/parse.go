@@ -8,6 +8,7 @@ import (
 	"bufio"
 	"errors"
 	"io"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -19,19 +20,19 @@ import (
 type MetricKey string
 
 const (
-	MetricImpressions   MetricKey = "impressions"
-	MetricProductViews  MetricKey = "product_page_views"
-	MetricDownloads     MetricKey = "downloads"
+	MetricImpressions  MetricKey = "impressions"
+	MetricProductViews MetricKey = "product_page_views"
+	MetricDownloads    MetricKey = "downloads"
 )
 
 // column maps an Apple Analytics TSV header to the AppClimb metric key. A
 // report may expose several aliases (e.g. units vs totalDownloads) — both are
 // accepted and collapse to the same key.
 var column = map[string]MetricKey{
-	"impressionsTotal":  MetricImpressions,
-	"pageViewCount":     MetricProductViews,
-	"units":             MetricDownloads,
-	"totalDownloads":    MetricDownloads,
+	"impressionsTotal": MetricImpressions,
+	"pageViewCount":    MetricProductViews,
+	"units":            MetricDownloads,
+	"totalDownloads":   MetricDownloads,
 }
 
 // Row is one parsed data row: a single metric value for one day.
@@ -53,11 +54,13 @@ type Aggregate struct {
 	Completeness    float64
 }
 
-// Parse reads a TSV stream (already gunzipped) and emits one Aggregate per
-// recognised metric column per day. The date column is expected in Apple's
-// "YYYY-MM-DD" format. Rows outside [from, to) are dropped. completeness uses
-// the Apple reporting lag (a day is only 1.0-complete once it is older than
-// lagDays from the window end).
+// Parse reads a TSV stream (already gunzipped) and emits one app-level
+// Aggregate per recognised metric and day. Apple reports can contain many rows
+// for the same day split by Territory, Device and other dimensions; those rows
+// are summed deterministically before persistence so the database conflict key
+// cannot turn the last dimension row into the apparent app total. Rows outside
+// [from, to) are dropped. completeness uses the Apple reporting lag (a day is
+// only 1.0-complete once it is older than lagDays from the window end).
 func Parse(
 	body io.Reader,
 	from, to time.Time,
@@ -122,7 +125,7 @@ func Parse(
 	if err := scanner.Err(); err != nil {
 		return nil, err
 	}
-	return out, nil
+	return mergeAggregates(out), nil
 }
 
 // parseHeader locates the Date column and returns a map of column-index ->
@@ -194,4 +197,91 @@ func categoryFor(key MetricKey) string {
 	default:
 		return "APP_STORE"
 	}
+}
+
+type aggregateKey struct {
+	metricKey string
+	occurred  int64
+	unit      string
+	category  string
+}
+
+func keyForAggregate(row Aggregate) aggregateKey {
+	return aggregateKey{
+		metricKey: row.MetricKey,
+		occurred:  row.OccurredAt.UTC().UnixNano(),
+		unit:      row.Unit,
+		category:  row.Dimensions["category"],
+	}
+}
+
+// mergeAggregates reconciles dimension rows and segment partitions inside one
+// APP_STORE report into one deterministic app/day/metric value.
+func mergeAggregates(rows []Aggregate) []Aggregate {
+	merged := make(map[aggregateKey]Aggregate, len(rows))
+	for _, row := range rows {
+		key := keyForAggregate(row)
+		current, exists := merged[key]
+		if !exists {
+			current = row
+			current.OccurredAt = row.OccurredAt.UTC()
+			current.Dimensions = map[string]string{"category": key.category}
+		} else {
+			current.Value += row.Value
+			if row.SourceUpdatedAt.After(current.SourceUpdatedAt) {
+				current.SourceUpdatedAt = row.SourceUpdatedAt
+			}
+			if row.Completeness < current.Completeness {
+				current.Completeness = row.Completeness
+			}
+		}
+		merged[key] = current
+	}
+	return sortedAggregates(merged)
+}
+
+// mergeReportAggregates combines distinct APP_STORE report types. Their metric
+// sets are normally disjoint; if Apple exposes the same normalised metric in
+// two reports, selecting the largest complete app total is deterministic and
+// avoids double-counting the same semantic metric across report schemas.
+func mergeReportAggregates(rows []Aggregate) []Aggregate {
+	merged := make(map[aggregateKey]Aggregate, len(rows))
+	for _, row := range rows {
+		key := keyForAggregate(row)
+		current, exists := merged[key]
+		minCompleteness := row.Completeness
+		if exists && current.Completeness < minCompleteness {
+			minCompleteness = current.Completeness
+		}
+		if !exists ||
+			row.Value > current.Value ||
+			(row.Value == current.Value && row.SourceUpdatedAt.After(current.SourceUpdatedAt)) {
+			current = row
+			current.OccurredAt = row.OccurredAt.UTC()
+			current.Dimensions = map[string]string{"category": key.category}
+		}
+		current.Completeness = minCompleteness
+		merged[key] = current
+	}
+	return sortedAggregates(merged)
+}
+
+func sortedAggregates(merged map[aggregateKey]Aggregate) []Aggregate {
+	result := make([]Aggregate, 0, len(merged))
+	for _, row := range merged {
+		result = append(result, row)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if !result[i].OccurredAt.Equal(result[j].OccurredAt) {
+			return result[i].OccurredAt.Before(result[j].OccurredAt)
+		}
+		if result[i].MetricKey != result[j].MetricKey {
+			return result[i].MetricKey < result[j].MetricKey
+		}
+		if result[i].Unit != result[j].Unit {
+			return result[i].Unit < result[j].Unit
+		}
+		return result[i].Dimensions["category"] < result[j].Dimensions["category"]
+	})
+	return result
 }

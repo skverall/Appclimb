@@ -5,6 +5,18 @@ import (
 	"time"
 )
 
+var confidenceFixtureNow = time.Date(2026, 7, 23, 2, 0, 0, 0, time.UTC)
+
+var testBenchmarks = map[StageID]float64{
+	StageStore:    0.52,
+	StageInstall:  0.26,
+	StageActivate: 0.41,
+	StagePaywall:  0.73,
+	StageTrial:    0.49,
+	StagePaid:     0.43,
+	StageRenew:    0.56,
+}
+
 // metric is a small builder for legible fixtures.
 func metric(provider, key string, value float64) Metric {
 	return Metric{
@@ -13,18 +25,21 @@ func metric(provider, key string, value float64) Metric {
 		OccurredAt:   time.Date(2026, 7, 23, 0, 0, 0, 0, time.UTC),
 		Value:        value,
 		Unit:         "count",
-		Freshness:    2,
+		Freshness:    999, // ignored: freshness is derived from OccurredAt.
 		Completeness: 0.98,
 	}
 }
 
 func TestComputeConfidence_MirrorsTypeScriptFixtures(t *testing.T) {
 	// diagnosis.test.ts: {completeness 0.98, freshness 2} -> {98, high}.
-	got := ComputeConfidence([]Metric{metric("posthog", "activation_24h", 0.31)})
+	got := ComputeConfidence(
+		[]Metric{metric("posthog", "activation_24h", 0.31)},
+		confidenceFixtureNow,
+	)
 	if got.Score != 98 || got.Level != ConfidenceHigh {
 		t.Fatalf("expected {98, high}, got {%d, %s}", got.Score, got.Level)
 	}
-	if got := ComputeConfidence(nil); got.Score != 0 || got.Level != ConfidenceLow {
+	if got := ComputeConfidence(nil, confidenceFixtureNow); got.Score != 0 || got.Level != ConfidenceLow {
 		t.Fatalf("empty input expected {0, low}, got {%d, %s}", got.Score, got.Level)
 	}
 }
@@ -34,13 +49,13 @@ func TestComputeConfidence_LevelThresholds(t *testing.T) {
 	// freshness=0 the freshness factor is 1.0, so solve completeness for an
 	// exact target score, then assert the level flips at 80/55.
 	scoreFor := func(target int, freshness float64) float64 {
-		return (float64(target)/100 - (1 - freshness/72)*0.28) / 0.72
+		return (float64(target)/100 - (1-freshness/72)*0.28) / 0.72
 	}
 	cases := []struct {
-		name        string
-		score       int
-		freshness   float64
-		wantLevel   string
+		name      string
+		score     int
+		freshness float64
+		wantLevel string
 	}{
 		{"high boundary (80)", 80, 0, ConfidenceHigh},
 		{"medium boundary (55)", 55, 0, ConfidenceMedium},
@@ -49,8 +64,14 @@ func TestComputeConfidence_LevelThresholds(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			m := Metric{Completeness: scoreFor(c.score, c.freshness), Freshness: c.freshness}
-			got := ComputeConfidence([]Metric{m})
+			m := Metric{
+				Provider:     "posthog",
+				Key:          "activation_24h",
+				OccurredAt:   confidenceFixtureNow.Add(-time.Duration(c.freshness * float64(time.Hour))),
+				Completeness: scoreFor(c.score, c.freshness),
+				Freshness:    0,
+			}
+			got := ComputeConfidence([]Metric{m}, confidenceFixtureNow)
 			if got.Score != c.score {
 				t.Fatalf("score: want %d got %d", c.score, got.Score)
 			}
@@ -58,6 +79,25 @@ func TestComputeConfidence_LevelThresholds(t *testing.T) {
 				t.Fatalf("level: want %s got %s", c.wantLevel, got.Level)
 			}
 		})
+	}
+}
+
+func TestComputeConfidence_DerivesFreshnessFromNewestObservation(t *testing.T) {
+	recent := metric("posthog", "activation_24h", 100)
+	recent.OccurredAt = confidenceFixtureNow.Add(-2 * time.Hour)
+	recent.Freshness = 10_000
+	stale := recent
+	stale.OccurredAt = confidenceFixtureNow.Add(-96 * time.Hour)
+	stale.Freshness = 0
+
+	recentConfidence := ComputeConfidence([]Metric{recent}, confidenceFixtureNow)
+	staleConfidence := ComputeConfidence([]Metric{stale}, confidenceFixtureNow)
+	if recentConfidence.Score <= staleConfidence.Score {
+		t.Fatalf(
+			"recent observation should outrank stale observation: recent=%d stale=%d",
+			recentConfidence.Score,
+			staleConfidence.Score,
+		)
 	}
 }
 
@@ -70,7 +110,7 @@ func TestClassifyStages_CriticalThresholdIsStrictlyLessThan75Percent(t *testing.
 			"impressions":        previous,
 			"product_page_views": previous * rate,
 		}
-		stages := ClassifyStages(sums)
+		stages := ClassifyStages(sums, testBenchmarks)
 		return stages[1].Health // store is index 1
 	}
 	if h := at(0.385); h != "critical" {
@@ -91,6 +131,104 @@ func TestClassifyStages_UnknownWhenVolumeZero(t *testing.T) {
 			t.Fatalf("stage %s with no volume: want unknown, got %s", s.Definition.ID, s.Health)
 		}
 	}
+}
+
+func TestClassifyStages_DistinguishesConfirmedZeroFromMissingMetric(t *testing.T) {
+	missing := ClassifyStages(
+		map[string]float64{"impressions": 100},
+		testBenchmarks,
+	)
+	if missing[1].Health != "unknown" || missing[1].ConversionRate != nil {
+		t.Fatalf("missing store metric must be unknown, got %+v", missing[1])
+	}
+	confirmedZero := ClassifyStages(
+		map[string]float64{
+			"impressions":        100,
+			"product_page_views": 0,
+		},
+		testBenchmarks,
+	)
+	if confirmedZero[1].Health != "critical" ||
+		confirmedZero[1].ConversionRate == nil ||
+		*confirmedZero[1].ConversionRate != 0 {
+		t.Fatalf("present zero store metric must remain a confirmed zero, got %+v", confirmedZero[1])
+	}
+}
+
+func TestClassifyStages_MissingOwnerMetricStaysUnknown(t *testing.T) {
+	metrics := []Metric{
+		metric("app-store-connect", "impressions", 1_000),
+		metric("app-store-connect", "product_page_views", 600),
+		metric("app-store-connect", "downloads", 300),
+		// A similarly named point from the wrong provider must not stand in for
+		// the canonical PostHog activation owner.
+		metric("superwall", "activated_users", 0),
+		metric("superwall", "paywall_views", 100),
+	}
+	stages := ClassifyStages(
+		AggregateByMetric(metrics),
+		testBenchmarks,
+	)
+	activation := stages[3]
+	if activation.Health != "unknown" {
+		t.Fatalf("missing PostHog activation: want unknown, got %s", activation.Health)
+	}
+	if activation.ConversionRate != nil {
+		t.Fatalf("missing PostHog activation must not produce a zero conversion: %v", *activation.ConversionRate)
+	}
+	paywall := stages[4]
+	if paywall.Health != "unknown" || paywall.ConversionRate != nil {
+		t.Fatalf(
+			"stage after a missing denominator must stay unknown, got health=%s conversion=%v",
+			paywall.Health,
+			paywall.ConversionRate,
+		)
+	}
+
+	diag := Generate(Input{
+		Metrics:    metrics,
+		Now:        confidenceFixtureNow,
+		Benchmarks: testBenchmarks,
+	})
+	for _, insight := range diag.Insights {
+		if insight.StageID == StageActivate || insight.StageID == StagePaywall {
+			t.Fatalf("missing owner data must not become a confirmed insight: %+v", insight)
+		}
+	}
+}
+
+func TestAggregateByMetric_UsesLatestRangeSnapshotWithoutSummingHistory(t *testing.T) {
+	metrics := []Metric{
+		{
+			Provider:   "superwall",
+			Key:        "paywall_views",
+			OccurredAt: dayAt(2026, 7, 20),
+			Value:      80,
+			Unit:       "count", // legacy additive row
+		},
+		{
+			Provider:   "superwall",
+			Key:        "paywall_views",
+			OccurredAt: dayAt(2026, 7, 21),
+			Value:      100,
+			Unit:       "range_count",
+		},
+		{
+			Provider:   "superwall",
+			Key:        "paywall_views",
+			OccurredAt: dayAt(2026, 7, 22),
+			Value:      120,
+			Unit:       "range_count",
+		},
+	}
+	sums := AggregateByMetric(metrics)
+	if got := sums["paywall_views"]; got != 120 {
+		t.Fatalf("range snapshots must use latest value, not 80+100+120; got %v", got)
+	}
+}
+
+func dayAt(year int, month time.Month, day int) time.Time {
+	return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
 }
 
 // fullFunnel builds a healthy funnel then lets a test degrade one stage.
@@ -137,7 +275,8 @@ func TestGenerate_Rank1IsEarliestConstraint(t *testing.T) {
 		Metrics: fullFunnel(map[StageID]float64{
 			StageActivate: 5500, // 5500/26000 = 0.21 < 0.3075 -> critical
 		}),
-		Now: time.Date(2026, 7, 24, 12, 0, 0, 0, time.UTC),
+		Now:        time.Date(2026, 7, 24, 12, 0, 0, 0, time.UTC),
+		Benchmarks: testBenchmarks,
 	})
 	if len(diag.Insights) == 0 {
 		t.Fatal("expected at least one insight")
@@ -158,7 +297,11 @@ func TestGenerate_Rank1IsEarliestConstraint(t *testing.T) {
 }
 
 func TestGenerate_RanksAtMostThree(t *testing.T) {
-	diag := Generate(Input{Metrics: fullFunnel(nil), Now: time.Now()})
+	diag := Generate(Input{
+		Metrics:    fullFunnel(nil),
+		Now:        time.Now(),
+		Benchmarks: testBenchmarks,
+	})
 	if len(diag.Insights) > 3 {
 		t.Fatalf("insights must not exceed 3 (DB CHECK), got %d", len(diag.Insights))
 	}
@@ -191,7 +334,8 @@ func TestGenerate_EveryInsightHasEvidenceAndAction(t *testing.T) {
 			StageActivate: 5500,
 			StageStore:    35000, // watch
 		}),
-		Now: time.Now(),
+		Now:        time.Now(),
+		Benchmarks: testBenchmarks,
 	})
 	if len(diag.Insights) == 0 {
 		t.Fatal("expected insights")
@@ -227,7 +371,11 @@ func TestGenerate_WindowIsTrailing30DaysUTCDayAligned(t *testing.T) {
 }
 
 func TestGenerate_HealthyFunnelProducesNoConstraint(t *testing.T) {
-	diag := Generate(Input{Metrics: fullFunnel(nil), Now: time.Now()})
+	diag := Generate(Input{
+		Metrics:    fullFunnel(nil),
+		Now:        time.Now(),
+		Benchmarks: testBenchmarks,
+	})
 	for _, ins := range diag.Insights {
 		if ins.Kind == KindDerived {
 			t.Fatalf("a healthy funnel must not produce a Derived constraint, got %q", ins.Title)
@@ -237,8 +385,9 @@ func TestGenerate_HealthyFunnelProducesNoConstraint(t *testing.T) {
 
 func TestInputHash_StableForSameMetricsAndSensitiveToValueChange(t *testing.T) {
 	base := fullFunnel(nil)
-	a := InputHash(base)
-	b := InputHash(base)
+	now := time.Date(2026, 7, 24, 12, 30, 0, 0, time.UTC)
+	a := InputHash(base, now)
+	b := InputHash(base, now)
 	if a == "" {
 		t.Fatal("hash must be non-empty")
 	}
@@ -247,18 +396,22 @@ func TestInputHash_StableForSameMetricsAndSensitiveToValueChange(t *testing.T) {
 	}
 	changed := append([]Metric(nil), base...)
 	changed[0].Value += 1
-	if InputHash(changed) == a {
+	if InputHash(changed, now) == a {
 		t.Fatal("hash must change when a value changes")
+	}
+	if InputHash(base, now.Add(2*time.Hour)) == a {
+		t.Fatal("hash must change as freshness ages into a later hour")
 	}
 }
 
 func TestInputHash_OrderIndependent(t *testing.T) {
 	base := fullFunnel(nil)
+	now := time.Date(2026, 7, 24, 12, 30, 0, 0, time.UTC)
 	reversed := make([]Metric, len(base))
 	for i := range base {
 		reversed[len(base)-1-i] = base[i]
 	}
-	if InputHash(base) != InputHash(reversed) {
+	if InputHash(base, now) != InputHash(reversed, now) {
 		t.Fatal("hash must be order-independent (canonical sort)")
 	}
 }
@@ -274,7 +427,36 @@ func TestStages_CanonicalOrderMatchesContracts(t *testing.T) {
 			t.Fatalf("stage %d: want %s, got %s", i, want[i], s.ID)
 		}
 	}
-	if stages[0].Benchmark != 0 {
-		t.Fatal("discover must have no benchmark")
+	for _, stage := range stages {
+		if stage.Benchmark != 0 {
+			t.Fatalf(
+				"live stage %s must not inherit a demo benchmark",
+				stage.ID,
+			)
+		}
+	}
+}
+
+func TestGenerate_DoesNotInventBenchmarks(t *testing.T) {
+	diag := Generate(Input{
+		Metrics: fullFunnel(map[StageID]float64{
+			StageActivate: 1,
+		}),
+		Now: time.Now(),
+	})
+	if len(diag.Insights) != 0 || len(diag.Evidence) != 0 {
+		t.Fatalf(
+			"metrics without a defensible benchmark must not create benchmark claims: insights=%d evidence=%d",
+			len(diag.Insights),
+			len(diag.Evidence),
+		)
+	}
+	for _, stage := range diag.Stages {
+		if stage.Definition.Benchmark != 0 {
+			t.Fatalf(
+				"stage %s inherited an unsupported benchmark",
+				stage.Definition.ID,
+			)
+		}
 	}
 }

@@ -28,7 +28,20 @@ func (db *DB) QueueDueDiagnoses(ctx context.Context, now time.Time, interval tim
 	if interval <= 0 {
 		interval = 6 * time.Hour
 	}
-	rows, err := db.Pool.Query(ctx, "select id::text from workspaces order by id")
+	rows, err := db.Pool.Query(
+		ctx,
+		`select id::text
+		 from workspaces
+		 where (
+		   subscription_status='trialing'
+		   and (trial_ends_at > $1 or entitlement_ends_at > $1)
+		 ) or (
+		   subscription_status='active'
+		   and entitlement_ends_at > $1
+		 )
+		 order by id`,
+		now.UTC(),
+	)
 	if err != nil {
 		return 0, err
 	}
@@ -50,12 +63,34 @@ func (db *DB) QueueDueDiagnoses(ctx context.Context, now time.Time, interval tim
 	var total int64
 	for _, workspaceID := range workspaceIDs {
 		err := db.WithWorkspace(ctx, workspaceID, func(tx pgx.Tx) error {
+			if err := reapStaleDiagnosisRuns(
+				ctx,
+				tx,
+				workspaceID,
+				now,
+			); err != nil {
+				return err
+			}
 			result, err := tx.Exec(
 				ctx,
 				`insert into diagnosis_runs(workspace_id, app_id, run_after)
 				 select a.workspace_id, a.id, $2
 				 from apps a
+				 join workspaces w on w.id=a.workspace_id
 				 where a.workspace_id=$1
+				   and (
+				     (
+				       w.subscription_status='trialing'
+				       and (
+				         w.trial_ends_at > $2
+				         or w.entitlement_ends_at > $2
+				       )
+				     )
+				     or (
+				       w.subscription_status='active'
+				       and w.entitlement_ends_at > $2
+				     )
+				   )
 				   and not exists(
 				     select 1 from diagnosis_runs dr
 				     where dr.app_id=a.id
@@ -66,7 +101,10 @@ func (db *DB) QueueDueDiagnoses(ctx context.Context, now time.Time, interval tim
 				     where dr.app_id=a.id
 				       and dr.status='succeeded'
 				       and dr.updated_at > now() - $3::interval
-				   )`,
+				   )
+				 on conflict (app_id)
+				   where status in ('queued','running','retrying')
+				 do nothing`,
 				workspaceID,
 				now.UTC(),
 				interval.String(),
@@ -88,7 +126,22 @@ func (db *DB) QueueDueDiagnoses(ctx context.Context, now time.Time, interval tim
 // FOR UPDATE SKIP LOCKED, mirroring ClaimSyncJob. Returns ErrNotFound when no
 // run is ready across any workspace.
 func (db *DB) ClaimDiagnosisRun(ctx context.Context) (DiagnosisRun, error) {
-	rows, err := db.Pool.Query(ctx, "select id::text from workspaces order by id")
+	rows, err := db.Pool.Query(
+		ctx,
+		`select id::text
+		 from workspaces
+		 where (
+		   subscription_status='trialing'
+		   and (
+		     trial_ends_at > now()
+		     or entitlement_ends_at > now()
+		   )
+		 ) or (
+		   subscription_status='active'
+		   and entitlement_ends_at > now()
+		 )
+		 order by id`,
+	)
 	if err != nil {
 		return DiagnosisRun{}, err
 	}
@@ -113,13 +166,27 @@ func (db *DB) ClaimDiagnosisRun(ctx context.Context) (DiagnosisRun, error) {
 			return tx.QueryRow(
 				ctx,
 				`with candidate as (
-				   select id
-				   from diagnosis_runs
-				   where workspace_id=$1
-				     and status in ('queued','retrying')
-				     and run_after <= now()
-				   order by created_at
-				   for update skip locked
+				   select dr.id
+				   from diagnosis_runs dr
+				   join workspaces w on w.id=dr.workspace_id
+				   where dr.workspace_id=$1
+				     and dr.status in ('queued','retrying')
+				     and dr.run_after <= now()
+				     and (
+				       (
+				         w.subscription_status='trialing'
+				         and (
+				           w.trial_ends_at > now()
+				           or w.entitlement_ends_at > now()
+				         )
+				       )
+				       or (
+				         w.subscription_status='active'
+				         and w.entitlement_ends_at > now()
+				       )
+				     )
+				   order by dr.created_at
+				   for update of dr skip locked
 				   limit 1
 				 )
 				 update diagnosis_runs dr set
@@ -181,23 +248,23 @@ func (db *DB) MetricsForApp(ctx context.Context, workspaceID, appID string, from
 			return err
 		}
 		defer rows.Close()
-			for rows.Next() {
-				var m Metric
-				if err := rows.Scan(
-					&m.Provider,
-					&m.Key,
-					&m.OccurredAt,
-					&m.Value,
-					&m.Unit,
-					&m.Freshness,
-					&m.Completeness,
-				); err != nil {
-					return err
-				}
-				metrics = append(metrics, m)
+		for rows.Next() {
+			var m Metric
+			if err := rows.Scan(
+				&m.Provider,
+				&m.Key,
+				&m.OccurredAt,
+				&m.Value,
+				&m.Unit,
+				&m.Freshness,
+				&m.Completeness,
+			); err != nil {
+				return err
 			}
-			return rows.Err()
-		})
+			metrics = append(metrics, m)
+		}
+		return rows.Err()
+	})
 	return metrics, err
 }
 

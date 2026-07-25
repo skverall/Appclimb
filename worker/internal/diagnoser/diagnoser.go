@@ -5,7 +5,7 @@
 // The logic here previously lived in two parallel places — the TypeScript
 // src/lib/diagnosis.ts (used only by tests) and the inline growthSnapshot
 // function in worker/internal/httpapi/server.go. Both now delegate here so the
-// thresholds, benchmarks and confidence weights cannot drift. AI explanation
+// thresholds, source ownership and confidence weights cannot drift. AI explanation
 // may sit on top of this output later (PRODUCT_DIRECTION §7: deterministic
 // calculations and evidence lineage come before AI explanation), but this
 // package never calls a model: every output is reproducible from its inputs.
@@ -25,15 +25,16 @@ import (
 // Version is the schema version of the generator output. It is persisted in
 // evidence.calculation_version and insights.diagnosis_version so stale rows
 // can be invalidated when the algorithm changes.
-const Version = "2026.07.1"
+const Version = "2026.07.3"
 
 // DiagnosisWindowDays is the trailing window every diagnosis covers, matching
 // the growth-map window (server.go growthMap handler: AddDate(0,0,-30)).
 const DiagnosisWindowDays = 30
 
-// Health thresholds. A stage is "critical" once its conversion rate falls
-// below 75% of its benchmark, "watch" between 75% and 100%. These mirror
-// src/lib/diagnosis.ts selectEarliestBrokenStage and growthSnapshot exactly.
+// Health thresholds. When a workspace has an explicitly supplied, defensible
+// benchmark, a stage is "critical" once its conversion rate falls below 75%
+// of that benchmark and "watch" between 75% and 100%. Production never falls
+// back to the illustrative demo rates.
 const (
 	criticalFactor = 0.75
 	// Confidence weights mirror src/lib/diagnosis.ts assessConfidence.
@@ -78,9 +79,9 @@ const (
 // Derived/Observed insight. Avoids acting on noise (PRODUCT_DIRECTION §14.4).
 const LowVolumeThreshold = 50.0
 
-// StageDefinition describes one node of the River Atlas funnel. It is the
-// canonical stage→metric→source→benchmark mapping (moved here from the inline
-// stages table in server.go so the API and the generator share it).
+// StageDefinition describes one node of the River Atlas funnel. Benchmark is
+// zero in the canonical definitions and is populated only from an explicit
+// workspace input during classification.
 type StageDefinition struct {
 	ID        StageID
 	Label     string
@@ -89,18 +90,18 @@ type StageDefinition struct {
 	Benchmark float64 // 0 means no benchmark (top-of-funnel)
 }
 
-// Stages is the single canonical iOS funnel definition. Mirrors the previous
-// server.go stages var verbatim.
+// Stages is the single canonical iOS funnel definition. Demo benchmark values
+// deliberately live only in src/lib/demo-data.ts.
 func Stages() []StageDefinition {
 	return []StageDefinition{
 		{ID: StageDiscover, Label: "Discover", MetricKey: "impressions", Source: "app-store-connect"},
-		{ID: StageStore, Label: "Store", MetricKey: "product_page_views", Source: "app-store-connect", Benchmark: 0.52},
-		{ID: StageInstall, Label: "Install", MetricKey: "downloads", Source: "app-store-connect", Benchmark: 0.26},
-		{ID: StageActivate, Label: "Activate", MetricKey: "activation_24h", Source: "posthog", Benchmark: 0.41},
-		{ID: StagePaywall, Label: "Paywall", MetricKey: "paywall_views", Source: "superwall", Benchmark: 0.73},
-		{ID: StageTrial, Label: "Trial", MetricKey: "trials_new", Source: "revenuecat", Benchmark: 0.49},
-		{ID: StagePaid, Label: "Paid", MetricKey: "paid_new", Source: "revenuecat", Benchmark: 0.43},
-		{ID: StageRenew, Label: "Renew", MetricKey: "renewals", Source: "revenuecat", Benchmark: 0.56},
+		{ID: StageStore, Label: "Store", MetricKey: "product_page_views", Source: "app-store-connect"},
+		{ID: StageInstall, Label: "Install", MetricKey: "downloads", Source: "app-store-connect"},
+		{ID: StageActivate, Label: "Activate", MetricKey: "activated_users", Source: "posthog"},
+		{ID: StagePaywall, Label: "Paywall", MetricKey: "paywall_views", Source: "superwall"},
+		{ID: StageTrial, Label: "Trial", MetricKey: "trials_new", Source: "revenuecat"},
+		{ID: StagePaid, Label: "Paid", MetricKey: "paid_new", Source: "revenuecat"},
+		{ID: StageRenew, Label: "Renew", MetricKey: "renewals", Source: "revenuecat"},
 	}
 }
 
@@ -108,11 +109,14 @@ func Stages() []StageDefinition {
 // local type (rather than importing database) so this package stays free of an
 // import cycle; callers convert from database.Metric.
 type Metric struct {
-	Provider     string
-	Key          string
-	OccurredAt   time.Time
-	Value        float64
-	Unit         string
+	Provider   string
+	Key        string
+	OccurredAt time.Time
+	Value      float64
+	Unit       string
+	// Freshness is retained at the database boundary for backwards
+	// compatibility. Diagnosis deliberately derives freshness from OccurredAt
+	// and the current clock so an imported point cannot stay "fresh" forever.
 	Freshness    float64
 	Completeness float64
 }
@@ -136,19 +140,39 @@ type Confidence struct {
 	Level string // high | medium | low
 }
 
-// ComputeConfidence derives the overall data-trust score from the freshness and
-// completeness of the metric points feeding the diagnosis.
-func ComputeConfidence(metrics []Metric) Confidence {
+// ComputeConfidence derives the overall data-trust score from completeness and
+// the age of the newest observation in each provider/metric series. Using the
+// newest observation avoids penalising a healthy trailing window merely because
+// it also contains older history, while deriving age from OccurredAt prevents a
+// freshness value frozen at import time from remaining trusted indefinitely.
+func ComputeConfidence(metrics []Metric, now time.Time) Confidence {
 	if len(metrics) == 0 {
 		return Confidence{Score: 0, Level: ConfidenceLow}
 	}
-	var completeness, freshness float64
+	type seriesKey struct {
+		provider string
+		metric   string
+	}
+	latestBySeries := make(map[seriesKey]time.Time, len(metrics))
+	var completeness float64
 	for _, m := range metrics {
 		completeness += m.Completeness
-		freshness += m.Freshness
+		key := seriesKey{provider: m.Provider, metric: m.Key}
+		if current, ok := latestBySeries[key]; !ok || m.OccurredAt.After(current) {
+			latestBySeries[key] = m.OccurredAt
+		}
 	}
 	avgCompleteness := completeness / float64(len(metrics))
-	avgFreshness := freshness / float64(len(metrics))
+	var freshness float64
+	for _, occurredAt := range latestBySeries {
+		if occurredAt.IsZero() {
+			freshness += freshnessSpanHours
+			continue
+		}
+		age := now.UTC().Sub(occurredAt.UTC()).Hours()
+		freshness += math.Max(0, age)
+	}
+	avgFreshness := freshness / float64(len(latestBySeries))
 	freshnessFactor := math.Max(0, 1-avgFreshness/freshnessSpanHours)
 	score := int(math.Round(math.Max(0, math.Min(1, avgCompleteness*weightCompleteness+freshnessFactor*weightFreshness)) * 100))
 	level := ConfidenceLow
@@ -160,43 +184,95 @@ func ComputeConfidence(metrics []Metric) Confidence {
 	return Confidence{Score: score, Level: level}
 }
 
-// AggregateByMetric sums every metric_point value by metric_key across the
-// window, collapsing all dimension granularity (per-day, per-cohort) the way
-// growthSnapshot did (server.go sums loop).
+// AggregateByMetric combines metric points using the stage's canonical owner.
+// Additive observations are summed across the window. Provider range snapshots
+// (for example Superwall's date-range overview) are non-additive, so only the
+// newest snapshot is used; legacy additive rows for that same series are
+// ignored once a range snapshot exists.
 func AggregateByMetric(metrics []Metric) map[string]float64 {
-	sums := make(map[string]float64, 16)
+	owners := make(map[string]string, len(Stages()))
+	for _, stage := range Stages() {
+		owners[stage.MetricKey] = stage.Source
+	}
+	type accumulator struct {
+		sum              float64
+		snapshotValue    float64
+		snapshotOccurred time.Time
+		hasSnapshot      bool
+	}
+	aggregates := make(map[string]accumulator, 16)
 	for _, m := range metrics {
-		sums[m.Key] += m.Value
+		if owner, ok := owners[m.Key]; ok && m.Provider != owner {
+			continue
+		}
+		current := aggregates[m.Key]
+		if isRangeSnapshotUnit(m.Unit) {
+			if !current.hasSnapshot ||
+				m.OccurredAt.After(current.snapshotOccurred) ||
+				(m.OccurredAt.Equal(current.snapshotOccurred) && m.Value > current.snapshotValue) {
+				current.snapshotValue = m.Value
+				current.snapshotOccurred = m.OccurredAt
+			}
+			current.hasSnapshot = true
+		} else {
+			current.sum += m.Value
+		}
+		aggregates[m.Key] = current
+	}
+	sums := make(map[string]float64, len(aggregates))
+	for key, aggregate := range aggregates {
+		if aggregate.hasSnapshot {
+			sums[key] = aggregate.snapshotValue
+			continue
+		}
+		sums[key] = aggregate.sum
 	}
 	return sums
+}
+
+func isRangeSnapshotUnit(unit string) bool {
+	return unit == "range_count" || unit == "range_ratio"
 }
 
 // ClassifyStages computes the River Atlas stages from aggregated volumes. The
 // rules are the canonical health classification:
 //
-//	unknown  — no volume
-//	healthy  — volume present and rate at or above benchmark
+//	unknown  — required owner metric or denominator is absent
+//	healthy  — a benchmark is present and the rate is at or above it
 //	watch    — rate in [benchmark*0.75, benchmark)
 //	critical — rate below benchmark*0.75
 //
-// Discover (index 0) has no benchmark and is never critical by rate.
-func ClassifyStages(sums map[string]float64) []StageResult {
+// Without a benchmark, volume and conversion remain visible but health is
+// unknown. Discover has no conversion denominator and therefore stays unknown.
+func ClassifyStages(
+	sums map[string]float64,
+	benchmarkSets ...map[StageID]float64,
+) []StageResult {
 	stages := Stages()
+	if len(benchmarkSets) > 0 {
+		for index := range stages {
+			if benchmark := benchmarkSets[0][stages[index].ID]; benchmark > 0 &&
+				benchmark <= 1 {
+				stages[index].Benchmark = benchmark
+			}
+		}
+	}
 	results := make([]StageResult, 0, len(stages))
 	previous := 0.0
+	previousPresent := false
 	for index, stage := range stages {
-		value := sums[stage.MetricKey]
+		value, present := sums[stage.MetricKey]
 		var conversion *float64
 		health := "unknown"
 		flowWidth := 30.0
 		if value > 0 {
-			health = "healthy"
 			flowWidth = math.Max(30, 155*math.Sqrt(value/math.Max(sums[stages[0].MetricKey], value)))
 		}
-		if index > 0 && previous > 0 {
+		if index > 0 && present && previousPresent && previous > 0 {
 			rate := math.Max(0, math.Min(1, value/previous))
 			conversion = &rate
 			if stage.Benchmark > 0 {
+				health = "healthy"
 				switch {
 				case rate < stage.Benchmark*criticalFactor:
 					health = "critical"
@@ -213,6 +289,7 @@ func ClassifyStages(sums map[string]float64) []StageResult {
 			FlowWidth:      math.Round(flowWidth),
 		})
 		previous = value
+		previousPresent = present
 	}
 	return results
 }
@@ -264,28 +341,29 @@ type Insight struct {
 // ExternalMutationAllowed is always false (DB CHECK forces it; read-only per
 // PRODUCT_DIRECTION §14.6).
 type ActionProposal struct {
-	InsightIdx          int
-	Title               string
-	Rationale           string
-	ExperimentTemplate  string
+	InsightIdx         int
+	Title              string
+	Rationale          string
+	ExperimentTemplate string
 }
 
 // Diagnosis is the full deterministic output for one app.
 type Diagnosis struct {
-	Version   string
-	Window    struct{ From, To time.Time }
-	Stages    []StageResult
+	Version    string
+	Window     struct{ From, To time.Time }
+	Stages     []StageResult
 	Confidence Confidence
-	Evidence  []Evidence
-	Insights  []Insight
-	Actions   []ActionProposal
-	InputHash string
+	Evidence   []Evidence
+	Insights   []Insight
+	Actions    []ActionProposal
+	InputHash  string
 }
 
 // Input is what Generate needs from the database layer.
 type Input struct {
-	Metrics []Metric
-	Now     time.Time
+	Metrics    []Metric
+	Now        time.Time
+	Benchmarks map[StageID]float64
 }
 
 // Generate runs the deterministic diagnosis pipeline. It is pure: identical
@@ -301,15 +379,18 @@ type Input struct {
 // At most three insights are produced (insights.rank CHECK 1..3). Fewer when
 // the data does not support more — never fabricated.
 func Generate(in Input) Diagnosis {
-	stages := ClassifyStages(AggregateByMetric(in.Metrics))
-	conf := ComputeConfidence(in.Metrics)
+	stages := ClassifyStages(
+		AggregateByMetric(in.Metrics),
+		in.Benchmarks,
+	)
+	conf := ComputeConfidence(in.Metrics, in.Now)
 	windowFrom, windowTo := diagnosisWindow(in.Now)
 
 	d := Diagnosis{
 		Version:    Version,
 		Confidence: conf,
 		Stages:     stages,
-		InputHash:  InputHash(in.Metrics),
+		InputHash:  InputHash(in.Metrics, in.Now),
 	}
 	d.Window.From = windowFrom
 	d.Window.To = windowTo
@@ -558,14 +639,17 @@ func experimentTemplate(id StageID) string {
 	}
 }
 
-// InputHash returns a stable hex digest of the metric inputs so the worker can
-// skip recomputation when nothing changed since the last successful run. The
-// key material is provider|metric_key|day|value rounded to avoid float noise.
-func InputHash(metrics []Metric) string {
+// InputHash returns a stable hex digest of the metric inputs and the current
+// freshness hour. Freshness is part of the generated output, so the clock must
+// participate in idempotency; otherwise an unchanged source could retain an old
+// high-confidence diagnosis forever.
+func InputHash(metrics []Metric, now time.Time) string {
 	type key struct {
 		provider, metricKey string
 		day                 string
 		value               string
+		unit                string
+		completeness        string
 	}
 	keys := make([]key, 0, len(metrics))
 	for _, m := range metrics {
@@ -574,6 +658,13 @@ func InputHash(metrics []Metric) string {
 			metricKey: m.Key,
 			day:       m.OccurredAt.UTC().Format("2006-01-02"),
 			value:     strconv.FormatFloat(round3(m.Value), 'f', 3, 64),
+			unit:      m.Unit,
+			completeness: strconv.FormatFloat(
+				round3(m.Completeness),
+				'f',
+				3,
+				64,
+			),
 		})
 	}
 	sort.Slice(keys, func(i, j int) bool {
@@ -583,9 +674,24 @@ func InputHash(metrics []Metric) string {
 		if keys[i].metricKey != keys[j].metricKey {
 			return keys[i].metricKey < keys[j].metricKey
 		}
-		return keys[i].day < keys[j].day
+		if keys[i].day != keys[j].day {
+			return keys[i].day < keys[j].day
+		}
+		if keys[i].unit != keys[j].unit {
+			return keys[i].unit < keys[j].unit
+		}
+		if keys[i].value != keys[j].value {
+			return keys[i].value < keys[j].value
+		}
+		return keys[i].completeness < keys[j].completeness
 	})
 	h := sha256.New()
+	h.Write([]byte(Version))
+	h.Write([]byte{0})
+	if len(metrics) > 0 {
+		h.Write([]byte(now.UTC().Truncate(time.Hour).Format(time.RFC3339)))
+		h.Write([]byte{0})
+	}
 	for _, k := range keys {
 		h.Write([]byte(k.provider))
 		h.Write([]byte{0})
@@ -594,6 +700,10 @@ func InputHash(metrics []Metric) string {
 		h.Write([]byte(k.day))
 		h.Write([]byte{0})
 		h.Write([]byte(k.value))
+		h.Write([]byte{0})
+		h.Write([]byte(k.unit))
+		h.Write([]byte{0})
+		h.Write([]byte(k.completeness))
 		h.Write([]byte{0})
 	}
 	return hex.EncodeToString(h.Sum(nil))[:32]

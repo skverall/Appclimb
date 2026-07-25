@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net"
 	"net/http"
@@ -9,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"appclimb.app/backend/internal/database"
+	"appclimb.app/backend/internal/entitlement"
 	"github.com/google/uuid"
 )
 
@@ -169,9 +172,56 @@ func (s *Server) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+func (s *Server) requireEntitlement(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		current := currentAuth(r)
+		state, err := s.lookupEntitlement(r.Context(), current.WorkspaceID)
+		if errors.Is(err, database.ErrNotFound) {
+			writeError(w, http.StatusPaymentRequired, "entitlement_required")
+			return
+		}
+		if err != nil {
+			s.logError(r, "entitlement lookup failed", err)
+			writeError(w, http.StatusInternalServerError, "entitlement_lookup_failed")
+			return
+		}
+		if !state.Allowed(s.Now().UTC()) {
+			writeError(w, http.StatusPaymentRequired, "entitlement_required")
+			return
+		}
+		next(w, r)
+	}
+}
+
+func (s *Server) lookupEntitlement(
+	ctx context.Context,
+	workspaceID string,
+) (entitlement.State, error) {
+	if s.EntitlementLookup != nil {
+		return s.EntitlementLookup(ctx, workspaceID)
+	}
+	return s.DB.WorkspaceEntitlement(ctx, workspaceID)
+}
+
 func (s *Server) rateLimited(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if !s.limiter.allow(clientIP(r), s.Now()) {
+			w.Header().Set("Retry-After", "60")
+			writeError(w, http.StatusTooManyRequests, "rate_limited")
+			return
+		}
+		next(w, r)
+	}
+}
+
+func (s *Server) rateLimitedByWorkspace(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		current := currentAuth(r)
+		key := "workspace:" + current.WorkspaceID + ":" + r.URL.Path
+		if current.WorkspaceID == "" {
+			key = "ip:" + clientIP(r) + ":" + r.URL.Path
+		}
+		if !s.limiter.allow(key, s.Now()) {
 			w.Header().Set("Retry-After", "60")
 			writeError(w, http.StatusTooManyRequests, "rate_limited")
 			return

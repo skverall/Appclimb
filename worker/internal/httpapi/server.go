@@ -20,21 +20,45 @@ import (
 	"appclimb.app/backend/internal/connectors"
 	"appclimb.app/backend/internal/database"
 	"appclimb.app/backend/internal/diagnoser"
+	"appclimb.app/backend/internal/entitlement"
 	"appclimb.app/backend/internal/secure"
 	"appclimb.app/backend/internal/syncer"
 	"github.com/google/uuid"
 )
 
-const maxJSONBody = 1 << 20
+const (
+	maxJSONBody        = 1 << 20
+	checkoutBindingTTL = 30 * time.Minute
+)
+
+type billingEventRecorder func(
+	context.Context,
+	string,
+	string,
+	time.Time,
+	json.RawMessage,
+	*database.BillingSubscriptionUpdate,
+) (database.BillingEventResult, error)
+
+type checkoutBindingCreator func(
+	context.Context,
+	string,
+	string,
+	[]byte,
+	time.Time,
+) error
 
 type Server struct {
-	Logger     *slog.Logger
-	DB         *database.DB
-	Config     config.Config
-	Connectors *connectors.Client
-	Tokens     auth.TokenIssuer
-	Now        func() time.Time
-	limiter    *ipRateLimiter
+	Logger                 *slog.Logger
+	DB                     *database.DB
+	Config                 config.Config
+	Connectors             *connectors.Client
+	Tokens                 auth.TokenIssuer
+	Now                    func() time.Time
+	EntitlementLookup      func(context.Context, string) (entitlement.State, error)
+	BillingEventRecorder   billingEventRecorder
+	CheckoutBindingCreator checkoutBindingCreator
+	limiter                *ipRateLimiter
 }
 
 type authContext struct {
@@ -62,8 +86,11 @@ func New(
 			AccessTTL: cfg.AccessTokenTTL,
 			Issuer:    "appclimb-api",
 		},
-		Now:     time.Now,
-		limiter: newIPRateLimiter(12, time.Minute),
+		Now:                    time.Now,
+		EntitlementLookup:      db.WorkspaceEntitlement,
+		BillingEventRecorder:   db.RecordBillingEvent,
+		CheckoutBindingCreator: db.CreateCheckoutBinding,
+		limiter:                newIPRateLimiter(12, time.Minute),
 	}
 }
 
@@ -80,10 +107,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/workspace", s.requireAuth(s.workspace))
 	mux.HandleFunc("GET /v1/growth-map", s.requireAuth(s.growthMap))
 	mux.HandleFunc("GET /v1/sources", s.requireAuth(s.listSources))
-	mux.HandleFunc("POST /v1/sources/{provider}/verify", s.requireAuth(s.verifySource))
-	mux.HandleFunc("PUT /v1/sources/{provider}", s.requireAuth(s.connectSource))
+	mux.HandleFunc("POST /v1/sources/{provider}/verify", s.requireAuth(s.requireEntitlement(s.verifySource)))
+	mux.HandleFunc("PUT /v1/sources/{provider}", s.requireAuth(s.requireEntitlement(s.connectSource)))
 	mux.HandleFunc("DELETE /v1/sources/{provider}", s.requireAuth(s.deleteSource))
-	mux.HandleFunc("POST /v1/sources/{provider}/sync", s.requireAuth(s.queueSync))
+	mux.HandleFunc("POST /v1/sources/{provider}/sync", s.requireAuth(s.requireEntitlement(s.queueSync)))
+	mux.HandleFunc(
+		"POST /v1/billing/checkout-binding",
+		s.requireAuth(s.rateLimitedByWorkspace(s.createCheckoutBinding)),
+	)
 	mux.HandleFunc("POST /v1/billing/webhook", s.paddleWebhook)
 	mux.HandleFunc("POST /v1/internal/sync/run", s.internalSync)
 	mux.HandleFunc("OPTIONS /{path...}", s.options)
@@ -465,9 +496,14 @@ func (s *Server) queueSync(w http.ResponseWriter, r *http.Request) {
 		r.Context(),
 		current.WorkspaceID,
 		provider,
+		s.Now().UTC(),
 		from,
 		to,
 	)
+	if errors.Is(err, database.ErrEntitlementRequired) {
+		writeError(w, http.StatusPaymentRequired, "entitlement_required")
+		return
+	}
 	if errors.Is(err, database.ErrNotFound) {
 		writeError(w, http.StatusNotFound, "source_not_connected")
 		return
@@ -488,7 +524,56 @@ func (s *Server) queueSync(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) growthMap(w http.ResponseWriter, r *http.Request) {
 	current := currentAuth(r)
-	from := s.Now().UTC().AddDate(0, 0, -30)
+	now := s.Now().UTC()
+	state, err := s.lookupEntitlement(r.Context(), current.WorkspaceID)
+	if errors.Is(err, database.ErrNotFound) {
+		writeError(w, http.StatusNotFound, "workspace_not_found")
+		return
+	}
+	if err != nil {
+		s.logError(r, "growth map entitlement lookup failed", err)
+		writeError(w, http.StatusInternalServerError, "entitlement_lookup_failed")
+		return
+	}
+	if !state.Allowed(now) {
+		workspace, err := s.DB.Workspace(
+			r.Context(),
+			current.UserID,
+			current.WorkspaceID,
+		)
+		if err != nil {
+			s.logError(r, "growth map shell workspace failed", err)
+			writeError(w, http.StatusInternalServerError, "growth_map_failed")
+			return
+		}
+		sources, err := s.DB.ListSources(r.Context(), current.WorkspaceID)
+		if err != nil {
+			s.logError(r, "growth map shell sources failed", err)
+			writeError(w, http.StatusInternalServerError, "growth_map_failed")
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"data": growthSnapshot(
+				now,
+				workspace,
+				nil,
+				nil,
+				nil,
+				nil,
+				nil,
+				sources,
+			),
+			"meta": map[string]any{
+				"mode":                     "empty",
+				"entitled":                 false,
+				"entitlementError":         "entitlement_required",
+				"externalMutationsAllowed": false,
+				"windowDays":               30,
+			},
+		})
+		return
+	}
+	from := now.AddDate(0, 0, -30)
 	workspace, metrics, events, insights, evidence, actions, err := s.DB.GrowthInputs(
 		r.Context(),
 		current.WorkspaceID,
@@ -507,7 +592,7 @@ func (s *Server) growthMap(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"data": growthSnapshot(
-			s.Now().UTC(),
+			now,
 			workspace,
 			metrics,
 			events,
@@ -518,13 +603,93 @@ func (s *Server) growthMap(w http.ResponseWriter, r *http.Request) {
 		),
 		"meta": map[string]any{
 			"mode":                     map[bool]string{true: "empty", false: "live"}[len(metrics) == 0],
+			"entitled":                 true,
 			"externalMutationsAllowed": false,
 			"windowDays":               30,
 		},
 	})
 }
 
+func (s *Server) createCheckoutBinding(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	if !s.Config.PaddleConfigured() {
+		writeError(w, http.StatusServiceUnavailable, "billing_not_configured")
+		return
+	}
+	current := currentAuth(r)
+	if current.Role != "owner" && current.Role != "admin" {
+		writeError(w, http.StatusForbidden, "admin_required")
+		return
+	}
+	var input struct {
+		PriceID string `json:"priceId"`
+	}
+	if err := decodeJSON(w, r, &input); err != nil {
+		return
+	}
+	input.PriceID = strings.TrimSpace(input.PriceID)
+	if !s.Config.PaddlePriceAllowed(input.PriceID) {
+		writeError(w, http.StatusBadRequest, "billing_price_not_allowed")
+		return
+	}
+	rawToken, tokenHash, err := billing.NewCheckoutBindingToken()
+	if err != nil {
+		s.logError(r, "checkout binding generation failed", err)
+		writeError(
+			w,
+			http.StatusInternalServerError,
+			"checkout_binding_failed",
+		)
+		return
+	}
+	expiresAt := s.Now().UTC().Add(checkoutBindingTTL)
+	if s.CheckoutBindingCreator == nil {
+		writeError(
+			w,
+			http.StatusServiceUnavailable,
+			"billing_not_configured",
+		)
+		return
+	}
+	if err := s.CheckoutBindingCreator(
+		r.Context(),
+		current.WorkspaceID,
+		input.PriceID,
+		tokenHash,
+		expiresAt,
+	); err != nil {
+		if errors.Is(err, database.ErrCheckoutPending) {
+			writeError(w, http.StatusConflict, "checkout_already_pending")
+			return
+		}
+		if errors.Is(err, database.ErrSubscriptionExists) {
+			writeError(w, http.StatusConflict, "billing_subscription_exists")
+			return
+		}
+		s.logError(r, "checkout binding persistence failed", err)
+		writeError(
+			w,
+			http.StatusInternalServerError,
+			"checkout_binding_failed",
+		)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"data": map[string]any{
+			"checkoutBinding": rawToken,
+			"priceId":         input.PriceID,
+			"expiresAt":       expiresAt,
+		},
+	})
+}
+
 func (s *Server) paddleWebhook(w http.ResponseWriter, r *http.Request) {
+	if !s.Config.PaddleConfigured() {
+		writeError(w, http.StatusServiceUnavailable, "billing_not_configured")
+		return
+	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxJSONBody))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_webhook_body")
@@ -548,52 +713,118 @@ func (s *Server) paddleWebhook(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.Unmarshal(body, &event); err != nil ||
 		event.EventID == "" ||
-		event.EventType == "" {
+		event.EventType == "" ||
+		event.Occurred == "" {
 		writeError(w, http.StatusBadRequest, "malformed_webhook_event")
 		return
 	}
-	var data struct {
-		ID         string `json:"id"`
-		Status     string `json:"status"`
-		CustomData struct {
-			WorkspaceID string `json:"workspace_id"`
-		} `json:"custom_data"`
-		CurrentBillingPeriod struct {
-			EndsAt string `json:"ends_at"`
-		} `json:"current_billing_period"`
-	}
-	_ = json.Unmarshal(event.Data, &data)
 	occurredAt, err := time.Parse(time.RFC3339Nano, event.Occurred)
 	if err != nil {
-		occurredAt = s.Now().UTC()
+		writeError(w, http.StatusBadRequest, "malformed_webhook_event")
+		return
 	}
-	var entitlementEndsAt *time.Time
-	if parsed, err := time.Parse(
-		time.RFC3339Nano,
-		data.CurrentBillingPeriod.EndsAt,
-	); err == nil {
-		entitlementEndsAt = &parsed
+	var update *database.BillingSubscriptionUpdate
+	ignoredReason := ""
+	if strings.HasPrefix(event.EventType, "subscription.") {
+		allowedPrices := make(map[string]bool, len(s.Config.PaddleAllowedPriceIDs))
+		for _, priceID := range s.Config.PaddleAllowedPriceIDs {
+			allowedPrices[priceID] = true
+		}
+		parsed, parseErr := billing.ParseSubscriptionUpdate(
+			event.Data,
+			billing.ProductPolicy{
+				ProductID:       s.Config.PaddleProductID,
+				ProductIdentity: s.Config.PaddleProductIdentity,
+				AllowedPriceIDs: allowedPrices,
+			},
+		)
+		if errors.Is(parseErr, billing.ErrProductNotAllowed) {
+			ignoredReason = "product_not_allowed"
+		} else if parseErr != nil {
+			writeError(w, http.StatusBadRequest, "malformed_webhook_event")
+			return
+		} else {
+			update = &database.BillingSubscriptionUpdate{
+				SubscriptionID:    parsed.SubscriptionID,
+				CustomerID:        parsed.CustomerID,
+				TransactionID:     parsed.TransactionID,
+				CustomWorkspaceID: parsed.CustomWorkspaceID,
+				CheckoutBinding:   parsed.CheckoutBinding,
+				Status:            parsed.Status,
+				ProductID:         parsed.ProductID,
+				PriceID:           parsed.PriceID,
+				EntitlementEndsAt: parsed.EntitlementEndsAt,
+			}
+		}
 	}
-	inserted, err := s.DB.RecordBillingEvent(
+	storedPayload, err := redactCheckoutBinding(body)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "malformed_webhook_event")
+		return
+	}
+	result, err := s.recordBillingEvent(
 		r.Context(),
 		event.EventID,
 		event.EventType,
-		occurredAt,
-		body,
-		data.CustomData.WorkspaceID,
-		data.ID,
-		data.Status,
-		entitlementEndsAt,
+		occurredAt.UTC(),
+		storedPayload,
+		update,
 	)
 	if err != nil {
 		s.logError(r, "billing event persistence failed", err)
 		writeError(w, http.StatusInternalServerError, "billing_event_failed")
 		return
 	}
+	if ignoredReason == "" && result.Reason != "applied" && result.Reason != "duplicate" {
+		ignoredReason = result.Reason
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"received":  true,
-		"duplicate": !inserted,
+		"received":               true,
+		"duplicate":              !result.Inserted,
+		"applied":                result.Applied,
+		"reconciliationRequired": result.ReconciliationRequired,
+		"ignored":                ignoredReason,
 	})
+}
+
+func redactCheckoutBinding(body []byte) (json.RawMessage, error) {
+	var payload map[string]any
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, err
+	}
+	if data, ok := payload["data"].(map[string]any); ok {
+		if customData, ok := data["custom_data"].(map[string]any); ok {
+			delete(customData, "checkout_binding")
+		}
+	}
+	return json.Marshal(payload)
+}
+
+func (s *Server) recordBillingEvent(
+	ctx context.Context,
+	eventID, eventType string,
+	occurredAt time.Time,
+	payload json.RawMessage,
+	update *database.BillingSubscriptionUpdate,
+) (database.BillingEventResult, error) {
+	if s.BillingEventRecorder != nil {
+		return s.BillingEventRecorder(
+			ctx,
+			eventID,
+			eventType,
+			occurredAt,
+			payload,
+			update,
+		)
+	}
+	return s.DB.RecordBillingEvent(
+		ctx,
+		eventID,
+		eventType,
+		occurredAt,
+		payload,
+		update,
+	)
 }
 
 func (s *Server) internalSync(w http.ResponseWriter, r *http.Request) {
@@ -764,11 +995,11 @@ func expandSources(connected []database.Source) []map[string]any {
 		"appclimb-rank":     "Keyword Monitor",
 	}
 	capabilities := map[string][]string{
-		"app-store-connect": {"Store engagement", "Commerce", "Usage", "Performance"},
-		"revenuecat":        {"Revenue", "Trials", "Paid conversion", "Renewals", "Churn"},
-		"posthog":           {"Activation", "Funnels", "Feature usage", "Retention"},
-		"superwall":         {"Paywall views", "Experiments", "Paywall conversion"},
-		"appclimb-rank":     {"Private beta", "100 keywords", "3 storefronts"},
+		"app-store-connect": {"App Store impressions", "Product page views", "Downloads"},
+		"revenuecat":        {"Revenue", "New trials", "New paid", "Trial conversion", "Retention rate", "Churn rate"},
+		"posthog":           {"Activation event users", "Session event users"},
+		"superwall":         {"Paywall views", "Paywall conversion", "Trial starts"},
+		"appclimb-rank":     {"Roadmap", "100 keywords planned", "3 storefronts planned"},
 	}
 	byProvider := map[string]database.Source{}
 	for _, source := range connected {
@@ -838,7 +1069,40 @@ func growthSnapshot(
 	}
 	sums := diagnoser.AggregateByMetric(stageMetrics)
 	classified := diagnoser.ClassifyStages(sums)
-	confidence := diagnoser.ComputeConfidence(stageMetrics)
+	confidence := diagnoser.ComputeConfidence(stageMetrics, now)
+
+	stageEvidenceIDs := make(map[string][]string, len(stages))
+	stageEvidenceSeen := make(map[string]map[string]bool, len(stages))
+	addStageEvidence := func(stageID, evidenceID string) {
+		if stageID == "" || evidenceID == "" {
+			return
+		}
+		if stageEvidenceSeen[stageID] == nil {
+			stageEvidenceSeen[stageID] = map[string]bool{}
+		}
+		if stageEvidenceSeen[stageID][evidenceID] {
+			return
+		}
+		stageEvidenceSeen[stageID][evidenceID] = true
+		stageEvidenceIDs[stageID] = append(
+			stageEvidenceIDs[stageID],
+			evidenceID,
+		)
+	}
+	for _, insight := range insights {
+		for _, evidenceID := range insight.EvidenceIDs {
+			addStageEvidence(insight.StageID, evidenceID)
+		}
+	}
+	for _, item := range evidence {
+		for _, stage := range stages {
+			for _, metricKey := range item.MetricKeys {
+				if metricKey == stage.MetricKey {
+					addStageEvidence(string(stage.ID), item.ID)
+				}
+			}
+		}
+	}
 
 	stagePayload := make([]map[string]any, 0, len(stages))
 	for _, result := range classified {
@@ -846,7 +1110,11 @@ func growthSnapshot(
 		if result.ConversionRate != nil {
 			conversion = *result.ConversionRate
 		}
-		stagePayload = append(stagePayload, map[string]any{
+		evidenceIDs := stageEvidenceIDs[string(result.Definition.ID)]
+		if evidenceIDs == nil {
+			evidenceIDs = []string{}
+		}
+		stageRow := map[string]any{
 			"id":             string(result.Definition.ID),
 			"label":          result.Definition.Label,
 			"value":          result.Value,
@@ -854,10 +1122,13 @@ func growthSnapshot(
 			"conversionRate": conversion,
 			"health":         result.Health,
 			"source":         result.Definition.Source,
-			"evidenceIds":    []string{},
+			"evidenceIds":    evidenceIDs,
 			"flowWidth":      result.FlowWidth,
-			"benchmark":      result.Definition.Benchmark,
-		})
+		}
+		if result.Definition.Benchmark > 0 {
+			stageRow["benchmark"] = result.Definition.Benchmark
+		}
+		stagePayload = append(stagePayload, stageRow)
 	}
 	eventPayload := make([]map[string]any, 0, len(events))
 	for _, event := range events {

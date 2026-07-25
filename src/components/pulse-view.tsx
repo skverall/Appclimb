@@ -29,6 +29,15 @@ export function PulseView({
   replayIndex: number;
   onReplayIndexChange: (index: number) => void;
 }) {
+  const appInitials =
+    snapshot.app.name
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase() || "AC";
+
   return (
     <section className="pulse-view">
       <div className="filter-row">
@@ -36,7 +45,7 @@ export function PulseView({
           className="filter-control app-filter"
           aria-label={`Selected app: ${snapshot.app.name}`}
         >
-          <span className="mini-app-icon">CD</span>
+          <span className="mini-app-icon">{appInitials}</span>
           <span>{snapshot.app.name}</span>
         </div>
         <div
@@ -88,15 +97,23 @@ export function PulseView({
             replayIndex={replayIndex}
             eventCount={snapshot.events.length}
             onSelectInsight={onSelectInsight}
+            illustrativeReplay={snapshot.mode === "demo"}
           />
           <GrowthReplay
             events={snapshot.events}
             replayIndex={replayIndex}
             onReplayIndexChange={onReplayIndexChange}
+            mode={snapshot.mode}
           />
           <div className="supporting-grid">
-            <RetentionHeatmap rows={snapshot.retention} />
-            <VoiceClusters clusters={snapshot.customerClusters} />
+            <RetentionHeatmap
+              rows={snapshot.retention}
+              mode={snapshot.mode}
+            />
+            <VoiceClusters
+              clusters={snapshot.customerClusters}
+              mode={snapshot.mode}
+            />
           </div>
         </div>
         <InsightPanel
