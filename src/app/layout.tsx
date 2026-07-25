@@ -101,6 +101,9 @@ export const metadata: Metadata = {
       "application/rss+xml": absoluteUrl("/feed.xml"),
     },
   },
+  verification: {
+    yandex: "3d71c1eca65fe46d",
+  },
 };
 
 export default function RootLayout({
