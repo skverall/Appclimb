@@ -1,0 +1,42 @@
+name: Deploy · Vercel Production
+
+# Auto-deploy the production site (appclimb.app) on every push to main.
+#
+# Why this exists: the project's native Vercel ↔ GitHub integration is linked
+# at the project level but its delivery webhook is not installed on this
+# repository, so pushes to main were not triggering builds (the production site
+# only moved on manual `vercel deploy`). This workflow is the reliable,
+# self-contained replacement: GitHub itself fires it on push, and it deploys
+# through the official Vercel CLI using repository secrets — no webhook and no
+# private integration URL required.
+#
+# Required repository secrets (set once, never committed):
+#   VERCEL_TOKEN       Vercel auth token with deploy access to the project
+#   VERCEL_ORG_ID      Vercel team / org id (team_…)
+#   VERCEL_PROJECT_ID  Vercel project id (prj_…)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: vercel-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Build & deploy to appclimb.app
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to Vercel (production)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: npx --yes vercel@latest deploy --prod --yes --token "$VERCEL_TOKEN"
