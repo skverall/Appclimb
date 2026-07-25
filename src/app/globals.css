@@ -8450,17 +8450,66 @@ a {
   }
 
   .atlas-visitors-card {
-    overflow-x: auto;
+    overflow: hidden;
   }
 
   .atlas-card-heading,
-  .atlas-card-footer {
-    min-width: 720px;
+  .atlas-card-footer,
+  .atlas-visitor-list {
+    min-width: 0;
   }
 
-  .atlas-visitor-head,
+  .atlas-visitor-head {
+    display: none;
+  }
+
   .atlas-visitor-list {
-    min-width: 720px;
+    padding: 3px 12px;
+    overflow-x: hidden;
+  }
+
+  .atlas-visitor-row {
+    grid-template-areas:
+      "visitor time"
+      "country device"
+      "source journey";
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 12px;
+    min-height: 88px;
+    padding: 8px 0;
+  }
+
+  .atlas-visitor-name {
+    grid-area: visitor;
+  }
+
+  .atlas-visitor-row > span:nth-child(2) {
+    grid-area: country;
+  }
+
+  .atlas-visitor-row > span:nth-child(3) {
+    grid-area: device;
+    justify-self: end;
+  }
+
+  .atlas-visitor-row > span:nth-child(4) {
+    grid-area: source;
+  }
+
+  .atlas-visitor-row > span:nth-child(5) {
+    grid-area: time;
+    justify-self: end;
+  }
+
+  .atlas-visitor-row > span:nth-child(6) {
+    grid-area: journey;
+    justify-self: end;
+  }
+
+  .atlas-card-footer {
+    min-height: 0;
+    padding-block: 9px;
+    line-height: 1.45;
   }
 
   .atlas-connect-card {
@@ -8517,6 +8566,15 @@ a {
   .atlas-filter-button,
   .atlas-setup-button {
     justify-content: flex-start;
+  }
+
+  .atlas-card-heading {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .atlas-search {
+    width: 100%;
   }
 
   .atlas-crawler-details {
