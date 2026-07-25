@@ -51,8 +51,9 @@ their own collected data after completing the live workspace gate. See
 
 - `src/app` — Next.js 16 App Router, route handlers and legal/auth pages.
 - `src/components` — code-native River Atlas UI.
-- `src/lib` — browser-safe contracts, deterministic diagnosis and a server-only
-  API session client.
+- `src/lib` — browser-safe contracts, request validation, connector clients and
+  a server-only API session client. Diagnosis, envelope encryption and Paddle
+  signature verification live in `worker`, not here.
 - `public/appclimb-analytics.js` — small first-party browser collector;
   `src/proxy.ts` forwards recognized crawler requests separately.
 - `worker` — Go API and recurring sync worker with Postgres migrations,

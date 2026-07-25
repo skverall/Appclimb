@@ -193,13 +193,24 @@ export function backendPublicUrl(path: string) {
   return `${API_URL}${path}`;
 }
 
+/**
+ * Statuses the Response constructor refuses to pair with a body — even an
+ * empty one. The API answers 204 for logout, account deletion and source
+ * disconnection, so relaying those without this check throws and turns a
+ * successful delete into a 500.
+ */
+const NULL_BODY_STATUSES = new Set([204, 205, 304]);
+
 export async function relayBackendResponse(response: Response) {
   const headers = new Headers();
   const contentType = response.headers.get("content-type");
   if (contentType) {
     headers.set("content-type", contentType);
   }
-  return new Response(await response.arrayBuffer(), {
+  const body = NULL_BODY_STATUSES.has(response.status)
+    ? null
+    : await response.arrayBuffer();
+  return new Response(body, {
     status: response.status,
     headers,
   });
