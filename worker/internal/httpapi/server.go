@@ -1634,7 +1634,7 @@ func expandSources(connected []database.Source) []map[string]any {
 		var lastMetricAt any
 		accountLabel := ""
 		lastErrorCode := ""
-		syncStatus := ""
+		var syncStatus any
 		syncAttempt := 0
 		syncMaxAttempts := 0
 		metricCount := 0
@@ -1645,7 +1645,9 @@ func expandSources(connected []database.Source) []map[string]any {
 			lastMetricAt = source.LastMetricAt
 			accountLabel = source.AccountLabel
 			lastErrorCode = source.LastErrorCode
-			syncStatus = source.SyncStatus
+			if source.SyncStatus != "" {
+				syncStatus = source.SyncStatus
+			}
 			syncAttempt = source.SyncAttempt
 			syncMaxAttempts = source.SyncMaxAttempts
 			metricCount = source.MetricCount

@@ -30,6 +30,25 @@ func TestHandlerRoutesDoNotConflict(t *testing.T) {
 	}
 }
 
+func TestExpandSourcesUsesNullForMissingSyncState(t *testing.T) {
+	sources := expandSources([]database.Source{
+		{
+			Provider:   "posthog",
+			Status:     "needs-attention",
+			SyncStatus: "succeeded",
+		},
+	})
+	if len(sources) != 5 {
+		t.Fatalf("expected complete source catalog, got %d", len(sources))
+	}
+	if got := sources[0]["syncStatus"]; got != nil {
+		t.Fatalf("disconnected source sync status must be null, got %#v", got)
+	}
+	if got := sources[2]["syncStatus"]; got != "succeeded" {
+		t.Fatalf("connected source sync status was lost, got %#v", got)
+	}
+}
+
 func TestAnalyticsHelpersMinimizeAndValidateCollectedData(t *testing.T) {
 	if country := analyticsCountry(" uz "); country != "UZ" {
 		t.Fatalf("expected normalized country, got %q", country)
