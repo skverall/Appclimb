@@ -2706,6 +2706,11 @@ a {
   height: 100%;
 }
 
+.provider-app-store-connect {
+  background: #0d96f6;
+  border-color: rgba(13, 150, 246, 0.2);
+}
+
 .provider-posthog {
   padding: 6px;
   background: #fffdf7;
