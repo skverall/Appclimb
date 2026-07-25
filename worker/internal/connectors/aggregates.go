@@ -307,8 +307,9 @@ func (c *Client) readSuperwall(
 		case strings.Contains(key, "paywall") && strings.Contains(key, "conversion"):
 			metricKey = "paywall_conversion"
 			unit = "ratio"
-		case strings.Contains(key, "trial"):
-			metricKey = "superwall_trials"
+			// Trials are intentionally not mapped: RevenueCat owns the
+			// subscription lifecycle (PRODUCT_DIRECTION §7). Superwall trial
+			// stats are dropped to avoid a cross-source ownership conflict.
 		}
 		if metricKey == "" {
 			continue

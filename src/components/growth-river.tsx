@@ -278,6 +278,7 @@ export const GrowthRiver = memo(function GrowthRiver({
                   "stage-node",
                   `stage-${stage.health}`,
                   isSelected ? "selected" : "",
+                  stage.disagreement ? "has-disagreement" : "",
                 ].join(" ")}
                 style={{ left: `${stageLeftPct(index, stages.length)}%` }}
                 onClick={() =>
@@ -287,6 +288,10 @@ export const GrowthRiver = memo(function GrowthRiver({
                   stage.conversionRate === null
                     ? ""
                     : `, ${(stage.conversionRate * 100).toFixed(1)}% conversion`
+                }${
+                  stage.disagreement
+                    ? `, source discrepancy: ${stage.disagreement.ownerProvider} ${stage.disagreement.ownerValue} vs ${stage.disagreement.otherProvider} ${stage.disagreement.otherValue}, using ${stage.disagreement.ownerProvider}`
+                    : ""
                 }`}
               >
                 <span className="stage-label">{stage.label}</span>
@@ -299,6 +304,13 @@ export const GrowthRiver = memo(function GrowthRiver({
                     ? "Entry volume"
                     : `${(stage.conversionRate * 100).toFixed(1)}%`}
                 </span>
+                {stage.disagreement && (
+                  <span
+                    className="disagreement-marker"
+                    title={`Source discrepancy: ${stage.disagreement.ownerProvider} reports ${stage.disagreement.ownerValue}, ${stage.disagreement.otherProvider} reports ${stage.disagreement.otherValue}. Using ${stage.disagreement.ownerProvider} as the source of truth.`}
+                    aria-hidden="true"
+                  />
+                )}
               </button>
             );
           })}

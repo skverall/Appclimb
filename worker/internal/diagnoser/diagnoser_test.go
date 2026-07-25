@@ -66,11 +66,11 @@ func TestClassifyStages_CriticalThresholdIsStrictlyLessThan75Percent(t *testing.
 	// critical; rate in [0.39, 0.52) is watch; rate >= 0.52 is healthy.
 	previous := 1000.0
 	at := func(rate float64) string {
-		sums := map[string]float64{
+		agg := Aggregation{Sums: map[string]float64{
 			"impressions":        previous,
 			"product_page_views": previous * rate,
-		}
-		stages := ClassifyStages(sums)
+		}}
+		stages := ClassifyStages(agg)
 		return stages[1].Health // store is index 1
 	}
 	if h := at(0.385); h != "critical" {
@@ -85,7 +85,7 @@ func TestClassifyStages_CriticalThresholdIsStrictlyLessThan75Percent(t *testing.
 }
 
 func TestClassifyStages_UnknownWhenVolumeZero(t *testing.T) {
-	stages := ClassifyStages(map[string]float64{})
+	stages := ClassifyStages(Aggregation{Sums: map[string]float64{}})
 	for _, s := range stages {
 		if s.Health != "unknown" {
 			t.Fatalf("stage %s with no volume: want unknown, got %s", s.Definition.ID, s.Health)
@@ -93,7 +93,8 @@ func TestClassifyStages_UnknownWhenVolumeZero(t *testing.T) {
 	}
 }
 
-// fullFunnel builds a healthy funnel then lets a test degrade one stage.
+// fullFunnel builds a healthy funnel then lets a test degrade one stage. Renew
+// is a ratio stage (renewal_rate), so its "volume" is a rate in [0,1].
 func fullFunnel(degraded map[StageID]float64) []Metric {
 	volumes := map[StageID]float64{
 		StageDiscover: 100000,
@@ -103,7 +104,7 @@ func fullFunnel(degraded map[StageID]float64) []Metric {
 		StagePaywall:  14000,
 		StageTrial:    7000,
 		StagePaid:     3000,
-		StageRenew:    2000,
+		StageRenew:    0.6, // ratio: 60% renewal, healthy vs benchmark 0.56
 	}
 	for stage, v := range degraded {
 		volumes[stage] = v
@@ -276,5 +277,143 @@ func TestStages_CanonicalOrderMatchesContracts(t *testing.T) {
 	}
 	if stages[0].Benchmark != 0 {
 		t.Fatal("discover must have no benchmark")
+	}
+}
+
+// --- Source precedence (PRODUCT_DIRECTION §7) ---
+
+func TestOwnerFor_ReturnsDeclaredStageOwner(t *testing.T) {
+	if got := OwnerFor("paywall_views"); got != "superwall" {
+		t.Fatalf("OwnerFor(paywall_views): want superwall, got %q", got)
+	}
+	if got := OwnerFor("activation_24h"); got != "posthog" {
+		t.Fatalf("OwnerFor(activation_24h): want posthog, got %q", got)
+	}
+	if got := OwnerFor("unknown_key"); got != "" {
+		t.Fatalf("OwnerFor(unknown_key): want empty, got %q", got)
+	}
+}
+
+func TestAggregateByOwner_OwnerWinsAndRecordsDisagreement(t *testing.T) {
+	// paywall_views: PostHog (non-owner) 1000 + Superwall (owner) 800.
+	// Owner (superwall) wins with 800; disagreement records both.
+	metrics := []Metric{
+		{Provider: "posthog", Key: "paywall_views", Value: 1000},
+		{Provider: "superwall", Key: "paywall_views", Value: 800},
+	}
+	agg := AggregateByOwner(metrics)
+	if agg.Sums["paywall_views"] != 800 {
+		t.Fatalf("owner value: want 800, got %v", agg.Sums["paywall_views"])
+	}
+	d, ok := agg.Disagreements["paywall_views"]
+	if !ok {
+		t.Fatal("expected disagreement for paywall_views")
+	}
+	if d.OwnerProvider != "superwall" || d.OwnerValue != 800 {
+		t.Fatalf("disagreement owner: want superwall/800, got %s/%v", d.OwnerProvider, d.OwnerValue)
+	}
+	if d.OtherProvider != "posthog" || d.OtherValue != 1000 {
+		t.Fatalf("disagreement other: want posthog/1000, got %s/%v", d.OtherProvider, d.OtherValue)
+	}
+}
+
+func TestAggregateByOwner_OwnerAbsentOmitsKeyButRecordsDisagreement(t *testing.T) {
+	// paywall_views only from PostHog (non-owner). Owner (superwall) absent.
+	// Key must NOT appear in Sums (no blending); disagreement still recorded
+	// so the UI can say "posthog reporting, but superwall is the source of truth".
+	metrics := []Metric{
+		{Provider: "posthog", Key: "paywall_views", Value: 1000},
+	}
+	agg := AggregateByOwner(metrics)
+	if _, present := agg.Sums["paywall_views"]; present {
+		t.Fatal("non-owner-only key must not appear in Sums (would blend)")
+	}
+	d, ok := agg.Disagreements["paywall_views"]
+	if !ok {
+		t.Fatal("expected disagreement even when owner absent")
+	}
+	if d.OtherProvider != "posthog" || d.OtherValue != 1000 {
+		t.Fatalf("disagreement other: want posthog/1000, got %s/%v", d.OtherProvider, d.OtherValue)
+	}
+	if d.OwnerValue != 0 {
+		t.Fatalf("disagreement owner value: want 0 (absent), got %v", d.OwnerValue)
+	}
+}
+
+func TestAggregateByOwner_OwnerOnlyNoDisagreement(t *testing.T) {
+	metrics := []Metric{
+		{Provider: "superwall", Key: "paywall_views", Value: 800},
+		{Provider: "app-store-connect", Key: "impressions", Value: 50000},
+	}
+	agg := AggregateByOwner(metrics)
+	if agg.Sums["paywall_views"] != 800 {
+		t.Fatalf("owner-only: want 800, got %v", agg.Sums["paywall_views"])
+	}
+	if len(agg.Disagreements) != 0 {
+		t.Fatalf("owner-only data must produce no disagreements, got %d", len(agg.Disagreements))
+	}
+}
+
+func TestClassifyStages_DisagreementPropagatesToStageResult(t *testing.T) {
+	metrics := []Metric{
+		{Provider: "superwall", Key: "paywall_views", Value: 800},
+		{Provider: "posthog", Key: "paywall_views", Value: 1000},
+	}
+	stages := ClassifyStages(AggregateByOwner(metrics))
+	var paywall *StageResult
+	for i := range stages {
+		if stages[i].Definition.ID == StagePaywall {
+			paywall = &stages[i]
+		}
+	}
+	if paywall == nil {
+		t.Fatal("paywall stage not found")
+	}
+	if paywall.Disagreement == nil {
+		t.Fatal("paywall stage must carry disagreement")
+	}
+	if paywall.Value != 800 {
+		t.Fatalf("paywall value: want 800 (owner), got %v", paywall.Value)
+	}
+}
+
+// --- Ratio stage (Renew via renewal_rate) ---
+
+func TestClassifyStages_RatioStageUsesRateDirectly(t *testing.T) {
+	// renewal_rate = 0.45, benchmark 0.56. 0.45 < 0.56 but >= 0.42 (0.75x) → watch.
+	agg := Aggregation{Sums: map[string]float64{
+		"renewal_rate": 0.45,
+	}}
+	stages := ClassifyStages(agg)
+	var renew *StageResult
+	for i := range stages {
+		if stages[i].Definition.ID == StageRenew {
+			renew = &stages[i]
+		}
+	}
+	if renew == nil {
+		t.Fatal("renew stage not found")
+	}
+	if renew.Health != "watch" {
+		t.Fatalf("renew health: want watch, got %s", renew.Health)
+	}
+	if renew.ConversionRate == nil || *renew.ConversionRate != 0.45 {
+		t.Fatalf("renew conversion: want 0.45 (rate directly), got %v", renew.ConversionRate)
+	}
+}
+
+func TestClassifyStages_RatioStageCriticalBelow75Percent(t *testing.T) {
+	// renewal_rate = 0.30 < 0.42 (0.75 * 0.56) → critical.
+	agg := Aggregation{Sums: map[string]float64{
+		"renewal_rate": 0.30,
+	}}
+	stages := ClassifyStages(agg)
+	for i := range stages {
+		if stages[i].Definition.ID == StageRenew {
+			if stages[i].Health != "critical" {
+				t.Fatalf("renew at 0.30: want critical, got %s", stages[i].Health)
+			}
+			return
+		}
 	}
 }

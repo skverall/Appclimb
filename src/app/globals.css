@@ -1551,6 +1551,25 @@ a {
   line-height: 1.45;
 }
 
+/* Source discrepancy marker on a River Atlas stage node (PRODUCT_DIRECTION §7).
+ * Calm amber tone, no red/coral per §5. */
+.disagreement-marker {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #c7a23a;
+  border: 2px solid var(--surface, #ffffff);
+  cursor: help;
+}
+@media (prefers-reduced-motion: reduce) {
+  .disagreement-marker {
+    animation: none;
+  }
+}
+
 .opportunity-card {
   display: grid;
   grid-template-columns: 27px minmax(0, 1fr) 16px;

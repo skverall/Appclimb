@@ -32,6 +32,13 @@ export interface MetricPoint {
   completeness: number;
 }
 
+export interface StageDisagreement {
+  ownerProvider: SourceProvider;
+  ownerValue: number;
+  otherProvider: SourceProvider;
+  otherValue: number;
+}
+
 export interface GrowthStage {
   id: StageId;
   label: string;
@@ -43,6 +50,9 @@ export interface GrowthStage {
   evidenceIds: string[];
   flowWidth: number;
   benchmark?: number;
+  // Present when a non-owner provider also reported this metric. The owner's
+  // value is the one used above; this surfaces the discrepancy (PRODUCT_DIRECTION §7).
+  disagreement?: StageDisagreement;
 }
 
 export type ChangeEventType =

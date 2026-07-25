@@ -859,8 +859,8 @@ func growthSnapshot(
 			Completeness: m.Completeness,
 		}
 	}
-	sums := diagnoser.AggregateByMetric(stageMetrics)
-	classified := diagnoser.ClassifyStages(sums)
+	agg := diagnoser.AggregateByOwner(stageMetrics)
+	classified := diagnoser.ClassifyStages(agg)
 	confidence := diagnoser.ComputeConfidence(stageMetrics)
 
 	stagePayload := make([]map[string]any, 0, len(stages))
@@ -869,7 +869,7 @@ func growthSnapshot(
 		if result.ConversionRate != nil {
 			conversion = *result.ConversionRate
 		}
-		stagePayload = append(stagePayload, map[string]any{
+		stage := map[string]any{
 			"id":             string(result.Definition.ID),
 			"label":          result.Definition.Label,
 			"value":          result.Value,
@@ -880,7 +880,16 @@ func growthSnapshot(
 			"evidenceIds":    []string{},
 			"flowWidth":      result.FlowWidth,
 			"benchmark":      result.Definition.Benchmark,
-		})
+		}
+		if result.Disagreement != nil {
+			stage["disagreement"] = map[string]any{
+				"ownerProvider": result.Disagreement.OwnerProvider,
+				"ownerValue":    result.Disagreement.OwnerValue,
+				"otherProvider": result.Disagreement.OtherProvider,
+				"otherValue":    result.Disagreement.OtherValue,
+			}
+		}
+		stagePayload = append(stagePayload, stage)
 	}
 	eventPayload := make([]map[string]any, 0, len(events))
 	for _, event := range events {

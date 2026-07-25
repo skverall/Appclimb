@@ -85,23 +85,108 @@ type StageDefinition struct {
 	ID        StageID
 	Label     string
 	MetricKey string
-	Source    string
+	Source    string // the named owner of this metric (PRODUCT_DIRECTION §7)
+	Unit      string // "count" (volume) or "ratio" (rate that is both value and conversion)
 	Benchmark float64 // 0 means no benchmark (top-of-funnel)
 }
 
-// Stages is the single canonical iOS funnel definition. Mirrors the previous
-// server.go stages var verbatim.
+// Stages is the single canonical iOS funnel definition. The Source field is
+// the precedence rule mandated by PRODUCT_DIRECTION §7: when two providers emit
+// the same metric_key, the owner's value wins and the discrepancy is surfaced.
+// Unit "ratio" stages (Renew) consume a rate metric directly as both their
+// value and their conversion rate — the value/previous division does not apply.
 func Stages() []StageDefinition {
 	return []StageDefinition{
-		{ID: StageDiscover, Label: "Discover", MetricKey: "impressions", Source: "app-store-connect"},
-		{ID: StageStore, Label: "Store", MetricKey: "product_page_views", Source: "app-store-connect", Benchmark: 0.52},
-		{ID: StageInstall, Label: "Install", MetricKey: "downloads", Source: "app-store-connect", Benchmark: 0.26},
-		{ID: StageActivate, Label: "Activate", MetricKey: "activation_24h", Source: "posthog", Benchmark: 0.41},
-		{ID: StagePaywall, Label: "Paywall", MetricKey: "paywall_views", Source: "superwall", Benchmark: 0.73},
-		{ID: StageTrial, Label: "Trial", MetricKey: "trials_new", Source: "revenuecat", Benchmark: 0.49},
-		{ID: StagePaid, Label: "Paid", MetricKey: "paid_new", Source: "revenuecat", Benchmark: 0.43},
-		{ID: StageRenew, Label: "Renew", MetricKey: "renewals", Source: "revenuecat", Benchmark: 0.56},
+		{ID: StageDiscover, Label: "Discover", MetricKey: "impressions", Source: "app-store-connect", Unit: "count"},
+		{ID: StageStore, Label: "Store", MetricKey: "product_page_views", Source: "app-store-connect", Unit: "count", Benchmark: 0.52},
+		{ID: StageInstall, Label: "Install", MetricKey: "downloads", Source: "app-store-connect", Unit: "count", Benchmark: 0.26},
+		{ID: StageActivate, Label: "Activate", MetricKey: "activation_24h", Source: "posthog", Unit: "count", Benchmark: 0.41},
+		{ID: StagePaywall, Label: "Paywall", MetricKey: "paywall_views", Source: "superwall", Unit: "count", Benchmark: 0.73},
+		{ID: StageTrial, Label: "Trial", MetricKey: "trials_new", Source: "revenuecat", Unit: "count", Benchmark: 0.49},
+		{ID: StagePaid, Label: "Paid", MetricKey: "paid_new", Source: "revenuecat", Unit: "count", Benchmark: 0.43},
+		{ID: StageRenew, Label: "Renew", MetricKey: "renewal_rate", Source: "revenuecat", Unit: "ratio", Benchmark: 0.56},
 	}
+}
+
+// OwnerFor returns the named source-of-truth provider for a metric_key, or ""
+// when no stage declares the key. This is the §7 precedence rule lookup.
+func OwnerFor(metricKey string) string {
+	for _, stage := range Stages() {
+		if stage.MetricKey == metricKey {
+			return stage.Source
+		}
+	}
+	return ""
+}
+
+// Disagreement records that two providers reported the same metric_key with
+// different values. The owner's value is used for the stage; the other value
+// is surfaced so the user can see the discrepancy (PRODUCT_DIRECTION §7).
+type Disagreement struct {
+	OwnerProvider string
+	OwnerValue    float64
+	OtherProvider string
+	OtherValue    float64
+}
+
+// Aggregation is the provider-aware output of AggregateByOwner. Sums holds the
+// owner's summed value per metric_key; Disagreements holds conflicts where a
+// non-owner provider also reported the same key.
+type Aggregation struct {
+	Sums          map[string]float64
+	Disagreements map[string]Disagreement
+}
+
+// AggregateByOwner sums each metric_key using ONLY its declared owner provider
+// (per Stages()), enforcing PRODUCT_DIRECTION §7 precedence. When a non-owner
+// provider also reports the same key, the value is dropped from the sum and a
+// Disagreement is recorded. When the owner is absent but others are present,
+// the key is omitted entirely (the stage stays unknown rather than blending in
+// a non-canonical value).
+func AggregateByOwner(metrics []Metric) Aggregation {
+	byProviderValue := map[string]map[string]float64{} // key -> provider -> summed value
+	for _, m := range metrics {
+		if byProviderValue[m.Key] == nil {
+			byProviderValue[m.Key] = map[string]float64{}
+		}
+		byProviderValue[m.Key][m.Provider] += m.Value
+	}
+	agg := Aggregation{
+		Sums:          make(map[string]float64, 16),
+		Disagreements: make(map[string]Disagreement),
+	}
+	for key, providerValues := range byProviderValue {
+		owner := OwnerFor(key)
+		ownerValue := providerValues[owner]
+		// Find the largest non-owner contribution to surface as the disagreement.
+		var otherProvider string
+		var otherValue float64
+		for provider, value := range providerValues {
+			if provider == owner {
+				continue
+			}
+			if value > otherValue {
+				otherProvider = provider
+				otherValue = value
+			}
+		}
+		// Only the owner contributes to the sum. If the owner is absent, the key
+		// is omitted so the stage renders honestly as unknown.
+		if owner != "" && ownerValue > 0 {
+			agg.Sums[key] = ownerValue
+		}
+		// Record a disagreement whenever a non-owner reported the same key,
+		// regardless of whether the owner is present — both are §7 discrepancies.
+		if otherProvider != "" {
+			agg.Disagreements[key] = Disagreement{
+				OwnerProvider: owner,
+				OwnerValue:    ownerValue,
+				OtherProvider: otherProvider,
+				OtherValue:    otherValue,
+			}
+		}
+	}
+	return agg
 }
 
 // Metric is the subset of a metric_points row the generator consumes. It is a
@@ -127,6 +212,7 @@ type StageResult struct {
 	ConversionRate *float64
 	Health         string // healthy | watch | critical | unknown
 	FlowWidth      float64
+	Disagreement   *Disagreement
 }
 
 // Confidence is the workspace-level data-trust score, identical to the previous
@@ -171,39 +257,67 @@ func AggregateByMetric(metrics []Metric) map[string]float64 {
 	return sums
 }
 
-// ClassifyStages computes the River Atlas stages from aggregated volumes. The
-// rules are the canonical health classification:
+// ClassifyStages computes the River Atlas stages from an owner-aware
+// aggregation. The rules are the canonical health classification:
 //
 //	unknown  — no volume
 //	healthy  — volume present and rate at or above benchmark
 //	watch    — rate in [benchmark*0.75, benchmark)
 //	critical — rate below benchmark*0.75
 //
-// Discover (index 0) has no benchmark and is never critical by rate.
-func ClassifyStages(sums map[string]float64) []StageResult {
+// Count stages derive their conversion rate from value/previous. Ratio stages
+// (e.g. Renew, fed by renewal_rate) use the rate directly as both value and
+// conversion — the value/previous division does not apply. Discover (index 0)
+// has no benchmark and is never critical by rate.
+func ClassifyStages(agg Aggregation) []StageResult {
 	stages := Stages()
 	results := make([]StageResult, 0, len(stages))
 	previous := 0.0
 	for index, stage := range stages {
-		value := sums[stage.MetricKey]
+		value := agg.Sums[stage.MetricKey]
 		var conversion *float64
 		health := "unknown"
 		flowWidth := 30.0
-		if value > 0 {
-			health = "healthy"
-			flowWidth = math.Max(30, 155*math.Sqrt(value/math.Max(sums[stages[0].MetricKey], value)))
-		}
-		if index > 0 && previous > 0 {
-			rate := math.Max(0, math.Min(1, value/previous))
-			conversion = &rate
-			if stage.Benchmark > 0 {
-				switch {
-				case rate < stage.Benchmark*criticalFactor:
-					health = "critical"
-				case rate < stage.Benchmark:
-					health = "watch"
+
+		if stage.Unit == "ratio" {
+			// Ratio stage: value IS the rate. Conversion and health come from
+			// the rate directly; value/previous is meaningless for a rate.
+			if value > 0 {
+				rate := math.Max(0, math.Min(1, value))
+				conversion = &rate
+				health = "healthy"
+				if stage.Benchmark > 0 {
+					switch {
+					case rate < stage.Benchmark*criticalFactor:
+						health = "critical"
+					case rate < stage.Benchmark:
+						health = "watch"
+					}
 				}
 			}
+		} else {
+			// Count stage: existing volume + value/previous conversion logic.
+			if value > 0 {
+				health = "healthy"
+				flowWidth = math.Max(30, 155*math.Sqrt(value/math.Max(agg.Sums[stages[0].MetricKey], value)))
+			}
+			if index > 0 && previous > 0 {
+				rate := math.Max(0, math.Min(1, value/previous))
+				conversion = &rate
+				if stage.Benchmark > 0 {
+					switch {
+					case rate < stage.Benchmark*criticalFactor:
+						health = "critical"
+					case rate < stage.Benchmark:
+						health = "watch"
+					}
+				}
+			}
+		}
+
+		var disagreement *Disagreement
+		if d, ok := agg.Disagreements[stage.MetricKey]; ok {
+			disagreement = &d
 		}
 		results = append(results, StageResult{
 			Definition:     stage,
@@ -211,7 +325,10 @@ func ClassifyStages(sums map[string]float64) []StageResult {
 			ConversionRate: conversion,
 			Health:         health,
 			FlowWidth:      math.Round(flowWidth),
+			Disagreement:   disagreement,
 		})
+		// "previous" only matters for count-stage conversion; ratio stages do
+		// not consume it, but keep it updated for the next count stage.
 		previous = value
 	}
 	return results
@@ -301,7 +418,7 @@ type Input struct {
 // At most three insights are produced (insights.rank CHECK 1..3). Fewer when
 // the data does not support more — never fabricated.
 func Generate(in Input) Diagnosis {
-	stages := ClassifyStages(AggregateByMetric(in.Metrics))
+	stages := ClassifyStages(AggregateByOwner(in.Metrics))
 	conf := ComputeConfidence(in.Metrics)
 	windowFrom, windowTo := diagnosisWindow(in.Now)
 
