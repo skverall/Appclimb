@@ -453,9 +453,9 @@ export function SourcesView({
 }) {
   const isDemo = snapshot.mode === "demo";
   const accessRestricted = !isDemo && !entitled;
-  const [selectedProvider, setSelectedProvider] = useState(
-    snapshot.sources[0]?.provider,
-  );
+  const [selectedProvider, setSelectedProvider] = useState<
+    SourceConnection["provider"] | null
+  >(null);
   const [syncing, setSyncing] = useState(false);
   const [syncComplete, setSyncComplete] = useState(false);
   const [managing, setManaging] = useState(false);
@@ -845,17 +845,40 @@ export function SourcesView({
             />
           ))}
         </div>
+      </div>
 
-        {selected && (
-          <aside className="source-detail">
-            <div className={`provider-logo provider-${selected.provider}`}>
-              <ProviderMark provider={selected.provider} />
+      {selected && (
+        <ModalDialog
+          labelledBy="source-modal-title"
+          onClose={() => {
+            setSelectedProvider(null);
+            setManaging(false);
+            setConnectionState("idle");
+            setConnectionMessage("");
+            if (oauthState !== "idle") {
+              void fetch("/api/oauth/posthog/connect", {
+                method: "DELETE",
+              });
+              setOauthState("idle");
+              setOauthProjects([]);
+            }
+          }}
+          dialogClassName="settings-dialog source-modal-dialog"
+          closeLabel="Close connection window"
+        >
+          <div className="source-detail">
+            <div className="source-detail-header">
+              <div className={`provider-logo provider-${selected.provider}`}>
+                <ProviderMark provider={selected.provider} />
+              </div>
+              <span className={`status-pill status-${selected.status}`}>
+                {!isDemo && selected.status === "connected" && (
+                  <Check size={14} />
+                )}
+                {isDemo ? "Sample profile" : sourceStatusLabel(selected.status)}
+              </span>
             </div>
-            <span className={`status-pill status-${selected.status}`}>
-              {!isDemo && selected.status === "connected" && <Check size={14} />}
-              {isDemo ? "Sample profile" : sourceStatusLabel(selected.status)}
-            </span>
-            <h3>{selected.label}</h3>
+            <h3 id="source-modal-title">{selected.label}</h3>
             <p>
               {selected.capabilities.join(", ")}.{" "}
               {isDemo
@@ -963,6 +986,7 @@ export function SourcesView({
                   onClick={() => {
                     setConnectionState("idle");
                     setManaging(false);
+                    setSelectedProvider(null);
                   }}
                 >
                   Done
@@ -1276,9 +1300,9 @@ export function SourcesView({
                     ? "Revoking the source deletes its stored credentials immediately."
                     : "No credentials are stored for this source."}
             </p>
-          </aside>
-        )}
-      </div>
+          </div>
+        </ModalDialog>
+      )}
     </section>
   );
 }

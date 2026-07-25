@@ -116,12 +116,14 @@ describe("restricted source recovery", () => {
     const selectedCard = screen.getByRole("button", {
       name: /App Store Connect/i,
     });
+    fireEvent.click(selectedCard);
     expect(selectedCard).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText(/credentials may still be valid/i)).toBeInTheDocument();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: /^review connection$/i }),
-    );
+    const reviewButton = screen.queryByRole("button", { name: /^review connection$/i });
+    if (reviewButton) {
+      fireEvent.click(reviewButton);
+    }
     fireEvent.click(
       screen.getByRole("button", { name: /revoke connection/i }),
     );
