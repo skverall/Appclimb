@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 
 import { ModalDialog } from "@/components/modal-dialog";
+import { ProviderMark } from "@/components/provider-mark";
 import type {
   DashboardSnapshot,
   Experiment,
@@ -705,7 +706,7 @@ export function SourcesView({
         {selected && (
           <aside className="source-detail">
             <div className={`provider-logo provider-${selected.provider}`}>
-              {sourceInitials(selected)}
+              <ProviderMark provider={selected.provider} />
             </div>
             <span className={`status-pill status-${selected.status}`}>
               {!isDemo && selected.status === "connected" && <Check size={14} />}
@@ -953,7 +954,7 @@ function SourceCard({
       aria-pressed={selected}
     >
       <div className={`provider-logo provider-${source.provider}`}>
-        {sourceInitials(source)}
+        <ProviderMark provider={source.provider} />
       </div>
       <div className="source-card-copy">
         <div>
@@ -1012,18 +1013,6 @@ function sourceLabel(provider: SourceConnection["provider"]): string {
       superwall: "Superwall",
       "appclimb-rank": "AppClimb Rank",
     }[provider] ?? provider
-  );
-}
-
-function sourceInitials(source: SourceConnection): string {
-  return (
-    {
-      "app-store-connect": "A",
-      revenuecat: "RC",
-      posthog: "PH",
-      superwall: "S",
-      "appclimb-rank": "AC",
-    }[source.provider] ?? source.label.slice(0, 2)
   );
 }
 

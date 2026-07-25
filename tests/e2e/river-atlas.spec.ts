@@ -86,8 +86,16 @@ test("opportunity, lab and source workflows are interactive", async ({ page }) =
 
   await page.getByRole("button", { name: "Sources" }).click();
   await expect(page).toHaveURL(/\?view=sources$/);
+  await expect(
+    page.locator(".source-card [data-provider-mark]"),
+  ).toHaveCount(5);
   await page.getByRole("button", { name: /RevenueCat/ }).first().click();
   await expect(page.getByRole("heading", { name: "RevenueCat" })).toBeVisible();
+  await expect(
+    page.locator(
+      '.source-detail [data-provider-mark="revenuecat"]',
+    ),
+  ).toBeVisible();
   await expect(page.getByText("None in demo")).toBeVisible();
 });
 
