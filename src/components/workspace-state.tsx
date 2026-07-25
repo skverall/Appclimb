@@ -182,8 +182,14 @@ function EmptySourceCard({
       <i>
         {source.provider === "appclimb-rank"
           ? "Roadmap"
+          : source.syncStatus === "queued" ||
+              source.syncStatus === "running" ||
+              source.syncStatus === "retrying"
+            ? "Importing"
+          : source.status === "connected" && (source.metricCount ?? 0) > 0
+            ? "Live data"
           : source.status === "connected"
-            ? "Connected"
+            ? "Access saved · no data"
             : source.status === "needs-attention"
               ? "Needs attention"
               : "Not connected"}

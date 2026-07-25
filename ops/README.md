@@ -15,8 +15,10 @@ migration, configuration, and first-real-event proof separately.
 
 The production project is isolated at `/opt/apps/appclimb` and uses the
 Compose project name `appclimb`. Only `api` joins the shared
-`hortiops_default` ingress network. PostgreSQL and the worker remain on the
-project-private `appclimb_internal` network.
+`hortiops_default` ingress network. API and worker also join the
+project-scoped egress network so provider imports can make outbound HTTPS
+requests. PostgreSQL remains exclusively on the private
+`appclimb_internal` network.
 
 Database migrations run in the one-shot `migrate` service with
 `.env.admin`. API and worker use only the non-superuser
@@ -30,9 +32,10 @@ admin password. Compose interpolation reads the root-only `.env`.
 - Public smoke: `./ops/smoke.sh`
 - Logs: `docker compose logs --since=30m api worker`
 
-`ops/smoke.sh` also verifies that protected Acquisition Atlas reads and the
-public collector route exist. Expected unauthenticated/invalid-token responses
-are `401`; `404` or `405` means the new API bundle is not running.
+`ops/smoke.sh` also verifies that protected Acquisition Atlas reads, password
+recovery routes, and the public collector route exist. Expected
+unauthenticated/invalid-token responses are `401`; `404` or `405` means the
+new API bundle is not running.
 
 ## Backend release
 
@@ -62,6 +65,14 @@ passed; the `appclimb.app` property token is installed in Vercel; and separate
 human plus user-agent-detected crawler events were accepted. The pre-release
 bundle and database dump are retained under
 `/opt/backups/appclimb-deploys/20260725T155739Z`.
+
+Password recovery introduces migration `007_password_recovery.sql`. Reset
+tokens are stored only as SHA-256 hashes, expire after 30 minutes, are
+single-use, and revoke existing refresh sessions when consumed. Email delivery
+is enabled only when the AppClimb runtime has `SMTP_HOST`, `SMTP_PORT`,
+`SMTP_USERNAME`, `SMTP_PASSWORD`, `MAIL_FROM`, and `PUBLIC_APP_URL`. Use an
+AppClimb-specific transactional sender; do not reuse credentials from another
+VPS application.
 
 ## Backup and restore
 

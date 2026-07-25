@@ -120,8 +120,16 @@ export const dashboardSnapshotSchema = z.object({
       label: z.string(),
       status: z.enum(["connected", "needs-attention", "not-connected"]),
       lastSyncAt: z.string().nullish(),
+      nextSyncAt: z.string().nullish(),
       freshnessHours: z.number().finite().nullish(),
       lastErrorCode: z.string().nullish(),
+      syncStatus: z
+        .enum(["queued", "running", "retrying", "succeeded", "failed"])
+        .nullish(),
+      syncAttempt: z.number().int().nonnegative().optional(),
+      syncMaxAttempts: z.number().int().nonnegative().optional(),
+      metricCount: z.number().int().nonnegative().optional(),
+      lastMetricAt: z.string().nullish(),
       capabilities: z.array(z.string()),
       readOnly: z.literal(true),
     }),

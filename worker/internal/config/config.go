@@ -28,6 +28,12 @@ type Config struct {
 	HistoryDays           int
 	AppleBaseURL          string
 	AppleReportLagDays    int
+	SMTPHost              string
+	SMTPPort              string
+	SMTPUsername          string
+	SMTPPassword          string
+	MailFrom              string
+	PublicAppURL          string
 	Version               string
 }
 
@@ -97,6 +103,12 @@ func Load() (Config, error) {
 		HistoryDays:        historyDays,
 		AppleBaseURL:       env("APPLE_BASE_URL", "https://api.appstoreconnect.apple.com"),
 		AppleReportLagDays: appleLagDays,
+		SMTPHost:           strings.TrimSpace(os.Getenv("SMTP_HOST")),
+		SMTPPort:           env("SMTP_PORT", "587"),
+		SMTPUsername:       strings.TrimSpace(os.Getenv("SMTP_USERNAME")),
+		SMTPPassword:       strings.TrimSpace(os.Getenv("SMTP_PASSWORD")),
+		MailFrom:           strings.TrimSpace(os.Getenv("MAIL_FROM")),
+		PublicAppURL:       strings.TrimRight(env("PUBLIC_APP_URL", "https://appclimb.app"), "/"),
 		Version:            env("APP_VERSION", "dev"),
 	}
 	if cfg.DatabaseURL == "" {
@@ -106,6 +118,15 @@ func Load() (Config, error) {
 		return Config{}, errors.New("INTERNAL_TOKEN must be at least 32 characters")
 	}
 	return cfg, nil
+}
+
+func (cfg Config) MailConfigured() bool {
+	return cfg.SMTPHost != "" &&
+		cfg.SMTPPort != "" &&
+		cfg.SMTPUsername != "" &&
+		cfg.SMTPPassword != "" &&
+		cfg.MailFrom != "" &&
+		cfg.PublicAppURL != ""
 }
 
 func (cfg Config) PaddleConfigured() bool {

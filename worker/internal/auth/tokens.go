@@ -77,3 +77,18 @@ func HashRefreshToken(raw string) []byte {
 	sum := sha256.Sum256([]byte(raw))
 	return sum[:]
 }
+
+func NewPasswordResetToken() (raw string, hash []byte, err error) {
+	value := make([]byte, 32)
+	if _, err := rand.Read(value); err != nil {
+		return "", nil, err
+	}
+	raw = base64.RawURLEncoding.EncodeToString(value)
+	sum := sha256.Sum256([]byte(raw))
+	return raw, sum[:], nil
+}
+
+func HashPasswordResetToken(raw string) []byte {
+	sum := sha256.Sum256([]byte(raw))
+	return sum[:]
+}

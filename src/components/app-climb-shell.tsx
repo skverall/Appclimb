@@ -23,6 +23,7 @@ import Link from "next/link";
 
 import { logout } from "@/app/actions";
 import { AcquisitionAtlas } from "@/components/acquisition-atlas";
+import { AccountSecurity } from "@/components/account-security";
 import { BrandMark } from "@/components/brand-mark";
 import { ModalDialog } from "@/components/modal-dialog";
 import { PlanCheckout } from "@/components/plan-checkout";
@@ -35,8 +36,8 @@ import { PulseView } from "@/components/pulse-view";
 import {
   DiagnoseView,
   LabView,
-  SourcesView,
 } from "@/components/workspace-views";
+import { SourcesView } from "@/components/sources-view";
 import {
   EmptyWorkspaceView,
   NoEvidenceView,
@@ -256,17 +257,32 @@ export function AppClimbShell({
       ? "restricted"
       : initialSnapshot.mode === "demo"
         ? "demo"
-        : sourceConnections.some((source) => source.status === "needs-attention")
+        : sourceConnections.some(
+              (source) =>
+                source.status === "needs-attention" ||
+                source.syncStatus === "failed",
+            )
           ? "attention"
-          : sourceConnections.some((source) => source.status === "connected")
+          : sourceConnections.some(
+                (source) =>
+                  source.syncStatus === "queued" ||
+                  source.syncStatus === "running" ||
+                  source.syncStatus === "retrying",
+            )
+            ? "syncing"
+          : sourceConnections.some((source) => (source.metricCount ?? 0) > 0)
             ? "connected"
+            : sourceConnections.some((source) => source.status === "connected")
+              ? "waiting"
             : "empty";
   const sourceNavLabel = {
     unavailable: "workspace unavailable",
     restricted: "imports paused",
     demo: "sample profiles",
     attention: "connection needs attention",
+    syncing: "source import in progress",
     connected: "source connected",
+    waiting: "source access saved; awaiting data",
     empty: "no sources connected",
   }[sourceNavState];
   const trialProgress = Math.max(0, Math.min(100, (trialDays / 14) * 100));
@@ -282,7 +298,7 @@ export function AppClimbShell({
     initialSnapshot.mode === "demo"
       ? "Interactive demo · synthetic sample data"
       : initialSnapshot.mode === "empty"
-        ? "No live data yet"
+        ? "Growth River awaiting source data"
         : initialSnapshot.mode === "restricted"
           ? "Plan required · imports paused"
           : initialSnapshot.mode === "unavailable"
@@ -636,6 +652,7 @@ export function AppClimbShell({
               onOpenInsight={openInsight}
               replayIndex={replayIndex}
               onReplayIndexChange={setReplayIndex}
+              sources={sourceConnections}
             />
           ) : activeSection === "diagnose" &&
             initialSnapshot.insights.length === 0 ? (
@@ -672,6 +689,20 @@ export function AppClimbShell({
               entitled={initialSnapshot.mode !== "restricted"}
               sources={sourceConnections}
               onSourcesChange={setSourceConnections}
+              onOpenGrowthRiver={() => {
+                window.location.assign("/");
+              }}
+              onOpenAcquisitionAtlas={() => {
+                setPulseProjection("acquisition");
+                navigateTo("pulse");
+                const url = new URL(window.location.href);
+                url.searchParams.set("atlas", "1");
+                window.history.replaceState(
+                  null,
+                  "",
+                  `${url.pathname}${url.search}${url.hash}`,
+                );
+              }}
             />
           ) : null}
         </main>
@@ -750,6 +781,8 @@ export function AppClimbShell({
                   ))}
                 </div>
               </section>
+
+              <AccountSecurity />
 
               <div className="account-plan-card">
                 <span className="account-plan-icon">

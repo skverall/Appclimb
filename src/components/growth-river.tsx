@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useMemo, useState } from "react";
+import { memo, useMemo, useState, type CSSProperties } from "react";
 import { area, curveCatmullRom, line } from "d3-shape";
 import {
   ArrowDownToLine,
@@ -14,7 +14,13 @@ import {
 } from "lucide-react";
 
 import { ModalDialog } from "@/components/modal-dialog";
-import type { GrowthStage, Insight, StageHealth, StageId } from "@/lib/contracts";
+import type {
+  GrowthStage,
+  Insight,
+  SourceConnection,
+  StageHealth,
+  StageId,
+} from "@/lib/contracts";
 
 const ICONS = {
   discover: Compass,
@@ -34,6 +40,30 @@ const HEALTH_COLORS: Record<StageHealth, string> = {
   critical: "#e97361",
   unknown: "#b9c6c4",
 };
+
+const SOURCE_LABELS: Record<SourceConnection["provider"], string> = {
+  "app-store-connect": "App Store Connect",
+  posthog: "PostHog",
+  superwall: "Superwall",
+  revenuecat: "RevenueCat",
+  "appclimb-rank": "AppClimb Rank",
+};
+
+function riverSourceState(source?: SourceConnection) {
+  if (!source || source.status === "not-connected") return "Not connected";
+  if (
+    source.syncStatus === "queued" ||
+    source.syncStatus === "running" ||
+    source.syncStatus === "retrying"
+  ) {
+    return "Import in progress";
+  }
+  if (source.lastErrorCode || source.status === "needs-attention") {
+    return "Import needs attention";
+  }
+  if ((source.metricCount ?? 0) > 0) return "Live data";
+  return "Access saved · awaiting data";
+}
 
 const VIEW_W = 1056;
 const VIEW_H = 360;
@@ -62,6 +92,7 @@ export const GrowthRiver = memo(function GrowthRiver({
   eventCount,
   onSelectInsight,
   illustrativeReplay,
+  sources,
 }: {
   stages: GrowthStage[];
   insights: Insight[];
@@ -70,6 +101,7 @@ export const GrowthRiver = memo(function GrowthRiver({
   eventCount: number;
   onSelectInsight: (insightId: string) => void;
   illustrativeReplay: boolean;
+  sources: SourceConnection[];
 }) {
   const [methodologyOpen, setMethodologyOpen] = useState(false);
   const activeInsight = insights.find(
@@ -282,6 +314,10 @@ export const GrowthRiver = memo(function GrowthRiver({
                 (insight) => insight.stageId === stage.id,
               );
               const isSelected = activeInsight?.stageId === stage.id;
+              const source = sources.find(
+                (candidate) => candidate.provider === stage.source,
+              );
+              const sourceState = riverSourceState(source);
 
               return (
                 <button
@@ -292,16 +328,21 @@ export const GrowthRiver = memo(function GrowthRiver({
                     `stage-${stage.health}`,
                     isSelected ? "selected" : "",
                   ].join(" ")}
-                  style={{ left: `${stageLeftPct(index, stages.length)}%` }}
+                  style={
+                    {
+                      left: `${stageLeftPct(index, stages.length)}%`,
+                      "--stage-index": index,
+                    } as CSSProperties
+                  }
                   onClick={() =>
                     stageInsight && onSelectInsight(stageInsight.id)
                   }
-                  disabled={!stageInsight}
+                  aria-disabled={!stageInsight}
                   aria-label={`${stage.label}: ${stage.formattedValue}${
                     stage.conversionRate === null
                       ? ""
                       : `, ${(stage.conversionRate * 100).toFixed(1)}% conversion`
-                  }`}
+                  }. Source: ${SOURCE_LABELS[stage.source]}. ${sourceState}`}
                 >
                   <span className="stage-label">{stage.label}</span>
                   <span className="stage-icon">
@@ -312,6 +353,17 @@ export const GrowthRiver = memo(function GrowthRiver({
                     {stage.conversionRate === null
                       ? "Entry volume"
                       : `${(stage.conversionRate * 100).toFixed(1)}%`}
+                  </span>
+                  <span
+                    className={`stage-source stage-source-${sourceState
+                      .toLowerCase()
+                      .replaceAll(/[^a-z]+/g, "-")}`}
+                  >
+                    {SOURCE_LABELS[stage.source]}
+                  </span>
+                  <span className="stage-tooltip" role="tooltip">
+                    <strong>{SOURCE_LABELS[stage.source]} owns this stage</strong>
+                    <small>{sourceState}</small>
                   </span>
                 </button>
               );

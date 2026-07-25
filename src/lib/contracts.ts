@@ -119,8 +119,14 @@ export interface SourceConnection {
   label: string;
   status: "connected" | "needs-attention" | "not-connected";
   lastSyncAt?: string | null;
+  nextSyncAt?: string | null;
   freshnessHours?: number | null;
   lastErrorCode?: string | null;
+  syncStatus?: "queued" | "running" | "retrying" | "succeeded" | "failed" | null;
+  syncAttempt?: number;
+  syncMaxAttempts?: number;
+  metricCount?: number;
+  lastMetricAt?: string | null;
   capabilities: string[];
   readOnly: true;
 }

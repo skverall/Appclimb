@@ -69,6 +69,7 @@ services:
       ingress:
         aliases:
           - appclimb-api
+      egress:
 
   worker:
     image: appclimb-api:1.0.0
@@ -105,6 +106,7 @@ services:
         max-file: "3"
     networks:
       - internal
+      - egress
 
   db:
     image: postgres:16.9-alpine3.22
@@ -137,6 +139,9 @@ services:
 networks:
   internal:
     internal: true
+  # API and worker need outbound HTTPS for read-only provider imports.
+  # PostgreSQL stays exclusively on the isolated internal network.
+  egress:
   ingress:
     external: true
     name: hortiops_default

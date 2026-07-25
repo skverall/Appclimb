@@ -29,4 +29,25 @@ invalid_webhook_status=$(curl --silent --output /dev/null --write-out '%{http_co
   "$base_url/v1/billing/webhook")
 test "$invalid_webhook_status" = "401"
 
+forgot_password_status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+  --request POST \
+  --header 'Content-Type: application/json' \
+  --data '{"email":"appclimb-release-smoke@invalid.example"}' \
+  "$base_url/v1/auth/password/forgot")
+test "$forgot_password_status" = "202"
+
+invalid_reset_status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+  --request POST \
+  --header 'Content-Type: application/json' \
+  --data '{"token":"invalid","newPassword":"not-a-real-password"}' \
+  "$base_url/v1/auth/password/reset")
+test "$invalid_reset_status" = "400"
+
+unauthorized_password_change_status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+  --request POST \
+  --header 'Content-Type: application/json' \
+  --data '{}' \
+  "$base_url/v1/account/password")
+test "$unauthorized_password_change_status" = "401"
+
 printf 'PUBLIC_SMOKE_OK\n'

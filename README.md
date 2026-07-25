@@ -130,6 +130,11 @@ in Vercel. Connector credentials are encrypted with a random per-connection
 data key; the data key is then encrypted by the backend master key. Credentials,
 refresh sessions, billing payloads and sync jobs never reach the browser.
 
+Password recovery uses single-use SHA-256 token hashes with a 30-minute
+expiry. Delivery requires a project-specific SMTP identity configured through
+`SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, and `MAIL_FROM`.
+Do not reuse another application’s mail credentials.
+
 The frontend is designed for Vercel. The Go API and worker ship in the same
 distroless image for the existing Hostinger container environment. Configure
 Paddle webhooks directly at

@@ -12,7 +12,7 @@ import { GrowthRiver } from "@/components/growth-river";
 import { InsightPanel } from "@/components/insight-panel";
 import { RetentionHeatmap } from "@/components/retention-heatmap";
 import { VoiceClusters } from "@/components/voice-clusters";
-import type { DashboardSnapshot } from "@/lib/contracts";
+import type { DashboardSnapshot, SourceConnection } from "@/lib/contracts";
 
 export function PulseView({
   snapshot,
@@ -21,6 +21,7 @@ export function PulseView({
   onOpenInsight,
   replayIndex,
   onReplayIndexChange,
+  sources,
 }: {
   snapshot: DashboardSnapshot;
   selectedInsightId: string;
@@ -28,6 +29,7 @@ export function PulseView({
   onOpenInsight: (insightId: string) => void;
   replayIndex: number;
   onReplayIndexChange: (index: number) => void;
+  sources: SourceConnection[];
 }) {
   const appInitials =
     snapshot.app.name
@@ -98,6 +100,7 @@ export function PulseView({
             eventCount={snapshot.events.length}
             onSelectInsight={onSelectInsight}
             illustrativeReplay={snapshot.mode === "demo"}
+            sources={sources}
           />
           <GrowthReplay
             events={snapshot.events}

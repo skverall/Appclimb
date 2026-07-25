@@ -22,6 +22,7 @@ import (
 	"appclimb.app/backend/internal/database"
 	"appclimb.app/backend/internal/diagnoser"
 	"appclimb.app/backend/internal/entitlement"
+	"appclimb.app/backend/internal/mailer"
 	"appclimb.app/backend/internal/secure"
 	"appclimb.app/backend/internal/syncer"
 	"appclimb.app/backend/internal/webanalytics"
@@ -62,6 +63,7 @@ type Server struct {
 	EntitlementLookup      func(context.Context, string) (entitlement.State, error)
 	BillingEventRecorder   billingEventRecorder
 	CheckoutBindingCreator checkoutBindingCreator
+	PasswordResetSender    func(context.Context, string, string) error
 	limiter                *ipRateLimiter
 	collectorLimiter       *ipRateLimiter
 }
@@ -81,7 +83,7 @@ func New(
 	db *database.DB,
 	cfg config.Config,
 ) *Server {
-	return &Server{
+	server := &Server{
 		Logger:     logger,
 		DB:         db,
 		Config:     cfg,
@@ -99,6 +101,17 @@ func New(
 		limiter:                newIPRateLimiter(12, time.Minute),
 		collectorLimiter:       newIPRateLimiter(180, time.Minute),
 	}
+	if cfg.MailConfigured() {
+		sender := mailer.SMTP{
+			Host:     cfg.SMTPHost,
+			Port:     cfg.SMTPPort,
+			Username: cfg.SMTPUsername,
+			Password: cfg.SMTPPassword,
+			From:     cfg.MailFrom,
+		}
+		server.PasswordResetSender = sender.SendPasswordReset
+	}
+	return server
 }
 
 func (s *Server) Handler() http.Handler {
@@ -109,9 +122,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/auth/login", s.rateLimited(s.login))
 	mux.HandleFunc("POST /v1/auth/refresh", s.rateLimited(s.refresh))
 	mux.HandleFunc("POST /v1/auth/logout", s.logout)
+	mux.HandleFunc("POST /v1/auth/password/forgot", s.rateLimited(s.forgotPassword))
+	mux.HandleFunc("POST /v1/auth/password/reset", s.rateLimited(s.resetPassword))
 	mux.HandleFunc("GET /v1/me", s.requireAuth(s.me))
 	mux.HandleFunc("PATCH /v1/me", s.requireAuth(s.updateProfile))
 	mux.HandleFunc("DELETE /v1/account", s.requireAuth(s.deleteAccount))
+	mux.HandleFunc(
+		"POST /v1/account/password",
+		s.requireAuth(s.rateLimitedByWorkspace(s.changePassword)),
+	)
 	mux.HandleFunc("GET /v1/workspace", s.requireAuth(s.workspace))
 	mux.HandleFunc("GET /v1/growth-map", s.requireAuth(s.growthMap))
 	mux.HandleFunc(
@@ -328,6 +347,149 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusInternalServerError, "logout_failed")
 			return
 		}
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) forgotPassword(w http.ResponseWriter, r *http.Request) {
+	startedAt := time.Now()
+	defer func() {
+		if remaining := 450*time.Millisecond - time.Since(startedAt); remaining > 0 {
+			time.Sleep(remaining)
+		}
+	}()
+	var input struct {
+		Email string `json:"email"`
+	}
+	if err := decodeJSON(w, r, &input); err != nil {
+		return
+	}
+	if len(input.Email) > 320 {
+		writeJSON(w, http.StatusAccepted, map[string]any{"accepted": true})
+		return
+	}
+	rawToken, tokenHash, err := auth.NewPasswordResetToken()
+	if err != nil {
+		s.logError(r, "password recovery token failed", err)
+		writeJSON(w, http.StatusAccepted, map[string]any{"accepted": true})
+		return
+	}
+	email, found, err := s.DB.CreatePasswordReset(
+		r.Context(),
+		input.Email,
+		tokenHash,
+		s.Now().UTC().Add(30*time.Minute),
+	)
+	if err != nil {
+		s.logError(r, "password recovery lookup failed", err)
+		writeJSON(w, http.StatusAccepted, map[string]any{"accepted": true})
+		return
+	}
+	if found {
+		if s.PasswordResetSender == nil {
+			s.Logger.Warn("password recovery mail unavailable", "error_code", "mail_not_configured")
+		} else {
+			resetURL := s.Config.PublicAppURL +
+				"/reset-password?token=" +
+				url.QueryEscape(rawToken)
+			sendContext, cancel := context.WithTimeout(r.Context(), 12*time.Second)
+			defer cancel()
+			if err := s.PasswordResetSender(sendContext, email, resetURL); err != nil {
+				s.logError(r, "password recovery mail failed", err)
+			}
+		}
+	}
+	writeJSON(w, http.StatusAccepted, map[string]any{"accepted": true})
+}
+
+func (s *Server) resetPassword(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Token       string `json:"token"`
+		NewPassword string `json:"newPassword"`
+	}
+	if err := decodeJSON(w, r, &input); err != nil {
+		return
+	}
+	input.Token = strings.TrimSpace(input.Token)
+	if len(input.Token) < 40 ||
+		len(input.Token) > 128 ||
+		len(input.NewPassword) < 8 ||
+		len(input.NewPassword) > 128 {
+		writeError(w, http.StatusBadRequest, "invalid_or_expired_reset")
+		return
+	}
+	passwordHash, err := auth.HashPassword(input.NewPassword)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_password")
+		return
+	}
+	err = s.DB.ConsumePasswordReset(
+		r.Context(),
+		auth.HashPasswordResetToken(input.Token),
+		passwordHash,
+		s.Now().UTC(),
+	)
+	if errors.Is(err, database.ErrPasswordResetInvalid) {
+		writeError(w, http.StatusBadRequest, "invalid_or_expired_reset")
+		return
+	}
+	if err != nil {
+		s.logError(r, "password reset failed", err)
+		writeError(w, http.StatusInternalServerError, "password_reset_failed")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) changePassword(w http.ResponseWriter, r *http.Request) {
+	current := currentAuth(r)
+	var input struct {
+		CurrentPassword string `json:"currentPassword"`
+		NewPassword     string `json:"newPassword"`
+	}
+	if err := decodeJSON(w, r, &input); err != nil {
+		return
+	}
+	if len(input.CurrentPassword) < 8 ||
+		len(input.CurrentPassword) > 128 ||
+		len(input.NewPassword) < 8 ||
+		len(input.NewPassword) > 128 ||
+		input.CurrentPassword == input.NewPassword {
+		writeError(w, http.StatusBadRequest, "invalid_password_change")
+		return
+	}
+	currentHash, err := s.DB.PasswordHash(
+		r.Context(),
+		current.UserID,
+		current.WorkspaceID,
+	)
+	if errors.Is(err, database.ErrNotFound) {
+		writeError(w, http.StatusUnauthorized, "session_not_found")
+		return
+	}
+	if err != nil {
+		s.logError(r, "password lookup failed", err)
+		writeError(w, http.StatusInternalServerError, "password_change_failed")
+		return
+	}
+	if !auth.CheckPassword(currentHash, input.CurrentPassword) {
+		writeError(w, http.StatusUnauthorized, "current_password_invalid")
+		return
+	}
+	nextHash, err := auth.HashPassword(input.NewPassword)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_password")
+		return
+	}
+	if err := s.DB.ChangePassword(
+		r.Context(),
+		current.UserID,
+		current.WorkspaceID,
+		nextHash,
+	); err != nil {
+		s.logError(r, "password change failed", err)
+		writeError(w, http.StatusInternalServerError, "password_change_failed")
+		return
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -1469,25 +1631,40 @@ func expandSources(connected []database.Source) []map[string]any {
 		status := "not-connected"
 		var lastSyncAt any
 		var nextSyncAt any
+		var lastMetricAt any
 		accountLabel := ""
 		lastErrorCode := ""
+		syncStatus := ""
+		syncAttempt := 0
+		syncMaxAttempts := 0
+		metricCount := 0
 		if ok {
 			status = source.Status
 			lastSyncAt = source.LastSyncedAt
 			nextSyncAt = source.NextSyncAt
+			lastMetricAt = source.LastMetricAt
 			accountLabel = source.AccountLabel
 			lastErrorCode = source.LastErrorCode
+			syncStatus = source.SyncStatus
+			syncAttempt = source.SyncAttempt
+			syncMaxAttempts = source.SyncMaxAttempts
+			metricCount = source.MetricCount
 		}
 		result = append(result, map[string]any{
-			"provider":      provider,
-			"label":         labels[provider],
-			"status":        status,
-			"accountLabel":  accountLabel,
-			"lastSyncAt":    lastSyncAt,
-			"nextSyncAt":    nextSyncAt,
-			"lastErrorCode": lastErrorCode,
-			"capabilities":  capabilities[provider],
-			"readOnly":      true,
+			"provider":        provider,
+			"label":           labels[provider],
+			"status":          status,
+			"accountLabel":    accountLabel,
+			"lastSyncAt":      lastSyncAt,
+			"nextSyncAt":      nextSyncAt,
+			"lastErrorCode":   lastErrorCode,
+			"syncStatus":      syncStatus,
+			"syncAttempt":     syncAttempt,
+			"syncMaxAttempts": syncMaxAttempts,
+			"metricCount":     metricCount,
+			"lastMetricAt":    lastMetricAt,
+			"capabilities":    capabilities[provider],
+			"readOnly":        true,
 		})
 	}
 	return result

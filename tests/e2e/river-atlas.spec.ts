@@ -88,7 +88,12 @@ test("opportunity, lab and source workflows are interactive", async ({ page }) =
   await expect(page).toHaveURL(/\?view=sources$/);
   await expect(
     page.locator(".source-card [data-provider-mark]"),
-  ).toHaveCount(5);
+  ).toHaveCount(4);
+  await expect(
+    page.getByText(
+      "Acquisition Atlas uses AppClimb tracking — not PostHog.",
+    ),
+  ).toBeVisible();
   await page.getByRole("button", { name: /RevenueCat/ }).first().click();
   await expect(page.getByRole("heading", { name: "RevenueCat" })).toBeVisible();
   await expect(
@@ -96,7 +101,7 @@ test("opportunity, lab and source workflows are interactive", async ({ page }) =
       '.source-detail [data-provider-mark="revenuecat"]',
     ),
   ).toBeVisible();
-  await expect(page.getByText("None in demo")).toBeVisible();
+  await expect(page.getByText(/Illustrative coverage only/)).toBeVisible();
 });
 
 test("workspace links reload and browser history restores context", async ({
@@ -181,9 +186,15 @@ test("account entry makes sign up, sign in and recovery unambiguous", async ({
   await expect(
     page.getByRole("heading", { name: "Forgot your password?" }),
   ).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Account email" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Send reset link" })).toBeVisible();
+  await expect(page.locator('a[href^="mailto:"]')).toHaveCount(0);
+
+  await page.goto("/reset-password?token=e2e-placeholder-token");
   await expect(
-    page.getByRole("link", { name: "Request a password reset" }),
-  ).toHaveAttribute("href", /mailto:aydmaxx@gmail.com/);
+    page.getByRole("heading", { name: "Choose a new password" }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Save new password" })).toBeVisible();
 });
 
 test("checkout success cannot confirm an anonymous payment", async ({

@@ -57,3 +57,27 @@ func TestRefreshTokensAreRandomAndHashable(t *testing.T) {
 		t.Fatal("refresh token hash is not stable")
 	}
 }
+
+func TestPasswordResetTokensAreRandomAndHashOnly(t *testing.T) {
+	firstRaw, firstHash, err := NewPasswordResetToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	secondRaw, secondHash, err := NewPasswordResetToken()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if firstRaw == secondRaw || bytes.Equal(firstHash, secondHash) {
+		t.Fatal("password reset tokens must be unique")
+	}
+	if len(firstRaw) < 40 || len(firstHash) != 32 {
+		t.Fatalf(
+			"unexpected reset token sizes: raw=%d hash=%d",
+			len(firstRaw),
+			len(firstHash),
+		)
+	}
+	if !bytes.Equal(HashPasswordResetToken(firstRaw), firstHash) {
+		t.Fatal("stored reset hash must be reproducible without storing the raw token")
+	}
+}

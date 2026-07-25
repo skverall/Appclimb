@@ -17,12 +17,13 @@ import (
 )
 
 var (
-	ErrConflict            = errors.New("resource already exists")
-	ErrNotFound            = errors.New("resource not found")
-	ErrRefreshInvalid      = errors.New("refresh token is invalid")
-	ErrEntitlementRequired = errors.New("workspace entitlement is required")
-	ErrCheckoutPending     = errors.New("a checkout is already pending")
-	ErrSubscriptionExists  = errors.New("a Paddle subscription already exists")
+	ErrConflict             = errors.New("resource already exists")
+	ErrNotFound             = errors.New("resource not found")
+	ErrRefreshInvalid       = errors.New("refresh token is invalid")
+	ErrPasswordResetInvalid = errors.New("password reset token is invalid")
+	ErrEntitlementRequired  = errors.New("workspace entitlement is required")
+	ErrCheckoutPending      = errors.New("a checkout is already pending")
+	ErrSubscriptionExists   = errors.New("a Paddle subscription already exists")
 )
 
 type Identity struct {
@@ -72,13 +73,18 @@ func (db *DB) WorkspaceEntitlement(
 }
 
 type Source struct {
-	Provider       string     `json:"provider"`
-	Status         string     `json:"status"`
-	AccountLabel   string     `json:"accountLabel,omitempty"`
-	LastVerifiedAt *time.Time `json:"lastVerifiedAt,omitempty"`
-	LastSyncedAt   *time.Time `json:"lastSyncedAt,omitempty"`
-	NextSyncAt     *time.Time `json:"nextSyncAt,omitempty"`
-	LastErrorCode  string     `json:"lastErrorCode,omitempty"`
+	Provider        string     `json:"provider"`
+	Status          string     `json:"status"`
+	AccountLabel    string     `json:"accountLabel,omitempty"`
+	LastVerifiedAt  *time.Time `json:"lastVerifiedAt,omitempty"`
+	LastSyncedAt    *time.Time `json:"lastSyncedAt,omitempty"`
+	NextSyncAt      *time.Time `json:"nextSyncAt,omitempty"`
+	LastErrorCode   string     `json:"lastErrorCode,omitempty"`
+	SyncStatus      string     `json:"syncStatus,omitempty"`
+	SyncAttempt     int        `json:"syncAttempt,omitempty"`
+	SyncMaxAttempts int        `json:"syncMaxAttempts,omitempty"`
+	MetricCount     int        `json:"metricCount"`
+	LastMetricAt    *time.Time `json:"lastMetricAt,omitempty"`
 }
 
 type SourceSecret struct {
@@ -405,6 +411,201 @@ func (db *DB) Authenticate(ctx context.Context, email string) (Identity, string,
 	return identity, passwordHash, err
 }
 
+func (db *DB) PasswordHash(
+	ctx context.Context,
+	userID, workspaceID string,
+) (string, error) {
+	var passwordHash string
+	err := db.Pool.QueryRow(
+		ctx,
+		`select u.password_hash
+		 from users u
+		 join workspace_members wm on wm.user_id=u.id
+		 where u.id=$1 and wm.workspace_id=$2`,
+		userID,
+		workspaceID,
+	).Scan(&passwordHash)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return passwordHash, err
+}
+
+func (db *DB) ChangePassword(
+	ctx context.Context,
+	userID, workspaceID, passwordHash string,
+) error {
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	result, err := tx.Exec(
+		ctx,
+		`update users u
+		 set password_hash=$3,updated_at=now()
+		 where u.id=$1
+		   and exists(
+		     select 1 from workspace_members
+		     where user_id=u.id and workspace_id=$2
+		   )`,
+		userID,
+		workspaceID,
+		passwordHash,
+	)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() != 1 {
+		return ErrNotFound
+	}
+	if _, err := tx.Exec(
+		ctx,
+		`update refresh_sessions
+		 set revoked_at=coalesce(revoked_at,now())
+		 where user_id=$1`,
+		userID,
+	); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(
+		ctx,
+		`insert into audit_events(
+		   workspace_id,actor_user_id,action,target_type,target_id
+		 ) values($1,$2,'account.password_changed','user',$2)`,
+		workspaceID,
+		userID,
+	); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (db *DB) CreatePasswordReset(
+	ctx context.Context,
+	email string,
+	tokenHash []byte,
+	expiresAt time.Time,
+) (string, bool, error) {
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		return "", false, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var userID string
+	var normalizedEmail string
+	err = tx.QueryRow(
+		ctx,
+		`select id::text,email::text
+		 from users
+		 where email=$1`,
+		strings.ToLower(strings.TrimSpace(email)),
+	).Scan(&userID, &normalizedEmail)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	if _, err := tx.Exec(
+		ctx,
+		`update password_reset_tokens
+		 set used_at=coalesce(used_at,now())
+		 where user_id=$1 and used_at is null`,
+		userID,
+	); err != nil {
+		return "", false, err
+	}
+	if _, err := tx.Exec(
+		ctx,
+		`insert into password_reset_tokens(user_id,token_hash,expires_at)
+		 values($1,$2,$3)`,
+		userID,
+		tokenHash,
+		expiresAt,
+	); err != nil {
+		return "", false, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return "", false, err
+	}
+	return normalizedEmail, true, nil
+}
+
+func (db *DB) ConsumePasswordReset(
+	ctx context.Context,
+	tokenHash []byte,
+	passwordHash string,
+	now time.Time,
+) error {
+	tx, err := db.Pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var tokenID, userID, workspaceID string
+	err = tx.QueryRow(
+		ctx,
+		`select prt.id::text,prt.user_id::text,wm.workspace_id::text
+		 from password_reset_tokens prt
+		 join workspace_members wm on wm.user_id=prt.user_id
+		 where prt.token_hash=$1
+		   and prt.used_at is null
+		   and prt.expires_at>$2
+		 order by wm.created_at
+		 limit 1
+		 for update of prt`,
+		tokenHash,
+		now,
+	).Scan(&tokenID, &userID, &workspaceID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrPasswordResetInvalid
+	}
+	if err != nil {
+		return err
+	}
+	if _, err := tx.Exec(
+		ctx,
+		`update users set password_hash=$2,updated_at=$3 where id=$1`,
+		userID,
+		passwordHash,
+		now,
+	); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(
+		ctx,
+		`update password_reset_tokens
+		 set used_at=$2
+		 where user_id=$1 and used_at is null`,
+		userID,
+		now,
+	); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(
+		ctx,
+		`update refresh_sessions
+		 set revoked_at=coalesce(revoked_at,$2)
+		 where user_id=$1`,
+		userID,
+		now,
+	); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(
+		ctx,
+		`insert into audit_events(
+		   workspace_id,actor_user_id,action,target_type,target_id
+		 ) values($1,$2,'account.password_reset','user',$2)`,
+		workspaceID,
+		userID,
+	); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
 func (db *DB) Identity(ctx context.Context, userID, workspaceID string) (Identity, error) {
 	var identity Identity
 	err := db.Pool.QueryRow(
@@ -685,10 +886,28 @@ func (db *DB) ListSources(ctx context.Context, workspaceID string) ([]Source, er
 			   last_verified_at,
 			   last_synced_at,
 			   next_sync_at,
-			   coalesce(last_error_code,'')
-			 from source_connections
-			 where workspace_id=$1
-			 order by provider`,
+			   coalesce(last_error_code,''),
+			   coalesce(latest_job.status::text,''),
+			   coalesce(latest_job.attempt,0),
+			   coalesce(latest_job.max_attempts,0),
+			   coalesce(provider_metrics.metric_count,0),
+			   provider_metrics.last_metric_at
+			 from source_connections sc
+			 left join lateral (
+			   select status,attempt,max_attempts
+			   from sync_jobs
+			   where connection_id=sc.id
+			   order by created_at desc
+			   limit 1
+			 ) latest_job on true
+			 left join lateral (
+			   select count(*)::int as metric_count,max(occurred_at) as last_metric_at
+			   from metric_points
+			   where workspace_id=sc.workspace_id
+			     and provider=sc.provider
+			 ) provider_metrics on true
+			 where sc.workspace_id=$1
+			 order by sc.provider`,
 			workspaceID,
 		)
 		if err != nil {
@@ -705,6 +924,11 @@ func (db *DB) ListSources(ctx context.Context, workspaceID string) ([]Source, er
 				&source.LastSyncedAt,
 				&source.NextSyncAt,
 				&source.LastErrorCode,
+				&source.SyncStatus,
+				&source.SyncAttempt,
+				&source.SyncMaxAttempts,
+				&source.MetricCount,
+				&source.LastMetricAt,
 			); err != nil {
 				return err
 			}

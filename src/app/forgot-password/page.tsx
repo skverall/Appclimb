@@ -1,7 +1,8 @@
-import { ArrowLeft, LifeBuoy, Mail, ShieldCheck } from "lucide-react";
+import { ArrowLeft, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 
 import { BrandMark } from "@/components/brand-mark";
+import { PasswordRecoveryForm } from "@/components/password-recovery-form";
 
 export const metadata = {
   title: "Recover your AppClimb account",
@@ -19,23 +20,10 @@ export default function ForgotPasswordPage() {
         <span className="eyebrow">Account recovery</span>
         <h1>Forgot your password?</h1>
         <p>
-          AppClimb is still in private beta, so recovery requests are verified
-          by a person before any account access changes. This protects your
-          connected source credentials.
+          Enter the email you use for AppClimb. We will send a single-use,
+          time-limited link if an account exists.
         </p>
-        <a
-          className="recovery-action"
-          href="mailto:aydmaxx@gmail.com?subject=AppClimb%20password%20reset"
-        >
-          <Mail size={17} /> Request a password reset
-        </a>
-        <div className="recovery-note">
-          <LifeBuoy size={16} />
-          <span>
-            Send the request from your AppClimb account email. Never include
-            source API keys or passwords.
-          </span>
-        </div>
+        <PasswordRecoveryForm />
         <Link href="/login" className="recovery-back">
           <ArrowLeft size={15} /> Back to sign in
         </Link>
