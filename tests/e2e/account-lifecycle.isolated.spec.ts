@@ -19,7 +19,12 @@ test("trial signup creates an isolated backend workspace and can delete it", asy
   ).toBeVisible();
   await expect(page.getByText("2.41M")).toHaveCount(0);
   await expect(page.getByText(/synthetic sample data/i)).toHaveCount(0);
-  await page.getByRole("button", { name: "Sources" }).click();
+  await page
+    .getByRole("button", {
+      name: "Open Sources to connect App Store Connect",
+    })
+    .click();
+  await expect(page.getByRole("textbox", { name: /Apple app ID/ })).toBeVisible();
   await expect(page.getByText("0 of 5 sources connected")).toBeVisible();
   await expect(page.getByText("Not connected").first()).toBeVisible();
 

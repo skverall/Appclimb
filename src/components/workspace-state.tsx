@@ -39,7 +39,7 @@ export function EmptyWorkspaceView({
   onOpenMethodology,
 }: {
   snapshot: DashboardSnapshot;
-  onOpenSources: () => void;
+  onOpenSources: (provider?: SourceConnection["provider"]) => void;
   onOpenMethodology: () => void;
 }) {
   const configuredSources = snapshot.sources.filter(
@@ -114,7 +114,11 @@ export function EmptyWorkspaceView({
       </ol>
 
       <div className="empty-actions">
-        <button className="primary-action" type="button" onClick={onOpenSources}>
+        <button
+          className="primary-action"
+          type="button"
+          onClick={() => onOpenSources()}
+        >
           <PlugZap size={17} />{" "}
           {awaitingMetrics ? "Review Sources" : "Connect first source"}{" "}
           <ArrowRight size={17} />
@@ -159,13 +163,13 @@ function EmptySourceCard({
   onOpenSources,
 }: {
   source: SourceConnection;
-  onOpenSources: () => void;
+  onOpenSources: (provider?: SourceConnection["provider"]) => void;
 }) {
   return (
     <button
       className="empty-source-card"
       type="button"
-      onClick={onOpenSources}
+      onClick={() => onOpenSources(source.provider)}
       aria-label={`Open Sources to connect ${source.label}`}
     >
       <span className={`provider-logo provider-${source.provider}`}>

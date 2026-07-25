@@ -526,7 +526,18 @@ export function AppClimbShell({
             initialSnapshot.mode === "empty" ? (
             <EmptyWorkspaceView
               snapshot={initialSnapshot}
-              onOpenSources={() => navigateTo("sources")}
+              onOpenSources={(provider) => {
+                if (provider) {
+                  const url = new URL(window.location.href);
+                  url.searchParams.set("source", provider);
+                  window.history.replaceState(
+                    null,
+                    "",
+                    `${url.pathname}${url.search}${url.hash}`,
+                  );
+                }
+                navigateTo("sources");
+              }}
               onOpenMethodology={() => setHelpOpen(true)}
             />
           ) : activeSection === "pulse" ? (
