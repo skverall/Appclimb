@@ -9386,6 +9386,11 @@ a {
   flex: 0 0 auto;
 }
 
+.source-health-view .source-attention-note > div {
+  display: grid;
+  gap: 2px;
+}
+
 .source-waiting-note {
   display: flex;
   align-items: flex-start;
