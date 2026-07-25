@@ -472,7 +472,7 @@ func (db *DB) ChangePassword(
 		ctx,
 		`insert into audit_events(
 		   workspace_id,actor_user_id,action,target_type,target_id
-		 ) values($1,$2,'account.password_changed','user',$2)`,
+		 ) values($1,$2,'account.password_changed','user',$2::text)`,
 		workspaceID,
 		userID,
 	); err != nil {
@@ -597,7 +597,7 @@ func (db *DB) ConsumePasswordReset(
 		ctx,
 		`insert into audit_events(
 		   workspace_id,actor_user_id,action,target_type,target_id
-		 ) values($1,$2,'account.password_reset','user',$2)`,
+		 ) values($1,$2,'account.password_reset','user',$2::text)`,
 		workspaceID,
 		userID,
 	); err != nil {
