@@ -5,7 +5,7 @@ import { AuthForm } from "@/components/auth-form";
 import { BrandMark } from "@/components/brand-mark";
 
 export const metadata = {
-  title: "Start your early-access trial",
+  title: "Create an account or sign in",
 };
 
 export default function LoginPage() {
@@ -44,12 +44,12 @@ export default function LoginPage() {
       </section>
       <section className="auth-panel">
         <div className="auth-panel-copy">
-          <span className="eyebrow">Available now</span>
-          <h2>Create an early-access workspace.</h2>
+          <span className="eyebrow">Your private workspace</span>
+          <h2>Create your AppClimb account.</h2>
           <p>
-            Account, 14-day trial and secure source setup are available now. The
-            workspace opens with labeled demo data while live imports are
-            completed.
+            Create an account in one step or sign in to continue. You can
+            explore first, connect a read-only source when ready, and choose a
+            paid plan only if AppClimb is useful.
           </p>
         </div>
         <AuthForm />

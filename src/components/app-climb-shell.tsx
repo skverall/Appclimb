@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Activity,
+  CheckCircle2,
+  ChevronRight,
+  CreditCard,
+  ExternalLink,
   FlaskConical,
   Gauge,
   HelpCircle,
@@ -20,6 +24,11 @@ import { logout } from "@/app/actions";
 import { BrandMark } from "@/components/brand-mark";
 import { ModalDialog } from "@/components/modal-dialog";
 import { PlanCheckout } from "@/components/plan-checkout";
+import {
+  AVATAR_KEYS,
+  type AvatarKey,
+  ProfileAvatar,
+} from "@/components/profile-avatar";
 import { PulseView } from "@/components/pulse-view";
 import {
   DiagnoseView,
@@ -90,6 +99,12 @@ export function AppClimbShell({
   const [billingOpen, setBillingOpen] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [accountError, setAccountError] = useState("");
+  const [avatarKey, setAvatarKey] = useState<AvatarKey>(
+    (session?.avatarKey as AvatarKey | undefined) ?? "ridge",
+  );
+  const [avatarState, setAvatarState] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
   const [experiments, setExperiments] = useState<Experiment[]>(
     initialSnapshot.experiments,
   );
@@ -219,7 +234,6 @@ export function AppClimbShell({
   }[sourceNavState];
   const trialProgress = Math.max(0, Math.min(100, (trialDays / 14) * 100));
   const profileName = session ? session.email.split("@")[0] : "Demo";
-  const profileInitials = profileName.slice(0, 2).toUpperCase();
   const appInitials = initialSnapshot.app.name
     .split(/\s+/)
     .filter(Boolean)
@@ -264,6 +278,27 @@ export function AppClimbShell({
     } catch {
       setAccountError("Account deletion could not be completed. Try again.");
       setDeletingAccount(false);
+    }
+  };
+  const saveAvatar = async (nextAvatar: AvatarKey) => {
+    if (!session || nextAvatar === avatarKey || avatarState === "saving") return;
+    const previous = avatarKey;
+    setAvatarKey(nextAvatar);
+    setAvatarState("saving");
+    setAccountError("");
+    try {
+      const response = await fetch("/api/account", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ avatarKey: nextAvatar }),
+      });
+      if (!response.ok) throw new Error("avatar_update_failed");
+      setAvatarState("saved");
+      window.setTimeout(() => setAvatarState("idle"), 1800);
+    } catch {
+      setAvatarKey(previous);
+      setAvatarState("error");
+      setAccountError("Avatar could not be saved. Try again.");
     }
   };
   const retryWorkspace = () => {
@@ -369,16 +404,18 @@ export function AppClimbShell({
             <Settings size={17} /> Settings
           </button>
           {session ? (
-            <form action={logout}>
-              <button className="profile-row" type="submit">
-                <span className="profile-avatar">{profileInitials}</span>
-                <span>
-                  <strong>{profileName}</strong>
-                  <small>Solo workspace</small>
-                </span>
-                <LogOut size={16} />
-              </button>
-            </form>
+            <button
+              className="profile-row"
+              type="button"
+              onClick={() => setSettingsOpen(true)}
+            >
+              <ProfileAvatar avatarKey={avatarKey} />
+              <span>
+                <strong>{profileName}</strong>
+                <small>{accountPlanLabel}</small>
+              </span>
+              <ChevronRight size={16} />
+            </button>
           ) : sessionUnavailable ? (
             <div className="session-recovery-row">
               <button
@@ -408,8 +445,8 @@ export function AppClimbShell({
             <Link className="profile-row" href="/login">
               <span className="profile-avatar">DE</span>
               <span>
-                <strong>Start your trial</strong>
-                <small>No card required</small>
+                <strong>Create account</strong>
+                <small>Or sign in</small>
               </span>
               <LogIn size={16} />
             </Link>
@@ -429,6 +466,16 @@ export function AppClimbShell({
             >
               {workspaceStatus}
             </span>
+            <Link
+              className="topbar-demo-action"
+              href={
+                initialSnapshot.mode === "demo" && session ? "/" : "/?demo=1"
+              }
+            >
+              {initialSnapshot.mode === "demo" && session
+                ? "Open workspace"
+                : "View demo"}
+            </Link>
             <button
               className="icon-button"
               type="button"
@@ -453,6 +500,11 @@ export function AppClimbShell({
               >
                 Choose plan
               </button>
+            )}
+            {!session && !sessionUnavailable && (
+              <Link className="topbar-auth-action" href="/login">
+                Sign in
+              </Link>
             )}
             <div className="readonly-pill">
               <span />
@@ -540,22 +592,17 @@ export function AppClimbShell({
         <ModalDialog
           labelledBy="settings-title"
           onClose={() => setSettingsOpen(false)}
+          dialogClassName="settings-dialog account-dialog"
           closeLabel="Close settings"
         >
-          <span className="eyebrow">Account settings</span>
-          <h2 id="settings-title">Workspace control</h2>
-          <div className="settings-security-note">
-            <ShieldCheck size={18} />
-            <p>
-              Sources are read-only. Revoking a source deletes its encrypted
-              credentials immediately.
-            </p>
-          </div>
+          <span className="eyebrow">Your account</span>
+          <h2 id="settings-title">Profile & billing</h2>
           {session ? (
             <>
-              <div className="settings-account-row">
-                <span className="profile-avatar">{profileInitials}</span>
+              <div className="account-identity-card">
+                <ProfileAvatar avatarKey={avatarKey} className="account-avatar" />
                 <div>
+                  <span>Signed in as</span>
                   <strong>{session.email}</strong>
                   <p>{accountPlanLabel}</p>
                 </div>
@@ -565,26 +612,86 @@ export function AppClimbShell({
                   </button>
                 </form>
               </div>
-              <div className="settings-billing-row">
+
+              <section className="account-section" aria-labelledby="avatar-title">
+                <div className="account-section-heading">
+                  <div>
+                    <strong id="avatar-title">Choose your trail mark</strong>
+                    <p>A small illustrated profile — no photo upload needed.</p>
+                  </div>
+                  <span
+                    className={`avatar-save-state avatar-save-${avatarState}`}
+                    role="status"
+                  >
+                    {avatarState === "saving"
+                      ? "Saving…"
+                      : avatarState === "saved"
+                        ? "Saved"
+                        : avatarState === "error"
+                          ? "Try again"
+                          : ""}
+                  </span>
+                </div>
+                <div className="avatar-picker">
+                  {AVATAR_KEYS.map((key) => (
+                    <button
+                      type="button"
+                      className={avatarKey === key ? "selected" : ""}
+                      key={key}
+                      onClick={() => saveAvatar(key)}
+                      aria-label={`Use ${key} avatar`}
+                      aria-pressed={avatarKey === key}
+                      disabled={avatarState === "saving"}
+                    >
+                      <ProfileAvatar avatarKey={key} />
+                      {avatarKey === key && (
+                        <CheckCircle2 size={16} aria-hidden="true" />
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </section>
+
+              <div className="account-plan-card">
+                <span className="account-plan-icon">
+                  <CreditCard size={18} />
+                </span>
                 <div>
-                  <strong>
-                    {activeSubscription
-                      ? "Manage billing"
-                      : "Billing support"}
-                  </strong>
+                  <span>Subscription</span>
+                  <strong>{accountPlanLabel}</strong>
                   <p>
                     {activeSubscription
-                      ? "The embedded customer portal is still in development. For cancellation or payment help, contact Paddle with your purchase email and transaction reference."
-                      : "Checkout, charge and refund questions are handled by Paddle, AppClimb’s merchant of record."}
+                      ? "Update payment details, invoices or cancellation in Paddle’s secure customer portal."
+                      : "Start Pro when you are ready. No card is required during the free trial."}
                   </p>
                 </div>
-                <a
-                  href="https://paddle.net/contact"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Open Paddle support
-                </a>
+                {activeSubscription ? (
+                  <a
+                    href="https://customer-portal.paddle.com/"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Manage billing <ExternalLink size={14} />
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSettingsOpen(false);
+                      setBillingOpen(true);
+                    }}
+                  >
+                    Choose plan <ChevronRight size={14} />
+                  </button>
+                )}
+              </div>
+
+              <div className="settings-security-note">
+                <ShieldCheck size={18} />
+                <p>
+                  Sources are read-only. Revoking a source deletes its encrypted
+                  credentials immediately.
+                </p>
               </div>
               <div className="danger-zone">
                 <div>

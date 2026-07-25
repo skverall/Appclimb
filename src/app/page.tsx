@@ -88,13 +88,14 @@ export default async function Home({
 }) {
   const resolvedSearchParams = await searchParams;
   const renderedAt = await currentTimestamp();
+  const forceDemo = resolvedSearchParams.demo === "1";
   const authRecoveryUnavailable =
     resolvedSearchParams.auth === "unavailable";
   const sessionPresence = await backendSessionPresence();
   const privateSessionExpected =
     sessionPresence.hasAccessToken || sessionPresence.hasRefreshToken;
   const returnParams = new URLSearchParams();
-  for (const key of ["view", "insight"]) {
+  for (const key of ["view", "insight", "demo"]) {
     const value = resolvedSearchParams[key];
     if (typeof value === "string") returnParams.set(key, value);
   }
@@ -158,10 +159,15 @@ export default async function Home({
   }
 
   if (
+    !forceDemo &&
     privateSessionExpected &&
     (!authenticatedSnapshotLoaded || !session)
   ) {
     snapshot = unavailableSnapshot(session);
+  }
+
+  if (forceDemo) {
+    snapshot = demoSnapshot;
   }
 
   const initialSection = workspaceSectionFromValue(

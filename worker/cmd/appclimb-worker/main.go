@@ -150,6 +150,46 @@ func (r *runner) process(ctx context.Context, job database.SyncJob) {
 		r.fail(ctx, job, "credential_decryption_failed", false)
 		return
 	}
+	if job.Provider == "posthog" {
+		refreshed, changed, refreshErr := r.connectors.RefreshPostHogOAuth(
+			ctx,
+			credentials,
+		)
+		if refreshErr != nil {
+			var providerErr connectors.ProviderError
+			if errors.As(refreshErr, &providerErr) {
+				r.fail(ctx, job, providerErr.Code, providerErr.Retryable)
+			} else {
+				r.fail(ctx, job, "posthog_oauth_refresh_failed", true)
+			}
+			return
+		}
+		if changed {
+			refreshedEnvelope, sealErr := secure.Seal(
+				refreshed,
+				r.cfg.EnvelopeMasterKey,
+			)
+			if sealErr != nil {
+				r.fail(ctx, job, "credential_encryption_failed", false)
+				return
+			}
+			encodedEnvelope, marshalErr := json.Marshal(refreshedEnvelope)
+			if marshalErr != nil {
+				r.fail(ctx, job, "credential_encryption_failed", false)
+				return
+			}
+			if updateErr := r.db.UpdateSourceCredentials(
+				ctx,
+				job.WorkspaceID,
+				job.ConnectionID,
+				encodedEnvelope,
+			); updateErr != nil {
+				r.fail(ctx, job, "credential_rotation_failed", true)
+				return
+			}
+			credentials = refreshed
+		}
+	}
 	aggregates, err := r.connectors.ReadAggregates(
 		ctx,
 		job.Provider,

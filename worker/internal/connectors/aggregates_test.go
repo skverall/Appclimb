@@ -175,6 +175,59 @@ func TestReadPostHogCountsDistinctPeopleForConfiguredEvents(t *testing.T) {
 	}
 }
 
+func TestRefreshPostHogOAuthRotatesExpiredTokenAndPreservesSettings(t *testing.T) {
+	now := time.Date(2026, 7, 25, 12, 0, 0, 0, time.UTC)
+	client := &Client{
+		HTTP: &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+			if request.URL.String() != "https://oauth.posthog.com/oauth/token/" {
+				t.Fatalf("unexpected endpoint: %s", request.URL)
+			}
+			if err := request.ParseForm(); err != nil {
+				t.Fatal(err)
+			}
+			if request.Form.Get("grant_type") != "refresh_token" ||
+				request.Form.Get("refresh_token") != "refresh-old" ||
+				request.Form.Get("client_id") != "https://appclimb.app/api/oauth/posthog/client" {
+				t.Fatalf("unexpected refresh form: %v", request.Form)
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body: io.NopCloser(strings.NewReader(
+					`{"access_token":"access-new","refresh_token":"refresh-new","expires_in":3600}`,
+				)),
+				Request: request,
+			}, nil
+		})},
+		Now: func() time.Time { return now },
+	}
+	credentials := map[string]any{
+		"authMethod":        "oauth",
+		"personalApiKey":    "access-old",
+		"oauthRefreshToken": "refresh-old",
+		"oauthClientId":     "https://appclimb.app/api/oauth/posthog/client",
+		"oauthExpiresAt":    now.Add(-time.Minute).Format(time.RFC3339),
+		"projectId":         "project-1",
+	}
+	updated, changed, err := client.RefreshPostHogOAuth(
+		context.Background(),
+		credentials,
+	)
+	if err != nil {
+		t.Fatalf("RefreshPostHogOAuth: %v", err)
+	}
+	if !changed ||
+		updated["personalApiKey"] != "access-new" ||
+		updated["oauthRefreshToken"] != "refresh-new" ||
+		updated["projectId"] != "project-1" ||
+		updated["oauthExpiresAt"] != now.Add(time.Hour).Format(time.RFC3339) {
+		t.Fatalf("unexpected refreshed credentials: %+v", updated)
+	}
+	if credentials["personalApiKey"] != "access-old" {
+		t.Fatal("refresh must not mutate the caller credential map")
+	}
+}
+
 func TestAppleMissingAppIDReturnsValidationErrorWithoutPanic(t *testing.T) {
 	client := &Client{Now: time.Now}
 	credentials := map[string]any{

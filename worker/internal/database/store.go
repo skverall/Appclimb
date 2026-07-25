@@ -28,6 +28,7 @@ var (
 type Identity struct {
 	UserID       string    `json:"userId"`
 	Email        string    `json:"email"`
+	Avatar       string    `json:"avatarKey"`
 	WorkspaceID  string    `json:"workspaceId"`
 	Workspace    string    `json:"workspaceName"`
 	Role         string    `json:"role"`
@@ -303,10 +304,10 @@ func (db *DB) CreateIdentity(
 		ctx,
 		`insert into users(email, password_hash)
 		 values($1, $2)
-		 returning id::text, email::text`,
+		 returning id::text, email::text, avatar_key`,
 		email,
 		passwordHash,
-	).Scan(&identity.UserID, &identity.Email); err != nil {
+	).Scan(&identity.UserID, &identity.Email, &identity.Avatar); err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
 			return Identity{}, ErrConflict
@@ -373,6 +374,7 @@ func (db *DB) Authenticate(ctx context.Context, email string) (Identity, string,
 		`select
 		   u.id::text,
 		   u.email::text,
+		   u.avatar_key,
 		   u.password_hash,
 		   w.id::text,
 		   w.name,
@@ -389,6 +391,7 @@ func (db *DB) Authenticate(ctx context.Context, email string) (Identity, string,
 	).Scan(
 		&identity.UserID,
 		&identity.Email,
+		&identity.Avatar,
 		&passwordHash,
 		&identity.WorkspaceID,
 		&identity.Workspace,
@@ -409,6 +412,7 @@ func (db *DB) Identity(ctx context.Context, userID, workspaceID string) (Identit
 		`select
 		   u.id::text,
 		   u.email::text,
+		   u.avatar_key,
 		   w.id::text,
 		   w.name,
 		   wm.role::text,
@@ -423,6 +427,7 @@ func (db *DB) Identity(ctx context.Context, userID, workspaceID string) (Identit
 	).Scan(
 		&identity.UserID,
 		&identity.Email,
+		&identity.Avatar,
 		&identity.WorkspaceID,
 		&identity.Workspace,
 		&identity.Role,
@@ -433,6 +438,33 @@ func (db *DB) Identity(ctx context.Context, userID, workspaceID string) (Identit
 		return Identity{}, ErrNotFound
 	}
 	return identity, err
+}
+
+func (db *DB) UpdateAvatar(
+	ctx context.Context,
+	userID, workspaceID, avatar string,
+) (Identity, error) {
+	result, err := db.Pool.Exec(
+		ctx,
+		`update users u
+		 set avatar_key=$3,
+		     updated_at=now()
+		 where u.id=$1
+		   and exists(
+		     select 1 from workspace_members
+		     where workspace_id=$2 and user_id=u.id
+		   )`,
+		userID,
+		workspaceID,
+		avatar,
+	)
+	if err != nil {
+		return Identity{}, err
+	}
+	if result.RowsAffected() != 1 {
+		return Identity{}, ErrNotFound
+	}
+	return db.Identity(ctx, userID, workspaceID)
 }
 
 func (db *DB) Workspace(ctx context.Context, userID, workspaceID string) (Workspace, error) {
@@ -580,6 +612,7 @@ func (db *DB) RotateRefreshSession(
 		`select
 		   u.id::text,
 		   u.email::text,
+		   u.avatar_key,
 		   w.id::text,
 		   w.name,
 		   wm.role::text,
@@ -594,6 +627,7 @@ func (db *DB) RotateRefreshSession(
 	).Scan(
 		&identity.UserID,
 		&identity.Email,
+		&identity.Avatar,
 		&identity.WorkspaceID,
 		&identity.Workspace,
 		&identity.Role,
@@ -758,6 +792,32 @@ func (db *DB) DeleteSource(ctx context.Context, workspaceID, provider string) er
 			return err
 		}
 		if result.RowsAffected() == 0 {
+			return ErrNotFound
+		}
+		return nil
+	})
+}
+
+func (db *DB) UpdateSourceCredentials(
+	ctx context.Context,
+	workspaceID, connectionID string,
+	envelope json.RawMessage,
+) error {
+	return db.WithWorkspace(ctx, workspaceID, func(tx pgx.Tx) error {
+		result, err := tx.Exec(
+			ctx,
+			`update source_connections
+			 set credential_envelope=$3,
+			     updated_at=now()
+			 where workspace_id=$1 and id=$2`,
+			workspaceID,
+			connectionID,
+			envelope,
+		)
+		if err != nil {
+			return err
+		}
+		if result.RowsAffected() != 1 {
 			return ErrNotFound
 		}
 		return nil
@@ -1117,29 +1177,10 @@ func (db *DB) CreateCheckoutBinding(
 		   superseded_at=now()
 		 where workspace_id=$1
 		   and consumed_at is null
-		   and superseded_at is null
-		   and expires_at <= now()`,
+		   and superseded_at is null`,
 		workspaceID,
 	); err != nil {
 		return err
-	}
-	var pending bool
-	if err := tx.QueryRow(
-		ctx,
-		`select exists(
-		   select 1
-		   from paddle_checkout_bindings
-		   where workspace_id=$1
-		     and consumed_at is null
-		     and superseded_at is null
-		     and expires_at > now()
-		 )`,
-		workspaceID,
-	).Scan(&pending); err != nil {
-		return err
-	}
-	if pending {
-		return ErrCheckoutPending
 	}
 
 	result, err := tx.Exec(

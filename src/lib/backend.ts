@@ -12,6 +12,7 @@ const API_URL = (
 export interface BackendIdentity {
   userId: string;
   email: string;
+  avatarKey?: string;
   workspaceId: string;
   workspaceName: string;
   role: string;

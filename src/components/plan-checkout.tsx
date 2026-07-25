@@ -141,6 +141,7 @@ export function PlanCheckout({
       checkout.Checkout.open({
         items: [{ priceId: plan.paddlePriceId, quantity: 1 }],
         customData: {
+          product: "appclimb-pro",
           workspace_id: workspaceId,
           checkout_binding: checkoutBinding,
         },

@@ -40,42 +40,42 @@ export function VoiceClusters({
           Review themes will appear when a supported voice source is available.
         </div>
       ) : (
-      <div className="cluster-field">
-        {clusters.map((cluster) => (
-          <div
-            key={cluster.id}
-            className={`cluster-bubble ${cluster.sentiment}`}
-            style={{
-              left: `${cluster.x}%`,
-              top: `${cluster.y}%`,
-              width: cluster.radius * 2,
-              height: cluster.radius * 2,
-            }}
-            role="img"
-            aria-label={`${cluster.label}: ${cluster.mentions} mentions, ${cluster.sentiment} sentiment`}
-          >
-            <strong className="cluster-bubble-label">{cluster.label}</strong>
-            <span className="cluster-bubble-count">
-              {cluster.mentions} mentions
+        <div className="cluster-field">
+          {clusters.map((cluster) => (
+            <div
+              key={cluster.id}
+              className={`cluster-bubble ${cluster.sentiment}`}
+              style={{
+                left: `${cluster.x}%`,
+                top: `${cluster.y}%`,
+                width: cluster.radius * 2,
+                height: cluster.radius * 2,
+              }}
+              role="img"
+              aria-label={`${cluster.label}: ${cluster.mentions} mentions, ${cluster.sentiment} sentiment`}
+            >
+              <strong className="cluster-bubble-label">{cluster.label}</strong>
+              <span className="cluster-bubble-count">
+                {cluster.mentions} mentions
+              </span>
+            </div>
+          ))}
+          <div className="cluster-legend" aria-label="Sentiment legend">
+            <span>
+              <i className="cluster-key positive" /> Positive
+            </span>
+            <span>
+              <i className="cluster-key mixed" /> Mixed
+            </span>
+            <span>
+              <i className="cluster-key negative" /> Negative
             </span>
           </div>
-        ))}
-        <div className="cluster-legend" aria-label="Sentiment legend">
-          <span>
-            <i className="cluster-key positive" /> Positive
-          </span>
-          <span>
-            <i className="cluster-key mixed" /> Mixed
-          </span>
-          <span>
-            <i className="cluster-key negative" /> Negative
-          </span>
+          <div className="cluster-source">
+            <MessageCircleMore size={14} />
+            App Store reviews · last 90 days
+          </div>
         </div>
-        <div className="cluster-source">
-          <MessageCircleMore size={14} />
-          App Store reviews · last 90 days
-        </div>
-      </div>
       )}
     </section>
   );

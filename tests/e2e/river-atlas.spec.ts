@@ -150,8 +150,40 @@ test("public pricing exposes the early-access catalog and signup path", async ({
     .click();
   await expect(page).toHaveURL(/\/login$/);
   await expect(
-    page.getByRole("heading", { name: "Create an early-access workspace." }),
+    page.getByRole("heading", { name: "Create your AppClimb account." }),
   ).toBeVisible();
+});
+
+test("account entry makes sign up, sign in and recovery unambiguous", async ({
+  page,
+}) => {
+  await page.goto("/login");
+  await expect(
+    page.getByRole("button", { name: "Create account", exact: true }).first(),
+  ).toHaveAttribute("aria-pressed", "true");
+  await expect(
+    page.getByText(
+      "Includes 14 days of Pro access · no card · no automatic charge.",
+    ),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await expect(page.getByRole("link", { name: "Forgot password?" })).toHaveAttribute(
+    "href",
+    "/forgot-password",
+  );
+  const password = page.locator('input[name="password"]');
+  await expect(password).toHaveAttribute("type", "password");
+  await page.getByRole("button", { name: "Show password" }).click();
+  await expect(password).toHaveAttribute("type", "text");
+
+  await page.getByRole("link", { name: "Forgot password?" }).click();
+  await expect(
+    page.getByRole("heading", { name: "Forgot your password?" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Request a password reset" }),
+  ).toHaveAttribute("href", /mailto:aydmaxx@gmail.com/);
 });
 
 test("checkout success cannot confirm an anonymous payment", async ({

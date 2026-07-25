@@ -5,6 +5,7 @@ import type { BackendIdentity } from "@/lib/backend";
 export const backendIdentitySchema = z.object({
   userId: z.string().trim().min(1),
   email: z.email().trim().max(320),
+  avatarKey: z.string().trim().min(1).optional(),
   workspaceId: z.string().trim().min(1),
   workspaceName: z.string().trim().min(1),
   role: z.string().trim().min(1),

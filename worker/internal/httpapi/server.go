@@ -103,6 +103,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/auth/refresh", s.rateLimited(s.refresh))
 	mux.HandleFunc("POST /v1/auth/logout", s.logout)
 	mux.HandleFunc("GET /v1/me", s.requireAuth(s.me))
+	mux.HandleFunc("PATCH /v1/me", s.requireAuth(s.updateProfile))
 	mux.HandleFunc("DELETE /v1/account", s.requireAuth(s.deleteAccount))
 	mux.HandleFunc("GET /v1/workspace", s.requireAuth(s.workspace))
 	mux.HandleFunc("GET /v1/growth-map", s.requireAuth(s.growthMap))
@@ -322,6 +323,41 @@ func (s *Server) me(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.logError(r, "identity lookup failed", err)
 		writeError(w, http.StatusInternalServerError, "identity_lookup_failed")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"data": identity})
+}
+
+func (s *Server) updateProfile(w http.ResponseWriter, r *http.Request) {
+	current := currentAuth(r)
+	var input struct {
+		AvatarKey string `json:"avatarKey"`
+	}
+	if err := decodeJSON(w, r, &input); err != nil {
+		return
+	}
+	allowed := map[string]bool{
+		"ridge": true, "river": true, "summit": true, "forest": true,
+		"dawn": true, "glacier": true, "night": true, "horizon": true,
+	}
+	input.AvatarKey = strings.TrimSpace(input.AvatarKey)
+	if !allowed[input.AvatarKey] {
+		writeError(w, http.StatusBadRequest, "invalid_avatar")
+		return
+	}
+	identity, err := s.DB.UpdateAvatar(
+		r.Context(),
+		current.UserID,
+		current.WorkspaceID,
+		input.AvatarKey,
+	)
+	if errors.Is(err, database.ErrNotFound) {
+		writeError(w, http.StatusUnauthorized, "session_not_found")
+		return
+	}
+	if err != nil {
+		s.logError(r, "profile update failed", err)
+		writeError(w, http.StatusInternalServerError, "profile_update_failed")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"data": identity})

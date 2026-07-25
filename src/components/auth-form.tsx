@@ -1,7 +1,12 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { ArrowRight, LoaderCircle } from "lucide-react";
+import {
+  ArrowRight,
+  Eye,
+  EyeOff,
+  LoaderCircle,
+} from "lucide-react";
 import Link from "next/link";
 
 import {
@@ -28,6 +33,7 @@ function AuthModeForm({
 }) {
   const action = mode === "login" ? login : signup;
   const [state, formAction, pending] = useActionState(action, INITIAL_STATE);
+  const [showPassword, setShowPassword] = useState(false);
   const emailId = `${mode}-email`;
   const passwordId = `${mode}-password`;
 
@@ -41,7 +47,7 @@ function AuthModeForm({
           disabled={pending}
           onClick={() => onModeChange("signup")}
         >
-          Start trial
+          Create account
         </button>
         <button
           type="button"
@@ -64,18 +70,35 @@ function AuthModeForm({
           required
         />
       </label>
-      <label htmlFor={passwordId}>
-        Password
-        <input
-          id={passwordId}
-          name="password"
-          type="password"
-          minLength={8}
-          autoComplete={mode === "login" ? "current-password" : "new-password"}
-          placeholder="At least 8 characters"
-          required
-        />
-      </label>
+      <div className="auth-password-field">
+        <label className="auth-label-row" htmlFor={passwordId}>
+          Password
+          {mode === "login" && (
+            <Link href="/forgot-password">Forgot password?</Link>
+          )}
+        </label>
+        <span className="password-input">
+          <input
+            id={passwordId}
+            name="password"
+            type={showPassword ? "text" : "password"}
+            minLength={8}
+            autoComplete={
+              mode === "login" ? "current-password" : "new-password"
+            }
+            placeholder="At least 8 characters"
+            required
+          />
+          <button
+            type="button"
+            aria-label={showPassword ? "Hide password" : "Show password"}
+            aria-pressed={showPassword}
+            onClick={() => setShowPassword((visible) => !visible)}
+          >
+            {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+          </button>
+        </span>
+      </div>
       {state.error && (
         <p
           className="auth-message error"
@@ -104,7 +127,7 @@ function AuthModeForm({
           </>
         ) : (
           <>
-            {mode === "signup" ? "Start 14-day trial" : "Sign in"}
+            {mode === "signup" ? "Create account" : "Sign in"}
             <ArrowRight size={17} aria-hidden="true" />
           </>
         )}
@@ -112,9 +135,10 @@ function AuthModeForm({
       <p className="auth-terms">
         {mode === "signup" ? (
           <>
-            No card required. Then $12.99/month or $129/year. By creating a
-            workspace, you agree to the <Link href="/terms">Terms</Link> and
-            acknowledge the <Link href="/privacy">Privacy Policy</Link>.
+            Includes 14 days of Pro access · no card · no automatic charge.
+            By creating an account, you agree to the{" "}
+            <Link href="/terms">Terms</Link> and acknowledge the{" "}
+            <Link href="/privacy">Privacy Policy</Link>.
           </>
         ) : (
           <>

@@ -20,6 +20,7 @@ import type {
   SourceConnection,
   StageId,
 } from "@/lib/contracts";
+import { ProviderMark } from "@/components/provider-mark";
 
 const STAGE_ICONS = {
   discover: Compass,
@@ -135,7 +136,11 @@ export function EmptyWorkspaceView({
         </h3>
         <div>
           {snapshot.sources.map((source) => (
-            <EmptySourceCard source={source} key={source.provider} />
+            <EmptySourceCard
+              source={source}
+              key={source.provider}
+              onOpenSources={onOpenSources}
+            />
           ))}
         </div>
       </div>
@@ -149,10 +154,23 @@ export function EmptyWorkspaceView({
   );
 }
 
-function EmptySourceCard({ source }: { source: SourceConnection }) {
+function EmptySourceCard({
+  source,
+  onOpenSources,
+}: {
+  source: SourceConnection;
+  onOpenSources: () => void;
+}) {
   return (
-    <article className="empty-source-card">
-      <span>{source.label.slice(0, 2).toUpperCase()}</span>
+    <button
+      className="empty-source-card"
+      type="button"
+      onClick={onOpenSources}
+      aria-label={`Open Sources to connect ${source.label}`}
+    >
+      <span className={`provider-logo provider-${source.provider}`}>
+        <ProviderMark provider={source.provider} />
+      </span>
       <div>
         <strong>{source.label}</strong>
         <small>{source.capabilities.slice(0, 2).join(" · ")}</small>
@@ -166,7 +184,7 @@ function EmptySourceCard({ source }: { source: SourceConnection }) {
               ? "Needs attention"
               : "Not connected"}
       </i>
-    </article>
+    </button>
   );
 }
 

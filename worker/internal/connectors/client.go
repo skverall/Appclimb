@@ -300,6 +300,117 @@ func (c *Client) verifyPostHog(
 	}, nil
 }
 
+// RefreshPostHogOAuth rotates a short-lived PostHog OAuth access token when it
+// is close to expiry. The caller persists the returned credential map inside
+// the existing encrypted source envelope.
+func (c *Client) RefreshPostHogOAuth(
+	ctx context.Context,
+	credentials map[string]any,
+) (map[string]any, bool, error) {
+	if strings.TrimSpace(fmt.Sprint(credentials["authMethod"])) != "oauth" {
+		return credentials, false, nil
+	}
+	expiresAtRaw, ok := credentials["oauthExpiresAt"].(string)
+	if !ok {
+		return nil, false, ProviderError{
+			Status: 400,
+			Code:   "invalid_posthog_oauth_credentials",
+		}
+	}
+	expiresAt, err := time.Parse(time.RFC3339, strings.TrimSpace(expiresAtRaw))
+	if err != nil {
+		return nil, false, ProviderError{
+			Status: 400,
+			Code:   "invalid_posthog_oauth_credentials",
+		}
+	}
+	if c.Now().UTC().Add(2 * time.Minute).Before(expiresAt.UTC()) {
+		return credentials, false, nil
+	}
+	refreshToken, clientID, err := require2(
+		credentials,
+		"oauthRefreshToken",
+		"oauthClientId",
+	)
+	if err != nil {
+		return nil, false, err
+	}
+	form := url.Values{
+		"grant_type":    {"refresh_token"},
+		"refresh_token": {refreshToken},
+		"client_id":     {clientID},
+	}
+	request, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		"https://oauth.posthog.com/oauth/token/",
+		strings.NewReader(form.Encode()),
+	)
+	if err != nil {
+		return nil, false, ProviderError{
+			Status: 400,
+			Code:   "invalid_posthog_oauth_request",
+		}
+	}
+	request.Header.Set("Accept", "application/json")
+	request.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	request.Header.Set("User-Agent", "AppClimb/1.0")
+	response, err := c.HTTP.Do(request)
+	if err != nil {
+		return nil, false, ProviderError{
+			Status:    502,
+			Retryable: true,
+			Code:      "posthog_oauth_refresh_unavailable",
+		}
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		_, _ = io.Copy(io.Discard, io.LimitReader(response.Body, 8<<10))
+		return nil, false, ProviderError{
+			Status: response.StatusCode,
+			Retryable: response.StatusCode == http.StatusTooManyRequests ||
+				response.StatusCode >= 500,
+			Code: "posthog_oauth_refresh_failed",
+		}
+	}
+	body, err := io.ReadAll(io.LimitReader(response.Body, maxProviderResponse+1))
+	if err != nil || len(body) > maxProviderResponse {
+		return nil, false, ProviderError{
+			Status:    502,
+			Retryable: true,
+			Code:      "invalid_provider_response",
+		}
+	}
+	var token struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+		ExpiresIn    int    `json:"expires_in"`
+	}
+	if err := json.Unmarshal(body, &token); err != nil ||
+		strings.TrimSpace(token.AccessToken) == "" {
+		return nil, false, ProviderError{
+			Status:    502,
+			Retryable: true,
+			Code:      "invalid_provider_response",
+		}
+	}
+	updated := make(map[string]any, len(credentials))
+	for key, value := range credentials {
+		updated[key] = value
+	}
+	updated["personalApiKey"] = strings.TrimSpace(token.AccessToken)
+	if strings.TrimSpace(token.RefreshToken) != "" {
+		updated["oauthRefreshToken"] = strings.TrimSpace(token.RefreshToken)
+	}
+	if token.ExpiresIn < 60 {
+		token.ExpiresIn = 3600
+	}
+	updated["oauthExpiresAt"] = c.Now().UTC().
+		Add(time.Duration(token.ExpiresIn) * time.Second).
+		Format(time.RFC3339)
+	return updated, true, nil
+}
+
 func (c *Client) verifySuperwall(
 	ctx context.Context,
 	credentials map[string]any,

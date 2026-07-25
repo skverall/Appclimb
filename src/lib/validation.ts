@@ -34,6 +34,10 @@ export const connectorCredentialsSchema = z.discriminatedUnion("provider", [
       host: z.url().max(300),
       activationEvent: z.string().trim().min(1).max(100).optional(),
       sessionEvent: z.string().trim().min(1).max(100).optional(),
+      oauthRefreshToken: nonEmpty.optional(),
+      oauthExpiresAt: z.string().datetime({ offset: true }).optional(),
+      oauthClientId: z.url().max(300).optional(),
+      authMethod: z.literal("oauth").optional(),
     }),
   }),
   z.object({

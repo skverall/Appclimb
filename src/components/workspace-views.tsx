@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ArrowRight,
   BadgeCheck,
@@ -8,17 +8,21 @@ import {
   Check,
   CheckCircle2,
   ChevronRight,
+  CircleCheckBig,
   CircleDot,
   Clock3,
   DatabaseZap,
+  ExternalLink,
   FlaskConical,
   KeyRound,
   Link2,
+  LoaderCircle,
   LockKeyhole,
   Plus,
   RefreshCw,
   ShieldCheck,
   Sparkles,
+  X,
 } from "lucide-react";
 
 import { ModalDialog } from "@/components/modal-dialog";
@@ -29,6 +33,11 @@ import type {
   Insight,
   SourceConnection,
 } from "@/lib/contracts";
+import {
+  connectionFields,
+  type ConnectableProvider,
+  SOURCE_SETUP,
+} from "@/lib/source-setup";
 
 function PageIntro({
   eyebrow,
@@ -451,9 +460,15 @@ export function SourcesView({
   const [syncComplete, setSyncComplete] = useState(false);
   const [managing, setManaging] = useState(false);
   const [connectionState, setConnectionState] = useState<
-    "idle" | "saving" | "error"
+    "idle" | "saving" | "success" | "error"
   >("idle");
   const [connectionMessage, setConnectionMessage] = useState("");
+  const [oauthProjects, setOauthProjects] = useState<
+    Array<{ id: string; name: string; organizationName: string }>
+  >([]);
+  const [oauthState, setOauthState] = useState<
+    "idle" | "loading" | "ready" | "error"
+  >("idle");
 
   const selected = useMemo(
     () =>
@@ -475,6 +490,89 @@ export function SourcesView({
   const availableConnectorCount = sources.filter(
     (source) => source.provider !== "appclimb-rank",
   ).length;
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const requestedProvider = params.get("source");
+    const oauthResult = params.get("oauth");
+    const sourceExists =
+      requestedProvider &&
+      sources.some((source) => source.provider === requestedProvider);
+    if (!sourceExists && !oauthResult) return;
+
+    if (sourceExists) params.delete("source");
+    if (oauthResult) params.delete("oauth");
+    if (requestedProvider || oauthResult) {
+      const query = params.toString();
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${query ? `?${query}` : ""}`,
+      );
+    }
+
+    const controller = new AbortController();
+    const applyReturn = window.setTimeout(() => {
+      if (sourceExists) {
+        setSelectedProvider(
+          requestedProvider as SourceConnection["provider"],
+        );
+        if (requestedProvider !== "appclimb-rank" && !isDemo) {
+          setManaging(true);
+        }
+      }
+      if (oauthResult === "error") {
+        setConnectionState("error");
+        setConnectionMessage(
+          "PostHog authorization did not finish. No access was saved; try again.",
+        );
+        setOauthState("error");
+        return;
+      }
+      if (oauthResult !== "ready") return;
+
+      setSelectedProvider("posthog");
+      setManaging(true);
+      setOauthState("loading");
+      fetch("/api/oauth/posthog/projects", { signal: controller.signal })
+        .then(async (response) => {
+          if (!response.ok) throw new Error("oauth_projects_failed");
+          return (await response.json()) as {
+            data?: {
+              projects?: Array<{
+                id: string;
+                name: string;
+                organizationName: string;
+              }>;
+            };
+          };
+        })
+        .then((payload) => {
+          const projects = payload.data?.projects ?? [];
+          if (projects.length === 0) {
+            throw new Error("oauth_projects_empty");
+          }
+          setOauthProjects(projects);
+          setOauthState("ready");
+          setConnectionMessage("");
+          setConnectionState("idle");
+        })
+        .catch((error: unknown) => {
+          if (error instanceof DOMException && error.name === "AbortError") {
+            return;
+          }
+          setOauthState("error");
+          setConnectionState("error");
+          setConnectionMessage(
+            "PostHog authorized AppClimb, but no readable project was found.",
+          );
+        });
+    }, 0);
+    return () => {
+      window.clearTimeout(applyReturn);
+      controller.abort();
+    };
+  }, [isDemo, sources]);
 
   const requireAccount = () => {
     if (authenticated) return true;
@@ -518,6 +616,24 @@ export function SourcesView({
     }
   };
 
+  const markConnected = (provider: SourceConnection["provider"]) => {
+    onSourcesChange((current) =>
+      current.map((source) =>
+        source.provider === provider
+          ? {
+              ...source,
+              status: "connected",
+              freshnessHours: undefined,
+              lastSyncAt: undefined,
+              lastErrorCode: undefined,
+            }
+          : source,
+      ),
+    );
+    setConnectionState("success");
+    setConnectionMessage("");
+  };
+
   const connectSource = async (formData: FormData) => {
     if (!selected || selected.provider === "appclimb-rank") return;
     if (!requireAccount()) return;
@@ -553,25 +669,45 @@ export function SourcesView({
       if (!response.ok) {
         throw new Error("connection_failed");
       }
-      onSourcesChange((current) =>
-        current.map((source) =>
-          source.provider === selected.provider
-            ? {
-                ...source,
-                status: "connected",
-                freshnessHours: undefined,
-                lastSyncAt: undefined,
-              }
-            : source,
-        ),
-      );
-      setManaging(false);
-      setConnectionState("idle");
-      setConnectionMessage("Connection verified and encrypted.");
+      markConnected(selected.provider);
     } catch {
       setConnectionState("error");
       setConnectionMessage(
         "Credentials could not be verified. Check scopes and try again.",
+      );
+    }
+  };
+
+  const connectPostHogOAuth = async (formData: FormData) => {
+    if (!requireAccount()) return;
+    const projectId = String(formData.get("projectId") ?? "").trim();
+    const activationEvent = String(
+      formData.get("activationEvent") ?? "app_activated",
+    ).trim();
+    const sessionEvent = String(
+      formData.get("sessionEvent") ?? "$session_start",
+    ).trim();
+    if (!projectId || !activationEvent || !sessionEvent) {
+      setConnectionState("error");
+      setConnectionMessage("Choose a project and enter both event names.");
+      return;
+    }
+    setConnectionState("saving");
+    setConnectionMessage("");
+    try {
+      const response = await fetch("/api/oauth/posthog/connect", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ projectId, activationEvent, sessionEvent }),
+      });
+      if (!response.ok) throw new Error("oauth_connect_failed");
+      markConnected("posthog");
+      setOauthState("idle");
+      setOauthProjects([]);
+    } catch {
+      setConnectionState("error");
+      setConnectionMessage(
+        "PostHog access could not be verified. Reauthorize and try again.",
       );
     }
   };
@@ -693,9 +829,16 @@ export function SourcesView({
               selected={source.provider === selectedProvider}
               onSelect={() => {
                 setSelectedProvider(source.provider);
-                setManaging(false);
+                setManaging(
+                  !isDemo &&
+                    source.provider !== "appclimb-rank" &&
+                    source.status !== "connected",
+                );
                 setSyncComplete(false);
                 setConnectionMessage("");
+                setConnectionState("idle");
+                setOauthState("idle");
+                setOauthProjects([]);
               }}
               isDemo={isDemo}
               generatedAt={snapshot.generatedAt}
@@ -783,58 +926,265 @@ export function SourcesView({
               </div>
             )}
 
-            {managing &&
+            {connectionState === "success" &&
             selected.provider !== "appclimb-rank" ? (
-              <form
-                className="connection-form"
-                action={connectSource}
-              >
-                {connectionFields(selected.provider).map((field) => (
-                  <label key={field.name}>
-                    {field.label}
-                    {field.multiline ? (
-                      <textarea
-                        name={field.name}
-                        placeholder={field.placeholder}
-                        required
-                        spellCheck={false}
-                      />
-                    ) : (
-                      <input
-                        name={field.name}
-                        type={field.secret ? "password" : "text"}
-                        placeholder={field.placeholder}
-                        defaultValue={field.defaultValue}
-                        required
-                        spellCheck={false}
-                      />
-                    )}
-                  </label>
-                ))}
+              <div className="connection-success" role="status">
+                <div className="connection-success-mark" aria-hidden="true">
+                  <span />
+                  <CircleCheckBig size={30} />
+                </div>
+                <div>
+                  <span className="eyebrow">Connection complete</span>
+                  <h4>{selected.label} is connected</h4>
+                  <p>
+                    Access was verified and encrypted. AppClimb can now import
+                    the supported read-only metrics for this workspace.
+                  </p>
+                </div>
                 <button
                   className="primary-action"
-                  type="submit"
-                  disabled={
-                    connectionState === "saving" || accessRestricted
-                  }
+                  type="button"
+                  onClick={triggerSync}
+                  disabled={syncing}
                 >
-                  <ShieldCheck size={17} />
-                  {accessRestricted
-                    ? "Plan required to verify"
-                    : connectionState === "saving"
-                    ? "Verifying…"
-                    : "Verify & connect"}
+                  <RefreshCw
+                    size={17}
+                    className={syncing ? "spin" : undefined}
+                  />
+                  {syncing
+                    ? "Starting first sync…"
+                    : syncComplete
+                      ? "First sync queued"
+                      : "Start first sync"}
                 </button>
-                {selectedHasCredentials && (
-                  <button
-                    className="danger-action"
-                    type="button"
-                    onClick={revokeSource}
+                <button
+                  className="secondary-action"
+                  type="button"
+                  onClick={() => {
+                    setConnectionState("idle");
+                    setManaging(false);
+                  }}
+                >
+                  Done
+                </button>
+              </div>
+            ) : managing && selected.provider !== "appclimb-rank" ? (
+              <div className="connection-setup">
+                <button
+                  className="connection-close"
+                  type="button"
+                  aria-label="Close connection setup"
+                  onClick={() => {
+                    setManaging(false);
+                    setConnectionState("idle");
+                    setConnectionMessage("");
+                    if (oauthState !== "idle") {
+                      void fetch("/api/oauth/posthog/connect", {
+                        method: "DELETE",
+                      });
+                      setOauthState("idle");
+                      setOauthProjects([]);
+                    }
+                  }}
+                >
+                  <X size={15} />
+                </button>
+                <ConnectionGuide provider={selected.provider} />
+
+                {selected.provider === "posthog" &&
+                oauthState === "loading" ? (
+                  <div className="oauth-loading" role="status">
+                    <LoaderCircle className="spin" size={22} />
+                    <div>
+                      <strong>Loading your PostHog projects…</strong>
+                      <span>
+                        Authorization is complete. AppClimb is reading only the
+                        project list you granted.
+                      </span>
+                    </div>
+                  </div>
+                ) : selected.provider === "posthog" &&
+                  oauthState === "ready" ? (
+                  <form
+                    className="connection-form oauth-project-form"
+                    action={connectPostHogOAuth}
                   >
-                    Revoke connection
-                  </button>
+                    <label>
+                      PostHog project
+                      <select name="projectId" required defaultValue="">
+                        <option value="" disabled>
+                          Choose a project
+                        </option>
+                        {oauthProjects.map((project) => (
+                          <option key={project.id} value={project.id}>
+                            {project.organizationName} · {project.name}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Activation event · unique users
+                      <input
+                        name="activationEvent"
+                        defaultValue="app_activated"
+                        required
+                        spellCheck={false}
+                      />
+                      <span className="field-help">
+                        The event that means a user reached first value.
+                        <a
+                          href="https://posthog.com/docs/product-analytics/activation"
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Choose an activation event <ExternalLink size={12} />
+                        </a>
+                      </span>
+                    </label>
+                    <label>
+                      Session event · unique users
+                      <input
+                        name="sessionEvent"
+                        defaultValue="$session_start"
+                        required
+                        spellCheck={false}
+                      />
+                    </label>
+                    <button
+                      className="primary-action"
+                      type="submit"
+                      disabled={connectionState === "saving"}
+                    >
+                      {connectionState === "saving" ? (
+                        <LoaderCircle className="spin" size={17} />
+                      ) : (
+                        <ShieldCheck size={17} />
+                      )}
+                      {connectionState === "saving"
+                        ? "Verifying project…"
+                        : "Connect selected project"}
+                    </button>
+                  </form>
+                ) : (
+                  <>
+                    {selected.provider === "posthog" && (
+                      <>
+                        <a
+                          className="oauth-connect-button"
+                          href="/api/oauth/posthog/start"
+                        >
+                          <ProviderMark provider="posthog" />
+                          <span>
+                            <strong>Continue with PostHog</strong>
+                            <small>
+                              Recommended · scoped read-only OAuth
+                            </small>
+                          </span>
+                          <ArrowRight size={16} />
+                        </a>
+                        <div className="connection-divider">
+                          <span>or connect with an API key</span>
+                        </div>
+                      </>
+                    )}
+                    {selected.provider === "revenuecat" && (
+                      <div className="oauth-coming-note">
+                        <BadgeCheck size={17} />
+                        <p>
+                          <strong>RevenueCat OAuth is supported</strong>
+                          It will appear here after RevenueCat approves AppClimb
+                          as an OAuth client. API key setup remains available
+                          below.
+                        </p>
+                      </div>
+                    )}
+                    <form
+                      className="connection-form"
+                      action={connectSource}
+                    >
+                      {connectionFields(selected.provider).map((field) => (
+                        <label key={field.name}>
+                          {field.label}
+                          {field.multiline ? (
+                            <textarea
+                              name={field.name}
+                              placeholder={field.placeholder}
+                              required
+                              spellCheck={false}
+                            />
+                          ) : (
+                            <input
+                              name={field.name}
+                              type={field.secret ? "password" : "text"}
+                              placeholder={field.placeholder}
+                              defaultValue={field.defaultValue}
+                              required
+                              spellCheck={false}
+                            />
+                          )}
+                          <span className="field-help">
+                            {field.help}
+                            <a
+                              href={field.helpUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              {field.helpLabel} <ExternalLink size={12} />
+                            </a>
+                          </span>
+                        </label>
+                      ))}
+                      <div className="connection-security-note">
+                        <ShieldCheck size={16} />
+                        <span>
+                          Encrypted before storage · never exposed to the
+                          browser again · read-only imports
+                        </span>
+                      </div>
+                      <button
+                        className="primary-action"
+                        type="submit"
+                        disabled={
+                          connectionState === "saving" || accessRestricted
+                        }
+                      >
+                        {connectionState === "saving" ? (
+                          <LoaderCircle className="spin" size={17} />
+                        ) : (
+                          <ShieldCheck size={17} />
+                        )}
+                        {accessRestricted
+                          ? "Plan required to verify"
+                          : connectionState === "saving"
+                            ? "Verifying credentials…"
+                            : "Verify & connect"}
+                      </button>
+                      {connectionState === "saving" && (
+                        <div className="connection-progress" role="status">
+                          <span className="active">
+                            <CheckCircle2 size={13} /> Checking access
+                          </span>
+                          <span>
+                            <LockKeyhole size={13} /> Encrypting
+                          </span>
+                          <span>
+                            <RefreshCw size={13} /> Preparing sync
+                          </span>
+                        </div>
+                      )}
+                      {selectedHasCredentials && (
+                        <button
+                          className="danger-action"
+                          type="button"
+                          onClick={revokeSource}
+                        >
+                          Revoke connection
+                        </button>
+                      )}
+                    </form>
+                  </>
                 )}
-              </form>
+              </div>
             ) : (
               <>
                 {isDemo ? (
@@ -933,6 +1283,26 @@ export function SourcesView({
   );
 }
 
+function ConnectionGuide({ provider }: { provider: ConnectableProvider }) {
+  const setup = SOURCE_SETUP[provider];
+  return (
+    <div className="connection-guide">
+      <div>
+        <span className="eyebrow">Three quick steps</span>
+        <strong>Connect {sourceLabel(provider)}</strong>
+      </div>
+      <ol>
+        {setup.steps.map((step, index) => (
+          <li key={step}>
+            <span>{index + 1}</span>
+            <p>{step}</p>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
 function SourceCard({
   source,
   selected,
@@ -1024,106 +1394,4 @@ function sourceStatusLabel(status: SourceConnection["status"]) {
       "not-connected": "Not connected",
     }[status] ?? status
   );
-}
-
-interface ConnectionField {
-  name: string;
-  label: string;
-  placeholder: string;
-  secret?: boolean;
-  multiline?: boolean;
-  defaultValue?: string;
-}
-
-function connectionFields(
-  provider: Exclude<SourceConnection["provider"], "appclimb-rank">,
-): ConnectionField[] {
-  return {
-    "app-store-connect": [
-      {
-        name: "appId",
-        label: "Apple app ID",
-        placeholder: "1234567890",
-      },
-      {
-        name: "issuerId",
-        label: "Issuer ID",
-        placeholder: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-      },
-      {
-        name: "keyId",
-        label: "Key ID",
-        placeholder: "ABC123DEFG",
-      },
-      {
-        name: "privateKey",
-        label: "Private key (.p8)",
-        placeholder: "-----BEGIN PRIVATE KEY-----",
-        secret: true,
-        multiline: true,
-      },
-    ],
-    revenuecat: [
-      {
-        name: "apiKey",
-        label: "Secret API key",
-        placeholder: "sk_…",
-        secret: true,
-      },
-      {
-        name: "projectId",
-        label: "Project ID",
-        placeholder: "proj…",
-      },
-    ],
-    posthog: [
-      {
-        name: "personalApiKey",
-        label: "Personal API key",
-        placeholder: "phx_…",
-        secret: true,
-      },
-      {
-        name: "projectId",
-        label: "Project ID",
-        placeholder: "12345",
-      },
-      {
-        name: "host",
-        label: "PostHog host",
-        placeholder: "https://us.posthog.com",
-        defaultValue: "https://us.posthog.com",
-      },
-      {
-        name: "activationEvent",
-        label: "Activation event · unique users",
-        placeholder: "app_activated",
-        defaultValue: "app_activated",
-      },
-      {
-        name: "sessionEvent",
-        label: "Session event · unique users",
-        placeholder: "$session_start",
-        defaultValue: "$session_start",
-      },
-    ],
-    superwall: [
-      {
-        name: "apiKey",
-        label: "API key",
-        placeholder: "sw_…",
-        secret: true,
-      },
-      {
-        name: "projectId",
-        label: "Project ID",
-        placeholder: "project ID",
-      },
-      {
-        name: "applicationId",
-        label: "Application ID",
-        placeholder: "application ID",
-      },
-    ],
-  }[provider];
 }

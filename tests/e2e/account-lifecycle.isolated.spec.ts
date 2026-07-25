@@ -8,7 +8,7 @@ test("trial signup creates an isolated backend workspace and can delete it", asy
   await page.goto("/login");
   await page.getByLabel("Work email").fill(email);
   await page.getByLabel("Password").fill("RiverAtlas!2026");
-  await page.getByRole("button", { name: "Start 14-day trial" }).click();
+  await page.getByRole("button", { name: "Create account" }).last().click();
   await page.waitForURL("/");
 
   await expect(page.getByText("My AppClimb workspace")).toBeVisible();
@@ -25,7 +25,7 @@ test("trial signup creates an isolated backend workspace and can delete it", asy
 
   await page.getByRole("button", { name: "Settings" }).click();
   await expect(
-    page.getByRole("dialog", { name: "Workspace control" }),
+    page.getByRole("dialog", { name: "Profile & billing" }),
   ).toBeVisible();
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Delete account" }).click();
