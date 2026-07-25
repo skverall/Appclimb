@@ -1,12 +1,14 @@
 import type { NextConfig } from "next";
 
+const developmentEval =
+  process.env.NODE_ENV === "development" ? " 'unsafe-eval'" : "";
 const contentSecurityPolicy = [
   "default-src 'self'",
   "base-uri 'self'",
   "object-src 'none'",
   "frame-ancestors 'none'",
   "form-action 'self'",
-  "script-src 'self' 'unsafe-inline' https://cdn.paddle.com https://*.paddle.com",
+  `script-src 'self' 'unsafe-inline'${developmentEval} https://cdn.paddle.com https://*.paddle.com`,
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",
   "img-src 'self' data: blob: https://*.paddle.com",

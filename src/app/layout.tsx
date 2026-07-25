@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { DM_Sans, Manrope } from "next/font/google";
+import Script from "next/script";
 
 import { JsonLd } from "@/components/json-ld";
 import {
@@ -146,6 +147,14 @@ export default function RootLayout({
           }}
         />
         {children}
+        {process.env.APPCLIMB_TRACKING_TOKEN && (
+          <Script
+            src="/appclimb-analytics.js"
+            data-token={process.env.APPCLIMB_TRACKING_TOKEN}
+            data-storage="session"
+            strategy="afterInteractive"
+          />
+        )}
       </body>
     </html>
   );

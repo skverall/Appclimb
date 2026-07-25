@@ -34,14 +34,21 @@ Product truth:
 
 - Shipped: interactive demo, auth, no-card trial, pricing, billing, account
   controls, secure connector setup, and production foundation.
-- Prototype: most visible River Atlas metrics and diagnoses use clearly
-  labeled synthetic data.
-- In development: complete live imports and end-to-end diagnosis.
+- Implemented release candidate: first-party Acquisition Atlas UI, referrer
+  and UTM collection, explicit web goals, and separately counted AI crawler
+  requests.
+- Prototype: most visible Growth River and public Acquisition Atlas metrics use
+  clearly labeled synthetic data.
+- In development: complete live imports, end-to-end diagnosis, and production
+  property/token rollout for real AppClimb website acquisition.
 - Roadmap: keyword monitoring, competitor intelligence, complete Voice of
   Customer analysis, and broader SaaS support.
 
 Never describe AppClimb as a completed live-data analytics product until the
 Stage 1 exit criteria in `PRODUCT_DIRECTION.md` are verified.
+Do not describe user-agent crawler detection as verified provider identity.
+Human visits referred by an AI assistant and crawler requests are separate
+evidence streams.
 
 ## Topic architecture
 
@@ -110,12 +117,18 @@ The active outreach and listing backlog is tracked in
 - Bing Webmaster Tools: sitemap status, IndexNow submissions, indexed URLs.
 - Organic product funnel: landing page -> demo -> account -> first source
   connection -> first evidence-backed bottleneck.
+- Acquisition Atlas, after its live rollout gates pass: qualified visitor
+  source, landing page, engagement, and explicitly instrumented conversion.
+- AI crawler requests by agent category and requested public page, reported
+  separately from human AI referral sessions.
 
 ### Monthly
 
 - Run the prompts in `ai-visibility-baseline.csv` through Google, ChatGPT,
   Gemini, Perplexity, Copilot, and Claude where search is available.
 - Record retrieved, cited, mentioned, and recommended as separate outcomes.
+- Treat a crawler request as discovery evidence only; it is not proof that an
+  answer cited, mentioned, or recommended AppClimb.
 - Record which source earned the mention: AppClimb page, GitHub, review site,
   community thread, video, or publication.
 - Refresh important articles when provider definitions or AppClimb product

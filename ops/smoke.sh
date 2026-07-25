@@ -11,6 +11,17 @@ unauthorized_status=$(curl --silent --output /dev/null --write-out '%{http_code}
   "$base_url/v1/me")
 test "$unauthorized_status" = "401"
 
+unauthorized_analytics_status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+  "$base_url/v1/web-analytics")
+test "$unauthorized_analytics_status" = "401"
+
+invalid_collector_status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+  --request POST \
+  --header 'Content-Type: application/json' \
+  --data '{}' \
+  "$base_url/v1/web-analytics/collect")
+test "$invalid_collector_status" = "401"
+
 invalid_webhook_status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
   --request POST \
   --header 'Content-Type: application/json' \

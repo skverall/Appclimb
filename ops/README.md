@@ -1,5 +1,18 @@
 # AppClimb backend operations
 
+## Release boundaries
+
+There are two independent production releases:
+
+- `.github/workflows/vercel-deploy.yml` verifies a push to `main` and deploys
+  the Next.js frontend to Vercel.
+- The Go API, worker, and PostgreSQL migrations are deployed explicitly to
+  Hostinger.
+
+A successful Vercel workflow does not prove that a new Go endpoint or database
+migration is live. For cross-stack features, record frontend, backend,
+migration, configuration, and first-real-event proof separately.
+
 The production project is isolated at `/opt/apps/appclimb` and uses the
 Compose project name `appclimb`. Only `api` joins the shared
 `hortiops_default` ingress network. PostgreSQL and the worker remain on the
@@ -16,6 +29,32 @@ admin password. Compose interpolation reads the root-only `.env`.
 - Readiness: `GET /readyz`
 - Public smoke: `./ops/smoke.sh`
 - Logs: `docker compose logs --since=30m api worker`
+
+`ops/smoke.sh` also verifies that protected Acquisition Atlas reads and the
+public collector route exist. Expected unauthenticated/invalid-token responses
+are `401`; `404` or `405` means the new API bundle is not running.
+
+## Backend release
+
+Before changing `/opt/apps/appclimb`:
+
+1. Run `npm run check` on the exact source commit.
+2. Capture the current source/config bundle, image identity, and database dump
+   under `/opt/backups/appclimb-deploys/<timestamp>`.
+3. Transfer only the reviewed release source and preserve the root-only
+   `.env`, `.env.admin`, and `.env.runtime` files.
+4. Build the new image and let the one-shot `migrate` service complete before
+   API and worker replacement.
+5. Confirm `migrate` exited successfully, then confirm both API and worker are
+   healthy.
+6. Run `./ops/smoke.sh` against the public endpoint.
+7. Inspect API and worker logs for the release window.
+
+Acquisition Atlas introduces migration `006_web_analytics.sql`. It creates
+`web_properties`, `web_events`, and `web_crawler_events`, enables and forces
+workspace RLS, and adds no new backend secret: signed property tokens reuse the
+existing JWT signing key. The Vercel `APPCLIMB_TRACKING_TOKEN` must only be set
+after a real property is created through the authenticated API.
 
 ## Backup and restore
 

@@ -2,7 +2,7 @@
 
 **Status:** Canonical product north star
 
-**Last updated:** July 24, 2026
+**Last updated:** July 25, 2026
 
 **Owner:** AppClimb founder
 
@@ -71,17 +71,32 @@ The wording may evolve, but the promise must keep all three parts:
 The current River Atlas website is a **high-fidelity interactive product
 prototype and technical foundation**, not the completed AppClimb product.
 
-What exists today:
+Production-verified foundation:
 
-- the River Atlas visual language;
-- the four-part navigation: Pulse, Diagnose, Lab, Sources;
-- an interactive demo workspace;
+- the River Atlas visual language and four-part navigation;
+- an interactive, clearly labeled demo workspace;
 - authentication, trial, pricing, Paddle checkout, and account deletion;
-- a Go/PostgreSQL backend foundation;
-- encrypted source-credential handling;
-- connector scaffolding and part of the recurring sync pipeline;
-- deterministic evidence and diagnosis contracts;
-- production deployment, health checks, tests, backups, and rollback support.
+- the isolated Go/PostgreSQL backend, encrypted source credentials, health
+  checks, backups, and rollback support;
+- connector scaffolding, recurring-sync foundations, and deterministic
+  evidence and diagnosis contracts.
+
+Implemented in the current repository:
+
+- **Acquisition Atlas**, a second Pulse projection for the path from traffic
+  source to engaged visitor to explicit conversion;
+- first-party referral, UTM, landing-page, device, and anonymous journey
+  collection;
+- separate server-side AI crawler visibility for answer retrieval, search
+  indexing, and model training;
+- signed property tokens, hostname validation, duplicate protection,
+  rate-limiting, forced workspace RLS, and no stored visitor IP address.
+
+Acquisition Atlas is only **live** for a workspace after the backend migration
+and API are deployed, a web property is created, its token is installed on the
+site, and real events are observed. Until then its public view is an explicitly
+labeled synthetic demo. User-agent crawler detection must not be described as
+provider identity verification; provider IP-range verification is future work.
 
 What must not be misrepresented as complete:
 
@@ -105,6 +120,22 @@ Future sessions must clearly distinguish:
 
 Visual polish must never be used as evidence that the underlying product
 capability is finished.
+
+### Current delivery order
+
+Acquisition Atlas is a bounded acquisition primitive, not a pivot away from
+the iOS wedge and not evidence that Stage 3 is complete. The delivery sequence
+is:
+
+1. finish one truthful iOS subscription journey and its source reliability;
+2. productionize first-party acquisition collection for AppClimb's own site
+   and instrument explicit account and paid-conversion goals;
+3. connect website-to-app evidence only through a documented attribution and
+   identity contract;
+4. expand acquisition intelligence and SaaS journeys after the Stage 1 proof.
+
+The next highest-leverage product gap remains a new workspace reaching its
+first trusted, evidence-backed bottleneck from real source data.
 
 ---
 
@@ -316,7 +347,9 @@ The primary navigation remains intentionally small:
 
 The live visual state of the product:
 
-- River Atlas;
+- **Growth River:** the product journey from discovery through renewal;
+- **Acquisition Atlas:** channels, referrers, campaigns, landing pages,
+  anonymous journeys, and a separately counted crawler current;
 - current bottleneck;
 - data confidence;
 - key changes;
@@ -364,6 +397,11 @@ Each metric must have an explicit owner. For the initial iOS wedge:
 - Superwall owns paywall exposure, variants, experiments, and paywall
   conversion.
 - AppClimb’s rank monitor will own collected keyword-position history.
+- AppClimb first-party web analytics owns web referrals, UTM attribution,
+  landing-page journeys, explicit web conversions, and crawler requests.
+
+Human visits and crawler requests are different evidence streams. They must
+never be added together as visitors or conversions.
 
 When sources disagree, AppClimb must show the discrepancy or apply a documented
 precedence rule. It must not quietly blend incompatible values.
@@ -451,6 +489,7 @@ The roadmap should expand by completing user journeys, not by collecting logos.
 
 ### SaaS and web growth
 
+- AppClimb first-party web analytics
 - Paddle
 - Stripe
 - RevenueCat Web
@@ -499,6 +538,8 @@ Purpose:
 - prove that the product can make complex data immediately understandable;
 - build the production foundation;
 - demonstrate the complete conceptual loop.
+- validate bounded future primitives, such as Acquisition Atlas, without
+  pretending the broader SaaS stage has been reached.
 
 Exit criteria:
 
@@ -621,6 +662,17 @@ The product should measure:
 - users who return after a new change event or sync;
 - time from first source connection to first trusted insight;
 - percentage of insights users accept, dismiss, or convert into experiments.
+
+For Acquisition Atlas, supporting operational metrics are:
+
+- qualified visitors by channel and referrer;
+- visitor-to-engaged and visitor-to-explicit-conversion rates;
+- time from property installation to the first accepted event;
+- human referral traffic from AI assistants, reported separately from crawler
+  requests;
+- crawler requests by declared agent category and requested public page.
+
+These supporting metrics do not replace the activation definition above.
 
 ### North-star direction
 
@@ -765,6 +817,8 @@ When handing off:
 
 - explain what is actually working;
 - explain what still uses sample data;
+- distinguish repository implementation, frontend deployment, backend
+  migration, site-token installation, and first real event as separate proof;
 - list the next highest-leverage product gap;
 - show evidence from tests or production;
 - update this document only when the founder changes product direction, not for
@@ -788,8 +842,15 @@ The following decisions are intentional:
 - Insights are Observed, Derived, or Hypothesis.
 - AI receives aggregates and evidence references, not credentials.
 - Pulse, Diagnose, Lab, and Sources are the primary navigation.
+- Pulse may contain multiple coherent projections; Growth River and
+  Acquisition Atlas are the current pair.
 - Vercel hosts the web frontend.
 - The isolated Go/PostgreSQL backend runs on the existing Hostinger VPS.
+- Web acquisition analytics is first-party AppClimb infrastructure. Do not add
+  DataFast or another paid analytics dependency for this capability without an
+  explicit founder decision.
+- Human AI referrals and AI crawler requests remain separate datasets.
+- Current crawler attribution is user-agent detected, not IP verified.
 - Paddle handles the current trial and subscription billing contract.
 - The product should remain accessible to independent builders and scalable to
   a very large self-serve audience.

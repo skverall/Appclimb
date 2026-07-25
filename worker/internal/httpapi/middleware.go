@@ -214,6 +214,24 @@ func (s *Server) rateLimited(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+func (s *Server) rateLimitedCollector(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		limiter := s.collectorLimiter
+		if limiter == nil {
+			limiter = s.limiter
+		}
+		if limiter == nil || !limiter.allow(
+			"collector:"+clientIP(r),
+			s.Now(),
+		) {
+			w.Header().Set("Retry-After", "60")
+			writeError(w, http.StatusTooManyRequests, "rate_limited")
+			return
+		}
+		next(w, r)
+	}
+}
+
 func (s *Server) rateLimitedByWorkspace(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		current := currentAuth(r)

@@ -7,11 +7,13 @@ AppClimb helps a builder see where a product's growth journey first becomes cons
 ## Product status
 
 - Shipped: interactive River Atlas demo; authentication; 14-day no-card trial; pricing and Paddle checkout; account controls; secure connector setup foundation.
-- Prototype: most visible River Atlas metrics and diagnoses use clearly labeled synthetic sample data.
-- In development: complete live imports and reliable end-to-end diagnosis across App Store Connect, RevenueCat, PostHog, and Superwall.
+- Implemented release candidate: first-party Acquisition Atlas UI and contracts for web referrers, UTM campaigns, landing pages, explicit conversion goals, and separately counted crawler requests.
+- Prototype: most visible Growth River and public Acquisition Atlas metrics use clearly labeled synthetic sample data.
+- In development: production Acquisition Atlas property/token rollout plus complete live imports and reliable end-to-end diagnosis across App Store Connect, RevenueCat, PostHog, and Superwall.
 - Roadmap: keyword monitoring, competitor intelligence, complete Voice of Customer analysis, and broader SaaS support.
 
 AppClimb must not be described as a completed live-data analytics platform yet. It is currently an early-access interactive product prototype and technical foundation.
+Acquisition Atlas is a Pulse projection, not a change to the initial iOS subscription-app wedge. Human visits referred by an AI assistant are separate from AI crawler requests. Current crawler attribution is detected from user agent and is not IP-verified. AppClimb does not use DataFast for this capability.
 
 ## Audience
 
@@ -23,6 +25,7 @@ The initial audience is solo developers and small teams running iOS subscription
 - RevenueCat: subscription lifecycle, trials, paid conversion, renewal, churn, and subscription revenue.
 - PostHog: product behavior, activation, funnels, features, and retention.
 - Superwall: paywall exposure, variants, experiments, and paywall conversion.
+- AppClimb first-party analytics: web referrers, UTM attribution, landing-page journeys, explicit web goals, and server-observed crawler requests.
 
 AppClimb uses aggregate comparisons unless a customer explicitly confirms a shared identifier across sources. Insights are labeled Observed, Derived, or Hypothesis.
 
@@ -37,6 +40,7 @@ AppClimb uses aggregate comparisons unless a customer explicitly confirms a shar
 
 - Product: https://appclimb.app/ios-subscription-analytics
 - Interactive demo: https://appclimb.app/?demo=1
+- Acquisition Atlas demo: https://appclimb.app/?demo=1&atlas=1
 - iOS subscription growth guide: https://appclimb.app/guides/ios-subscription-growth
 - Field notes: https://appclimb.app/blog
 - Pricing: https://appclimb.app/pricing

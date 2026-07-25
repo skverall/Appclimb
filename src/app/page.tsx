@@ -105,7 +105,7 @@ export default async function Home({
   const privateSessionExpected =
     sessionPresence.hasAccessToken || sessionPresence.hasRefreshToken;
   const returnParams = new URLSearchParams();
-  for (const key of ["view", "insight", "demo"]) {
+  for (const key of ["view", "insight", "demo", "atlas"]) {
     const value = resolvedSearchParams[key];
     if (typeof value === "string") returnParams.set(key, value);
   }
@@ -193,6 +193,9 @@ export default async function Home({
       initialSnapshot={snapshot}
       initialSection={initialSection}
       initialInsightId={initialInsightId}
+      initialPulseProjection={
+        resolvedSearchParams.atlas === "1" ? "acquisition" : "growth"
+      }
       session={session}
       privateSessionExpected={privateSessionExpected}
       trialDaysRemaining={

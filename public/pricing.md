@@ -25,9 +25,10 @@ Last updated: 2026-07-25
 ## Current product status
 
 - Available now: clearly labeled interactive demo, authentication, trial, billing, account controls, and secure source setup foundation
-- In development: complete live imports, real end-to-end growth diagnosis, and Growth Replay based on customer data
+- Implemented release candidate: first-party Acquisition Atlas for web referrers, UTM campaigns, landing pages, explicit conversion goals, and separately counted crawler requests
+- In development: production property/token rollout, complete live imports, real end-to-end growth diagnosis, and Growth Replay based on customer data
 
-AppClimb is in early access. Most visible demo metrics are synthetic sample data and are labeled as such.
+AppClimb is in early access. Most visible demo metrics are synthetic sample data and are labeled as such. A crawler detected by user agent is not described as IP-verified.
 
 Human-readable pricing: https://appclimb.app/pricing
 Product overview: https://appclimb.app/ios-subscription-analytics

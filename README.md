@@ -1,4 +1,4 @@
-# AppClimb Web — River Atlas
+# AppClimb Web — Visual Growth OS
 
 AppClimb is a visual growth diagnosis workspace for independent iOS
 subscription apps.
@@ -16,6 +16,8 @@ Read it before changing product direction or expanding the feature set.
 
 - Growth River: Discover → Store → Install → Activate → Paywall → Trial → Paid
   → Renew.
+- Acquisition Atlas: channel/referrer/UTM → visitor → engagement → explicit
+  conversion, with AI crawler requests kept in a separate current.
 - Evidence inspector with at most three ranked opportunities.
 - Growth Replay for releases, metadata, screenshots, price and paywall changes.
 - Retention heatmap and Voice of Customer clusters.
@@ -24,12 +26,33 @@ Read it before changing product direction or expanding the feature set.
 - One-page Paddle overlay checkout with a signed webhook as the entitlement
   source of truth.
 
+The current public workspace is an interactive product demo. Growth River data
+is primarily synthetic. Acquisition Atlas includes a tested first-party
+collector and backend contract, but a private workspace becomes live only
+after migration, property creation, token installation, and receipt of real
+events. See [docs/acquisition-atlas.md](./docs/acquisition-atlas.md).
+
+## Documentation map
+
+- [PRODUCT_DIRECTION.md](./PRODUCT_DIRECTION.md) — canonical audience,
+  product truth, roadmap, invariants, and current delivery order.
+- [docs/acquisition-atlas.md](./docs/acquisition-atlas.md) — collection model,
+  privacy boundary, install contract, rollout gates, and status.
+- [ops/README.md](./ops/README.md) — production topology, backend release, smoke
+  checks, backup, and rollback.
+- [marketing/organic-growth/README.md](./marketing/organic-growth/README.md) —
+  accurate public positioning and organic-discovery system.
+- [public/pricing.md](./public/pricing.md) — machine-readable pricing and
+  product-status contract.
+
 ## Architecture
 
 - `src/app` — Next.js 16 App Router, route handlers and legal/auth pages.
 - `src/components` — code-native River Atlas UI.
 - `src/lib` — browser-safe contracts, deterministic diagnosis and a server-only
   API session client.
+- `public/appclimb-analytics.js` — small first-party browser collector;
+  `src/proxy.ts` forwards recognized crawler requests separately.
 - `worker` — Go API and recurring sync worker with Postgres migrations,
   envelope encryption, RLS, bounded pagination, reconciliation, retries, UTC
   windows and 90-day retention.
@@ -42,9 +65,12 @@ Source precedence is deterministic:
 - RevenueCat: trials, paid conversion, renewals, churn and subscription revenue.
 - PostHog: activation, funnels, feature usage and product retention.
 - Superwall: paywall views, experiments and paywall conversion.
+- AppClimb first-party analytics: web referrers, UTM attribution, landing-page
+  journeys, explicit web goals, and server-observed crawler requests.
 
 User-level joins are disabled unless a workspace explicitly confirms a shared
 App User ID. Otherwise AppClimb uses aggregate UTC day and cohort comparisons.
+Human traffic and crawler traffic are never combined.
 
 ## Local development
 
@@ -78,6 +104,13 @@ Required Vercel server-only value:
 
 - `APPCLIMB_API_URL=https://appclimb.srv1300823.hstgr.cloud`
 
+Required after creating the production `appclimb.app` web property:
+
+- `APPCLIMB_TRACKING_TOKEN=acwa1_...`
+
+The tracking token is a signed public property identifier, not an account
+credential. Do not invent a token or reuse an authenticated session token.
+
 Required public checkout values:
 
 - `NEXT_PUBLIC_PADDLE_ENV=production`
@@ -95,6 +128,12 @@ distroless image for the existing Hostinger container environment. Configure
 Paddle webhooks directly at
 `https://appclimb.srv1300823.hstgr.cloud/v1/billing/webhook`; the Next.js route
 is retained only as a compatibility proxy.
+
+Pushes to `main` run `.github/workflows/vercel-deploy.yml`, verify the complete
+Node/Go release candidate, and deploy only the Vercel frontend. Backend and
+database changes still require the explicit Hostinger procedure in
+[ops/README.md](./ops/README.md); a green Vercel deployment is not proof that a
+new Go route or migration is live.
 
 ## Provider notes
 

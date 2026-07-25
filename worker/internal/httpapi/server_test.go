@@ -30,6 +30,25 @@ func TestHandlerRoutesDoNotConflict(t *testing.T) {
 	}
 }
 
+func TestAnalyticsHelpersMinimizeAndValidateCollectedData(t *testing.T) {
+	if country := analyticsCountry(" uz "); country != "UZ" {
+		t.Fatalf("expected normalized country, got %q", country)
+	}
+	if country := analyticsCountry("USA"); country != "" {
+		t.Fatalf("invalid country must be discarded, got %q", country)
+	}
+	path, ok := analyticsPath("/pricing?email=private@example.com#plan")
+	if !ok || path != "/pricing" {
+		t.Fatalf("query and fragment must not be stored, got %q ok=%v", path, ok)
+	}
+	if _, ok := analyticsPath("https://example.com/private"); ok {
+		t.Fatal("absolute URLs must not be accepted as analytics paths")
+	}
+	if got := analyticsText("абвг", 3); got != "абв" {
+		t.Fatalf("analytics text must truncate on rune boundaries, got %q", got)
+	}
+}
+
 func TestWorkspaceRateLimitDoesNotCoupleDifferentCustomers(t *testing.T) {
 	now := time.Date(2026, 7, 25, 12, 0, 0, 0, time.UTC)
 	server := &Server{

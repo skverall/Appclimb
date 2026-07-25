@@ -10,6 +10,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/mail"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -23,11 +24,13 @@ import (
 	"appclimb.app/backend/internal/entitlement"
 	"appclimb.app/backend/internal/secure"
 	"appclimb.app/backend/internal/syncer"
+	"appclimb.app/backend/internal/webanalytics"
 	"github.com/google/uuid"
 )
 
 const (
 	maxJSONBody        = 1 << 20
+	maxAnalyticsBody   = 32 << 10
 	checkoutBindingTTL = 30 * time.Minute
 )
 
@@ -54,11 +57,13 @@ type Server struct {
 	Config                 config.Config
 	Connectors             *connectors.Client
 	Tokens                 auth.TokenIssuer
+	WebTokens              webanalytics.TokenIssuer
 	Now                    func() time.Time
 	EntitlementLookup      func(context.Context, string) (entitlement.State, error)
 	BillingEventRecorder   billingEventRecorder
 	CheckoutBindingCreator checkoutBindingCreator
 	limiter                *ipRateLimiter
+	collectorLimiter       *ipRateLimiter
 }
 
 type authContext struct {
@@ -86,11 +91,13 @@ func New(
 			AccessTTL: cfg.AccessTokenTTL,
 			Issuer:    "appclimb-api",
 		},
+		WebTokens:              webanalytics.TokenIssuer{Key: cfg.JWTSigningKey},
 		Now:                    time.Now,
 		EntitlementLookup:      db.WorkspaceEntitlement,
 		BillingEventRecorder:   db.RecordBillingEvent,
 		CheckoutBindingCreator: db.CreateCheckoutBinding,
 		limiter:                newIPRateLimiter(12, time.Minute),
+		collectorLimiter:       newIPRateLimiter(180, time.Minute),
 	}
 }
 
@@ -107,6 +114,22 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("DELETE /v1/account", s.requireAuth(s.deleteAccount))
 	mux.HandleFunc("GET /v1/workspace", s.requireAuth(s.workspace))
 	mux.HandleFunc("GET /v1/growth-map", s.requireAuth(s.growthMap))
+	mux.HandleFunc(
+		"GET /v1/web-analytics",
+		s.requireAuth(s.requireEntitlement(s.webAnalytics)),
+	)
+	mux.HandleFunc(
+		"POST /v1/web-analytics/property",
+		s.requireAuth(s.requireEntitlement(s.createWebProperty)),
+	)
+	mux.HandleFunc(
+		"POST /v1/web-analytics/collect",
+		s.rateLimitedCollector(s.collectWebEvent),
+	)
+	mux.HandleFunc(
+		"POST /v1/web-analytics/crawler",
+		s.rateLimitedCollector(s.collectWebCrawlerEvent),
+	)
 	mux.HandleFunc("GET /v1/sources", s.requireAuth(s.listSources))
 	mux.HandleFunc("POST /v1/sources/{provider}/verify", s.requireAuth(s.requireEntitlement(s.verifySource)))
 	mux.HandleFunc("PUT /v1/sources/{provider}", s.requireAuth(s.requireEntitlement(s.connectSource)))
@@ -644,6 +667,398 @@ func (s *Server) growthMap(w http.ResponseWriter, r *http.Request) {
 			"windowDays":               30,
 		},
 	})
+}
+
+func (s *Server) webAnalytics(w http.ResponseWriter, r *http.Request) {
+	current := currentAuth(r)
+	windowDays := 7
+	if rawDays := r.URL.Query().Get("days"); rawDays != "" {
+		parsed, err := strconv.Atoi(rawDays)
+		if err != nil || (parsed != 7 && parsed != 30 && parsed != 90) {
+			writeError(w, http.StatusBadRequest, "invalid_analytics_window")
+			return
+		}
+		windowDays = parsed
+	}
+	snapshot, err := s.DB.WebAnalytics(
+		r.Context(),
+		current.WorkspaceID,
+		s.Now().UTC(),
+		windowDays,
+	)
+	if err != nil {
+		s.logError(r, "web analytics query failed", err)
+		writeError(w, http.StatusInternalServerError, "web_analytics_failed")
+		return
+	}
+	if snapshot.Property != nil {
+		token, err := s.WebTokens.Issue(webanalytics.TokenClaims{
+			WorkspaceID: current.WorkspaceID,
+			PropertyID:  snapshot.Property.ID,
+			Version:     snapshot.Property.TokenVersion,
+		})
+		if err != nil {
+			s.logError(r, "web analytics token issue failed", err)
+			writeError(
+				w,
+				http.StatusInternalServerError,
+				"web_analytics_token_failed",
+			)
+			return
+		}
+		snapshot.Property.TrackingToken = token
+	}
+	mode := "empty"
+	if snapshot.Property != nil &&
+		(snapshot.Totals.Pageviews > 0 || snapshot.Crawlers.Requests > 0) {
+		mode = "live"
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"data": snapshot,
+		"meta": map[string]any{
+			"mode":                     mode,
+			"windowDays":               windowDays,
+			"externalMutationsAllowed": false,
+			"privacy": map[string]any{
+				"storesIPAddress": false,
+				"defaultStorage":  "session",
+			},
+		},
+	})
+}
+
+func (s *Server) createWebProperty(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	current := currentAuth(r)
+	if current.Role != "owner" && current.Role != "admin" {
+		writeError(w, http.StatusForbidden, "admin_required")
+		return
+	}
+	var input struct {
+		Name   string `json:"name"`
+		Domain string `json:"domain"`
+	}
+	if err := decodeJSON(w, r, &input); err != nil {
+		return
+	}
+	input.Name = strings.TrimSpace(input.Name)
+	input.Domain = webanalytics.NormalizeHostname(input.Domain)
+	if len(input.Name) < 1 ||
+		len(input.Name) > 120 ||
+		!validAnalyticsDomain(input.Domain) {
+		writeError(w, http.StatusBadRequest, "invalid_web_property")
+		return
+	}
+	property, err := s.DB.CreateWebProperty(
+		r.Context(),
+		current.WorkspaceID,
+		input.Name,
+		input.Domain,
+	)
+	if errors.Is(err, database.ErrConflict) {
+		writeError(w, http.StatusConflict, "web_property_exists")
+		return
+	}
+	if err != nil {
+		s.logError(r, "web property creation failed", err)
+		writeError(w, http.StatusInternalServerError, "web_property_failed")
+		return
+	}
+	token, err := s.WebTokens.Issue(webanalytics.TokenClaims{
+		WorkspaceID: current.WorkspaceID,
+		PropertyID:  property.ID,
+		Version:     property.TokenVersion,
+	})
+	if err != nil {
+		s.logError(r, "web analytics token issue failed", err)
+		writeError(
+			w,
+			http.StatusInternalServerError,
+			"web_analytics_token_failed",
+		)
+		return
+	}
+	property.TrackingToken = token
+	_ = s.DB.Audit(
+		r.Context(),
+		current.WorkspaceID,
+		current.UserID,
+		"web_property.created",
+		"web_property",
+		property.ID,
+		map[string]any{"domain": property.Domain},
+	)
+	writeJSON(w, http.StatusCreated, map[string]any{
+		"data": property,
+		"meta": map[string]any{
+			"storesIPAddress": false,
+			"defaultStorage":  "session",
+		},
+	})
+}
+
+func (s *Server) collectWebEvent(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Token       string `json:"token"`
+		EventID     string `json:"eventId"`
+		Kind        string `json:"kind"`
+		VisitorID   string `json:"visitorId"`
+		SessionID   string `json:"sessionId"`
+		OccurredAt  string `json:"occurredAt"`
+		Hostname    string `json:"hostname"`
+		Path        string `json:"path"`
+		Referrer    string `json:"referrer"`
+		UTMSource   string `json:"utmSource"`
+		UTMMedium   string `json:"utmMedium"`
+		UTMCampaign string `json:"utmCampaign"`
+		UTMTerm     string `json:"utmTerm"`
+		UTMContent  string `json:"utmContent"`
+		DurationMS  *int   `json:"durationMs"`
+		Goal        string `json:"goal"`
+	}
+	if err := decodeAnalyticsJSON(w, r, &input); err != nil {
+		return
+	}
+	claims, err := s.WebTokens.Parse(input.Token)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "invalid_tracking_token")
+		return
+	}
+	if _, err := uuid.Parse(input.EventID); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_analytics_event")
+		return
+	}
+	if _, err := uuid.Parse(input.VisitorID); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_analytics_event")
+		return
+	}
+	if _, err := uuid.Parse(input.SessionID); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_analytics_event")
+		return
+	}
+	if input.Kind != "page_view" &&
+		input.Kind != "engagement" &&
+		input.Kind != "conversion" {
+		writeError(w, http.StatusBadRequest, "invalid_analytics_event")
+		return
+	}
+	occurredAt := analyticsOccurredAt(input.OccurredAt, s.Now().UTC())
+	path, ok := analyticsPath(input.Path)
+	if !ok ||
+		!validAnalyticsDomain(webanalytics.NormalizeHostname(input.Hostname)) {
+		writeError(w, http.StatusBadRequest, "invalid_analytics_event")
+		return
+	}
+	if input.DurationMS != nil &&
+		(*input.DurationMS < 0 || *input.DurationMS > 86_400_000) {
+		writeError(w, http.StatusBadRequest, "invalid_analytics_event")
+		return
+	}
+	utmSource := analyticsText(input.UTMSource, 120)
+	utmMedium := analyticsText(input.UTMMedium, 120)
+	source := webanalytics.ClassifyAcquisition(
+		input.Referrer,
+		utmSource,
+		utmMedium,
+	)
+	source.Source = analyticsText(source.Source, 120)
+	device := webanalytics.ParseClientDevice(r.Header.Get("User-Agent"))
+	country := analyticsCountry(r.Header.Get("X-AppClimb-Country"))
+	_, err = s.DB.RecordWebEvent(
+		r.Context(),
+		claims,
+		database.WebEventInput{
+			EventID:        input.EventID,
+			Kind:           input.Kind,
+			VisitorID:      input.VisitorID,
+			SessionID:      input.SessionID,
+			OccurredAt:     occurredAt,
+			Hostname:       input.Hostname,
+			Path:           path,
+			ReferrerHost:   source.ReferrerHost,
+			Source:         source.Source,
+			Channel:        source.Channel,
+			UTMSource:      utmSource,
+			UTMMedium:      utmMedium,
+			UTMCampaign:    analyticsText(input.UTMCampaign, 160),
+			UTMTerm:        analyticsText(input.UTMTerm, 160),
+			UTMContent:     analyticsText(input.UTMContent, 160),
+			CountryCode:    country,
+			Browser:        device.Browser,
+			OS:             device.OS,
+			Device:         device.Device,
+			DurationMS:     input.DurationMS,
+			ConversionGoal: analyticsText(input.Goal, 120),
+		},
+	)
+	if errors.Is(err, database.ErrNotFound) ||
+		errors.Is(err, database.ErrPropertyDomainMismatch) {
+		writeError(w, http.StatusUnauthorized, "invalid_tracking_token")
+		return
+	}
+	if err != nil {
+		s.logError(r, "web analytics collection failed", err)
+		writeError(w, http.StatusInternalServerError, "collection_failed")
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func (s *Server) collectWebCrawlerEvent(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	var input struct {
+		Token      string `json:"token"`
+		EventID    string `json:"eventId"`
+		OccurredAt string `json:"occurredAt"`
+		Hostname   string `json:"hostname"`
+		Path       string `json:"path"`
+	}
+	if err := decodeAnalyticsJSON(w, r, &input); err != nil {
+		return
+	}
+	claims, err := s.WebTokens.Parse(input.Token)
+	if err != nil {
+		writeError(w, http.StatusUnauthorized, "invalid_tracking_token")
+		return
+	}
+	if _, err := uuid.Parse(input.EventID); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_crawler_event")
+		return
+	}
+	path, ok := analyticsPath(input.Path)
+	if !ok ||
+		!validAnalyticsDomain(webanalytics.NormalizeHostname(input.Hostname)) {
+		writeError(w, http.StatusBadRequest, "invalid_crawler_event")
+		return
+	}
+	userAgent := r.Header.Get("X-AppClimb-Original-User-Agent")
+	if userAgent == "" {
+		userAgent = r.Header.Get("User-Agent")
+	}
+	crawler, ok := webanalytics.ClassifyCrawler(userAgent)
+	if !ok {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	_, err = s.DB.RecordWebCrawlerEvent(
+		r.Context(),
+		claims,
+		database.WebCrawlerEventInput{
+			EventID:    input.EventID,
+			OccurredAt: analyticsOccurredAt(input.OccurredAt, s.Now().UTC()),
+			Hostname:   input.Hostname,
+			Path:       path,
+			Provider:   crawler.Provider,
+			Agent:      crawler.Agent,
+			Category:   crawler.Category,
+			CountryCode: analyticsCountry(
+				r.Header.Get("X-AppClimb-Country"),
+			),
+		},
+	)
+	if errors.Is(err, database.ErrNotFound) ||
+		errors.Is(err, database.ErrPropertyDomainMismatch) {
+		writeError(w, http.StatusUnauthorized, "invalid_tracking_token")
+		return
+	}
+	if err != nil {
+		s.logError(r, "crawler analytics collection failed", err)
+		writeError(w, http.StatusInternalServerError, "collection_failed")
+		return
+	}
+	w.WriteHeader(http.StatusAccepted)
+}
+
+func decodeAnalyticsJSON(
+	w http.ResponseWriter,
+	r *http.Request,
+	target any,
+) error {
+	r.Body = http.MaxBytesReader(w, r.Body, maxAnalyticsBody)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid_json")
+		return err
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		writeError(w, http.StatusBadRequest, "invalid_json")
+		return errors.New("request body contains multiple JSON values")
+	}
+	return nil
+}
+
+func analyticsOccurredAt(raw string, now time.Time) time.Time {
+	parsed, err := time.Parse(time.RFC3339Nano, raw)
+	if err != nil ||
+		parsed.Before(now.Add(-24*time.Hour)) ||
+		parsed.After(now.Add(5*time.Minute)) {
+		return now
+	}
+	return parsed.UTC()
+}
+
+func analyticsPath(raw string) (string, bool) {
+	if raw == "" {
+		raw = "/"
+	}
+	if !strings.HasPrefix(raw, "/") || len(raw) > 2048 {
+		return "", false
+	}
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.IsAbs() {
+		return "", false
+	}
+	path := parsed.EscapedPath()
+	if path == "" {
+		path = "/"
+	}
+	if len(path) > 2048 {
+		return "", false
+	}
+	return path, true
+}
+
+func analyticsText(value string, limit int) string {
+	value = strings.TrimSpace(value)
+	runes := []rune(value)
+	if len(runes) > limit {
+		value = string(runes[:limit])
+	}
+	return value
+}
+
+func analyticsCountry(value string) string {
+	value = strings.ToUpper(strings.TrimSpace(value))
+	if len(value) != 2 {
+		return ""
+	}
+	for _, character := range value {
+		if character < 'A' || character > 'Z' {
+			return ""
+		}
+	}
+	return value
+}
+
+func validAnalyticsDomain(domain string) bool {
+	if domain == "localhost" {
+		return true
+	}
+	if len(domain) < 3 ||
+		len(domain) > 253 ||
+		strings.ContainsAny(domain, " /:@?#") ||
+		!strings.Contains(domain, ".") {
+		return false
+	}
+	parsed, err := url.Parse("https://" + domain)
+	return err == nil &&
+		parsed.Hostname() == domain &&
+		parsed.Port() == ""
 }
 
 func (s *Server) createCheckoutBinding(

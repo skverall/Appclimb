@@ -5,6 +5,7 @@ import {
   Activity,
   CheckCircle2,
   ChevronRight,
+  Code2,
   CreditCard,
   ExternalLink,
   FlaskConical,
@@ -21,6 +22,7 @@ import {
 import Link from "next/link";
 
 import { logout } from "@/app/actions";
+import { AcquisitionAtlas } from "@/components/acquisition-atlas";
 import { BrandMark } from "@/components/brand-mark";
 import { ModalDialog } from "@/components/modal-dialog";
 import { PlanCheckout } from "@/components/plan-checkout";
@@ -73,6 +75,7 @@ export function AppClimbShell({
   initialSnapshot,
   initialSection = "pulse",
   initialInsightId,
+  initialPulseProjection = "growth",
   session,
   privateSessionExpected = false,
   trialDaysRemaining,
@@ -80,6 +83,7 @@ export function AppClimbShell({
   initialSnapshot: DashboardSnapshot;
   initialSection?: WorkspaceSection;
   initialInsightId?: string;
+  initialPulseProjection?: "growth" | "acquisition";
   session?: BackendIdentity;
   privateSessionExpected?: boolean;
   trialDaysRemaining?: number;
@@ -113,6 +117,9 @@ export function AppClimbShell({
   >(initialSnapshot.sources);
   const [latestCreatedExperimentId, setLatestCreatedExperimentId] =
     useState("");
+  const [pulseProjection, setPulseProjection] = useState<
+    "growth" | "acquisition"
+  >(initialPulseProjection);
 
   const selectedInsight = useMemo<Insight | undefined>(
     () =>
@@ -155,6 +162,24 @@ export function AppClimbShell({
     [insightIds, selectedInsightId, updateWorkspaceUrl],
   );
 
+  const selectPulseProjection = useCallback(
+    (projection: "growth" | "acquisition") => {
+      setPulseProjection(projection);
+      const url = new URL(window.location.href);
+      if (projection === "acquisition") {
+        url.searchParams.set("atlas", "1");
+      } else {
+        url.searchParams.delete("atlas");
+      }
+      window.history.pushState(
+        null,
+        "",
+        `${url.pathname}${url.search}${url.hash}`,
+      );
+    },
+    [],
+  );
+
   const selectInsight = useCallback(
     (insightId: string) => {
       const nextInsightId = workspaceInsightFromValue(insightId, insightIds);
@@ -176,6 +201,9 @@ export function AppClimbShell({
       );
       setActiveSection(section);
       setSelectedInsightId(insightId);
+      setPulseProjection(
+        params.get("atlas") === "1" ? "acquisition" : "growth",
+      );
     };
 
     window.addEventListener("popstate", restoreWorkspaceLocation);
@@ -526,6 +554,36 @@ export function AppClimbShell({
         </header>
 
         <main className="workspace-content">
+          {activeSection === "pulse" &&
+            initialSnapshot.mode !== "unavailable" &&
+            initialSnapshot.mode !== "restricted" && (
+              <div
+                className="pulse-projection-switch"
+                role="tablist"
+                aria-label="Pulse projection"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={pulseProjection === "growth"}
+                  className={pulseProjection === "growth" ? "active" : ""}
+                  onClick={() => selectPulseProjection("growth")}
+                >
+                  <Gauge size={14} /> Growth River
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={pulseProjection === "acquisition"}
+                  className={
+                    pulseProjection === "acquisition" ? "active" : ""
+                  }
+                  onClick={() => selectPulseProjection("acquisition")}
+                >
+                  <Code2 size={14} /> Acquisition Atlas
+                </button>
+              </div>
+            )}
           {initialSnapshot.mode === "unavailable" ? (
             <UnavailableWorkspaceView onRetry={retryWorkspace} />
           ) : initialSnapshot.mode === "restricted" &&
@@ -533,6 +591,12 @@ export function AppClimbShell({
             <RestrictedWorkspaceView
               onOpenBilling={() => setBillingOpen(true)}
               onOpenSources={() => navigateTo("sources")}
+            />
+          ) : activeSection === "pulse" &&
+            pulseProjection === "acquisition" ? (
+            <AcquisitionAtlas
+              authenticated={Boolean(session)}
+              demo={initialSnapshot.mode === "demo"}
             />
           ) : activeSection === "pulse" &&
             initialSnapshot.mode === "empty" ? (
