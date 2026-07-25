@@ -110,3 +110,20 @@ is retained only as a compatibility proxy.
 
 The privacy, terms and refund pages describe the implemented product behavior.
 Independent legal review remains a launch-owner responsibility.
+
+## Organic discovery
+
+Public discovery is generated from the Next.js App Router:
+
+- `/robots.txt` and `/sitemap.xml` expose canonical, indexable pages.
+- `/manifest.webmanifest`, `/favicon.ico`, `/icon.svg` and the Apple/PWA icons
+  provide consistent browser and search branding.
+- `/opengraph-image` supplies the social preview.
+- `/feed.xml` publishes the editorial RSS feed.
+- `/llms.txt` and `/pricing.md` expose factual, machine-readable product status
+  and pricing for non-Google agents. Google does not use these files as a
+  ranking signal.
+- Production deploys notify IndexNow after the canonical sitemap is live.
+
+The topic map, visibility baseline, authority pipeline and publishing checklist
+live in [`marketing/organic-growth`](./marketing/organic-growth/README.md).

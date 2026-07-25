@@ -308,7 +308,10 @@ export function AppClimbShell({
   };
 
   return (
-    <div className="app-shell">
+    <div
+      className="app-shell"
+      data-nosnippet={initialSnapshot.mode === "demo" ? "" : undefined}
+    >
       <aside className="sidebar">
         <div>
           <BrandMark />
@@ -347,6 +350,15 @@ export function AppClimbShell({
         </div>
 
         <div className="sidebar-footer">
+          {!session && !sessionUnavailable && (
+            <nav
+              className="demo-resource-links"
+              aria-label="Learn about AppClimb"
+            >
+              <Link href="/ios-subscription-analytics">Product</Link>
+              <Link href="/guides/ios-subscription-growth">Growth guide</Link>
+            </nav>
+          )}
           <div className="trial-card">
             <div>
               <span className="eyebrow">
@@ -782,6 +794,8 @@ export function AppClimbShell({
             </li>
           </ol>
           <div className="settings-legal">
+            <Link href="/guides/ios-subscription-growth">Growth guide</Link>
+            <Link href="/blog">Field notes</Link>
             <Link href="/pricing">Pricing</Link>
             <Link href="/privacy">Privacy</Link>
             <Link href="/terms">Terms</Link>

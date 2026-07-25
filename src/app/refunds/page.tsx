@@ -1,6 +1,10 @@
 import Link from "next/link";
 
-export const metadata = { title: "Refund policy" };
+export const metadata = {
+  title: "Refund policy",
+  description: "AppClimb refund policy for subscriptions billed by Paddle.",
+  alternates: { canonical: "/refunds" },
+};
 
 export default function RefundPolicyPage() {
   return (

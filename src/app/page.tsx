@@ -1,4 +1,5 @@
 import { AppClimbShell } from "@/components/app-climb-shell";
+import type { Metadata } from "next";
 import type { DashboardSnapshot } from "@/lib/contracts";
 import {
   backendSessionPresence,
@@ -15,6 +16,15 @@ import {
 import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "AppClimb — Visual growth diagnosis for iOS subscription apps",
+  description:
+    "Explore an interactive River Atlas demo that maps acquisition, activation, paywall, subscription, and retention evidence into one growth journey.",
+  alternates: {
+    canonical: "/",
+  },
+};
 
 interface GrowthEnvelope {
   data?: DashboardSnapshot;

@@ -1,0 +1,16 @@
+cluster,query,intent,buyer_stage,target_url,status,search_volume,priority,notes
+iOS subscription analytics,iOS subscription analytics,commercial,consideration,/ios-subscription-analytics,published,unverified,P0,Primary category page
+iOS subscription analytics,subscription analytics for iOS apps,commercial,consideration,/ios-subscription-analytics,published,unverified,P0,Semantic variant handled by the same page
+iOS subscription analytics,mobile app subscription analytics,commercial,consideration,/ios-subscription-analytics,published,unverified,P0,Avoid creating a thin exact-match duplicate
+Growth diagnosis,how to analyze an iOS subscription funnel,informational,awareness,/guides/ios-subscription-growth,published,unverified,P0,Definitive hub
+Growth diagnosis,iOS app growth bottleneck,informational,awareness,/guides/ios-subscription-growth,published,unverified,P1,Needs real case evidence after Stage 1
+Analytics stack,iOS subscription analytics stack,informational,consideration,/blog/ios-subscription-analytics-stack,published,unverified,P0,Source-of-truth differentiation
+Analytics stack,RevenueCat PostHog analytics stack,informational,implementation,/blog/ios-subscription-analytics-stack,published,unverified,P0,Future dedicated article only with safe identity examples
+Analytics stack,App Store Connect RevenueCat PostHog Superwall,informational,implementation,/blog/ios-subscription-analytics-stack,published,unverified,P1,Provider fan-out query
+App Store acquisition,App Store conversion rate formula,informational,awareness,/blog/app-store-conversion-rate,published,unverified,P0,Corrects the denominator misconception
+App Store acquisition,what is a good App Store conversion rate,informational,awareness,/blog/app-store-conversion-rate,published,unverified,P0,Answer with Apple peer groups not a fabricated universal number
+Activation,how to define activation for a mobile app,informational,implementation,/blog/define-ios-app-activation,planned,unverified,P0,Next article
+Subscription conversion,how to improve trial to paid conversion iOS,informational,implementation,/blog/diagnose-trial-to-paid-conversion,planned,unverified,P1,Keep paywall and billing evidence separate
+Experiment design,mobile app experiment guardrail metrics,informational,implementation,/blog/mobile-app-experiment-guardrails,planned,unverified,P1,Supports Lab workflow
+Identity,RevenueCat PostHog user identity mapping,informational,implementation,/blog/revenuecat-posthog-identity,planned,unverified,P1,High trust technical article
+Brand,AppClimb,brand,decision,/,published,unverified,P0,Root is already discoverable in the reviewed search snapshot

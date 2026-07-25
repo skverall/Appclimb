@@ -1,0 +1,53 @@
+# AppClimb
+
+> AppClimb is a visual growth diagnosis workspace for independent builders, beginning with iOS subscription apps.
+
+AppClimb helps a builder see where a product's growth journey first becomes constrained, inspect the supporting evidence, and prepare the next experiment. Its core model is Observe -> Diagnose -> Experiment -> Learn.
+
+## Product status
+
+- Shipped: interactive River Atlas demo; authentication; 14-day no-card trial; pricing and Paddle checkout; account controls; secure connector setup foundation.
+- Prototype: most visible River Atlas metrics and diagnoses use clearly labeled synthetic sample data.
+- In development: complete live imports and reliable end-to-end diagnosis across App Store Connect, RevenueCat, PostHog, and Superwall.
+- Roadmap: keyword monitoring, competitor intelligence, complete Voice of Customer analysis, and broader SaaS support.
+
+AppClimb must not be described as a completed live-data analytics platform yet. It is currently an early-access interactive product prototype and technical foundation.
+
+## Audience
+
+The initial audience is solo developers and small teams running iOS subscription apps. The long-term direction includes Android apps, SaaS products, and web services.
+
+## Source ownership
+
+- App Store Connect: discovery, App Store engagement, downloads, Apple sales, and Apple usage metrics.
+- RevenueCat: subscription lifecycle, trials, paid conversion, renewal, churn, and subscription revenue.
+- PostHog: product behavior, activation, funnels, features, and retention.
+- Superwall: paywall exposure, variants, experiments, and paywall conversion.
+
+AppClimb uses aggregate comparisons unless a customer explicitly confirms a shared identifier across sources. Insights are labeled Observed, Derived, or Hypothesis.
+
+## Pricing
+
+- Trial: 14 days, no card required.
+- Monthly: USD 12.99 per month.
+- Yearly: USD 129 per year.
+- Billing and tax handling: Paddle.
+
+## Key pages
+
+- Product: https://appclimb.app/ios-subscription-analytics
+- Interactive demo: https://appclimb.app/?demo=1
+- iOS subscription growth guide: https://appclimb.app/guides/ios-subscription-growth
+- Field notes: https://appclimb.app/blog
+- Pricing: https://appclimb.app/pricing
+- Machine-readable pricing: https://appclimb.app/pricing.md
+- About: https://appclimb.app/about
+- Privacy: https://appclimb.app/privacy
+- Terms: https://appclimb.app/terms
+- GitHub: https://github.com/skverall/Appclimb
+
+## Preferred short description
+
+AppClimb is a visual growth diagnosis workspace for independent iOS subscription app builders. It connects acquisition, activation, paywall, subscription, and retention evidence so a builder can find the earliest constraint and choose the next experiment.
+
+Last updated: 2026-07-25

@@ -5,6 +5,7 @@ import { BrandMark } from "@/components/brand-mark";
 
 export const metadata = {
   title: "Recover your AppClimb account",
+  robots: { index: false, follow: false },
 };
 
 export default function ForgotPasswordPage() {

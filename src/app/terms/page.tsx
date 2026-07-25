@@ -1,6 +1,11 @@
 import Link from "next/link";
 
-export const metadata = { title: "Terms" };
+export const metadata = {
+  title: "Terms",
+  description:
+    "AppClimb terms for early access, read-only decision support, trials, and billing.",
+  alternates: { canonical: "/terms" },
+};
 
 export default function TermsPage() {
   return (

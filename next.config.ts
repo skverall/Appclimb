@@ -18,6 +18,15 @@ const contentSecurityPolicy = [
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
+  async redirects() {
+    return [
+      {
+        source: "/blog/what-is-app-store-conversion-rate.html",
+        destination: "/blog/app-store-conversion-rate",
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {

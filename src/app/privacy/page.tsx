@@ -1,6 +1,11 @@
 import Link from "next/link";
 
-export const metadata = { title: "Privacy" };
+export const metadata = {
+  title: "Privacy",
+  description:
+    "How AppClimb protects source credentials, limits identity joins, and handles deletion.",
+  alternates: { canonical: "/privacy" },
+};
 
 export default function PrivacyPage() {
   return (

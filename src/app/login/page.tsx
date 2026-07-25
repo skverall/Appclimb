@@ -6,6 +6,7 @@ import { BrandMark } from "@/components/brand-mark";
 
 export const metadata = {
   title: "Create an account or sign in",
+  robots: { index: false, follow: false },
 };
 
 export default function LoginPage() {
