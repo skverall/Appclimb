@@ -440,6 +440,9 @@ func (db *DB) ChangePassword(
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if err := setWorkspaceContext(ctx, tx, workspaceID); err != nil {
+		return err
+	}
 	result, err := tx.Exec(
 		ctx,
 		`update users u
@@ -563,6 +566,9 @@ func (db *DB) ConsumePasswordReset(
 		return ErrPasswordResetInvalid
 	}
 	if err != nil {
+		return err
+	}
+	if err := setWorkspaceContext(ctx, tx, workspaceID); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(

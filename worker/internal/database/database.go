@@ -144,6 +144,20 @@ func (db *DB) WithWorkspace(
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if err := setWorkspaceContext(ctx, tx, workspaceID); err != nil {
+		return err
+	}
+	if err := fn(tx); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func setWorkspaceContext(
+	ctx context.Context,
+	tx pgx.Tx,
+	workspaceID string,
+) error {
 	if _, err := tx.Exec(
 		ctx,
 		"select set_config('app.workspace_id', $1, true)",
@@ -151,8 +165,5 @@ func (db *DB) WithWorkspace(
 	); err != nil {
 		return fmt.Errorf("set workspace context: %w", err)
 	}
-	if err := fn(tx); err != nil {
-		return err
-	}
-	return tx.Commit(ctx)
+	return nil
 }
