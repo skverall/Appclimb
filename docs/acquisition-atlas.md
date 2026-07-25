@@ -75,12 +75,18 @@ Current crawler categories include answer retrieval, search indexing, and model
 training. A provider label means the request user agent matched a maintained
 rule; it is not yet proof that the source IP belongs to that provider.
 
-The category tabs scope the headline count and the daily chart. The provider
-and requested-page breakdowns are aggregated across all categories, and the
-Atlas labels them that way, because `/v1/web-analytics` returns those two
-rollups without a category dimension. Scoping them per category needs a backend
-change in `worker/internal/database/webanalytics.go` and a matching field in
-`CrawlerSnapshot`; do not present them as category-specific until then.
+The category tabs scope the headline count, the daily chart, and the provider
+and requested-page rollups. Provider share is relative to the selected
+category, not to all crawler traffic, and each category is ranked
+independently so a busy category cannot crowd the others out of a shared row
+limit.
+
+`category` is optional on those two rollups in `CrawlerSnapshot` because the
+Vercel frontend and the Hostinger Go API deploy separately. When the field is
+absent — an API released before this change — the Atlas shows the rows
+unfiltered and labels both sections "all categories" rather than implying a
+scope the numbers do not have. Remove the fallback only after every deployed
+API returns the field.
 
 AppClimb does not persist visitor IP addresses. The browser tracker respects Do
 Not Track and uses session storage by default. Persistent storage is available

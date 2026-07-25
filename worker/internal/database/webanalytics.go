@@ -108,14 +108,19 @@ type WebVisitorRow struct {
 	Converted   bool      `json:"converted"`
 }
 
+// Provider and page rollups carry their crawler category so the Atlas can
+// scope them to the selected tab. Share is relative to the category, not to
+// all crawler traffic.
 type WebCrawlerProvider struct {
 	Provider string  `json:"provider"`
+	Category string  `json:"category"`
 	Requests int     `json:"requests"`
 	Share    float64 `json:"share"`
 }
 
 type WebCrawlerPage struct {
 	Path     string `json:"path"`
+	Category string `json:"category"`
 	Requests int    `json:"requests"`
 }
 
@@ -894,25 +899,35 @@ func loadCrawlerSnapshot(
 	}
 	seriesRows.Close()
 
+	// Ranked per category rather than globally, so a busy category cannot
+	// crowd the others out of a single flat limit.
 	providerRows, err := tx.Query(
 		ctx,
-		`select
-		   provider,
-		   count(*)::int,
-		   coalesce(
-		     count(*)::float8 / nullif(
-		       sum(count(*)) over(),
+		`select provider, category, requests, share
+		 from (
+		   select
+		     provider,
+		     category::text as category,
+		     count(*)::int as requests,
+		     coalesce(
+		       count(*)::float8 / nullif(
+		         sum(count(*)) over(partition by category),
+		         0
+		       ),
 		       0
-		     ),
-		     0
-		   )
-		 from web_crawler_events
-		 where property_id=$1
-		   and occurred_at >= $2
-		   and occurred_at <= $3
-		 group by provider
-		 order by count(*) desc, provider
-		 limit 10`,
+		     ) as share,
+		     row_number() over(
+		       partition by category
+		       order by count(*) desc, provider
+		     ) as position
+		   from web_crawler_events
+		   where property_id=$1
+		     and occurred_at >= $2
+		     and occurred_at <= $3
+		   group by provider, category
+		 ) ranked
+		 where position <= 8
+		 order by category, requests desc, provider`,
 		propertyID,
 		from,
 		now,
@@ -924,6 +939,7 @@ func loadCrawlerSnapshot(
 		var item WebCrawlerProvider
 		if err := providerRows.Scan(
 			&item.Provider,
+			&item.Category,
 			&item.Requests,
 			&item.Share,
 		); err != nil {
@@ -940,14 +956,24 @@ func loadCrawlerSnapshot(
 
 	pageRows, err := tx.Query(
 		ctx,
-		`select path, count(*)::int
-		 from web_crawler_events
-		 where property_id=$1
-		   and occurred_at >= $2
-		   and occurred_at <= $3
-		 group by path
-		 order by count(*) desc, path
-		 limit 10`,
+		`select path, category, requests
+		 from (
+		   select
+		     path,
+		     category::text as category,
+		     count(*)::int as requests,
+		     row_number() over(
+		       partition by category
+		       order by count(*) desc, path
+		     ) as position
+		   from web_crawler_events
+		   where property_id=$1
+		     and occurred_at >= $2
+		     and occurred_at <= $3
+		   group by path, category
+		 ) ranked
+		 where position <= 8
+		 order by category, requests desc, path`,
 		propertyID,
 		from,
 		now,
@@ -957,7 +983,11 @@ func loadCrawlerSnapshot(
 	}
 	for pageRows.Next() {
 		var item WebCrawlerPage
-		if err := pageRows.Scan(&item.Path, &item.Requests); err != nil {
+		if err := pageRows.Scan(
+			&item.Path,
+			&item.Category,
+			&item.Requests,
+		); err != nil {
 			pageRows.Close()
 			return err
 		}

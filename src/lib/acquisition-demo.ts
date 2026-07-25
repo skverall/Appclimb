@@ -402,23 +402,104 @@ export const demoAcquisitionSnapshot: AcquisitionSnapshot = {
       { date: "2026-07-24", category: "model_training", requests: 6 },
       { date: "2026-07-25", category: "model_training", requests: 5 },
     ],
+    // Requests per category sum to the category totals below; share is
+    // relative to the provider's own category.
     providers: [
-      { provider: "ChatGPT", requests: 95, share: 0.422 },
-      { provider: "OpenAI", requests: 48, share: 0.213 },
-      { provider: "Google", requests: 44, share: 0.196 },
-      { provider: "Perplexity", requests: 24, share: 0.107 },
-      { provider: "Anthropic", requests: 14, share: 0.062 },
+      {
+        provider: "ChatGPT",
+        category: "ai_answer",
+        requests: 52,
+        share: 0.547,
+      },
+      { provider: "OpenAI", category: "ai_answer", requests: 18, share: 0.189 },
+      {
+        provider: "Perplexity",
+        category: "ai_answer",
+        requests: 11,
+        share: 0.116,
+      },
+      { provider: "Google", category: "ai_answer", requests: 10, share: 0.105 },
+      {
+        provider: "Anthropic",
+        category: "ai_answer",
+        requests: 4,
+        share: 0.042,
+      },
+      {
+        provider: "ChatGPT",
+        category: "search_index",
+        requests: 28,
+        share: 0.389,
+      },
+      {
+        provider: "Google",
+        category: "search_index",
+        requests: 22,
+        share: 0.306,
+      },
+      {
+        provider: "OpenAI",
+        category: "search_index",
+        requests: 16,
+        share: 0.222,
+      },
+      {
+        provider: "Perplexity",
+        category: "search_index",
+        requests: 6,
+        share: 0.083,
+      },
+      {
+        provider: "ChatGPT",
+        category: "model_training",
+        requests: 15,
+        share: 0.259,
+      },
+      {
+        provider: "OpenAI",
+        category: "model_training",
+        requests: 14,
+        share: 0.241,
+      },
+      {
+        provider: "Google",
+        category: "model_training",
+        requests: 12,
+        share: 0.207,
+      },
+      {
+        provider: "Anthropic",
+        category: "model_training",
+        requests: 10,
+        share: 0.172,
+      },
+      {
+        provider: "Perplexity",
+        category: "model_training",
+        requests: 7,
+        share: 0.121,
+      },
     ],
     pages: [
-      { path: "/pricing", requests: 38 },
-      { path: "/", requests: 29 },
-      { path: "/features", requests: 21 },
-      { path: "/blog/best-crm-2024", requests: 18 },
-      { path: "/docs/api/overview", requests: 12 },
-      { path: "/integrations", requests: 11 },
-      { path: "/compare/vs-spreadsheets", requests: 9 },
-      { path: "/changelog", requests: 7 },
-      { path: "/about", requests: 6 },
+      { path: "/pricing", category: "ai_answer", requests: 18 },
+      { path: "/", category: "ai_answer", requests: 13 },
+      { path: "/features", category: "ai_answer", requests: 10 },
+      { path: "/blog/best-crm-2024", category: "ai_answer", requests: 8 },
+      { path: "/compare/vs-spreadsheets", category: "ai_answer", requests: 6 },
+      { path: "/docs/api/overview", category: "ai_answer", requests: 5 },
+      { path: "/pricing", category: "search_index", requests: 12 },
+      { path: "/", category: "search_index", requests: 10 },
+      { path: "/features", category: "search_index", requests: 7 },
+      { path: "/blog/best-crm-2024", category: "search_index", requests: 6 },
+      { path: "/integrations", category: "search_index", requests: 5 },
+      { path: "/changelog", category: "search_index", requests: 4 },
+      { path: "/about", category: "search_index", requests: 3 },
+      { path: "/pricing", category: "model_training", requests: 8 },
+      { path: "/docs/api/overview", category: "model_training", requests: 7 },
+      { path: "/", category: "model_training", requests: 6 },
+      { path: "/integrations", category: "model_training", requests: 6 },
+      { path: "/features", category: "model_training", requests: 4 },
+      { path: "/blog/best-crm-2024", category: "model_training", requests: 4 },
     ],
     categories: [
       { category: "ai_answer", requests: 95 },
@@ -531,10 +612,6 @@ export function demoAcquisitionSnapshotForWindow(
     crawlerRequests,
     base.crawlers.categories.map((entry) => entry.requests),
   );
-  const crawlerProviders = distribute(
-    crawlerRequests,
-    base.crawlers.providers.map((entry) => entry.requests),
-  );
 
   const categoryTotals = new Map<CrawlerCategory, number>(
     base.crawlers.categories.map((entry, index) => [
@@ -542,6 +619,28 @@ export function demoAcquisitionSnapshotForWindow(
       crawlerCategories[index],
     ]),
   );
+
+  // Providers are split inside their own category, so each tab's rows still
+  // add up to the headline count for that tab.
+  const crawlerProviders = new Array<number>(base.crawlers.providers.length);
+  const providerGroups = new Map<CrawlerCategory | "", number[]>();
+  base.crawlers.providers.forEach((provider, index) => {
+    const key = provider.category ?? "";
+    providerGroups.set(key, [...(providerGroups.get(key) ?? []), index]);
+  });
+  providerGroups.forEach((indexes, key) => {
+    const groupTotal =
+      key === ""
+        ? crawlerRequests
+        : (categoryTotals.get(key as CrawlerCategory) ?? 0);
+    const parts = distribute(
+      groupTotal,
+      indexes.map((index) => base.crawlers.providers[index].requests),
+    );
+    indexes.forEach((index, position) => {
+      crawlerProviders[index] = parts[position];
+    });
+  });
   const crawlerSeries = [...categoryTotals.entries()].flatMap(
     ([category, total]) => {
       const shape = series.map((point) => point.visitors);
@@ -611,21 +710,21 @@ export function demoAcquisitionSnapshotForWindow(
         ...entry,
         requests: crawlerCategories[index],
       })),
-      providers: base.crawlers.providers.map((entry, index) => ({
-        ...entry,
-        requests: crawlerProviders[index],
-        share:
-          crawlerRequests > 0 ? crawlerProviders[index] / crawlerRequests : 0,
-      })),
-      pages: base.crawlers.pages.map((page, index) => ({
+      providers: base.crawlers.providers.map((entry, index) => {
+        const groupTotal = entry.category
+          ? (categoryTotals.get(entry.category) ?? 0)
+          : crawlerRequests;
+        return {
+          ...entry,
+          requests: crawlerProviders[index],
+          share: groupTotal > 0 ? crawlerProviders[index] / groupTotal : 0,
+        };
+      }),
+      // Requested pages are a top-N slice rather than an exhaustive split, so
+      // they scale proportionally without an exact-sum constraint.
+      pages: base.crawlers.pages.map((page) => ({
         ...page,
-        requests: distribute(
-          Math.round(
-            base.crawlers.pages.reduce((sum, row) => sum + row.requests, 0) *
-              ratio,
-          ),
-          base.crawlers.pages.map((row) => row.requests),
-        )[index],
+        requests: Math.max(1, Math.round(page.requests * ratio)),
       })),
     },
   };

@@ -68,6 +68,39 @@ describe("acquisition snapshots", () => {
     }
   });
 
+  it("keeps crawler providers adding up inside their own category", () => {
+    for (const windowDays of [7, 30, 90] as const) {
+      const { crawlers } = demoAcquisitionSnapshotForWindow(windowDays);
+
+      for (const { category, requests } of crawlers.categories) {
+        const scoped = crawlers.providers.filter(
+          (provider) => provider.category === category,
+        );
+        expect(scoped.length).toBeGreaterThan(0);
+        expect(
+          scoped.reduce((sum, provider) => sum + provider.requests, 0),
+        ).toBe(requests);
+        // The authored seven-day shares are rounded to three decimals, so
+        // they land near one rather than exactly on it.
+        expect(
+          scoped.reduce((sum, provider) => sum + provider.share, 0),
+        ).toBeCloseTo(1, 2);
+      }
+
+      // Requested pages are a top-N slice, so they only have to stay within
+      // the category they are attributed to.
+      for (const { category, requests } of crawlers.categories) {
+        const scoped = crawlers.pages.filter(
+          (page) => page.category === category,
+        );
+        expect(scoped.length).toBeGreaterThan(0);
+        expect(
+          scoped.reduce((sum, page) => sum + page.requests, 0),
+        ).toBeLessThanOrEqual(requests);
+      }
+    }
+  });
+
   it("ages demo visitor rows against the snapshot, not wall-clock time", () => {
     const generatedMs = Date.parse(demoAcquisitionSnapshot.generatedAt);
     for (const visitor of demoAcquisitionSnapshot.visitors) {

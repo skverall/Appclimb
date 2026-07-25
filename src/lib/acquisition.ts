@@ -68,6 +68,25 @@ export interface AcquisitionVisitor {
   converted: boolean;
 }
 
+export interface CrawlerProviderRow {
+  provider: string;
+  requests: number;
+  /** Share of its own category, not of all crawler traffic. */
+  share: number;
+  /**
+   * Optional because an API released before the category-scoped rollups
+   * returns these rows aggregated across every category. The Atlas falls back
+   * to labelling them as such when the field is absent.
+   */
+  category?: CrawlerCategory;
+}
+
+export interface CrawlerPageRow {
+  path: string;
+  requests: number;
+  category?: CrawlerCategory;
+}
+
 export interface CrawlerSnapshot {
   requests: number;
   verified: number;
@@ -76,8 +95,8 @@ export interface CrawlerSnapshot {
     category: CrawlerCategory;
     requests: number;
   }[];
-  providers: { provider: string; requests: number; share: number }[];
-  pages: { path: string; requests: number }[];
+  providers: CrawlerProviderRow[];
+  pages: CrawlerPageRow[];
   categories: { category: CrawlerCategory; requests: number }[];
   detectionLabel: string;
 }

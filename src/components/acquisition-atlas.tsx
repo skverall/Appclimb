@@ -910,6 +910,29 @@ function CrawlerCurrent({ snapshot }: { snapshot: AcquisitionSnapshot }) {
   );
 
   /**
+   * An API released before the category-scoped rollups returns these two lists
+   * aggregated across every category. Filtering them by tab would then hide
+   * most rows and imply a scope the numbers do not have, so the card only
+   * scopes them once the data carries a category, and says so either way.
+   */
+  const scopedRollups = snapshot.crawlers.providers.every(
+    (provider) => provider.category !== undefined,
+  );
+  const providers = scopedRollups
+    ? snapshot.crawlers.providers.filter(
+        (provider) => provider.category === tab,
+      )
+    : snapshot.crawlers.providers;
+  const crawlerPages = snapshot.crawlers.pages.every(
+    (page) => page.category !== undefined,
+  )
+    ? snapshot.crawlers.pages.filter((page) => page.category === tab)
+    : snapshot.crawlers.pages;
+  const rollupScopeLabel = scopedRollups
+    ? CRAWLER_TAB_LABELS[tab].toLowerCase()
+    : "all categories";
+
+  /**
    * Trend compares the most recent half of the window with the half before it,
    * which is the only period-over-period comparison this snapshot can support
    * without a second request.
@@ -967,7 +990,10 @@ function CrawlerCurrent({ snapshot }: { snapshot: AcquisitionSnapshot }) {
             type="button"
             role="tab"
             aria-selected={tab === category}
-            onClick={() => setTab(category)}
+            onClick={() => {
+              setTab(category);
+              setPagesExpanded(false);
+            }}
           >
             {CRAWLER_TAB_LABELS[category]}
           </button>
@@ -1027,10 +1053,13 @@ function CrawlerCurrent({ snapshot }: { snapshot: AcquisitionSnapshot }) {
       )}
       <div className="atlas-crawler-details">
         <div>
-          <span>By provider · all categories</span>
-          {snapshot.crawlers.providers.length > 0 ? (
-            snapshot.crawlers.providers.slice(0, 6).map((provider) => (
-              <div className="atlas-provider-row" key={provider.provider}>
+          <span>{`By provider · ${rollupScopeLabel}`}</span>
+          {providers.length > 0 ? (
+            providers.slice(0, 6).map((provider) => (
+              <div
+                className="atlas-provider-row"
+                key={`${provider.category ?? "all"}-${provider.provider}`}
+              >
                 <ProviderGlyph name={provider.provider} />
                 <strong>{provider.provider}</strong>
                 <span>{provider.requests}</span>
@@ -1042,21 +1071,24 @@ function CrawlerCurrent({ snapshot }: { snapshot: AcquisitionSnapshot }) {
           )}
         </div>
         <div>
-          <span>Top requested public pages · all categories</span>
-          {snapshot.crawlers.pages.length > 0 ? (
+          <span>{`Top requested public pages · ${rollupScopeLabel}`}</span>
+          {crawlerPages.length > 0 ? (
             <>
               {(pagesExpanded
-                ? snapshot.crawlers.pages
-                : snapshot.crawlers.pages.slice(0, COLLAPSED_ROWS)
+                ? crawlerPages
+                : crawlerPages.slice(0, COLLAPSED_ROWS)
               ).map((page) => (
-                <div className="atlas-crawler-page" key={page.path}>
+                <div
+                  className="atlas-crawler-page"
+                  key={`${page.category ?? "all"}-${page.path}`}
+                >
                   <strong title={page.path}>{page.path}</strong>
                   <span>{page.requests}</span>
                 </div>
               ))}
               <ExpandRows
                 expanded={pagesExpanded}
-                hidden={snapshot.crawlers.pages.length - COLLAPSED_ROWS}
+                hidden={crawlerPages.length - COLLAPSED_ROWS}
                 label="requested pages"
                 onToggle={() => setPagesExpanded((current) => !current)}
               />
