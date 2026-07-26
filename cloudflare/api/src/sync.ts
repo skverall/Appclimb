@@ -99,6 +99,26 @@ async function upsertMetrics(
   }
 }
 
+async function clearPostHogMetricsWindow(
+  db: D1Database,
+  job: SyncJobRow,
+): Promise<void> {
+  if (job.provider !== "posthog") return;
+  await db
+    .prepare(
+      `DELETE FROM metric_points
+       WHERE workspace_id=? AND app_id=? AND provider='posthog'
+         AND occurred_at>=? AND occurred_at<?`,
+    )
+    .bind(
+      job.workspace_id,
+      job.app_id,
+      job.window_from,
+      job.window_to,
+    )
+    .run();
+}
+
 function retryDelaySeconds(attempt: number): number {
   return Math.min(30 * 60, 15 * 2 ** Math.max(0, Math.min(8, attempt)));
 }
@@ -302,6 +322,7 @@ export async function processSyncMessage(
       new Date(job.window_from),
       new Date(job.window_to),
     );
+    await clearPostHogMetricsWindow(env.DB, job);
     await upsertMetrics(env.DB, job, points);
     await completeSync(env, job, points.length);
     log("info", "source_sync_succeeded", {
