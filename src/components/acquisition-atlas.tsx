@@ -16,6 +16,7 @@ import {
   ExternalLink,
   Filter,
   Globe2,
+  Info,
   LineChart,
   LoaderCircle,
   MousePointerClick,
@@ -99,6 +100,17 @@ const FLOW = {
 } as const;
 
 const FLOW_BAND_CENTER = FLOW.bandTop + FLOW.bandHeight / 2;
+
+/**
+ * Below this many visitors the Sankey stops being a measurement.
+ *
+ * Ribbon thickness is floored (`Math.max(2.5, …)`) so that a single-visitor
+ * channel stays visible at all, which means at small counts the bands no
+ * longer encode their share — an 11-visitor window renders a smooth flow that
+ * looks identical to a healthy one. A stepped bar of literal counts is the
+ * honest shape for a sample this size.
+ */
+const FLOW_MIN_VISITORS = 50;
 
 function channelColor(label: string) {
   return (
@@ -378,6 +390,9 @@ function AcquisitionFlow({
 
   const engagedHeight = Math.max(5, engagedRate * FLOW.bandHeight);
   const convertedHeight = Math.max(3, convertedRate * FLOW.bandHeight);
+  const smallSample =
+    snapshot.totals.visitors > 0 &&
+    snapshot.totals.visitors < FLOW_MIN_VISITORS;
 
   /**
    * Each channel enters as its own band and lands stacked against the visitors
@@ -471,10 +486,17 @@ function AcquisitionFlow({
           </div>
         )}
         <div className="atlas-flow-legend">
-          <span>Band width = visitors · colour = channel above</span>
+          <span>
+            {smallSample
+              ? "Bar length = visitor count at each step"
+              : "Band width = visitors · colour = channel above"}
+          </span>
           <span>Human traffic only — crawlers are charted separately</span>
         </div>
       </div>
+      {smallSample ? (
+        <AtlasSmallSampleFlow snapshot={snapshot} />
+      ) : (
       <div className="atlas-sankey-wrap">
         <div className="atlas-funnel-headings" aria-hidden="true">
           <div style={{ left: flowNodeCenterPercent(FLOW.visitorsX) }}>
@@ -585,7 +607,80 @@ function AcquisitionFlow({
           </span>
         </div>
       </div>
+      )}
     </article>
+  );
+}
+
+/**
+ * Small-window replacement for the Sankey. Bar length is the raw visitor count
+ * against the widest step, so a 1-of-11 step draws as 1/11 of the bar instead
+ * of being padded up to a visible ribbon.
+ */
+function AtlasSmallSampleFlow({ snapshot }: { snapshot: AcquisitionSnapshot }) {
+  const steps = [
+    {
+      key: "visitors",
+      label: "Visitors",
+      value: snapshot.totals.visitors,
+      note: "100% of total",
+    },
+    {
+      key: "engaged",
+      label: "Engaged",
+      value: snapshot.totals.engaged,
+      note: `${formatPercent(
+        snapshot.totals.visitors > 0
+          ? snapshot.totals.engaged / snapshot.totals.visitors
+          : 0,
+      )} of visitors`,
+    },
+    {
+      key: "converted",
+      label: "Converted",
+      value: snapshot.totals.converted,
+      note: `${formatPercent(
+        snapshot.totals.visitors > 0
+          ? snapshot.totals.converted / snapshot.totals.visitors
+          : 0,
+      )} of visitors`,
+    },
+  ];
+  const widest = Math.max(...steps.map((step) => step.value), 1);
+
+  return (
+    <div className="atlas-sankey-wrap atlas-small-sample">
+      <p className="atlas-small-sample-note" role="note">
+        <Info size={13} />
+        {`Only ${formatNumber(snapshot.totals.visitors)} visitors in this window — too few for a flow chart to be read as a rate. Counts are shown directly.`}
+      </p>
+      <ol className="atlas-small-sample-steps">
+        {steps.map((step) => (
+          <li key={step.key}>
+            <span className="atlas-small-sample-label">{step.label}</span>
+            <span className="atlas-small-sample-track">
+              <span
+                className={`atlas-small-sample-bar atlas-small-sample-${step.key}`}
+                style={{ width: `${(step.value / widest) * 100}%` }}
+              />
+            </span>
+            <span className="atlas-small-sample-value">
+              <strong>{formatNumber(step.value)}</strong>
+              <small>{step.note}</small>
+            </span>
+          </li>
+        ))}
+      </ol>
+      <div className="atlas-flow-footer">
+        <span>
+          {formatNumber(snapshot.totals.pageviews)} pageviews ·{" "}
+          {formatNumber(snapshot.totals.sessions)} sessions
+        </span>
+        <span>
+          <i /> {snapshot.totals.online} online
+        </span>
+      </div>
+    </div>
   );
 }
 
@@ -1046,9 +1141,23 @@ function CrawlerCurrent({ snapshot }: { snapshot: AcquisitionSnapshot }) {
       {activeSeries.length > 1 ? (
         <CrawlerChart series={activeSeries} shape={shape} />
       ) : (
+        /**
+         * A trend needs at least two dated buckets. Having too few points to
+         * plot is not the same as having no requests, and saying "none" while
+         * the counter above reads a non-zero number would make the card lie
+         * about its own data.
+         */
         <div className="atlas-crawler-chart-empty">
           <Bot size={24} />
-          <span>No crawler requests in this window</span>
+          {activeCount > 0 ? (
+            <span>
+              {`Not enough dated requests to plot a trend — ${formatNumber(activeCount)} so far`}
+            </span>
+          ) : (
+            <span>
+              {`No ${CRAWLER_TAB_LABELS[tab].toLowerCase()} requests in this window`}
+            </span>
+          )}
         </div>
       )}
       <div className="atlas-crawler-details">

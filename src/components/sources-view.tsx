@@ -741,6 +741,13 @@ function SourceJourneyCard({
     <button
       className="source-journey-row source-card"
       data-provider={source.provider}
+      /**
+       * The "Recommended next" wording lives on the single call to action in
+       * the data-path card above. Repeating it as a badge here gave the same
+       * instruction twice on one screen, so the row only carries the accent
+       * that ties it back to that action.
+       */
+      data-recommended={recommended ? "true" : undefined}
       type="button"
       onClick={onOpen}
     >
@@ -750,7 +757,6 @@ function SourceJourneyCard({
       <span className="source-journey-copy">
         <span>
           <strong>{source.label}</strong>
-          {recommended && <i>Recommended next</i>}
         </span>
         <small>{definition?.powers}</small>
       </span>

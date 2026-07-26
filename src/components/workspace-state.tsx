@@ -80,6 +80,48 @@ export function EmptyWorkspaceView({
         })}
       </div>
 
+      <div className="empty-actions">
+        <button
+          className="primary-action"
+          type="button"
+          onClick={() => onOpenSources()}
+        >
+          <PlugZap size={17} />{" "}
+          {awaitingMetrics ? "Review Sources" : "Connect first source"}{" "}
+          <ArrowRight size={17} />
+        </button>
+        <button
+          className="secondary-action"
+          type="button"
+          onClick={onOpenMethodology}
+        >
+          How source ownership works
+        </button>
+      </div>
+
+      {/**
+       * Current source state comes before the numbered explainer. It is the
+       * only block here that says something specific about this workspace,
+       * and it is what the primary action leads to; the steps below merely
+       * describe what will happen once a sync lands.
+       */}
+      <div className="empty-source-preview">
+        <h3>
+          {awaitingMetrics
+            ? "Configured source state"
+            : "Connect a source to get started"}
+        </h3>
+        <div>
+          {snapshot.sources.map((source) => (
+            <EmptySourceCard
+              source={source}
+              key={source.provider}
+              onOpenSources={onOpenSources}
+            />
+          ))}
+        </div>
+      </div>
+
       <ol className="empty-steps">
         <li>
           <span>1</span>
@@ -112,42 +154,6 @@ export function EmptyWorkspaceView({
           </div>
         </li>
       </ol>
-
-      <div className="empty-actions">
-        <button
-          className="primary-action"
-          type="button"
-          onClick={() => onOpenSources()}
-        >
-          <PlugZap size={17} />{" "}
-          {awaitingMetrics ? "Review Sources" : "Connect first source"}{" "}
-          <ArrowRight size={17} />
-        </button>
-        <button
-          className="secondary-action"
-          type="button"
-          onClick={onOpenMethodology}
-        >
-          How source ownership works
-        </button>
-      </div>
-
-      <div className="empty-source-preview">
-        <h3>
-          {awaitingMetrics
-            ? "Configured source state"
-            : "Connect a source to get started"}
-        </h3>
-        <div>
-          {snapshot.sources.map((source) => (
-            <EmptySourceCard
-              source={source}
-              key={source.provider}
-              onOpenSources={onOpenSources}
-            />
-          ))}
-        </div>
-      </div>
 
       <p className="empty-trust-note">
         <CheckCircle2 size={15} />

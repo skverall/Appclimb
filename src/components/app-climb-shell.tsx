@@ -525,55 +525,66 @@ export function AppClimbShell({
             <p className="eyebrow">{initialSnapshot.workspaceName}</p>
             <h1>{NAV_ITEMS.find((item) => item.id === activeSection)?.label}</h1>
           </div>
+          {/**
+           * Two clusters, not one queue. Read-only state chips come first and
+           * carry no border, then the interactive controls. Previously the two
+           * status indicators sat at opposite ends with three buttons between
+           * them, and both were styled as bordered pills, so nothing in the row
+           * signalled what could be clicked.
+           */}
           <div className="topbar-actions">
-            <span
-              className={`workspace-status workspace-status-${initialSnapshot.mode ?? "demo"}`}
-            >
-              {workspaceStatus}
-            </span>
-            <Link
-              className="topbar-demo-action"
-              href={
-                initialSnapshot.mode === "demo" && session ? "/" : "/?demo=1"
-              }
-            >
-              {initialSnapshot.mode === "demo" && session
-                ? "Open workspace"
-                : "View demo"}
-            </Link>
-            <button
-              className="icon-button"
-              type="button"
-              aria-label="Help"
-              onClick={() => setHelpOpen(true)}
-            >
-              <HelpCircle size={19} />
-            </button>
-            <button
-              className="icon-button account-button"
-              type="button"
-              aria-label="Account and settings"
-              onClick={() => setSettingsOpen(true)}
-            >
-              <Settings size={18} />
-            </button>
-            {session && !activeSubscription && (
-              <button
-                className="mobile-plan-action"
-                type="button"
-                onClick={() => setBillingOpen(true)}
+            <div className="topbar-state-group" role="status">
+              <span
+                className={`workspace-status workspace-status-${initialSnapshot.mode ?? "demo"}`}
               >
-                Choose plan
-              </button>
-            )}
-            {!session && !sessionUnavailable && (
-              <Link className="topbar-auth-action" href="/login">
-                Sign in
+                {workspaceStatus}
+              </span>
+              <div className="readonly-pill">
+                <span />
+                Read-only
+              </div>
+            </div>
+            <div className="topbar-control-group">
+              <Link
+                className="topbar-demo-action"
+                href={
+                  initialSnapshot.mode === "demo" && session ? "/" : "/?demo=1"
+                }
+              >
+                {initialSnapshot.mode === "demo" && session
+                  ? "Open workspace"
+                  : "View demo"}
               </Link>
-            )}
-            <div className="readonly-pill">
-              <span />
-              Read-only
+              <button
+                className="icon-button"
+                type="button"
+                aria-label="Help"
+                onClick={() => setHelpOpen(true)}
+              >
+                <HelpCircle size={19} />
+              </button>
+              <button
+                className="icon-button account-button"
+                type="button"
+                aria-label="Account and settings"
+                onClick={() => setSettingsOpen(true)}
+              >
+                <Settings size={18} />
+              </button>
+              {session && !activeSubscription && (
+                <button
+                  className="mobile-plan-action"
+                  type="button"
+                  onClick={() => setBillingOpen(true)}
+                >
+                  Choose plan
+                </button>
+              )}
+              {!session && !sessionUnavailable && (
+                <Link className="topbar-auth-action" href="/login">
+                  Sign in
+                </Link>
+              )}
             </div>
           </div>
         </header>
