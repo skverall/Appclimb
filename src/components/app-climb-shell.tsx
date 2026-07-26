@@ -741,15 +741,18 @@ export function AppClimbShell({
           {session ? (
             <>
               <div className="account-identity-card">
-                <ProfileAvatar avatarKey={avatarKey} className="account-avatar" />
-                <div>
-                  <span>Signed in as</span>
-                  <strong>{session.email}</strong>
-                  <p>{accountPlanLabel}</p>
+                <div className="account-identity-main">
+                  <ProfileAvatar avatarKey={avatarKey} className="account-avatar" />
+                  <div className="account-identity-info">
+                    <span>Signed in as</span>
+                    <strong>{session.email}</strong>
+                    <p>{accountPlanLabel}</p>
+                  </div>
                 </div>
                 <form action={logout}>
-                  <button type="submit">
-                    <LogOut size={15} /> Sign out
+                  <button type="submit" className="account-signout-btn">
+                    <LogOut size={14} />
+                    <span>Sign out</span>
                   </button>
                 </form>
               </div>
@@ -848,9 +851,10 @@ export function AppClimbShell({
                   type="button"
                   onClick={deleteAccount}
                   disabled={deletingAccount}
+                  className="danger-delete-btn"
                 >
-                  <Trash2 size={16} />
-                  {deletingAccount ? "Deleting…" : "Delete account"}
+                  <Trash2 size={15} />
+                  <span>{deletingAccount ? "Deleting…" : "Delete account"}</span>
                 </button>
               </div>
             </>
