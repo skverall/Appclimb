@@ -6,7 +6,6 @@ import {
   CheckCircle2,
   ChevronRight,
   Code2,
-  CreditCard,
   ExternalLink,
   FlaskConical,
   Gauge,
@@ -17,6 +16,7 @@ import {
   RefreshCw,
   Settings,
   ShieldCheck,
+  Sparkles,
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
@@ -837,12 +837,14 @@ export function AppClimbShell({
 
               <div className="account-plan-card">
                 <span className="account-plan-icon">
-                  <CreditCard size={18} />
+                  <Sparkles size={20} />
                 </span>
-                <div>
-                  <span>Subscription</span>
-                  <strong>{accountPlanLabel}</strong>
-                  <p>
+                <div className="account-plan-details">
+                  <div className="account-plan-header">
+                    <span className="account-plan-eyebrow">Subscription</span>
+                    <span className="account-plan-badge">{accountPlanLabel}</span>
+                  </div>
+                  <p className="account-plan-desc">
                     {activeSubscription
                       ? "Update payment details, invoices or cancellation in Paddle’s secure customer portal."
                       : "Start Pro when you are ready. No card is required during the free trial."}
@@ -853,18 +855,22 @@ export function AppClimbShell({
                     href="https://customer-portal.paddle.com/"
                     target="_blank"
                     rel="noreferrer"
+                    className="account-plan-cta"
                   >
-                    Manage billing <ExternalLink size={14} />
+                    <span>Manage billing</span>
+                    <ExternalLink size={14} />
                   </a>
                 ) : (
                   <button
                     type="button"
+                    className="account-plan-cta"
                     onClick={() => {
                       setSettingsOpen(false);
                       setBillingOpen(true);
                     }}
                   >
-                    Choose plan <ChevronRight size={14} />
+                    <span>Choose plan</span>
+                    <ChevronRight size={14} className="account-cta-arrow" />
                   </button>
                 )}
               </div>
