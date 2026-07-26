@@ -359,8 +359,8 @@ export async function growthMapSnapshot(
         autoMapped: true,
         detectedEventCount,
         updatedAt:
-          (typeof postHogSource?.lastMetricAt === "string"
-            ? postHogSource.lastMetricAt
+          (typeof postHogSource?.lastSyncAt === "string"
+            ? postHogSource.lastSyncAt
             : null) ?? postHogUpdatedAt,
         activeUserDays: activeTotal,
         activationUserDays: activationTotal,
