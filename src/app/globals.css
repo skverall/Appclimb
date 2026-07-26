@@ -9156,6 +9156,12 @@ a {
   background: var(--teal);
 }
 
+.journey-pending > i {
+  border-color: #38bdf8;
+  color: #0284c7;
+  background: #f0f9ff;
+}
+
 .journey-syncing > i,
 .journey-waiting > i {
   border-color: var(--amber-300);
@@ -9331,10 +9337,15 @@ a {
 }
 
 .data-health-block {
-  gap: 3px;
-  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 12px;
   border-radius: var(--radius-md);
   background: var(--n-50);
+  border: 1px solid var(--n-200);
+  transition: all 0.15s ease;
 }
 
 .data-health-block small {
@@ -9347,39 +9358,49 @@ a {
 
 .data-health-block strong {
   overflow: hidden;
-  color: var(--n-700);
+  color: var(--n-800);
   font-size: var(--text-2xs);
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.health-live {
-  color: var(--green-600);
-  background: var(--teal-100);
+.data-health-block.health-live {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.25);
 }
 
-.health-live strong {
-  color: var(--green-600);
+.data-health-block.health-live strong {
+  color: #047857;
 }
 
-.health-syncing,
-.health-waiting {
-  color: var(--amber-700);
-  background: var(--amber-50);
+.data-health-block.health-pending {
+  background: rgba(224, 242, 254, 0.6);
+  border-color: rgba(186, 230, 253, 0.8);
 }
 
-.health-syncing strong,
-.health-waiting strong {
-  color: var(--amber-700);
+.data-health-block.health-pending strong {
+  color: #0369a1;
 }
 
-.health-attention {
-  color: var(--coral-700);
-  background: var(--coral-50);
+.data-health-block.health-syncing,
+.data-health-block.health-waiting {
+  background: rgba(254, 243, 199, 0.5);
+  border-color: rgba(253, 230, 138, 0.7);
 }
 
-.health-attention strong {
-  color: var(--coral-700);
+.data-health-block.health-syncing strong,
+.data-health-block.health-waiting strong {
+  color: #b45309;
+}
+
+.data-health-block.health-attention {
+  background: rgba(255, 241, 242, 0.7);
+  border-color: rgba(254, 205, 211, 0.8);
+}
+
+.data-health-block.health-attention strong {
+  color: #e11d48;
 }
 
 .source-row-action {

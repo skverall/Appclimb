@@ -560,6 +560,8 @@ export function SourcesView({
                     <Check size={13} />
                   ) : health === "syncing" ? (
                     <RefreshCw className="spin" size={13} />
+                  ) : health === "pending" ? (
+                    <Clock3 size={13} />
                   ) : (
                     <span />
                   )}
