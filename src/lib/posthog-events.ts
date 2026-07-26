@@ -29,7 +29,12 @@ const sessionPatterns = [
 ];
 
 const activationPatterns = [
-  { pattern: /(^|_)(first|onboarding|setup)($|_)/iu, score: 52 },
+  { pattern: /(^|_)first($|_)/iu, score: 60 },
+  {
+    pattern:
+      /(^|_)(onboarding|setup)_(complete|completed|finish|finished)($|_)/iu,
+    score: 50,
+  },
   {
     pattern:
       /(^|_)(create|created|add|added|complete|completed|generate|generated|import|imported|upload|uploaded|publish|published)($|_)/iu,
@@ -138,11 +143,15 @@ export function autoMapPostHogEvents(
   };
   add(sessionEvent);
   add(activationEvent);
-  for (const event of [...events].sort((left, right) => {
-    const phaseDifference =
-      phaseOrder(flowPhase(left.name)) - phaseOrder(flowPhase(right.name));
-    return phaseDifference || activationScore(right) - activationScore(left);
-  })) {
+  const ranked = [...events].sort(
+    (left, right) => activationScore(right) - activationScore(left),
+  );
+  for (const phase of ["habit", "monetize", "value", "visit"] as const) {
+    const candidate = ranked.find((event) => flowPhase(event.name) === phase);
+    if (candidate) add(candidate.name);
+    if (selected.size >= 5) break;
+  }
+  for (const event of ranked) {
     add(event.name);
     if (selected.size >= 5) break;
   }

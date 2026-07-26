@@ -247,18 +247,36 @@ export async function processSyncMessage(
       const refreshed = await refreshPostHogOAuth(credentials);
       credentials = refreshed.credentials;
       credentialsChanged = refreshed.changed;
-      if (
-        credentials.mappingMode !== "automatic" &&
-        credentials.mappingMode !== "manual"
-      ) {
-        const events = await discoverPostHogEvents(credentials, 30);
-        const autoMap = autoMapPostHogEvents(events);
-        credentials = {
-          ...credentials,
-          ...autoMap,
-          mappingMode: "automatic",
-        };
-        credentialsChanged = true;
+      if (credentials.mappingMode !== "manual") {
+        try {
+          const events = await discoverPostHogEvents(credentials, 30);
+          const autoMap = autoMapPostHogEvents(events);
+          const currentMap = JSON.stringify({
+            sessionEvent: credentials.sessionEvent,
+            activationEvent: credentials.activationEvent,
+            eventFlow: credentials.eventFlow,
+            detectedEventCount: credentials.detectedEventCount,
+            mappingMode: credentials.mappingMode,
+          });
+          const nextMap = JSON.stringify({
+            ...autoMap,
+            mappingMode: "automatic",
+          });
+          credentials = {
+            ...credentials,
+            ...autoMap,
+            mappingMode: "automatic",
+          };
+          credentialsChanged ||= currentMap !== nextMap;
+        } catch (error) {
+          if (!credentials.sessionEvent && !credentials.activationEvent) {
+            throw error;
+          }
+          log("warn", "posthog_auto_map_refresh_failed", {
+            jobId: job.id,
+            error: error instanceof Error ? error.message : "unknown",
+          });
+        }
       }
       if (credentialsChanged) {
         const resealed = await sealCredentials(

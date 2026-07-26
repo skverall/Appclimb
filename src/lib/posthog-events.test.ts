@@ -20,6 +20,9 @@ describe("autoMapPostHogEvents", () => {
     expect(mapped.eventFlow.map((step) => step.event)).not.toContain(
       "paywall_purchase_cancelled",
     );
+    expect(mapped.eventFlow.map((step) => step.event)).toContain(
+      "vehicle_exported",
+    );
     expect(mapped.eventFlow.at(-1)?.phase).toBe("monetize");
   });
 
@@ -41,6 +44,21 @@ describe("autoMapPostHogEvents", () => {
 
     expect(mapped.sessionEvent).toBe("app_opened");
     expect(mapped.eventFlow.map((step) => step.event)).toContain("app_opened");
+  });
+
+  it("prefers completed product value over merely starting onboarding", () => {
+    const mapped = autoMapPostHogEvents([
+      { name: "$pageview", eventCount: 500, uniqueUsers: 100 },
+      { name: "onboarding_started", eventCount: 90, uniqueUsers: 70 },
+      { name: "activation_first_vehicle_created", eventCount: 30, uniqueUsers: 25 },
+      { name: "inventory_returned", eventCount: 15, uniqueUsers: 12 },
+      { name: "subscription_started", eventCount: 8, uniqueUsers: 7 },
+    ]);
+
+    expect(mapped.activationEvent).toBe("activation_first_vehicle_created");
+    expect(new Set(mapped.eventFlow.map((step) => step.phase))).toEqual(
+      new Set(["visit", "value", "habit", "monetize"]),
+    );
   });
 });
 
