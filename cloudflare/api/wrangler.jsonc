@@ -78,10 +78,18 @@
         "limit": 180,
         "period": 60
       }
+    },
+    {
+      "name": "AI_RATE_LIMITER",
+      "namespace_id": "2003",
+      "simple": {
+        "limit": 12,
+        "period": 60
+      }
     }
   ],
   "triggers": {
-    "crons": ["17 */6 * * *", "7 * * * *", "43 2 * * *"]
+    "crons": ["17 */6 * * *", "7 * * * *", "43 2 * * *", "23 3 * * *"]
   },
   "env": {
     "staging": {
@@ -151,10 +159,18 @@
             "limit": 180,
             "period": 60
           }
+        },
+        {
+          "name": "AI_RATE_LIMITER",
+          "namespace_id": "1003",
+          "simple": {
+            "limit": 12,
+            "period": 60
+          }
         }
       ],
       "triggers": {
-        "crons": ["17 */6 * * *", "7 * * * *", "43 2 * * *"]
+        "crons": ["17 */6 * * *", "7 * * * *", "43 2 * * *", "23 3 * * *"]
       }
     }
   }

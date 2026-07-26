@@ -6,6 +6,7 @@ export const secretNames = [
   "PADDLE_PRODUCT_ID",
   "PADDLE_PRODUCT_IDENTITY",
   "PADDLE_ALLOWED_PRICE_IDS",
+  "DEEPSEEK_API_KEY",
 ] as const;
 
 export type SecretName = (typeof secretNames)[number];

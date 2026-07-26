@@ -73,7 +73,7 @@ prototype and technical foundation**, not the completed AppClimb product.
 
 Production-verified foundation:
 
-- the River Atlas visual language and four-part navigation;
+- the River Atlas visual language and compact primary navigation;
 - an interactive, clearly labeled demo workspace;
 - authentication, trial, pricing, Paddle checkout, and account deletion;
 - the Cloudflare Workers/D1/Queues backend, encrypted source credentials,
@@ -115,6 +115,10 @@ What must not be misrepresented as complete:
 - automatic PostHog event mapping and Product Pulse charts are in development;
   they are not shipped until the bounded import is verified against a real
   connected project after deployment;
+- AI Visibility is in development as a provider-explicit DeepSeek answer
+  scanner with stored prompt evidence, bounded free usage, and Queue-backed
+  scans; it is not shipped until the production secret, migration, Queue
+  consumer, and first accepted real answer are verified separately;
 - competitor intelligence is not implemented;
 - Voice of Customer clustering is not yet a complete ingestion and analysis
   system;
@@ -375,6 +379,23 @@ Pulse answers: **What is happening now?**
 Evidence, comparisons, segments, change events, causal clues, and confidence.
 
 Diagnose answers: **Why is this happening?**
+
+### AI Visibility
+
+Provider-explicit prompt monitoring for the selected app:
+
+- natural discovery, comparison, and branded prompts;
+- stored model answers as inspectable evidence;
+- deterministic mention and explicit-position extraction;
+- provider, model, freshness, quota, and uncertainty shown in the interface;
+- free starter visibility followed by bounded recurring monitoring.
+
+AI Visibility answers: **How does this named AI provider describe and surface
+my app?**
+
+One model's answers must never be presented as universal AI visibility. The
+first provider is DeepSeek V4 Flash; additional providers require their own
+evidence contracts and labels.
 
 ### Lab
 
@@ -852,7 +873,9 @@ The following decisions are intentional:
 - The first product is read-only.
 - Insights are Observed, Derived, or Hypothesis.
 - AI receives aggregates and evidence references, not credentials.
-- Pulse, Diagnose, Lab, and Sources are the primary navigation.
+- Pulse, Diagnose, AI Visibility, Lab, and Sources are the primary navigation.
+- AI Visibility remains provider-explicit and evidence-backed; one DeepSeek
+  scan is never described as visibility across every AI model.
 - Pulse may contain multiple coherent projections; Growth River and
   Acquisition Atlas are the current pair.
 - Cloudflare Workers hosts the Next.js web frontend and Hono API.

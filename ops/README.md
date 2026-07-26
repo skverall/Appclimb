@@ -95,6 +95,8 @@ Cron schedules:
 - `17 */6 * * *` — enqueue due source imports;
 - `7 * * * *` — refresh up to 15 due App Store keyword observations;
 - `43 2 * * *` — enforce first-party analytics retention.
+- `23 3 * * *` — enqueue due weekly AI Visibility scans for entitled
+  workspaces.
 
 For an incident, inspect the latest `sync_jobs`, the source
 `last_error_code`, Queue delivery attempts, and Worker logs before reconnecting
@@ -111,6 +113,7 @@ Never print or commit secret values. The API Worker requires:
 - `PADDLE_PRODUCT_ID`
 - `PADDLE_PRODUCT_IDENTITY`
 - `PADDLE_ALLOWED_PRICE_IDS`
+- `DEEPSEEK_API_KEY`
 
 It also requires the `DB`, `SYNC_QUEUE`, `BACKUPS`, rate-limit, and `EMAIL`
 bindings declared in `cloudflare/api/wrangler.jsonc`.

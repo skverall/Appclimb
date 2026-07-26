@@ -25,6 +25,10 @@ Read it before changing product direction or expanding the feature set.
 - App Store catalog selection and a 100-keyword Rank Terrain with bounded
   observed-position history. Apple Ads popularity remains a separate,
   explicitly unavailable signal until that connector exists.
+- Provider-explicit AI Visibility: DeepSeek V4 Flash prompt scans run through
+  Cloudflare Queues, retain bounded answer evidence, and calculate mentions
+  and explicit positions deterministically. It does not claim universal AI
+  visibility.
 - Retention heatmap and Voice of Customer clusters.
 - Read-only Lab proposals and integration health.
 - 14-day no-card entitlement followed by `$12.99/month` or `$129/year`.
@@ -61,8 +65,9 @@ their own collected data after completing the live workspace gate. See
 - `public/appclimb-analytics.js` — small first-party browser collector;
   `src/middleware.ts` forwards recognized crawler requests separately.
 - `cloudflare/api` — Hono API Worker, D1 migrations, envelope encryption,
-  connector aggregates, Queue consumers, reconciliation, retries, UTC windows,
-  billing, password recovery, and 90-day analytics retention.
+  connector aggregates, source and AI Visibility Queue consumers,
+  reconciliation, retries, UTC windows, billing, password recovery, and
+  90-day analytics retention.
 - `wrangler.jsonc` — OpenNext web Worker, static assets, observability, and the
   private API service binding.
 - `worker`, `compose.yml`, and `deploy` — frozen Go/PostgreSQL rollback
@@ -143,6 +148,10 @@ committed. Connector credentials are encrypted with a random per-connection
 data key; the data key is then encrypted by the Worker master key.
 Credentials, refresh sessions, billing payloads and sync jobs never reach the
 browser.
+
+AI Visibility additionally requires the API Worker secret
+`DEEPSEEK_API_KEY`. The shared key is server-only: it is never returned to the
+web Worker, stored in D1, included in model prompts, or written to logs.
 
 Password recovery uses single-use SHA-256 token hashes with a 30-minute
 expiry. Cloudflare Email Service delivers messages through the `EMAIL` binding

@@ -23,6 +23,7 @@ import Link from "next/link";
 
 import { logout } from "@/app/actions";
 import { AcquisitionAtlas } from "@/components/acquisition-atlas";
+import { AiVisibilityView } from "@/components/ai-visibility-view";
 import { AccountSecurity } from "@/components/account-security";
 import { BrandMark } from "@/components/brand-mark";
 import { ModalDialog } from "@/components/modal-dialog";
@@ -67,6 +68,7 @@ const NAV_ITEMS: {
 }[] = [
   { id: "pulse", label: "Pulse", icon: Gauge },
   { id: "diagnose", label: "Diagnose", icon: Activity },
+  { id: "ai-visibility", label: "AI Visibility", icon: Sparkles },
   { id: "lab", label: "Lab", icon: FlaskConical },
   { id: "sources", label: "Sources", icon: PlugZap },
 ];
@@ -666,7 +668,8 @@ export function AppClimbShell({
           {initialSnapshot.mode === "unavailable" ? (
             <UnavailableWorkspaceView onRetry={retryWorkspace} />
           ) : initialSnapshot.mode === "restricted" &&
-            activeSection !== "sources" ? (
+            activeSection !== "sources" &&
+            activeSection !== "ai-visibility" ? (
             <RestrictedWorkspaceView
               onOpenBilling={() => setBillingOpen(true)}
               onOpenSources={() => navigateTo("sources")}
@@ -704,6 +707,12 @@ export function AppClimbShell({
               selectedInsight={selectedInsight}
               onSelectInsight={selectInsight}
               onCreateExperiment={() => createDraftFromInsight(selectedInsight)}
+            />
+          ) : activeSection === "ai-visibility" ? (
+            <AiVisibilityView
+              snapshot={initialSnapshot}
+              authenticated={Boolean(session)}
+              onChoosePlan={() => setBillingOpen(true)}
             />
           ) : activeSection === "lab" &&
             initialSnapshot.insights.length === 0 ? (

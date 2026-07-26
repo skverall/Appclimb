@@ -1,6 +1,7 @@
 export const WORKSPACE_SECTIONS = [
   "pulse",
   "diagnose",
+  "ai-visibility",
   "lab",
   "sources",
 ] as const;

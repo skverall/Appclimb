@@ -530,7 +530,7 @@ function AddAppDialog({
   );
 }
 
-function AppSelector({
+export function AppSelector({
   snapshot,
 }: {
   snapshot: DashboardSnapshot;

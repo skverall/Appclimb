@@ -13,6 +13,17 @@ import {
   searchAppStoreCatalog,
 } from "./apps-keywords";
 import {
+  addAiVisibilityPrompt,
+  aiVisibilitySnapshot,
+  processAiVisibilityMessage,
+  queueAiVisibilityScan,
+  queueDueAiVisibilityScans,
+  removeAiVisibilityPrompt,
+  setupAiVisibility,
+  updateAiVisibilityCadence,
+  type AiVisibilityMessage,
+} from "./ai-visibility";
+import {
   billingConfigured,
   createCheckoutBinding,
   parseSubscriptionUpdate,
@@ -211,6 +222,19 @@ const collectorRateLimit = createMiddleware<AppEnvironment>(async (c, next) => {
   }
   await next();
 });
+
+const aiVisibilityRateLimit = createMiddleware<AppEnvironment>(
+  async (c, next) => {
+    const auth = c.get("auth");
+    const result = await c.env.AI_RATE_LIMITER.limit({
+      key: `ai-visibility:${auth.workspaceId}`,
+    });
+    if (!result.success) {
+      return errorResponse(c, "rate_limited", 429);
+    }
+    await next();
+  },
+);
 
 const requireAuth = createMiddleware<AppEnvironment>(async (c, next) => {
   const authorization = c.req.header("authorization") ?? "";
@@ -742,7 +766,7 @@ app.get("/v1/apps", requireAuth, async (c) =>
   }),
 );
 
-app.get("/v1/apps/search", requireAuth, requireEntitlement, async (c) => {
+app.get("/v1/apps/search", requireAuth, async (c) => {
   const platform = (c.req.query("platform") ?? "app-store").trim();
   if (platform === "google-play") {
     return errorResponse(c, "google_play_authorization_required", 409);
@@ -763,7 +787,7 @@ app.get("/v1/apps/search", requireAuth, requireEntitlement, async (c) => {
   });
 });
 
-app.post("/v1/apps", requireAuth, requireEntitlement, async (c) => {
+app.post("/v1/apps", requireAuth, async (c) => {
   const auth = c.get("auth");
   if (!["owner", "admin"].includes(auth.role)) {
     return errorResponse(c, "admin_required", 403);
@@ -790,6 +814,98 @@ app.post("/v1/apps", requireAuth, requireEntitlement, async (c) => {
     201,
   );
 });
+
+app.get("/v1/ai-visibility", requireAuth, async (c) => {
+  const appId = (c.req.query("appId") ?? "").trim();
+  return c.json({
+    data: await aiVisibilitySnapshot(c.env, c.get("auth"), appId),
+  });
+});
+
+app.post(
+  "/v1/ai-visibility/setup",
+  requireAuth,
+  aiVisibilityRateLimit,
+  async (c) => {
+    const input = await jsonBody(c.req.raw);
+    const appId = typeof input.appId === "string" ? input.appId.trim() : "";
+    return c.json(
+      { data: await setupAiVisibility(c.env, c.get("auth"), appId) },
+      201,
+    );
+  },
+);
+
+app.post(
+  "/v1/ai-visibility/prompts",
+  requireAuth,
+  aiVisibilityRateLimit,
+  async (c) => {
+    const input = await jsonBody(c.req.raw);
+    return c.json(
+      {
+        data: await addAiVisibilityPrompt(
+          c.env,
+          c.get("auth"),
+          typeof input.appId === "string" ? input.appId.trim() : "",
+          typeof input.category === "string" ? input.category.trim() : "",
+          typeof input.prompt === "string" ? input.prompt : "",
+        ),
+      },
+      201,
+    );
+  },
+);
+
+app.delete(
+  "/v1/ai-visibility/prompts/:promptId",
+  requireAuth,
+  aiVisibilityRateLimit,
+  async (c) => {
+    await removeAiVisibilityPrompt(
+      c.env,
+      c.get("auth"),
+      c.req.param("promptId"),
+    );
+    return c.body(null, 204);
+  },
+);
+
+app.patch(
+  "/v1/ai-visibility/settings",
+  requireAuth,
+  aiVisibilityRateLimit,
+  async (c) => {
+    const input = await jsonBody(c.req.raw);
+    return c.json({
+      data: await updateAiVisibilityCadence(
+        c.env,
+        c.get("auth"),
+        typeof input.appId === "string" ? input.appId.trim() : "",
+        typeof input.cadence === "string" ? input.cadence.trim() : "",
+      ),
+    });
+  },
+);
+
+app.post(
+  "/v1/ai-visibility/scans",
+  requireAuth,
+  aiVisibilityRateLimit,
+  async (c) => {
+    const input = await jsonBody(c.req.raw);
+    return c.json(
+      {
+        data: await queueAiVisibilityScan(
+          c.env,
+          c.get("auth"),
+          typeof input.appId === "string" ? input.appId.trim() : "",
+        ),
+      },
+      202,
+    );
+  },
+);
 
 app.get("/v1/keywords", requireAuth, requireEntitlement, async (c) => {
   const appId = (c.req.query("appId") ?? "").trim();
@@ -1069,8 +1185,13 @@ app.notFound((c) => errorResponse(c, "not_found", 404));
 
 app.onError((error, c) => {
   if (error instanceof ProviderError) {
-    const status =
-      [400, 401, 403].includes(error.status) ? 400 : error.status >= 500 ? 502 : 400;
+    const status = (
+      [400, 401, 402, 403, 404, 409, 429].includes(error.status)
+        ? error.status
+        : error.status >= 500
+          ? 502
+          : 400
+    ) as ContentfulStatusCode;
     return errorResponse(c, error.code, status);
   }
   const code = error instanceof Error ? error.message : "internal_error";
@@ -1097,12 +1218,17 @@ async function constantTimeStrings(left: string, right: string): Promise<boolean
   return difference === 0;
 }
 
-const worker: ExportedHandler<Cloudflare.Env, SyncMessage> = {
+type QueueMessage = SyncMessage | AiVisibilityMessage;
+
+const worker: ExportedHandler<Cloudflare.Env, QueueMessage> = {
   fetch: app.fetch,
   async queue(batch, env): Promise<void> {
     for (const message of batch.messages) {
       try {
-        const result = await processSyncMessage(env, message.body);
+        const result =
+          message.body.type === "ai-visibility-scan"
+            ? await processAiVisibilityMessage(env, message.body)
+            : await processSyncMessage(env, message.body);
         if (result.retry) {
           message.retry({
             delaySeconds: Math.min(3600, 60 * 2 ** message.attempts),
@@ -1112,8 +1238,14 @@ const worker: ExportedHandler<Cloudflare.Env, SyncMessage> = {
         }
       } catch (error) {
         log("error", "queue_message_failed", {
-          jobId: message.body.jobId,
-          provider: message.body.provider,
+          jobId:
+            message.body.type === "source-sync"
+              ? message.body.jobId
+              : message.body.scanId,
+          provider:
+            message.body.type === "source-sync"
+              ? message.body.provider
+              : "deepseek",
           attempts: message.attempts,
           error: error instanceof Error ? error.message : "unknown",
         });
@@ -1132,6 +1264,13 @@ const worker: ExportedHandler<Cloudflare.Env, SyncMessage> = {
         if (event.cron === "7 * * * *") {
           const keywordRanks = await refreshDueKeywordRanks(env);
           log("info", "keyword_ranks_refreshed", { keywordRanks });
+          return;
+        }
+        if (event.cron === "23 3 * * *") {
+          const aiVisibilityScans = await queueDueAiVisibilityScans(env);
+          log("info", "ai_visibility_scheduled_scans_queued", {
+            aiVisibilityScans,
+          });
           return;
         }
         const queued = await queueDueSyncs(env);

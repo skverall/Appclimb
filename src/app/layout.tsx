@@ -11,6 +11,7 @@ import {
 } from "@/lib/site";
 
 import "./globals.css";
+import "./ai-visibility.css";
 
 const dmSans = DM_Sans({
   variable: "--font-body",
