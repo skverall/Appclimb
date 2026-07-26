@@ -128,6 +128,12 @@ function dataHealthLabel(source: SourceConnection) {
     case "attention":
       return source.lastErrorCode === "provider_unavailable"
         ? "Provider could not be reached"
+        : source.lastErrorCode === "apple_report_request_required"
+          ? "One-time Apple setup required"
+          : source.lastErrorCode === "apple_reports_pending"
+            ? "Apple is preparing reports"
+            : source.lastErrorCode === "apple_reports_role_required"
+              ? "Apple reports access required"
         : source.lastErrorCode === "no_data_in_window"
           ? "No matching data found"
           : "Import needs attention";
@@ -145,7 +151,16 @@ function errorGuidance(source: SourceConnection) {
     case "provider_unavailable":
       return "AppClimb could not reach PostHog during the last import. Your saved access is still encrypted; retry after connectivity is restored.";
     case "no_data_in_window":
+      if (source.provider === "app-store-connect") {
+        return "Apple returned no supported rows for this window. New Analytics Reports can take 1–2 days, and low-volume metrics may remain empty.";
+      }
       return "The source returned no matching rows. Check the selected project and event names, or wait until those events exist.";
+    case "apple_report_request_required":
+      return "This app has no active Analytics Reports request. An App Store Connect Admin must initialize one once; keep this Sales and Reports key for ongoing read-only imports.";
+    case "apple_reports_pending":
+      return "Apple accepted the Analytics Reports request but has not published the first downloadable instance yet. This normally takes 1–2 days; AppClimb will keep checking.";
+    case "apple_reports_role_required":
+      return "Apple denied access to Analytics Reports. Use a team key with the Sales and Reports role, then reconnect.";
     case "provider_query_failed":
       return "The provider rejected the import query. Reconnect to refresh access and verify the selected project.";
     case "posthog_oauth_refresh_failed":

@@ -27,8 +27,8 @@ export const SOURCE_SETUP: Record<ConnectableProvider, SourceSetup> = {
   "app-store-connect": {
     steps: [
       "Open Users and Access → Integrations in App Store Connect.",
-      "Create a read-only API key and download the .p8 file once.",
-      "Paste the identifiers below; AppClimb verifies before saving.",
+      "Create a team key with the Sales and Reports role, then download the .p8 file once.",
+      "Paste the identifiers below. If reports were never initialized, an Admin must request them once; Apple can take 1–2 days to prepare the first data.",
     ],
     fields: [
       {

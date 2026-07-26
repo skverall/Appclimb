@@ -1,3 +1,5 @@
+import { generateKeyPairSync } from "node:crypto";
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
@@ -5,6 +7,19 @@ import {
   readAggregates,
   refreshPostHogOAuth,
 } from "./aggregates";
+
+const appleKeyPair = generateKeyPairSync("ec", {
+  namedCurve: "P-256",
+  privateKeyEncoding: { type: "pkcs8", format: "pem" },
+  publicKeyEncoding: { type: "spki", format: "pem" },
+});
+
+const appleCredentials = {
+  appId: "6756513314",
+  issuerId: "69a6de70-1111-2222-3333-444455556666",
+  keyId: "ABCD1234EF",
+  privateKey: appleKeyPair.privateKey,
+};
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -99,5 +114,205 @@ describe("Cloudflare source aggregates", () => {
       { metricKey: "impressions", value: 15 },
       { metricKey: "product_page_views", value: 7 },
     ]);
+  });
+
+  it("maps Apple's current engagement and download report fields", () => {
+    const from = new Date("2026-07-01T00:00:00.000Z");
+    const to = new Date("2026-07-26T00:00:00.000Z");
+    const updatedAt = new Date("2026-07-26T00:00:00.000Z");
+    const engagement = parseAppleTSV(
+      [
+        "Date\tEvent\tPage Type\tCounts\tUnique Counts\tTerritory",
+        "2026-07-24\tImpression\tNo page\t10\t8\tUS",
+        "2026-07-24\tPage view\tProduct page\t4\t3\tUS",
+        "2026-07-24\tPage view\tDeveloper page\t20\t18\tUS",
+        "2026-07-24\tTap\tProduct page\t2\t2\tUS",
+      ].join("\n"),
+      from,
+      to,
+      updatedAt,
+      "App Store Discovery and Engagement Standard",
+      3,
+    );
+    const downloads = parseAppleTSV(
+      [
+        "Date\tDownload Type\tCounts\tTerritory",
+        "2026-07-24\tFirst-time Download\t2\tUS",
+        "2026-07-24\tRedownload\t1\tUS",
+        "2026-07-24\tManual update\t7\tUS",
+        "2026-07-24\tRestore\t5\tUS",
+      ].join("\n"),
+      from,
+      to,
+      updatedAt,
+      "App Downloads Standard",
+      2,
+    );
+    expect(
+      [...engagement, ...downloads]
+        .sort((left, right) => left.metricKey.localeCompare(right.metricKey))
+        .map(({ metricKey, value }) => ({ metricKey, value })),
+    ).toEqual([
+      { metricKey: "downloads", value: 3 },
+      { metricKey: "impressions", value: 10 },
+      { metricKey: "product_page_views", value: 4 },
+    ]);
+  });
+
+  it("uses Apple's read-only report chain without posting or leaking the JWT to segment storage", async () => {
+    const calls: Array<{
+      url: string;
+      method: string;
+      hasAuthorization: boolean;
+    }> = [];
+    const fetchMock = vi.fn(
+      async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = String(input);
+        const method = init?.method ?? "GET";
+        const hasAuthorization = new Headers(init?.headers).has("authorization");
+        calls.push({ url, method, hasAuthorization });
+        if (url.includes("/apps/6756513314/analyticsReportRequests")) {
+          return Response.json({
+            data: [
+              {
+                id: "request-1",
+                attributes: {
+                  accessType: "ONE_TIME_SNAPSHOT",
+                  stoppedDueToInactivity: false,
+                },
+              },
+            ],
+          });
+        }
+        if (url.includes("/analyticsReportRequests/request-1/reports")) {
+          return Response.json({
+            data: [
+              {
+                id: "report-engagement",
+                attributes: {
+                  name: "App Store Discovery and Engagement Standard",
+                  category: "APP_STORE_ENGAGEMENT",
+                },
+              },
+              {
+                id: "report-downloads",
+                attributes: {
+                  name: "App Downloads Standard",
+                  category: "COMMERCE",
+                },
+              },
+            ],
+          });
+        }
+        if (url.includes("/analyticsReports/report-engagement/instances")) {
+          return Response.json({
+            data: [
+              {
+                id: "instance-engagement",
+                attributes: {
+                  granularity: "DAILY",
+                  processingDate: "2026-07-26",
+                },
+              },
+            ],
+          });
+        }
+        if (url.includes("/analyticsReports/report-downloads/instances")) {
+          return Response.json({
+            data: [
+              {
+                id: "instance-downloads",
+                attributes: {
+                  granularity: "DAILY",
+                  processingDate: "2026-07-26",
+                },
+              },
+            ],
+          });
+        }
+        if (url.includes("/instance-engagement/segments")) {
+          return Response.json({
+            data: [
+              {
+                attributes: {
+                  url: "https://segments.example.com/engagement.tsv.gz",
+                },
+              },
+            ],
+          });
+        }
+        if (url.includes("/instance-downloads/segments")) {
+          return Response.json({
+            data: [
+              {
+                attributes: {
+                  url: "https://segments.example.com/downloads.tsv.gz",
+                },
+              },
+            ],
+          });
+        }
+        if (url.endsWith("/engagement.tsv.gz")) {
+          return new Response(
+            [
+              "Date\tEvent\tPage Type\tCounts",
+              "2026-07-24\tImpression\tNo page\t10",
+              "2026-07-24\tPage view\tProduct page\t4",
+            ].join("\n"),
+          );
+        }
+        if (url.endsWith("/downloads.tsv.gz")) {
+          return new Response(
+            [
+              "Date\tDownload Type\tCounts",
+              "2026-07-24\tFirst-time Download\t2",
+              "2026-07-24\tRedownload\t1",
+              "2026-07-24\tAuto-update\t9",
+            ].join("\n"),
+          );
+        }
+        return new Response("not found", { status: 404 });
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const rows = await readAggregates(
+      "app-store-connect",
+      appleCredentials,
+      new Date("2026-07-01T00:00:00.000Z"),
+      new Date("2026-07-26T00:00:00.000Z"),
+    );
+
+    expect(
+      rows.map(({ metricKey, value }) => ({ metricKey, value })),
+    ).toEqual([
+      { metricKey: "downloads", value: 3 },
+      { metricKey: "impressions", value: 10 },
+      { metricKey: "product_page_views", value: 4 },
+    ]);
+    expect(calls.some((call) => call.method === "POST")).toBe(false);
+    expect(
+      calls
+        .filter((call) => call.url.startsWith("https://segments.example.com/"))
+        .every((call) => !call.hasAuthorization),
+    ).toBe(true);
+  });
+
+  it("surfaces the one-time Apple report initialization requirement", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ data: [] })),
+    );
+    await expect(
+      readAggregates(
+        "app-store-connect",
+        appleCredentials,
+        new Date("2026-07-01T00:00:00.000Z"),
+        new Date("2026-07-26T00:00:00.000Z"),
+      ),
+    ).rejects.toMatchObject({
+      code: "apple_report_request_required",
+      retryable: false,
+    });
   });
 });

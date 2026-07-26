@@ -54,7 +54,9 @@ async function providerResponse(
   let response: Response;
   try {
     const headers = new Headers(init.headers);
-    headers.set("accept", "application/json");
+    if (!headers.has("accept")) {
+      headers.set("accept", "application/json");
+    }
     headers.set("user-agent", "AppClimb/2.0 Cloudflare");
     if (token) {
       headers.set("authorization", `Bearer ${token}`);
@@ -400,9 +402,14 @@ export function parseAppleTSV(
   from: Date,
   to: Date,
   sourceUpdatedAt: Date,
+  reportName = "",
+  lagDays = 2,
 ): Aggregate[] {
   const lines = text.split(/\n/u);
   const headers = (lines.shift() ?? "").replace(/\r$/u, "").split("\t");
+  const headerIndex = new Map(
+    headers.map((header, index) => [header.trim(), index]),
+  );
   const dateIndex = headers.findIndex((header) =>
     ["Date", "date"].includes(header.trim()),
   );
@@ -421,11 +428,55 @@ export function parseAppleTSV(
     if (metric) metricColumns.set(index, metric);
   });
   const result: Aggregate[] = [];
+  const eventIndex = headerIndex.get("Event");
+  const pageTypeIndex = headerIndex.get("Page Type");
+  const downloadTypeIndex = headerIndex.get("Download Type");
+  const countsIndex = headerIndex.get("Counts");
+  const isEngagement =
+    reportName === "App Store Discovery and Engagement Standard";
+  const isDownloads = reportName === "App Downloads Standard";
   for (const line of lines) {
     if (!line.trim()) continue;
     const fields = line.replace(/\r$/u, "").split("\t");
     const occurredAt = dateValue(fields[dateIndex]);
     if (!occurredAt || occurredAt < from || occurredAt >= to) continue;
+    if (countsIndex !== undefined) {
+      const value = numeric(fields[countsIndex]);
+      let metricKey = "";
+      if (isEngagement && eventIndex !== undefined) {
+        const event = String(fields[eventIndex] ?? "").trim().toLowerCase();
+        const pageType =
+          pageTypeIndex === undefined
+            ? ""
+            : String(fields[pageTypeIndex] ?? "").trim().toLowerCase();
+        if (event === "impression") {
+          metricKey = "impressions";
+        } else if (event === "page view" && pageType === "product page") {
+          metricKey = "product_page_views";
+        }
+      } else if (isDownloads && downloadTypeIndex !== undefined) {
+        const downloadType = String(fields[downloadTypeIndex] ?? "")
+          .trim()
+          .toLowerCase();
+        if (
+          downloadType === "first-time download" ||
+          downloadType === "redownload"
+        ) {
+          metricKey = "downloads";
+        }
+      }
+      if (metricKey && value !== null) {
+        result.push({
+          metricKey,
+          occurredAt: occurredAt.toISOString(),
+          value,
+          unit: "count",
+          dimensions: { category: "APP_STORE" },
+          sourceUpdatedAt: sourceUpdatedAt.toISOString(),
+          completeness: completeness(to, occurredAt, lagDays),
+        });
+      }
+    }
     for (const [index, metricKey] of metricColumns) {
       const value = numeric(fields[index]);
       if (value === null) continue;
@@ -436,11 +487,52 @@ export function parseAppleTSV(
         unit: "count",
         dimensions: { category: "APP_STORE" },
         sourceUpdatedAt: sourceUpdatedAt.toISOString(),
-        completeness: completeness(to, occurredAt, 2),
+        completeness: completeness(to, occurredAt, lagDays),
       });
     }
   }
   return mergeApple(result, "sum");
+}
+
+async function appleReportJSON(
+  endpoint: string,
+  token: string,
+): Promise<Record<string, unknown>> {
+  try {
+    return await providerJSON(endpoint, token);
+  } catch (error) {
+    if (error instanceof ProviderError && error.status === 403) {
+      throw new ProviderError("apple_reports_role_required", 403);
+    }
+    throw error;
+  }
+}
+
+async function downloadAppleTSV(endpoint: string): Promise<string> {
+  const response = await providerResponse(endpoint, "", {
+    headers: {
+      accept: "application/a-gzip, application/gzip, application/octet-stream",
+    },
+  });
+  const contentLength = Number(response.headers.get("content-length") ?? "0");
+  if (contentLength > 16 * 1024 * 1024) {
+    await response.body?.cancel();
+    throw new ProviderError("provider_response_too_large", 502, true);
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength > 16 * 1024 * 1024) {
+    throw new ProviderError("provider_response_too_large", 502, true);
+  }
+  const isGzip = bytes[0] === 0x1f && bytes[1] === 0x8b;
+  const text = isGzip
+    ? await new Response(
+        new Response(bytes).body?.pipeThrough(new DecompressionStream("gzip")),
+      ).text()
+    : new TextDecoder().decode(bytes);
+  if (text.length > 16 * 1024 * 1024) {
+    throw new ProviderError("provider_response_too_large", 502, true);
+  }
+  return text;
 }
 
 async function readApple(
@@ -454,78 +546,107 @@ async function readApple(
   const appId = required(credentials, "appId");
   const token = await appleToken(issuerId, keyId, privateKey);
   const base = "https://api.appstoreconnect.apple.com";
-  const requestPayload = {
-    data: {
-      type: "analyticsReportRequests",
-      attributes: { accessType: "ONGOING" },
-      relationships: { app: { data: { type: "apps", id: appId } } },
-    },
-  };
-  await providerResponse(
-    `${base}/v1/analyticsReportRequests`,
-    token,
-    {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(requestPayload),
-    },
-    new Set([200, 201, 202, 204, 409]),
-  ).then((response) => response.body?.cancel());
-  const requestQuery = new URLSearchParams({
-    "filter[accessType]": "ONGOING",
-    "filter[app]": appId,
-  });
-  const requests = await providerJSON(
-    `${base}/v1/analyticsReportRequests?${requestQuery}`,
+  const requests = await appleReportJSON(
+    `${base}/v1/apps/${encodeURIComponent(appId)}/analyticsReportRequests?limit=200`,
     token,
   );
   const request = (Array.isArray(requests.data) ? requests.data : [])
     .map(objectValue)
-    .find(
+    .filter(
       (item) =>
+        item.id &&
+        objectValue(item.attributes).stoppedDueToInactivity !== true,
+    )
+    .sort((left, right) => {
+      const priority = (item: Record<string, unknown>) =>
         String(objectValue(item.attributes).accessType).toUpperCase() ===
-        "ONGOING",
-    );
+        "ONGOING"
+          ? 0
+          : 1;
+      return priority(left) - priority(right);
+    })[0];
   const requestId = String(request?.id ?? "");
-  if (!requestId) return [];
-  let reportsUrl = `${base}/v1/analyticsReportRequests/${encodeURIComponent(requestId)}/reports?filter[category]=APP_STORE&limit=100`;
-  const reportIds = new Set<string>();
+  if (!requestId) {
+    throw new ProviderError("apple_report_request_required", 409);
+  }
+  const requestType = String(
+    objectValue(request.attributes).accessType ?? "",
+  ).toUpperCase();
+  const ongoingCutoff = new Date(
+    from.getTime() - 7 * 24 * 60 * 60 * 1000,
+  );
+  let reportsUrl = `${base}/v1/analyticsReportRequests/${encodeURIComponent(requestId)}/reports?limit=200`;
+  const reports = new Map<
+    string,
+    { id: string; name: string; lagDays: number }
+  >();
+  const wantedReports = new Map([
+    [
+      "App Store Discovery and Engagement Standard",
+      { metric: "engagement", lagDays: 3 },
+    ],
+    ["App Downloads Standard", { metric: "downloads", lagDays: 2 }],
+  ]);
   while (reportsUrl) {
-    const payload = await providerJSON(reportsUrl, token);
+    const payload = await appleReportJSON(reportsUrl, token);
     for (const raw of Array.isArray(payload.data) ? payload.data : []) {
       const item = objectValue(raw);
-      if (
-        String(objectValue(item.attributes).category).toUpperCase() ===
-        "APP_STORE" &&
-        item.id
-      ) {
-        reportIds.add(String(item.id));
+      const name = String(objectValue(item.attributes).name ?? "");
+      const wanted = wantedReports.get(name);
+      if (wanted && item.id) {
+        reports.set(wanted.metric, {
+          id: String(item.id),
+          name,
+          lagDays: wanted.lagDays,
+        });
       }
     }
     reportsUrl = String(objectValue(payload.links).next ?? "");
   }
+  if (!reports.size) {
+    throw new ProviderError("apple_reports_pending", 202);
+  }
   const reportResults: Aggregate[] = [];
-  for (const reportId of [...reportIds].sort()) {
-    let instancesUrl = `${base}/v1/analyticsReports/${encodeURIComponent(reportId)}/instances?filter[frequency]=DAILY&limit=100`;
-    const segmentUrls: string[] = [];
+  let instanceCount = 0;
+  for (const report of [...reports.values()].sort((left, right) =>
+    left.id.localeCompare(right.id),
+  )) {
+    let instancesUrl = `${base}/v1/analyticsReports/${encodeURIComponent(report.id)}/instances?filter[granularity]=DAILY&limit=200`;
+    const instances: Array<{
+      id: string;
+      processingDate: Date;
+    }> = [];
     while (instancesUrl) {
-      const payload = await providerJSON(instancesUrl, token);
+      const payload = await appleReportJSON(instancesUrl, token);
       for (const raw of Array.isArray(payload.data) ? payload.data : []) {
         const item = objectValue(raw);
         const attributes = objectValue(item.attributes);
-        const day = dateValue(attributes.reportingDate);
+        const processingDate = dateValue(attributes.processingDate);
         if (
-          !day ||
-          day < from ||
-          day >= to ||
-          String(attributes.frequency).toUpperCase() !== "DAILY"
+          !item.id ||
+          !processingDate ||
+          String(attributes.granularity).toUpperCase() !== "DAILY" ||
+          (requestType === "ONGOING" && processingDate < ongoingCutoff)
         ) {
           continue;
         }
-        const segmentPayload = await providerJSON(
-          `${base}/v1/analyticsReportInstances/${encodeURIComponent(String(item.id))}/segments?fields[analyticsReportSegments]=url,checksum,sizeInBytes`,
-          token,
-        );
+        instances.push({ id: String(item.id), processingDate });
+      }
+      instancesUrl = String(objectValue(payload.links).next ?? "");
+    }
+    instanceCount += instances.length;
+    const latestRowsByDay = new Map<
+      string,
+      { processingDate: string; rows: Aggregate[] }
+    >();
+    for (const instance of instances.sort(
+      (left, right) =>
+        left.processingDate.getTime() - right.processingDate.getTime(),
+    )) {
+      let segmentsUrl = `${base}/v1/analyticsReportInstances/${encodeURIComponent(instance.id)}/segments?fields[analyticsReportSegments]=url,checksum,sizeInBytes&limit=200`;
+      const segmentUrls: string[] = [];
+      while (segmentsUrl) {
+        const segmentPayload = await appleReportJSON(segmentsUrl, token);
         for (const segmentRaw of Array.isArray(segmentPayload.data)
           ? segmentPayload.data
           : []) {
@@ -534,23 +655,41 @@ async function readApple(
           );
           if (url) segmentUrls.push(url);
         }
+        segmentsUrl = String(objectValue(segmentPayload.links).next ?? "");
       }
-      instancesUrl = String(objectValue(payload.links).next ?? "");
-    }
-    const rows: Aggregate[] = [];
-    for (const segmentUrl of segmentUrls.sort()) {
-      const response = await providerResponse(segmentUrl, token);
-      if (!response.body) continue;
-      const decompressed = response.body.pipeThrough(
-        new DecompressionStream("gzip"),
-      );
-      const text = await new Response(decompressed).text();
-      if (text.length > 16 * 1024 * 1024) {
-        throw new ProviderError("provider_response_too_large", 502, true);
+      const instanceRows: Aggregate[] = [];
+      for (const segmentUrl of segmentUrls.sort()) {
+        const text = await downloadAppleTSV(segmentUrl);
+        instanceRows.push(
+          ...parseAppleTSV(
+            text,
+            from,
+            to,
+            instance.processingDate,
+            report.name,
+            report.lagDays,
+          ),
+        );
       }
-      rows.push(...parseAppleTSV(text, from, to, new Date()));
+      const rowsByDay = new Map<string, Aggregate[]>();
+      for (const row of mergeApple(instanceRows, "sum")) {
+        const rows = rowsByDay.get(row.occurredAt) ?? [];
+        rows.push(row);
+        rowsByDay.set(row.occurredAt, rows);
+      }
+      for (const [day, rows] of rowsByDay) {
+        latestRowsByDay.set(day, {
+          processingDate: instance.processingDate.toISOString(),
+          rows,
+        });
+      }
     }
-    reportResults.push(...mergeApple(rows, "sum"));
+    reportResults.push(
+      ...[...latestRowsByDay.values()].flatMap((entry) => entry.rows),
+    );
+  }
+  if (!instanceCount) {
+    throw new ProviderError("apple_reports_pending", 202);
   }
   return mergeApple(reportResults, "maximum");
 }

@@ -152,8 +152,10 @@ smokes, backup locations, and rollback boundaries are in
 
 ## Provider notes
 
-- Apple Analytics Reports are asynchronous and the first ongoing report can
-  take 1–2 days: <https://developer.apple.com/documentation/AppStoreConnectAPI/downloading-analytics-reports>
+- Apple Analytics imports use a team key with the `Sales and Reports` role.
+  An Admin must initialize Analytics Reports once if the app has no active
+  report request; the first downloadable report can take 1–2 days:
+  <https://developer.apple.com/documentation/AppStoreConnectAPI/downloading-analytics-reports>
 - RevenueCat uses API v2 Bearer keys with charts read permission:
   <https://www.revenuecat.com/docs/api-v2>
 - PostHog scheduled exports must not misuse the ad-hoc `/query` endpoint:
