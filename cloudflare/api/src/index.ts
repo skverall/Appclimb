@@ -3,6 +3,16 @@ import { createMiddleware } from "hono/factory";
 import type { ContentfulStatusCode } from "hono/utils/http-status";
 
 import {
+  addAppStoreApp,
+  addKeywordTrack,
+  checkKeywordRanks,
+  keywordSuggestions,
+  listKeywordTracks,
+  listWorkspaceApps,
+  refreshDueKeywordRanks,
+  searchAppStoreCatalog,
+} from "./apps-keywords";
+import {
   billingConfigured,
   createCheckoutBinding,
   parseSubscriptionUpdate,
@@ -726,8 +736,122 @@ app.post("/v1/sources/:provider/sync", requireAuth, requireEntitlement, async (c
   }
 });
 
+app.get("/v1/apps", requireAuth, async (c) =>
+  c.json({
+    data: await listWorkspaceApps(c.env.DB, c.get("auth").workspaceId),
+  }),
+);
+
+app.get("/v1/apps/search", requireAuth, requireEntitlement, async (c) => {
+  const platform = (c.req.query("platform") ?? "app-store").trim();
+  if (platform === "google-play") {
+    return errorResponse(c, "google_play_authorization_required", 409);
+  }
+  if (platform !== "app-store") {
+    return errorResponse(c, "unsupported_app_catalog", 400);
+  }
+  return c.json({
+    data: await searchAppStoreCatalog(
+      c.req.query("q") ?? "",
+      c.req.query("storefront") ?? "US",
+    ),
+    meta: {
+      platform: "app-store",
+      source: "Apple Search API",
+      privateAnalytics: false,
+    },
+  });
+});
+
+app.post("/v1/apps", requireAuth, requireEntitlement, async (c) => {
+  const auth = c.get("auth");
+  if (!["owner", "admin"].includes(auth.role)) {
+    return errorResponse(c, "admin_required", 403);
+  }
+  const input = await jsonBody(c.req.raw);
+  if (input.platform !== "app-store") {
+    return errorResponse(
+      c,
+      input.platform === "google-play"
+        ? "google_play_authorization_required"
+        : "unsupported_app_catalog",
+      input.platform === "google-play" ? 409 : 400,
+    );
+  }
+  return c.json(
+    {
+      data: await addAppStoreApp(
+        c.env,
+        auth,
+        typeof input.appStoreId === "string" ? input.appStoreId : "",
+        typeof input.storefront === "string" ? input.storefront : "US",
+      ),
+    },
+    201,
+  );
+});
+
+app.get("/v1/keywords", requireAuth, requireEntitlement, async (c) => {
+  const appId = (c.req.query("appId") ?? "").trim();
+  return c.json({
+    data: await listKeywordTracks(
+      c.env.DB,
+      c.get("auth").workspaceId,
+      appId,
+    ),
+    meta: {
+      rankSource: "Apple Search API observed result position",
+      popularitySource: "Apple Ads connection required",
+    },
+  });
+});
+
+app.get(
+  "/v1/keywords/suggestions",
+  requireAuth,
+  requireEntitlement,
+  async (c) =>
+    c.json({
+      data: await keywordSuggestions(
+        c.env,
+        c.get("auth"),
+        (c.req.query("appId") ?? "").trim(),
+      ),
+    }),
+);
+
+app.post("/v1/keywords", requireAuth, requireEntitlement, async (c) => {
+  const input = await jsonBody(c.req.raw);
+  const auth = c.get("auth");
+  const appId = typeof input.appId === "string" ? input.appId.trim() : "";
+  const data = await addKeywordTrack(
+    c.env,
+    auth,
+    appId,
+    typeof input.keyword === "string" ? input.keyword : "",
+    typeof input.storefront === "string" ? input.storefront : "US",
+  );
+  const check = await checkKeywordRanks(c.env, auth, appId, 1);
+  return c.json({ data, check }, 201);
+});
+
+app.post("/v1/keywords/check", requireAuth, requireEntitlement, async (c) => {
+  const input = await jsonBody(c.req.raw);
+  return c.json({
+    data: await checkKeywordRanks(
+      c.env,
+      c.get("auth"),
+      typeof input.appId === "string" ? input.appId.trim() : "",
+    ),
+  });
+});
+
 app.get("/v1/growth-map", requireAuth, async (c) => {
-  const snapshot = await growthMapSnapshot(c.env, c.get("auth"));
+  const snapshot = await growthMapSnapshot(
+    c.env,
+    c.get("auth"),
+    (c.req.query("appId") ?? "").trim(),
+  );
   return c.json(snapshot);
 });
 
@@ -1003,6 +1127,11 @@ const worker: ExportedHandler<Cloudflare.Env, SyncMessage> = {
         if (event.cron === "43 2 * * *") {
           const deleted = await deleteExpiredAnalytics(env);
           log("info", "analytics_retention_complete", { deleted });
+          return;
+        }
+        if (event.cron === "7 * * * *") {
+          const keywordRanks = await refreshDueKeywordRanks(env);
+          log("info", "keyword_ranks_refreshed", { keywordRanks });
           return;
         }
         const queued = await queueDueSyncs(env);

@@ -147,6 +147,24 @@ export interface CustomerCluster {
   radius: number;
 }
 
+export interface PostHogPulse {
+  status: "live" | "preparing" | "not-connected";
+  autoMapped: boolean;
+  detectedEventCount: number;
+  updatedAt: string | null;
+  activeUserDays: number;
+  activationUserDays: number;
+  activationRate: number | null;
+  dailyActive: Array<{ date: string; value: number }>;
+  flow: Array<{
+    id: string;
+    label: string;
+    event: string;
+    role: string;
+    value: number;
+  }>;
+}
+
 export interface DashboardSnapshot {
   mode?: "demo" | "empty" | "live" | "restricted" | "unavailable";
   generatedAt: string;
@@ -172,4 +190,5 @@ export interface DashboardSnapshot {
   sources: SourceConnection[];
   retention: RetentionCell[];
   customerClusters: CustomerCluster[];
+  posthogPulse?: PostHogPulse;
 }

@@ -1,6 +1,7 @@
 import { md5 } from "@noble/hashes/legacy.js";
 
 import {
+  discoverPostHogEvents,
   readAggregates,
   refreshPostHogOAuth,
   type Aggregate,
@@ -13,6 +14,7 @@ import {
 } from "./crypto";
 import { log, nowISO, requireSecret } from "./runtime";
 import type { SyncMessage } from "./sources";
+import { autoMapPostHogEvents } from "../../../src/lib/posthog-events";
 
 interface SyncJobRow {
   id: string;
@@ -241,9 +243,24 @@ export async function processSyncMessage(
       requireSecret(env, "ENVELOPE_MASTER_KEY"),
     );
     if (job.provider === "posthog") {
+      let credentialsChanged = false;
       const refreshed = await refreshPostHogOAuth(credentials);
       credentials = refreshed.credentials;
-      if (refreshed.changed) {
+      credentialsChanged = refreshed.changed;
+      if (
+        credentials.mappingMode !== "automatic" &&
+        credentials.mappingMode !== "manual"
+      ) {
+        const events = await discoverPostHogEvents(credentials, 30);
+        const autoMap = autoMapPostHogEvents(events);
+        credentials = {
+          ...credentials,
+          ...autoMap,
+          mappingMode: "automatic",
+        };
+        credentialsChanged = true;
+      }
+      if (credentialsChanged) {
         const resealed = await sealCredentials(
           credentials,
           requireSecret(env, "ENVELOPE_MASTER_KEY"),

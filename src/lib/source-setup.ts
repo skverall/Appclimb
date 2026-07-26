@@ -103,7 +103,7 @@ export const SOURCE_SETUP: Record<ConnectableProvider, SourceSetup> = {
     steps: [
       "Authorize AppClimb with read-only project and query scopes.",
       "Choose the PostHog project you want to diagnose.",
-      "Confirm the activation and session event names, then connect.",
+      "AppClimb auto-maps active use, first value and product milestones with one bounded aggregate query.",
     ],
     oauth: {
       label: "Continue with PostHog",

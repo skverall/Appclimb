@@ -105,7 +105,7 @@ export default async function Home({
   const privateSessionExpected =
     sessionPresence.hasAccessToken || sessionPresence.hasRefreshToken;
   const returnParams = new URLSearchParams();
-  for (const key of ["view", "insight", "demo", "atlas"]) {
+  for (const key of ["view", "insight", "demo", "atlas", "app"]) {
     const value = resolvedSearchParams[key];
     if (typeof value === "string") returnParams.set(key, value);
   }
@@ -124,7 +124,13 @@ export default async function Home({
   let authenticatedSnapshotLoaded = false;
 
   const [growthResult, identityResult] = await Promise.allSettled([
-    readBackend("/v1/growth-map"),
+    readBackend(
+      `/v1/growth-map${
+        typeof resolvedSearchParams.app === "string"
+          ? `?appId=${encodeURIComponent(resolvedSearchParams.app)}`
+          : ""
+      }`,
+    ),
     readBackend("/v1/me"),
   ]);
   const growthResponse =

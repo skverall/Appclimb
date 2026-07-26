@@ -152,6 +152,32 @@ export const dashboardSnapshotSchema = z.object({
       radius: z.number().finite(),
     }),
   ),
+  posthogPulse: z
+    .object({
+      status: z.enum(["live", "preparing", "not-connected"]),
+      autoMapped: z.boolean(),
+      detectedEventCount: z.number().int().nonnegative(),
+      updatedAt: z.string().nullable(),
+      activeUserDays: z.number().finite().nonnegative(),
+      activationUserDays: z.number().finite().nonnegative(),
+      activationRate: z.number().finite().min(0).max(1).nullable(),
+      dailyActive: z.array(
+        z.object({
+          date: z.string(),
+          value: z.number().finite().nonnegative(),
+        }),
+      ),
+      flow: z.array(
+        z.object({
+          id: z.string(),
+          label: z.string(),
+          event: z.string(),
+          role: z.string(),
+          value: z.number().finite().nonnegative(),
+        }),
+      ),
+    })
+    .optional(),
 });
 
 export function isDashboardSnapshot(

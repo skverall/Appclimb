@@ -39,7 +39,6 @@ import {
 } from "@/components/workspace-views";
 import { SourcesView } from "@/components/sources-view";
 import {
-  EmptyWorkspaceView,
   NoEvidenceView,
   RestrictedWorkspaceView,
   UnavailableWorkspaceView,
@@ -294,11 +293,6 @@ export function AppClimbShell({
       source.accountLabel?.trim(),
   )?.accountLabel;
   const displayedAppName = connectedAppleName?.trim() || initialSnapshot.app.name;
-  const workspaceSnapshot = {
-    ...initialSnapshot,
-    app: { ...initialSnapshot.app, name: displayedAppName },
-    sources: sourceConnections,
-  };
   const appInitials = displayedAppName
     .split(/\s+/)
     .filter(Boolean)
@@ -686,20 +680,6 @@ export function AppClimbShell({
                 initialSnapshot.app.period,
               )}
             />
-          ) : activeSection === "pulse" &&
-            initialSnapshot.mode === "empty" ? (
-            <EmptyWorkspaceView
-              snapshot={workspaceSnapshot}
-              onOpenSources={(provider) => {
-                if (provider) {
-                  openSourceSetup(provider);
-                  return;
-                }
-                navigateTo("sources");
-              }}
-              onOpenAcquisitionAtlas={openAcquisitionAtlas}
-              onOpenMethodology={() => setHelpOpen(true)}
-            />
           ) : activeSection === "pulse" ? (
             <PulseView
               snapshot={initialSnapshot}
@@ -709,6 +689,7 @@ export function AppClimbShell({
               replayIndex={replayIndex}
               onReplayIndexChange={setReplayIndex}
               sources={sourceConnections}
+              onOpenSources={() => navigateTo("sources")}
             />
           ) : activeSection === "diagnose" &&
             initialSnapshot.insights.length === 0 ? (

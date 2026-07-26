@@ -10,11 +10,10 @@ import {
   POSTHOG_CLIENT_ID,
   readPostHogOAuthPending,
 } from "@/lib/posthog-oauth";
+import { autoMapPostHogEvents } from "@/lib/posthog-events";
 
 const inputSchema = z.object({
   projectId: z.string().trim().min(1).max(120),
-  activationEvent: z.string().trim().min(1).max(200),
-  sessionEvent: z.string().trim().min(1).max(200),
 });
 
 export async function POST(request: Request) {
@@ -35,28 +34,16 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return Response.json({ error: "Invalid connection request" }, { status: 400 });
   }
-  let availableEvents: Set<string>;
+  let events;
   try {
-    availableEvents = new Set(
-      (await listPostHogEvents(pending, parsed.data.projectId)).map(
-        (event) => event.name,
-      ),
-    );
+    events = await listPostHogEvents(pending, parsed.data.projectId);
   } catch {
     return Response.json(
       { error: "PostHog events could not be verified" },
       { status: 502 },
     );
   }
-  if (
-    !availableEvents.has(parsed.data.activationEvent) ||
-    !availableEvents.has(parsed.data.sessionEvent)
-  ) {
-    return Response.json(
-      { error: "Choose events seen in this project during the last 30 days" },
-      { status: 422 },
-    );
-  }
+  const autoMap = autoMapPostHogEvents(events);
   const response = await requestWithSession("/v1/sources/posthog", {
     method: "PUT",
     body: JSON.stringify({
@@ -68,8 +55,11 @@ export async function POST(request: Request) {
         authMethod: "oauth",
         projectId: parsed.data.projectId,
         host: pending.host,
-        activationEvent: parsed.data.activationEvent,
-        sessionEvent: parsed.data.sessionEvent,
+        activationEvent: autoMap.activationEvent,
+        sessionEvent: autoMap.sessionEvent,
+        eventFlow: autoMap.eventFlow,
+        detectedEventCount: autoMap.detectedEventCount,
+        mappingMode: "automatic",
       },
     }),
   });

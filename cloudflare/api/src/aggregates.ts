@@ -241,16 +241,48 @@ async function readPostHog(
   if (!["https://us.posthog.com", "https://eu.posthog.com"].includes(host)) {
     throw new ProviderError("invalid_posthog_host", 400);
   }
-  const entries = [
-    [required(credentials, "activationEvent"), "activated_users"],
-    [required(credentials, "sessionEvent"), "active_users"],
-  ] as const;
-  if (entries.some(([event]) => !validEventName(event))) {
+  const activationEvent =
+    typeof credentials.activationEvent === "string"
+      ? credentials.activationEvent.trim()
+      : "";
+  const sessionEvent =
+    typeof credentials.sessionEvent === "string"
+      ? credentials.sessionEvent.trim()
+      : "";
+  const eventFlow = (Array.isArray(credentials.eventFlow)
+    ? credentials.eventFlow
+    : []
+  )
+    .map((value) => {
+      if (!value || typeof value !== "object") return null;
+      const candidate = value as Record<string, unknown>;
+      const event =
+        typeof candidate.event === "string" ? candidate.event.trim() : "";
+      const label =
+        typeof candidate.label === "string" ? candidate.label.trim() : "";
+      const phase =
+        typeof candidate.phase === "string" ? candidate.phase.trim() : "";
+      if (!validEventName(event)) return null;
+      return { event, label: label.slice(0, 80), phase: phase.slice(0, 24) };
+    })
+    .filter(
+      (
+        value,
+      ): value is { event: string; label: string; phase: string } =>
+        value !== null,
+    )
+    .slice(0, 5);
+  const events = [
+    activationEvent,
+    sessionEvent,
+    ...eventFlow.map((step) => step.event),
+  ].filter((event, index, values) => event && values.indexOf(event) === index);
+  if (events.some((event) => !validEventName(event))) {
     throw new ProviderError("invalid_posthog_event_name", 400);
   }
-  const metricByEvent = new Map(entries);
-  const quoted = entries
-    .map(([event]) => `'${event.replaceAll("'", "''")}'`)
+  if (!events.length) return [];
+  const quoted = events
+    .map((event) => `'${event.replaceAll("'", "''")}'`)
     .join(",");
   const query = `select
   toStartOfDay(timestamp) as day,
@@ -278,16 +310,41 @@ order by day,event`;
     const occurredAt = dateValue(row[0]);
     const event = typeof row[1] === "string" ? row[1] : "";
     const value = numeric(row[2]);
-    const metricKey = metricByEvent.get(event);
-    if (!occurredAt || value === null || !metricKey) continue;
-    result.push({
-      metricKey,
-      occurredAt: occurredAt.toISOString(),
-      value,
-      unit: "count",
-      dimensions: { event },
-      sourceUpdatedAt: now,
-      completeness: completeness(to, occurredAt),
+    if (!occurredAt || value === null) continue;
+    const detectedEventCount = Number(credentials.detectedEventCount);
+    const sharedDimensions = {
+      event,
+      detectedEventCount: Number.isFinite(detectedEventCount)
+        ? String(Math.max(0, Math.trunc(detectedEventCount)))
+        : "",
+      mappingMode:
+        credentials.mappingMode === "automatic" ? "automatic" : "manual",
+    };
+    const add = (
+      metricKey: string,
+      dimensions: Record<string, string> = {},
+    ) => {
+      result.push({
+        metricKey,
+        occurredAt: occurredAt.toISOString(),
+        value,
+        unit: "count",
+        dimensions: { ...sharedDimensions, ...dimensions },
+        sourceUpdatedAt: now,
+        completeness: completeness(to, occurredAt),
+      });
+    };
+    if (event === sessionEvent) add("active_users", { role: "active" });
+    if (event === activationEvent) {
+      add("activated_users", { role: "first_value" });
+    }
+    eventFlow.forEach((step, index) => {
+      if (step.event === event) {
+        add(`posthog_flow_${index + 1}`, {
+          role: step.phase || "value",
+          label: step.label || step.event,
+        });
+      }
     });
   }
   return result;

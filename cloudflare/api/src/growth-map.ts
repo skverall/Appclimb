@@ -26,6 +26,7 @@ interface MetricRow {
   value: number;
   unit: string;
   completeness: number;
+  dimensions: string;
 }
 
 function stageValues(metrics: MetricRow[]): Map<string, number> {
@@ -97,6 +98,7 @@ function parseJSON<T>(value: string | null, fallback: T): T {
 export async function growthMapSnapshot(
   env: Cloudflare.Env,
   auth: AuthContext,
+  requestedAppId = "",
 ): Promise<{
   data: Record<string, unknown>;
   meta: Record<string, unknown>;
@@ -106,17 +108,31 @@ export async function growthMapSnapshot(
   if (!workspace) {
     throw new Error("workspace_not_found");
   }
-  const sources = await listSources(env.DB, auth.workspaceId);
+  const selectedApp = await env.DB.prepare(
+    `SELECT id,name,platform,default_storefront
+     FROM apps
+     WHERE workspace_id=? AND id=?
+     LIMIT 1`,
+  )
+    .bind(auth.workspaceId, requestedAppId || workspace.defaultAppId)
+    .first<{
+      id: string;
+      name: string;
+      platform: string;
+      default_storefront: string;
+    }>();
+  if (!selectedApp) throw new Error("app_not_found");
+  const sources = await listSources(env.DB, auth.workspaceId, selectedApp.id);
   const entitled = isEntitled(workspace, now);
   const from = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString();
   const metricResult = entitled
     ? await env.DB.prepare(
-        `SELECT provider,metric_key,occurred_at,value,unit,completeness
+        `SELECT provider,metric_key,occurred_at,value,unit,completeness,dimensions
          FROM metric_points
-         WHERE workspace_id = ? AND occurred_at >= ?
+         WHERE workspace_id = ? AND app_id = ? AND occurred_at >= ?
          ORDER BY occurred_at`,
       )
-        .bind(auth.workspaceId, from)
+        .bind(auth.workspaceId, selectedApp.id, from)
         .all<MetricRow>()
     : { results: [] as MetricRow[] };
   const metrics = metricResult.results;
@@ -142,11 +158,11 @@ export async function growthMapSnapshot(
     ? await env.DB.prepare(
         `SELECT id,occurred_at,label,detail,event_type
          FROM change_events
-         WHERE workspace_id = ? AND occurred_at >= ?
+         WHERE workspace_id = ? AND app_id = ? AND occurred_at >= ?
          ORDER BY occurred_at DESC
          LIMIT 50`,
       )
-        .bind(auth.workspaceId, from)
+        .bind(auth.workspaceId, selectedApp.id, from)
         .all<{
           id: string;
           occurred_at: string;
@@ -159,10 +175,10 @@ export async function growthMapSnapshot(
     ? await env.DB.prepare(
         `SELECT id,title,finding,provider,metric_keys,window_from,window_to,
                 confidence,before_value,after_value
-         FROM evidence WHERE workspace_id = ?
+         FROM evidence WHERE workspace_id = ? AND app_id = ?
          ORDER BY created_at DESC LIMIT 50`,
       )
-        .bind(auth.workspaceId)
+        .bind(auth.workspaceId, selectedApp.id)
         .all<{
           id: string;
           title: string;
@@ -179,10 +195,10 @@ export async function growthMapSnapshot(
   const insightResult = entitled
     ? await env.DB.prepare(
         `SELECT id,title,summary,kind,stage_id,evidence_ids,confidence,impact,effort,rank
-         FROM insights WHERE workspace_id = ?
+         FROM insights WHERE workspace_id = ? AND app_id = ?
          ORDER BY created_at DESC,rank LIMIT 30`,
       )
-        .bind(auth.workspaceId)
+        .bind(auth.workspaceId, selectedApp.id)
         .all<{
           id: string;
           title: string;
@@ -200,10 +216,10 @@ export async function growthMapSnapshot(
     ? await env.DB.prepare(
         `SELECT id,insight_id,title,rationale,experiment_template,status,
                 external_mutation_allowed
-         FROM action_proposals WHERE workspace_id = ?
+         FROM action_proposals WHERE workspace_id = ? AND app_id = ?
          ORDER BY created_at DESC LIMIT 30`,
       )
-        .bind(auth.workspaceId)
+        .bind(auth.workspaceId, selectedApp.id)
         .all<{
           id: string;
           insight_id: string;
@@ -225,15 +241,65 @@ export async function growthMapSnapshot(
     price: "coral",
     paywall: "violet",
   };
+  const postHogMetrics = metrics.filter(
+    (metric) => metric.provider === "posthog",
+  );
+  const activeByDay = new Map<string, number>();
+  const flowByKey = new Map<
+    string,
+    { label: string; event: string; role: string; value: number }
+  >();
+  let detectedEventCount = 0;
+  let activeTotal = 0;
+  let activationTotal = 0;
+  let postHogUpdatedAt: string | null = null;
+  for (const metric of postHogMetrics) {
+    const dimensions = parseJSON<Record<string, string>>(metric.dimensions, {});
+    const date = metric.occurred_at.slice(0, 10);
+    if (metric.metric_key === "active_users") {
+      activeTotal += Number(metric.value);
+      activeByDay.set(date, (activeByDay.get(date) ?? 0) + Number(metric.value));
+    }
+    if (metric.metric_key === "activated_users") {
+      activationTotal += Number(metric.value);
+    }
+    if (/^posthog_flow_\d+$/u.test(metric.metric_key)) {
+      const current = flowByKey.get(metric.metric_key) ?? {
+        label: dimensions.label || dimensions.event || "Product milestone",
+        event: dimensions.event || "",
+        role: dimensions.role || "value",
+        value: 0,
+      };
+      current.value += Number(metric.value);
+      flowByKey.set(metric.metric_key, current);
+    }
+    detectedEventCount = Math.max(
+      detectedEventCount,
+      Number(dimensions.detectedEventCount) || 0,
+    );
+    if (
+      !postHogUpdatedAt ||
+      new Date(metric.occurred_at).getTime() >
+        new Date(postHogUpdatedAt).getTime()
+    ) {
+      postHogUpdatedAt = metric.occurred_at;
+    }
+  }
+  const postHogSource = sources.find(
+    (source) => source.provider === "posthog",
+  );
+  const flow = [...flowByKey.entries()]
+    .sort(([left], [right]) => left.localeCompare(right, undefined, { numeric: true }))
+    .map(([id, item]) => ({ id, ...item }));
   return {
     data: {
       generatedAt: now.toISOString(),
       workspaceName: workspace.name,
       app: {
-        id: workspace.defaultAppId,
-        name: workspace.defaultAppName,
-        platform: "iOS",
-        storefront: workspace.defaultStorefront,
+        id: selectedApp.id,
+        name: selectedApp.name,
+        platform: selectedApp.platform,
+        storefront: selectedApp.default_storefront,
         period: "Last 30 days",
       },
       confidence: {
@@ -283,6 +349,29 @@ export async function growthMapSnapshot(
       })),
       experiments: [],
       sources,
+      posthogPulse: {
+        status: postHogMetrics.length
+          ? "live"
+          : postHogSource?.status === "connected" ||
+              postHogSource?.status === "needs-attention"
+            ? "preparing"
+            : "not-connected",
+        autoMapped: true,
+        detectedEventCount,
+        updatedAt:
+          (typeof postHogSource?.lastMetricAt === "string"
+            ? postHogSource.lastMetricAt
+            : null) ?? postHogUpdatedAt,
+        activeUserDays: activeTotal,
+        activationUserDays: activationTotal,
+        activationRate:
+          activeTotal > 0 ? Math.min(1, activationTotal / activeTotal) : null,
+        dailyActive: [...activeByDay.entries()].map(([date, value]) => ({
+          date,
+          value,
+        })),
+        flow,
+      },
       retention: [],
       customerClusters: [],
     },

@@ -17,6 +17,7 @@ import {
   LockKeyhole,
   RefreshCw,
   ShieldCheck,
+  SlidersHorizontal,
   Sparkles,
   Waypoints,
   X,
@@ -109,7 +110,9 @@ function journeyFor(provider: SourceProvider) {
 }
 
 function dataHealth(source: SourceConnection): DataHealth {
-  if (source.provider === "appclimb-rank") return "roadmap";
+  if (source.provider === "appclimb-rank") {
+    return (source.metricCount ?? 0) > 0 ? "live" : "waiting";
+  }
   if (source.status === "not-connected") return "empty";
   if (
     source.syncStatus === "queued" ||
@@ -135,7 +138,9 @@ function dataHealth(source: SourceConnection): DataHealth {
 function dataHealthLabel(source: SourceConnection) {
   switch (dataHealth(source)) {
     case "live":
-      return `${source.metricCount ?? 0} metric points live`;
+      return source.provider === "appclimb-rank"
+        ? `${source.metricCount ?? 0} keywords tracked`
+        : `${source.metricCount ?? 0} metric points live`;
     case "syncing":
       return source.syncStatus === "retrying"
         ? `Retrying import · ${source.syncAttempt ?? 0}/${source.syncMaxAttempts ?? 0}`
@@ -152,10 +157,14 @@ function dataHealthLabel(source: SourceConnection) {
           : source.lastErrorCode === "apple_reports_role_required"
             ? "Apple reports access required"
         : source.lastErrorCode === "no_data_in_window"
-          ? "No matching data found"
+          ? source.provider === "posthog"
+            ? "No recent events yet"
+            : "No rows in the latest window"
           : "Import needs attention";
     case "waiting":
-      return "Access saved · No data imported";
+      return source.provider === "appclimb-rank"
+        ? "Ready · Add your first keyword"
+        : "Access saved · No data imported";
     case "roadmap":
       return "Roadmap";
     default:
@@ -172,7 +181,7 @@ function errorGuidance(source: SourceConnection) {
         return "Apple returned no supported rows for this window. New Analytics Reports normally take 24–48 hours, and low-volume metrics may remain empty.";
       }
       if (source.provider === "posthog") {
-        return "PostHog access works, but the selected event names were not seen in the last 30 days. Choose real events from this project; no reauthorization is required.";
+        return "PostHog access works. AppClimb will auto-map the project again on the next import; if the project is new, Pulse starts after its first event.";
       }
       return "The source returned no matching rows. Check the selected project and event names, or wait until those events exist.";
     case "apple_report_request_required":
@@ -447,11 +456,9 @@ export function SourcesView({
 
   const connectPostHogOAuth = async (formData: FormData) => {
     const projectId = String(formData.get("projectId") ?? "").trim();
-    const activationEvent = String(formData.get("activationEvent") ?? "").trim();
-    const sessionEvent = String(formData.get("sessionEvent") ?? "").trim();
-    if (!projectId || !activationEvent || !sessionEvent) {
+    if (!projectId) {
       setConnectionState("error");
-      setConnectionMessage("Choose a project and confirm both event names.");
+      setConnectionMessage("Choose a PostHog project.");
       return;
     }
     setConnectionState("saving");
@@ -460,7 +467,7 @@ export function SourcesView({
       const response = await fetch("/api/oauth/posthog/connect", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ projectId, activationEvent, sessionEvent }),
+        body: JSON.stringify({ projectId }),
       });
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as
@@ -724,9 +731,33 @@ export function SourcesView({
                 </button>
               </div>
             ) : selected.provider === "appclimb-rank" ? (
-              <div className="source-beta-note">
-                Keyword monitoring remains on the roadmap. No collector or
-                credentials are enabled.
+              <div className="source-health-view source-connect-intro">
+                <div className="source-destination-card">
+                  <Gauge size={22} />
+                  <div>
+                    <small>Built into AppClimb Pulse</small>
+                    <strong>
+                      {(selected.metricCount ?? 0) > 0
+                        ? `${selected.metricCount} keywords tracked`
+                        : "Ready for your first keyword"}
+                    </strong>
+                  </div>
+                </div>
+                <div className="source-waiting-note" role="note">
+                  <Sparkles size={17} />
+                  <span>
+                    Observed App Store positions and 14-check trends require no
+                    additional credentials. Apple Ads is only needed for
+                    official search popularity.
+                  </span>
+                </div>
+                <button
+                  className="primary-action"
+                  type="button"
+                  onClick={onOpenGrowthRiver}
+                >
+                  Open Keyword Terrain <ArrowRight size={17} />
+                </button>
               </div>
             ) : setupOpen && selectedConnectable ? (
               <ConnectionSetup
@@ -916,7 +947,9 @@ function SourceHealthView({
           <div>
             <strong>Apple is preparing reports (1–2 days)</strong>
             <span>
-              Apple accepted the Analytics Reports request. Initial report generation normally takes 1–2 days; AppClimb will keep checking automatically.
+              Apple accepted the request. As soon as files appear, AppClimb
+              imports the one-time historical snapshot first, then keeps the
+              ongoing daily reports up to date automatically.
             </span>
           </div>
         </div>
@@ -964,7 +997,7 @@ function SourceHealthView({
             ? "Checking import…"
             : source.provider === "posthog" &&
                 source.lastErrorCode === "no_data_in_window"
-              ? "Choose PostHog events"
+              ? "Review PostHog pulse"
             : health === "pending"
               ? "Check import status"
               : health === "attention"
@@ -1047,35 +1080,6 @@ function PostHogOAuthProjectForm({
   onConnect: (formData: FormData) => Promise<void>;
 }) {
   const [projectId, setProjectId] = useState("");
-  const [events, setEvents] = useState<PostHogEventOption[]>([]);
-  const [activationEvent, setActivationEvent] = useState("");
-  const [sessionEvent, setSessionEvent] = useState("");
-  const [eventState, setEventState] = useState<
-    "idle" | "loading" | "ready" | "error"
-  >("idle");
-
-  const chooseProject = async (nextProjectId: string) => {
-    setProjectId(nextProjectId);
-    setEvents([]);
-    setActivationEvent("");
-    setSessionEvent("");
-    setEventState("loading");
-    try {
-      const response = await fetch(
-        `/api/oauth/posthog/events?projectId=${encodeURIComponent(nextProjectId)}`,
-        { cache: "no-store" },
-      );
-      if (!response.ok) throw new Error("posthog_events_failed");
-      const payload = (await response.json()) as {
-        data?: { events?: PostHogEventOption[] };
-      };
-      const available = payload.data?.events ?? [];
-      setEvents(available);
-      setEventState("ready");
-    } catch {
-      setEventState("error");
-    }
-  };
 
   return (
     <form className="connection-form oauth-project-form" action={onConnect}>
@@ -1085,7 +1089,7 @@ function PostHogOAuthProjectForm({
           name="projectId"
           required
           value={projectId}
-          onChange={(event) => void chooseProject(event.target.value)}
+          onChange={(event) => setProjectId(event.target.value)}
         >
           <option value="" disabled>
             Choose a PostHog project
@@ -1098,85 +1102,27 @@ function PostHogOAuthProjectForm({
         </select>
       </label>
 
-      {eventState === "loading" && (
-        <div className="posthog-event-state" role="status">
-          <LoaderCircle className="spin" size={18} />
-          <span>Reading events seen in this project during the last 30 days…</span>
-        </div>
-      )}
-      {eventState === "error" && (
-        <div className="posthog-event-state is-error" role="alert">
-          <CircleAlert size={18} />
-          <span>Events could not be read. Choose the project again or reauthorize.</span>
-        </div>
-      )}
-      {eventState === "ready" && events.length === 0 && (
-        <div className="posthog-event-state" role="status">
-          <Clock3 size={18} />
+      <div className="posthog-auto-map-note">
+        <Waypoints size={18} />
+        <div>
+          <strong>AppClimb maps the product flow automatically</strong>
           <span>
-            No events were seen in the last 30 days. Send one test event to this
-            project, then choose the project again.
+            One bounded query reads the last 30 days, identifies useful
+            milestones, and builds your Pulse. You can review the mapping later.
           </span>
         </div>
-      )}
-      {events.length > 0 && (
-        <div className="posthog-event-picker">
-          <div className="posthog-event-picker-intro">
-            <Waypoints size={18} />
-            <div>
-              <strong>Choose from real project events</strong>
-              <span>
-                AppClimb found {events.length} event
-                {events.length === 1 ? "" : "s"} in the last 30 days.
-              </span>
-            </div>
-          </div>
-          <EventSelect
-            name="activationEvent"
-            label="First value event"
-            help="The first event that proves a new user reached meaningful value."
-            value={activationEvent}
-            events={events}
-            onChange={setActivationEvent}
-          />
-          <EventSelect
-            name="sessionEvent"
-            label="Active use event"
-            help="A recurring event that best represents a real product session."
-            value={sessionEvent}
-            events={events}
-            onChange={setSessionEvent}
-          />
-        </div>
-      )}
-
-      <p className="compact-field-help">
-        AppClimb validates both names before saving. It never invents a default
-        event for your project.{" "}
-        <a
-          href="https://posthog.com/docs/product-analytics/activation"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Activation guide <ExternalLink size={12} />
-        </a>
-      </p>
+      </div>
       <button
         className="primary-action"
         type="submit"
-        disabled={
-          connectionState === "saving" ||
-          !projectId ||
-          !activationEvent ||
-          !sessionEvent
-        }
+        disabled={connectionState === "saving" || !projectId}
       >
         {connectionState === "saving" ? (
           <LoaderCircle className="spin" size={17} />
         ) : (
           <ShieldCheck size={17} />
         )}
-        Connect selected project
+        Build my product pulse
       </button>
     </form>
   );
@@ -1355,6 +1301,55 @@ function ExistingPostHogEventSetup({
   );
 }
 
+function AutomaticPostHogSetup({
+  source,
+  onReviewMapping,
+  onChangeAuthorization,
+}: {
+  source: SourceConnection;
+  onReviewMapping: () => void;
+  onChangeAuthorization: () => void;
+}) {
+  const hasMetrics = (source.metricCount ?? 0) > 0;
+  const isPreparing =
+    source.syncStatus === "queued" ||
+    source.syncStatus === "running" ||
+    source.syncStatus === "retrying";
+  return (
+    <div className="existing-posthog-setup posthog-automatic-setup">
+      <div className="posthog-auto-map-note">
+        <Waypoints size={18} />
+        <div>
+          <strong>Product Pulse is mapped automatically</strong>
+          <span>
+            {hasMetrics
+              ? `${source.metricCount} daily metric points are live. AppClimb refreshes them with one bounded aggregate query.`
+              : isPreparing
+                ? "The first bounded import is running. You can close this window; Pulse will fill in automatically."
+                : "The connection is ready. If this project has no recent events yet, Pulse will begin after the first event arrives."}
+          </span>
+        </div>
+      </div>
+      <div className="posthog-automatic-actions">
+        <button
+          className="secondary-action"
+          type="button"
+          onClick={onReviewMapping}
+        >
+          <SlidersHorizontal size={15} /> Review mapping
+        </button>
+        <button
+          className="source-advanced-toggle"
+          type="button"
+          onClick={onChangeAuthorization}
+        >
+          Change project or authorization <ChevronDown size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ConnectionSetup({
   source,
   oauthState,
@@ -1409,14 +1404,21 @@ function ConnectionSetup({
       ) : source.provider === "posthog" &&
         alreadyConfigured &&
         !advancedOpen ? (
-        <ExistingPostHogEventSetup
-          onSaved={onPostHogEventsSaved}
+        <AutomaticPostHogSetup
+          source={source}
+          onReviewMapping={() => onAdvancedChange(true)}
           onChangeAuthorization={() => onAdvancedChange(true)}
         />
       ) : (
         <>
           {source.provider === "posthog" && (
             <>
+              {alreadyConfigured && advancedOpen && (
+                <ExistingPostHogEventSetup
+                  onSaved={onPostHogEventsSaved}
+                  onChangeAuthorization={() => onAdvancedChange(false)}
+                />
+              )}
               <a className="oauth-connect-button" href="/api/oauth/posthog/start">
                 <ProviderMark provider="posthog" />
                 <span>
@@ -1445,7 +1447,8 @@ function ConnectionSetup({
               </p>
             </div>
           )}
-          {(source.provider !== "posthog" || advancedOpen) && (
+          {(source.provider !== "posthog" ||
+            (advancedOpen && !alreadyConfigured)) && (
             <>
               <ol className="setup-visual-steps">
                 {setup.steps.map((step, index) => (

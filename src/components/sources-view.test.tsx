@@ -81,7 +81,7 @@ describe("guided Sources experience", () => {
     expect(window.location.search).toBe("?view=sources");
   });
 
-  it("turns PostHog zero rows into a real event chooser without reauthorization", async () => {
+  it("keeps PostHog zero rows in an automatic waiting state", async () => {
     const snapshot = sourceSnapshot();
     const posthog = snapshot.sources.find(
       (source) => source.provider === "posthog",
@@ -134,24 +134,20 @@ describe("guided Sources experience", () => {
     const postHogRow = screen.getByText("PostHog").closest("button");
     expect(postHogRow).not.toBeNull();
     fireEvent.click(postHogRow!);
-    expect(
-      screen.getByText(/selected event names were not seen in the last 30 days/i),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/auto-map the project again/i)).toBeInTheDocument();
     fireEvent.click(
-      screen.getByRole("button", { name: /choose posthog events/i }),
+      screen.getByRole("button", { name: /review posthog pulse/i }),
     );
 
     await waitFor(() => {
       expect(
-        screen.getByText(/changing these events does not require authorization/i),
+        screen.getByText(/product pulse is mapped automatically/i),
       ).toBeInTheDocument();
     });
     expect(
-      screen.getAllByRole("option", { name: /onboarding_started/i }).length,
-    ).toBe(2);
-    expect(
-      screen.queryByDisplayValue("app_activated"),
+      screen.queryByRole("option", { name: /onboarding_started/i }),
     ).not.toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   it("separates saved access from imported data and names the destination", () => {

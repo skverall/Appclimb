@@ -106,6 +106,62 @@ describe("Cloudflare source aggregates", () => {
     ]);
   });
 
+  it("emits automatic product-flow points from the same PostHog query", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          results: [
+            ["2026-07-25", "$pageview", 40],
+            ["2026-07-25", "guest_first_car_added", 16],
+            ["2026-07-25", "subscription_started", 4],
+          ],
+        }),
+      ),
+    );
+
+    const rows = await readAggregates(
+      "posthog",
+      {
+        personalApiKey: "phx_key",
+        projectId: "project-1",
+        host: "https://us.posthog.com",
+        activationEvent: "guest_first_car_added",
+        sessionEvent: "$pageview",
+        detectedEventCount: 48,
+        mappingMode: "automatic",
+        eventFlow: [
+          { event: "$pageview", label: "Pageview", phase: "visit" },
+          {
+            event: "guest_first_car_added",
+            label: "Guest first car added",
+            phase: "value",
+          },
+          {
+            event: "subscription_started",
+            label: "Subscription started",
+            phase: "monetize",
+          },
+        ],
+      },
+      new Date("2026-07-01T00:00:00.000Z"),
+      new Date("2026-07-26T00:00:00.000Z"),
+    );
+
+    expect(rows.map((row) => row.metricKey)).toEqual([
+      "active_users",
+      "posthog_flow_1",
+      "activated_users",
+      "posthog_flow_2",
+      "posthog_flow_3",
+    ]);
+    expect(rows[1]?.dimensions).toMatchObject({
+      event: "$pageview",
+      detectedEventCount: "48",
+      mappingMode: "automatic",
+    });
+  });
+
   it("refreshes an expired PostHog OAuth token without dropping settings", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-07-26T12:00:00.000Z"));

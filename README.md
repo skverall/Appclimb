@@ -20,6 +20,11 @@ Read it before changing product direction or expanding the feature set.
   conversion, with AI crawler requests kept in a separate current.
 - Evidence inspector with at most three ranked opportunities.
 - Growth Replay for releases, metadata, screenshots, price and paywall changes.
+- Automatic PostHog Product Pulse: one bounded event discovery pass followed
+  by aggregate active-use, first-value, and milestone trends.
+- App Store catalog selection and a 100-keyword Rank Terrain with bounded
+  observed-position history. Apple Ads popularity remains a separate,
+  explicitly unavailable signal until that connector exists.
 - Retention heatmap and Voice of Customer clusters.
 - Read-only Lab proposals and integration health.
 - 14-day no-card entitlement followed by `$12.99/month` or `$129/year`.
@@ -72,6 +77,8 @@ Source precedence is deterministic:
 - Superwall: paywall views, experiments and paywall conversion.
 - AppClimb first-party analytics: web referrers, UTM attribution, landing-page
   journeys, explicit web goals, and server-observed crawler requests.
+- AppClimb rank monitor: bounded public App Store result observations. These
+  are labeled observed positions, not official search-volume estimates.
 
 User-level joins are disabled unless a workspace explicitly confirms a shared
 App User ID. Otherwise AppClimb uses aggregate UTC day and cohort comparisons.

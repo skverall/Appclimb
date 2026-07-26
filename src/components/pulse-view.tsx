@@ -10,6 +10,7 @@ import {
 import { GrowthReplay } from "@/components/growth-replay";
 import { GrowthRiver } from "@/components/growth-river";
 import { InsightPanel } from "@/components/insight-panel";
+import { ProductPulseWorkspace } from "@/components/product-pulse-workspace";
 import { RetentionHeatmap } from "@/components/retention-heatmap";
 import { VoiceClusters } from "@/components/voice-clusters";
 import type { DashboardSnapshot, SourceConnection } from "@/lib/contracts";
@@ -22,6 +23,7 @@ export function PulseView({
   replayIndex,
   onReplayIndexChange,
   sources,
+  onOpenSources,
 }: {
   snapshot: DashboardSnapshot;
   selectedInsightId: string;
@@ -30,26 +32,15 @@ export function PulseView({
   replayIndex: number;
   onReplayIndexChange: (index: number) => void;
   sources: SourceConnection[];
+  onOpenSources: () => void;
 }) {
-  const appInitials =
-    snapshot.app.name
-      .split(/\s+/)
-      .filter(Boolean)
-      .slice(0, 2)
-      .map((part) => part[0])
-      .join("")
-      .toUpperCase() || "AC";
-
   return (
     <section className="pulse-view">
+      <ProductPulseWorkspace
+        snapshot={snapshot}
+        onOpenSources={onOpenSources}
+      />
       <div className="filter-row">
-        <div
-          className="filter-control app-filter"
-          aria-label={`Selected app: ${snapshot.app.name}`}
-        >
-          <span className="mini-app-icon">{appInitials}</span>
-          <span>{snapshot.app.name}</span>
-        </div>
         <div
           className="filter-control"
           aria-label={`Selected storefront: ${snapshot.app.storefront}`}

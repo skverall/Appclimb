@@ -109,7 +109,12 @@ What must not be misrepresented as complete:
 - most of the visible River Atlas data is still sample data;
 - a connected source does not yet guarantee a complete real-world funnel;
 - Apple report-segment ingestion is not complete;
-- keyword rank collection is not yet enabled for normal workspaces;
+- keyword rank collection, smart metadata suggestions, and Keyword Terrain are
+  in development for normal workspaces; production code exists, but the first
+  accepted real rank observation still needs release verification;
+- automatic PostHog event mapping and Product Pulse charts are in development;
+  they are not shipped until the bounded import is verified against a real
+  connected project after deployment;
 - competitor intelligence is not implemented;
 - Voice of Customer clustering is not yet a complete ingestion and analysis
   system;

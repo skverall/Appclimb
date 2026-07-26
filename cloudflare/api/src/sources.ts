@@ -50,7 +50,12 @@ const providerMetadata: Record<
   },
   posthog: {
     label: "PostHog",
-    capabilities: ["Activation event users", "Session event users"],
+    capabilities: [
+      "Automatic event map",
+      "Active user trend",
+      "First-value reach",
+      "Product flow signals",
+    ],
   },
   superwall: {
     label: "Superwall",
@@ -58,12 +63,17 @@ const providerMetadata: Record<
   },
   "appclimb-rank": {
     label: "Keyword Monitor",
-    capabilities: ["Roadmap", "100 keywords planned", "3 storefronts planned"],
+    capabilities: [
+      "100 tracked keywords",
+      "Daily observed rank",
+      "14-check trend history",
+    ],
   },
 };
 
 interface SourceRow {
   id: string;
+  app_id: string | null;
   provider: string;
   status: string;
   account_label: string | null;
@@ -86,11 +96,14 @@ interface PostHogConnectionRow {
 export async function listSources(
   db: D1Database,
   workspaceId: string,
+  appId?: string,
 ): Promise<Array<Record<string, unknown>>> {
-  const rows = await db
-    .prepare(
-      `SELECT
+  const [rows, keywordCount] = await Promise.all([
+    db
+      .prepare(
+        `SELECT
          sc.id,
+         sc.app_id,
          sc.provider,
          sc.status,
          sc.account_label,
@@ -124,27 +137,49 @@ export async function listSources(
            FROM metric_points mp
            WHERE mp.workspace_id = sc.workspace_id
              AND mp.provider = sc.provider
+             AND mp.app_id = sc.app_id
          ) AS metric_count,
          (
            SELECT MAX(mp.occurred_at)
            FROM metric_points mp
            WHERE mp.workspace_id = sc.workspace_id
              AND mp.provider = sc.provider
+             AND mp.app_id = sc.app_id
          ) AS last_metric_at
        FROM source_connections sc
        WHERE sc.workspace_id = ?
        ORDER BY sc.provider`,
-    )
-    .bind(workspaceId)
-    .all<SourceRow>();
-  const byProvider = new Map(rows.results.map((row) => [row.provider, row]));
+      )
+      .bind(workspaceId)
+      .all<SourceRow>(),
+    appId
+      ? db
+          .prepare(
+            `SELECT COUNT(*) AS total
+             FROM keyword_tracks
+             WHERE workspace_id=? AND app_id=? AND active=1`,
+          )
+          .bind(workspaceId, appId)
+          .first<{ total: number }>()
+      : Promise.resolve({ total: 0 }),
+  ]);
+  const byProvider = new Map(
+    rows.results
+      .filter((row) => !appId || row.app_id === appId)
+      .map((row) => [row.provider, row]),
+  );
   return providerOrder.map((provider) => {
     const row = byProvider.get(provider);
     const metadata = providerMetadata[provider];
+    const keywordMetricCount =
+      provider === "appclimb-rank" ? Number(keywordCount?.total ?? 0) : null;
     return {
       provider,
       label: metadata.label,
-      status: row?.status ?? "not-connected",
+      status:
+        provider === "appclimb-rank"
+          ? "connected"
+          : row?.status ?? "not-connected",
       accountLabel: row?.account_label ?? "",
       lastSyncAt: row?.last_synced_at ?? null,
       nextSyncAt: row?.next_sync_at ?? null,
@@ -152,7 +187,7 @@ export async function listSources(
       syncStatus: row?.sync_status ?? null,
       syncAttempt: row?.sync_attempt ?? 0,
       syncMaxAttempts: row?.sync_max_attempts ?? 0,
-      metricCount: Number(row?.metric_count ?? 0),
+      metricCount: keywordMetricCount ?? Number(row?.metric_count ?? 0),
       lastMetricAt: row?.last_metric_at ?? null,
       capabilities: metadata.capabilities,
       readOnly: true,
@@ -362,6 +397,7 @@ export async function updatePostHogEvents(
     ...credentials,
     activationEvent,
     sessionEvent,
+    mappingMode: "manual",
   };
   const sealed = await sealCredentials(
     nextCredentials,

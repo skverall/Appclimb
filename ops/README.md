@@ -93,6 +93,7 @@ credential failure and not a reason to stop future syncs.
 Cron schedules:
 
 - `17 */6 * * *` — enqueue due source imports;
+- `7 * * * *` — refresh up to 15 due App Store keyword observations;
 - `43 2 * * *` — enforce first-party analytics retention.
 
 For an incident, inspect the latest `sync_jobs`, the source
