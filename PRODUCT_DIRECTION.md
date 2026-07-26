@@ -2,7 +2,7 @@
 
 **Status:** Canonical product north star
 
-**Last updated:** July 25, 2026
+**Last updated:** July 26, 2026
 
 **Owner:** AppClimb founder
 
@@ -76,8 +76,8 @@ Production-verified foundation:
 - the River Atlas visual language and four-part navigation;
 - an interactive, clearly labeled demo workspace;
 - authentication, trial, pricing, Paddle checkout, and account deletion;
-- the isolated Go/PostgreSQL backend, encrypted source credentials, health
-  checks, backups, and rollback support;
+- the Cloudflare Workers/D1/Queues backend, encrypted source credentials,
+  health checks, backups, and rollback support;
 - connector scaffolding, recurring-sync foundations, and deterministic
   evidence and diagnosis contracts.
 
@@ -93,11 +93,11 @@ Implemented in the current repository:
   rate-limiting, forced workspace RLS, and no stored visitor IP address.
 
 AppClimb's own `appclimb.app` property passed the live workspace gate on
-2026-07-25: migration `006_web_analytics.sql` and the collector API were
-deployed, the signed property token was installed in Vercel, and first-party
-human and crawler events were accepted in production. The public demo remains
-an explicitly labeled synthetic view; authenticated workspace data and public
-demo data must not be confused.
+2026-07-25. On 2026-07-26 its complete production dataset was reconciled into
+Cloudflare D1, the Cloudflare collector accepted a new categorized crawler
+event, and the isolated production account lifecycle passed against the
+Cloudflare API. The public demo remains an explicitly labeled synthetic view;
+authenticated workspace data and public demo data must not be confused.
 
 Any other workspace is only **live** after the backend API is available, a web
 property is created, its token is installed on the tracked domain, and a real
@@ -850,8 +850,12 @@ The following decisions are intentional:
 - Pulse, Diagnose, Lab, and Sources are the primary navigation.
 - Pulse may contain multiple coherent projections; Growth River and
   Acquisition Atlas are the current pair.
-- Vercel hosts the web frontend.
-- The isolated Go/PostgreSQL backend runs on the existing Hostinger VPS.
+- Cloudflare Workers hosts the Next.js web frontend and Hono API.
+- Cloudflare D1 is the production database, Queues runs source imports, R2
+  retains operational exports, and Cloudflare Email Service sends password
+  recovery messages.
+- The stopped Hostinger Go/PostgreSQL project and temporary Vercel deployment
+  are rollback artifacts only, not active architecture or deployment targets.
 - Web acquisition analytics is first-party AppClimb infrastructure. Do not add
   DataFast or another paid analytics dependency for this capability without an
   explicit founder decision.

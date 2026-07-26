@@ -28,8 +28,8 @@ Read it before changing product direction or expanding the feature set.
 
 The current public workspace is an interactive product demo. Growth River data
 is primarily synthetic. Acquisition Atlas collection is live for AppClimb's
-own `appclimb.app` property: the production migration, collector API, signed
-property token, and first human/crawler events were verified on 2026-07-25.
+own `appclimb.app` property. Its data was migrated to Cloudflare D1 and the
+Cloudflare collector accepted a new categorized crawler event on 2026-07-26.
 The public Atlas remains labeled demo data, while authenticated workspaces show
 their own collected data after completing the live workspace gate. See
 [docs/acquisition-atlas.md](./docs/acquisition-atlas.md).
@@ -51,15 +51,17 @@ their own collected data after completing the live workspace gate. See
 
 - `src/app` — Next.js 16 App Router, route handlers and legal/auth pages.
 - `src/components` — code-native River Atlas UI.
-- `src/lib` — browser-safe contracts, request validation, connector clients and
-  a server-only API session client. Diagnosis, envelope encryption and Paddle
-  signature verification live in `worker`, not here.
+- `src/lib` — browser-safe contracts, request validation, UI data adapters and
+  a server-only API session client.
 - `public/appclimb-analytics.js` — small first-party browser collector;
-  `src/proxy.ts` forwards recognized crawler requests separately.
-- `worker` — Go API and recurring sync worker with Postgres migrations,
-  envelope encryption, RLS, bounded pagination, reconciliation, retries, UTC
-  windows and 90-day retention.
-- `compose.yml` — isolated API, worker and Postgres services for Hostinger VPS.
+  `src/middleware.ts` forwards recognized crawler requests separately.
+- `cloudflare/api` — Hono API Worker, D1 migrations, envelope encryption,
+  connector aggregates, Queue consumers, reconciliation, retries, UTC windows,
+  billing, password recovery, and 90-day analytics retention.
+- `wrangler.jsonc` — OpenNext web Worker, static assets, observability, and the
+  private API service binding.
+- `worker`, `compose.yml`, and `deploy` — frozen Go/PostgreSQL rollback
+  implementation; these are not the active production runtime.
 - `tests/e2e` — Playwright product workflow tests.
 
 Source precedence is deterministic:
@@ -97,17 +99,20 @@ npm run lint
 npm run typecheck
 npm test
 npm run build
+npm run build:cloudflare
+npm run cloudflare:api:test
 npm run worker:test
 npm run test:e2e
 ```
 
 ## Production configuration
 
-Required Vercel server-only value:
+The production web Worker reaches `appclimb-api` through the private
+`APPCLIMB_API` service binding. The explicit public fallback is:
 
-- `APPCLIMB_API_URL=https://appclimb.srv1300823.hstgr.cloud`
+- `APPCLIMB_API_URL=https://appclimb-api.aydmaxx.workers.dev`
 
-Configured in production after creating the `appclimb.app` web property:
+Configured as a secret after creating the `appclimb.app` web property:
 
 - `APPCLIMB_TRACKING_TOKEN=acwa1_...`
 
@@ -125,27 +130,25 @@ Required public checkout values:
 - `NEXT_PUBLIC_PADDLE_MONTHLY_PRICE_ID=pri_01ky7e3rhgefr89ye58sw6br8h`
 - `NEXT_PUBLIC_PADDLE_YEARLY_PRICE_ID=pri_01ky7e4f18n7423rd415re8ehb`
 
-Hostinger API secrets are documented in `.env.backend.example` and never belong
-in Vercel. Connector credentials are encrypted with a random per-connection
-data key; the data key is then encrypted by the backend master key. Credentials,
-refresh sessions, billing payloads and sync jobs never reach the browser.
+API secrets and non-secret bindings are declared by name in
+`cloudflare/api/wrangler.jsonc`; secret values are set with Wrangler and never
+committed. Connector credentials are encrypted with a random per-connection
+data key; the data key is then encrypted by the Worker master key.
+Credentials, refresh sessions, billing payloads and sync jobs never reach the
+browser.
 
 Password recovery uses single-use SHA-256 token hashes with a 30-minute
-expiry. Delivery requires a project-specific SMTP identity configured through
-`SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, and `MAIL_FROM`.
-Do not reuse another application’s mail credentials.
+expiry. Cloudflare Email Service delivers messages through the `EMAIL` binding
+from `no-reply@appclimb.app`; no SMTP password is stored by AppClimb.
 
-The frontend is designed for Vercel. The Go API and worker ship in the same
-distroless image for the existing Hostinger container environment. Configure
-Paddle webhooks directly at
-`https://appclimb.srv1300823.hstgr.cloud/v1/billing/webhook`; the Next.js route
-is retained only as a compatibility proxy.
+The frontend and API are designed for Cloudflare Workers. Configure Paddle
+webhooks at `https://appclimb.app/api/paddle/webhook`; the canonical Next.js
+route forwards through the private API service binding.
 
-Pushes to `main` run `.github/workflows/vercel-deploy.yml`, verify the complete
-Node/Go release candidate, and deploy only the Vercel frontend. Backend and
-database changes still require the explicit Hostinger procedure in
-[ops/README.md](./ops/README.md); a green Vercel deployment is not proof that a
-new Go route or migration is live.
+Pushes to `main` run `.github/workflows/cloudflare-deploy.yml`, apply D1
+migrations, and deploy both Workers after verification. Production operations,
+smokes, backup locations, and rollback boundaries are in
+[ops/README.md](./ops/README.md).
 
 ## Provider notes
 

@@ -1,13 +1,44 @@
 import "server-only";
 
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { cookies } from "next/headers";
 
 const ACCESS_COOKIE = "appclimb_access";
 const REFRESH_COOKIE = "appclimb_refresh";
-const API_URL = (
-  process.env.APPCLIMB_API_URL ??
-  "https://appclimb.srv1300823.hstgr.cloud"
-).replace(/\/$/, "");
+const CLOUDFLARE_API_URL = "https://appclimb-api.aydmaxx.workers.dev";
+
+interface BackendService {
+  fetch(request: Request): Promise<Response>;
+}
+
+interface BackendRuntime {
+  apiUrl: string;
+  service?: BackendService;
+}
+
+async function backendRuntime(): Promise<BackendRuntime> {
+  let runtimeUrl = "";
+  let service: BackendService | undefined;
+  try {
+    const env = getCloudflareContext().env as
+      CloudflareEnv & {
+        APPCLIMB_API_URL?: string;
+        APPCLIMB_API?: BackendService;
+      };
+    runtimeUrl = String(env.APPCLIMB_API_URL ?? "");
+    service = env.APPCLIMB_API;
+  } catch {
+    // Local Next.js and tests do not always have a Cloudflare request context.
+  }
+  return {
+    apiUrl: (
+      runtimeUrl ||
+      process.env.APPCLIMB_API_URL ||
+      CLOUDFLARE_API_URL
+    ).replace(/\/$/, ""),
+    service,
+  };
+}
 
 export interface BackendIdentity {
   userId: string;
@@ -91,12 +122,19 @@ export async function backendRequest(
     headers.set("authorization", `Bearer ${accessToken}`);
   }
 
-  return fetch(`${API_URL}${path}`, {
+  const runtime = await backendRuntime();
+  const requestInit = {
     ...init,
     headers,
     cache: "no-store",
-    signal: init.signal ?? AbortSignal.timeout(12_000),
-  });
+    signal: init.signal ?? AbortSignal.timeout(75_000),
+  } satisfies RequestInit;
+  if (runtime.service) {
+    return runtime.service.fetch(
+      new Request(`https://appclimb-api.internal${path}`, requestInit),
+    );
+  }
+  return fetch(`${runtime.apiUrl}${path}`, requestInit);
 }
 
 export async function readBackend(path: string, init: RequestInit = {}) {
@@ -189,8 +227,8 @@ export async function getRefreshToken() {
   return (await cookies()).get(REFRESH_COOKIE)?.value;
 }
 
-export function backendPublicUrl(path: string) {
-  return `${API_URL}${path}`;
+export async function backendPublicUrl(path: string) {
+  return `${(await backendRuntime()).apiUrl}${path}`;
 }
 
 /**

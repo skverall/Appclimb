@@ -75,9 +75,8 @@ export function postHogOAuthClientMetadata() {
 function cookieBase(maxAge: number) {
   return {
     httpOnly: true,
-    // Always Secure on Vercel/production; keep HTTP workable for local smoke tests.
-    secure:
-      process.env.NODE_ENV === "production" || process.env.VERCEL === "1",
+    // Always Secure in production; keep HTTP workable for local smoke tests.
+    secure: process.env.NODE_ENV === "production",
     sameSite: "lax" as const,
     path: OAUTH_COOKIE_PATH,
     maxAge,

@@ -9,6 +9,7 @@ const isolatedBackendEnvironment =
 const productionBackendHosts = new Set([
   "appclimb.app",
   "www.appclimb.app",
+  "appclimb-api.aydmaxx.workers.dev",
   "appclimb.srv1300823.hstgr.cloud",
 ]);
 

@@ -71,7 +71,7 @@ describe("postHogOAuthClientMetadata", () => {
 
 describe("PostHog OAuth redirects", () => {
   it("attaches the PKCE start cookie to the authorization redirect", () => {
-    vi.stubEnv("VERCEL", "1");
+    vi.stubEnv("NODE_ENV", "production");
 
     const response = redirectWithPostHogOAuthStart(
       "https://oauth.posthog.com/oauth/authorize/?client_id=test",

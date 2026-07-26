@@ -19,6 +19,16 @@ func TestPasswordHashAndVerification(t *testing.T) {
 	}
 }
 
+func TestPasswordHashIsCompatibleWithCloudflareWorker(t *testing.T) {
+	const encoded = "$argon2id$v=19$m=65536,t=3,p=2$AAECAwQFBgcICQoLDA0ODw$jbCPLPlvn1KB30ErB0+lEWnjTvexmRcwfBp//uIu3Jo"
+	if !CheckPassword(encoded, "Cloudflare!2026") {
+		t.Fatal("expected the shared Go/Cloudflare Argon2id vector to verify")
+	}
+	if CheckPassword(encoded, "wrong password") {
+		t.Fatal("wrong password must not verify the shared vector")
+	}
+}
+
 func TestAccessTokenClaimsAndAudience(t *testing.T) {
 	issuer := TokenIssuer{
 		Key:       bytes.Repeat([]byte{0x42}, 32),

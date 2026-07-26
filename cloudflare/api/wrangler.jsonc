@@ -1,0 +1,161 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "appclimb-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "head_sampling_rate": 1
+    }
+  },
+  "limits": {
+    "cpu_ms": 60000
+  },
+  "vars": {
+    "APP_VERSION": "cloudflare-production",
+    "PUBLIC_APP_URL": "https://appclimb.app",
+    "MAIL_FROM": "no-reply@appclimb.app",
+    "ALLOWED_ORIGINS": "https://appclimb.app,https://www.appclimb.app",
+    "EXTERNAL_MUTATIONS_ENABLED": "false",
+    "HISTORY_RETENTION_DAYS": "90",
+    "SYNC_INTERVAL_HOURS": "6"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "appclimb-production",
+      "database_id": "1152128e-50d5-49a3-8e4b-cf5b3b97b20e",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "SYNC_QUEUE",
+        "queue": "appclimb-sync"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "appclimb-sync",
+        "max_batch_size": 1,
+        "max_batch_timeout": 5,
+        "max_retries": 5,
+        "retry_delay": 60
+      }
+    ]
+  },
+  "r2_buckets": [
+    {
+      "binding": "BACKUPS",
+      "bucket_name": "appclimb-backups"
+    }
+  ],
+  "send_email": [
+    {
+      "name": "EMAIL",
+      "allowed_sender_addresses": ["no-reply@appclimb.app"]
+    }
+  ],
+  "ratelimits": [
+    {
+      "name": "AUTH_RATE_LIMITER",
+      "namespace_id": "2001",
+      "simple": {
+        "limit": 12,
+        "period": 60
+      }
+    },
+    {
+      "name": "COLLECTOR_RATE_LIMITER",
+      "namespace_id": "2002",
+      "simple": {
+        "limit": 180,
+        "period": 60
+      }
+    }
+  ],
+  "triggers": {
+    "crons": ["17 */6 * * *", "43 2 * * *"]
+  },
+  "env": {
+    "staging": {
+      "name": "appclimb-api-staging",
+      "vars": {
+        "APP_VERSION": "cloudflare-staging",
+        "PUBLIC_APP_URL": "https://appclimb-web-staging.aydmaxx.workers.dev",
+        "MAIL_FROM": "no-reply@appclimb.app",
+        "ALLOWED_ORIGINS": "https://appclimb-web-staging.aydmaxx.workers.dev,http://localhost:3000",
+        "EXTERNAL_MUTATIONS_ENABLED": "false",
+        "HISTORY_RETENTION_DAYS": "90",
+        "SYNC_INTERVAL_HOURS": "6"
+      },
+      "limits": {
+        "cpu_ms": 60000
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "appclimb-staging",
+          "database_id": "31030da6-be26-4ff6-a0c5-26c9aeeb5406",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "queues": {
+        "producers": [
+          {
+            "binding": "SYNC_QUEUE",
+            "queue": "appclimb-sync-staging"
+          }
+        ],
+        "consumers": [
+          {
+            "queue": "appclimb-sync-staging",
+            "max_batch_size": 1,
+            "max_batch_timeout": 5,
+            "max_retries": 5,
+            "retry_delay": 60
+          }
+        ]
+      },
+      "r2_buckets": [
+        {
+          "binding": "BACKUPS",
+          "bucket_name": "appclimb-backups-staging"
+        }
+      ],
+      "send_email": [
+        {
+          "name": "EMAIL",
+          "allowed_sender_addresses": ["no-reply@appclimb.app"]
+        }
+      ],
+      "ratelimits": [
+        {
+          "name": "AUTH_RATE_LIMITER",
+          "namespace_id": "1001",
+          "simple": {
+            "limit": 12,
+            "period": 60
+          }
+        },
+        {
+          "name": "COLLECTOR_RATE_LIMITER",
+          "namespace_id": "1002",
+          "simple": {
+            "limit": 180,
+            "period": 60
+          }
+        }
+      ],
+      "triggers": {
+        "crons": ["17 */6 * * *", "43 2 * * *"]
+      }
+    }
+  }
+}

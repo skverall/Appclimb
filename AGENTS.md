@@ -21,15 +21,21 @@ direction.
 - Read `docs/acquisition-atlas.md` before changing web attribution, visitor
   journeys, tracking, privacy, or crawler handling.
 - Read `ops/README.md` before production backend or database work.
-- A push to `main` deploys the Vercel frontend after checks; it does not deploy
-  the Hostinger Go API or PostgreSQL migrations.
+- A push to `main` runs `.github/workflows/cloudflare-deploy.yml`, applies D1
+  migrations, and deploys both the API and OpenNext web Workers.
+- Production is Cloudflare Workers + D1 + Queues + R2 + Email Service. The
+  stopped Hostinger Go/PostgreSQL project and Vercel deployment are rollback
+  artifacts only; never treat them as the current backend or release path.
 - For any live-data claim, verify repository code, frontend deployment,
   backend route/migration, property configuration, and first accepted real
   event separately.
-- Current production checkpoint (2026-07-25): `appclimb.app` has migration
-  `006_web_analytics.sql`, a real signed property token in Vercel, and verified
-  human plus user-agent-detected crawler events. Reverify mutable production
-  state before relying on this checkpoint in a new release.
+- Current production checkpoint (2026-07-26): the final frozen PostgreSQL
+  snapshot matches all 24 production D1 table counts; Cloudflare auth lifecycle
+  passed; the PostHog connection re-synced through Queues with the truthful
+  `no_data_in_window` state; a new categorized crawler event reached D1; the
+  authoritative custom domain uses the private API binding; and Cloudflare
+  Email Sending accepted the first password-recovery message. Reverify mutable
+  production state before relying on this checkpoint in a new release.
 - Acquisition Atlas is a Pulse projection and a bounded acquisition primitive.
   It does not change the initial iOS subscription-app wedge or make the broader
   SaaS roadmap complete.

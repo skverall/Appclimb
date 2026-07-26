@@ -14,13 +14,14 @@ It is a design reference, not evidence of production data.
   workspace uses clearly labeled synthetic demo data.
 - **Browser collection:** implemented in `public/appclimb-analytics.js` and
   relayed through `POST /api/track`.
-- **Crawler collection:** implemented server-side in `src/proxy.ts` and relayed
-  through `POST /api/track/crawler`.
-- **Storage and reads:** implemented in the Go API and PostgreSQL migration
-  `006_web_analytics.sql`.
-- **AppClimb production property:** live since 2026-07-25 with the migration,
-  collector API, signed Vercel token, and first accepted human and crawler
-  events verified independently.
+- **Crawler collection:** implemented at the Cloudflare edge in
+  `src/middleware.ts` and sent through the private API service binding.
+- **Storage and reads:** implemented in the Hono API Worker and production D1.
+  Historical migration `006_web_analytics.sql` was losslessly converted during
+  the PostgreSQL-to-D1 cutover.
+- **AppClimb production property:** live since 2026-07-25; its full dataset,
+  signed Worker secret, collector, and categorized crawler path were verified
+  on Cloudflare on 2026-07-26.
 - **Live workspace gate:** backend migration and API deployed, property
   created, signed token installed on the tracked domain, and a real event
   accepted and visible.
@@ -81,12 +82,11 @@ category, not to all crawler traffic, and each category is ranked
 independently so a busy category cannot crowd the others out of a shared row
 limit.
 
-`category` is optional on those two rollups in `CrawlerSnapshot` because the
-Vercel frontend and the Hostinger Go API deploy separately. When the field is
-absent — an API released before this change — the Atlas shows the rows
-unfiltered and labels both sections "all categories" rather than implying a
-scope the numbers do not have. Remove the fallback only after every deployed
-API returns the field.
+The Cloudflare API always returns `category` on those two rollups. The frontend
+still handles a missing field as an explicit historical compatibility state:
+it shows rows unfiltered and labels both sections "all categories" rather than
+inventing a scope. Do not reintroduce an active legacy API dependency for this
+fallback.
 
 AppClimb does not persist visitor IP addresses. The browser tracker respects Do
 Not Track and uses session storage by default. Persistent storage is available
@@ -109,9 +109,9 @@ snippet before `</body>`:
 ```
 
 For AppClimb's own Next.js deployment, set the generated token as the
-server-side `APPCLIMB_TRACKING_TOKEN` environment variable. The root layout
-loads the browser tracker and `src/proxy.ts` forwards recognized crawler
-requests automatically.
+server-side `APPCLIMB_TRACKING_TOKEN` Worker secret. The root layout loads the
+browser tracker and `src/middleware.ts` forwards recognized crawler requests
+automatically.
 
 Record an explicit conversion after the tracker has loaded:
 
@@ -132,9 +132,8 @@ The AppClimb website currently emits:
 
 The tracking token is a signed public property identifier. It is not an account
 credential. The collector validates its signature, workspace, property version
-and request hostname before inserting a deduplicated event. Authenticated reads
-run with the workspace PostgreSQL context and every analytics table has forced
-row-level security.
+and request hostname before inserting a deduplicated D1 event. Authenticated
+reads bind every query to the workspace ID from the verified access token.
 
 The public demo uses synthetic sample data and labels it as demo traffic. A
 private workspace shows an explicit setup or waiting state until real events
@@ -152,12 +151,13 @@ frozen `generatedAt` rather than the current time.
 
 1. The browser or Next.js proxy sends a bounded event to the same AppClimb web
    origin.
-2. Next.js validates body size and forwards the request to the Go collector.
-3. The Go API validates the signed property token, request hostname, event
+2. The OpenNext web Worker validates body size and reaches the Hono API through
+   the private `APPCLIMB_API` service binding.
+3. The API Worker validates the signed property token, request hostname, event
    shape, category, and retention boundary.
-4. PostgreSQL inserts a deduplicated row under the property's workspace.
-5. Authenticated reads set the workspace database context before querying the
-   forced-RLS tables.
+4. D1 inserts a deduplicated row under the property's workspace.
+5. Authenticated reads scope every D1 query to the workspace from the verified
+   access token.
 
 AppClimb first-party analytics owns web referrer, UTM, landing-page, explicit
 web conversion, and crawler evidence. App Store Connect, RevenueCat, PostHog,
@@ -169,14 +169,14 @@ remain disabled unless a workspace explicitly confirms a shared identifier.
 Treat these as separate release gates:
 
 1. Run `npm run check` on the exact commit.
-2. Deploy the Hostinger backend bundle and run migration
-   `006_web_analytics.sql` through the one-shot `migrate` service.
+2. Apply committed D1 migrations and deploy `appclimb-api`.
 3. Confirm `GET /v1/web-analytics` returns an authentication response rather
    than `404` or `405`.
 4. Create the `appclimb.app` property from an entitled owner workspace.
-5. Set its returned `acwa1_...` token as the Vercel server-only
+5. Set its returned `acwa1_...` token as the Cloudflare Worker
    `APPCLIMB_TRACKING_TOKEN`.
-6. Deploy the Vercel frontend and verify the browser collector is present.
+6. Deploy `appclimb-web` and verify the private API service binding plus browser
+   collector.
 7. Confirm one real page view is accepted, appears in Acquisition Atlas, and is
    not labeled demo data.
 8. Send a recognized crawler user agent through a public page and confirm it
@@ -184,11 +184,12 @@ Treat these as separate release gates:
 9. Add explicit conversion calls for account creation, checkout start, and
    successful paid activation before interpreting conversion rate.
 
-All nine gates passed for the `appclimb.app` property on 2026-07-25. Production
-proof included an accepted campaign page view, a separate GPTBot crawler event,
-healthy API/worker services, and the three explicit website goal hooks. The
-public `?demo=1&atlas=1` workspace intentionally remains synthetic and labeled;
-it is not evidence from the production property.
+All nine original live-property gates passed on 2026-07-25. Cloudflare
+migration proof on 2026-07-26 additionally included exact D1 reconciliation,
+healthy API and private service-binding checks, the complete production account
+lifecycle, and a new GPTBot event stored only in the model-training crawler
+category. The public `?demo=1&atlas=1` workspace intentionally remains
+synthetic and labeled; it is not evidence from the production property.
 
 For every other property, apply the same gates independently. Until its
 applicable gates pass, describe that property as implemented or partially

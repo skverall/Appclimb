@@ -1,0 +1,43 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "appclimb-web",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-07-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  },
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true,
+      "head_sampling_rate": 1
+    }
+  },
+  "vars": {
+    "APPCLIMB_API_URL": "https://appclimb-api.aydmaxx.workers.dev"
+  },
+  "services": [
+    {
+      "binding": "APPCLIMB_API",
+      "service": "appclimb-api"
+    }
+  ],
+  "env": {
+    "staging": {
+      "name": "appclimb-web-staging",
+      "vars": {
+        "APPCLIMB_API_URL": "https://appclimb-api-staging.aydmaxx.workers.dev"
+      },
+      "services": [
+        {
+          "binding": "APPCLIMB_API",
+          "service": "appclimb-api-staging"
+        }
+      ]
+    }
+  }
+}
