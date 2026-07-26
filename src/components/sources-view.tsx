@@ -35,7 +35,14 @@ import {
   type ConnectableProvider,
 } from "@/lib/source-setup";
 
-type DataHealth = "live" | "syncing" | "waiting" | "attention" | "empty" | "roadmap";
+type DataHealth =
+  | "live"
+  | "syncing"
+  | "pending"
+  | "waiting"
+  | "attention"
+  | "empty"
+  | "roadmap";
 
 interface JourneyDefinition {
   provider: ConnectableProvider;
@@ -104,6 +111,9 @@ function dataHealth(source: SourceConnection): DataHealth {
   ) {
     return "syncing";
   }
+  if (source.lastErrorCode === "apple_reports_pending") {
+    return "pending";
+  }
   if (
     source.status === "needs-attention" ||
     source.syncStatus === "failed" ||
@@ -125,15 +135,15 @@ function dataHealthLabel(source: SourceConnection) {
         : source.syncStatus === "running"
           ? "Importing data now"
           : "Import queued";
+    case "pending":
+      return "Apple is preparing reports";
     case "attention":
       return source.lastErrorCode === "provider_unavailable"
         ? "Provider could not be reached"
         : source.lastErrorCode === "apple_report_request_required"
           ? "One-time Apple setup required"
-          : source.lastErrorCode === "apple_reports_pending"
-            ? "Apple is preparing reports"
-            : source.lastErrorCode === "apple_reports_role_required"
-              ? "Apple reports access required"
+          : source.lastErrorCode === "apple_reports_role_required"
+            ? "Apple reports access required"
         : source.lastErrorCode === "no_data_in_window"
           ? "No matching data found"
           : "Import needs attention";
@@ -790,7 +800,7 @@ function SourceJourneyCard({
           ? "View model"
           : health === "attention"
           ? "Fix"
-          : health === "syncing" || health === "waiting"
+          : health === "syncing" || health === "waiting" || health === "pending"
             ? "View status"
             : health === "live"
               ? "View"
@@ -850,6 +860,8 @@ function SourceHealthView({
               <Check size={16} />
             ) : health === "syncing" ? (
               <RefreshCw className="spin" size={16} />
+            ) : health === "pending" ? (
+              <Clock3 size={16} />
             ) : (
               "2"
             )}
@@ -869,6 +881,18 @@ function SourceHealthView({
           )}
         </div>
       </div>
+
+      {health === "pending" && (
+        <div className="source-pending-note" role="status">
+          <Clock3 size={18} />
+          <div>
+            <strong>Apple is preparing reports (1–2 days)</strong>
+            <span>
+              Apple accepted the Analytics Reports request. Initial report generation normally takes 1–2 days; AppClimb will keep checking automatically.
+            </span>
+          </div>
+        </div>
+      )}
 
       {health === "attention" && (
         <div className="source-attention-note" role="status">
@@ -895,15 +919,17 @@ function SourceHealthView({
           <RefreshCw className={syncing ? "spin" : undefined} size={17} />
           {syncing
             ? "Checking import…"
-            : health === "attention"
-              ? "Retry import"
-              : health === "syncing"
-                ? source.syncStatus === "retrying"
-                  ? "Retry import now"
-                  : "Refresh import status"
-              : health === "live"
-                ? "Sync now"
-                : "Start first import"}
+            : health === "pending"
+              ? "Check import status"
+              : health === "attention"
+                ? "Retry import"
+                : health === "syncing"
+                  ? source.syncStatus === "retrying"
+                    ? "Retry import now"
+                    : "Refresh import status"
+                : health === "live"
+                  ? "Sync now"
+                  : "Start first import"}
         </button>
         <button className="secondary-action" type="button" onClick={onOpenGrowthRiver}>
           Open Growth River

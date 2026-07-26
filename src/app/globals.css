@@ -9476,6 +9476,12 @@ a {
   border: 1px solid var(--amber-200);
 }
 
+.data-health-pill.health-pending {
+  color: #0369a1;
+  background: #f0f9ff;
+  border: 1px solid #bae6fd;
+}
+
 .data-health-pill.health-attention {
   color: var(--coral-800);
   background: var(--coral-50);
@@ -9540,6 +9546,13 @@ a {
   box-shadow: 0 0 0 3px var(--amber-100);
 }
 
+.source-health-track > div.health-pending > span {
+  border-color: #38bdf8;
+  color: #0284c7;
+  background: #f0f9ff;
+  box-shadow: 0 0 0 3px #e0f2fe;
+}
+
 .source-health-track > div.health-attention > span {
   border-color: var(--coral-400);
   color: var(--coral-700);
@@ -9558,6 +9571,11 @@ a {
   color: var(--ink-muted);
   font-size: var(--text-3xs);
   line-height: 1.3;
+}
+
+.source-health-track > div.health-pending > small {
+  color: #0369a1;
+  font-weight: 500;
 }
 
 .source-health-track > div.health-attention > small {
@@ -9618,6 +9636,40 @@ a {
 .source-destination-card span {
   margin-top: 4px;
   font-size: var(--text-3xs);
+}
+
+.source-pending-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px solid #bae6fd;
+  border-radius: var(--radius-md);
+  color: #0c4a6e;
+  background: linear-gradient(135deg, rgba(224, 242, 254, 0.6) 0%, rgba(240, 249, 255, 0.4) 100%);
+}
+
+.source-pending-note svg {
+  flex: 0 0 auto;
+  color: #0284c7;
+  margin-top: 2px;
+}
+
+.source-pending-note > div {
+  display: grid;
+  gap: 3px;
+}
+
+.source-pending-note strong {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: #0369a1;
+}
+
+.source-pending-note span {
+  font-size: var(--text-2xs);
+  line-height: 1.45;
+  color: #075985;
 }
 
 .source-health-view .source-attention-note {
