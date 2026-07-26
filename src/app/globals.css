@@ -7584,18 +7584,13 @@ a {
   padding: 15px 18px 10px;
 }
 
-/* Small-sample replacement for the flow ribbon. */
-.atlas-small-sample {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 16px;
-}
-
+/* Caveat shown above the flow when the window is too small for its rates to
+   be stable. The ribbon itself still draws to scale. */
 .atlas-small-sample-note {
   display: flex;
   align-items: flex-start;
   gap: 7px;
+  margin-bottom: 12px;
   padding: 9px 11px;
   border: 1px solid var(--amber-200);
   border-radius: var(--radius-md);
@@ -7610,78 +7605,22 @@ a {
   margin-top: 1px;
 }
 
-.atlas-small-sample-steps {
-  display: grid;
-  gap: 14px;
-  padding: 0;
-  list-style: none;
-}
-
-.atlas-small-sample-steps li {
-  display: grid;
-  grid-template-columns: 78px minmax(0, 1fr) 96px;
-  align-items: center;
-  gap: 12px;
-}
-
-.atlas-small-sample-label {
-  color: var(--ink-secondary);
-  font-size: var(--text-2xs);
-  font-weight: var(--weight-bold);
-}
-
-.atlas-small-sample-track {
-  display: block;
-  height: 22px;
-  border-radius: var(--radius-xs);
-  background: var(--n-50);
-}
-
-.atlas-small-sample-bar {
-  display: block;
-  height: 100%;
-  min-width: 2px;
-  border-radius: var(--radius-xs);
-  background: var(--teal-300);
-  transition: width 320ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.atlas-small-sample-engaged {
-  background: var(--teal-400);
-}
-
-.atlas-small-sample-converted {
-  background: var(--teal-500);
-}
-
-.atlas-small-sample-value {
-  display: grid;
-  justify-items: end;
-  gap: 1px;
-}
-
-.atlas-small-sample-value strong {
-  font-family: var(--font-display);
-  font-size: var(--text-xl);
-  letter-spacing: var(--tracking-tighter);
-  line-height: var(--leading-none);
-}
-
-.atlas-small-sample-value small {
-  color: var(--n-600);
-  font-size: var(--text-3xs);
-}
-
 /*
  * Inset matches .atlas-sankey-wrap's horizontal padding so that the percentage
  * offsets React derives from the Sankey viewBox land over their own nodes.
  */
+/* Containing block for the funnel headings. Anything stacked above it (the
+   small-sample caveat) shifts the whole plot instead of overlapping it. */
+.atlas-sankey-plot {
+  position: relative;
+}
+
 .atlas-funnel-headings {
   position: absolute;
   z-index: 2;
-  top: 16px;
-  right: 18px;
-  left: 18px;
+  top: 1px;
+  right: 0;
+  left: 0;
   height: 0;
   pointer-events: none;
 }

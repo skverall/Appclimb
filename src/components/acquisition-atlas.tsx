@@ -102,13 +102,10 @@ const FLOW = {
 const FLOW_BAND_CENTER = FLOW.bandTop + FLOW.bandHeight / 2;
 
 /**
- * Below this many visitors the Sankey stops being a measurement.
- *
- * Ribbon thickness is floored (`Math.max(2.5, …)`) so that a single-visitor
- * channel stays visible at all, which means at small counts the bands no
- * longer encode their share — an 11-visitor window renders a smooth flow that
- * looks identical to a healthy one. A stepped bar of literal counts is the
- * honest shape for a sample this size.
+ * Below this many visitors the flow still draws to scale, but the rates it
+ * implies are not yet stable — 9 of 11 engaged and 9 of 11000 engaged produce
+ * the same ribbon while carrying very different confidence. The chart stays;
+ * a caveat is shown alongside it so the shape is not read as a settled rate.
  */
 const FLOW_MIN_VISITORS = 50;
 
@@ -388,8 +385,8 @@ function AcquisitionFlow({
       ? snapshot.totals.converted / snapshot.totals.visitors
       : 0;
 
-  const engagedHeight = Math.max(5, engagedRate * FLOW.bandHeight);
-  const convertedHeight = Math.max(3, convertedRate * FLOW.bandHeight);
+  const engagedHeight = Math.max(1, engagedRate * FLOW.bandHeight);
+  const convertedHeight = Math.max(1, convertedRate * FLOW.bandHeight);
   const smallSample =
     snapshot.totals.visitors > 0 &&
     snapshot.totals.visitors < FLOW_MIN_VISITORS;
@@ -406,8 +403,11 @@ function AcquisitionFlow({
 
     return channels.map((channel) => {
       const share = channel.visitors / total;
-      const entrySpan = Math.max(2.5, share * entryHeight);
-      const stackSpan = Math.max(2.5, share * FLOW.bandHeight);
+      // Floors only exist to keep a band clickable, so they are kept just
+      // under a pixel of visible weight. At 2.5px any channel below ~2% of
+      // traffic was drawn thicker than its share.
+      const entrySpan = Math.max(1, share * entryHeight);
+      const stackSpan = Math.max(1, share * FLOW.bandHeight);
       const entryTop = entryCursor;
       const stackTop = stackCursor;
       entryCursor += entrySpan + FLOW.entryGap;
@@ -486,18 +486,23 @@ function AcquisitionFlow({
           </div>
         )}
         <div className="atlas-flow-legend">
-          <span>
-            {smallSample
-              ? "Bar length = visitor count at each step"
-              : "Band width = visitors · colour = channel above"}
-          </span>
+          <span>Band width = visitors · colour = channel above</span>
           <span>Human traffic only — crawlers are charted separately</span>
         </div>
       </div>
-      {smallSample ? (
-        <AtlasSmallSampleFlow snapshot={snapshot} />
-      ) : (
       <div className="atlas-sankey-wrap">
+        {smallSample && (
+          <p className="atlas-small-sample-note" role="note">
+            <Info size={13} />
+            {`Only ${formatNumber(snapshot.totals.visitors)} visitors in this window — the bands are to scale, but the rates they imply are not yet stable.`}
+          </p>
+        )}
+        {/**
+         * The headings are absolutely positioned over the plot, so they need a
+         * containing block that starts below the caveat — otherwise anything
+         * added above them in flow overlaps them instead of pushing them down.
+         */}
+        <div className="atlas-sankey-plot">
         <div className="atlas-funnel-headings" aria-hidden="true">
           <div style={{ left: flowNodeCenterPercent(FLOW.visitorsX) }}>
             <span>Visitors</span>
@@ -597,6 +602,7 @@ function AcquisitionFlow({
             fill="#1c7f79"
           />
         </svg>
+        </div>
         <div className="atlas-flow-footer">
           <span>
             {formatNumber(snapshot.totals.pageviews)} pageviews ·{" "}
@@ -607,80 +613,7 @@ function AcquisitionFlow({
           </span>
         </div>
       </div>
-      )}
     </article>
-  );
-}
-
-/**
- * Small-window replacement for the Sankey. Bar length is the raw visitor count
- * against the widest step, so a 1-of-11 step draws as 1/11 of the bar instead
- * of being padded up to a visible ribbon.
- */
-function AtlasSmallSampleFlow({ snapshot }: { snapshot: AcquisitionSnapshot }) {
-  const steps = [
-    {
-      key: "visitors",
-      label: "Visitors",
-      value: snapshot.totals.visitors,
-      note: "100% of total",
-    },
-    {
-      key: "engaged",
-      label: "Engaged",
-      value: snapshot.totals.engaged,
-      note: `${formatPercent(
-        snapshot.totals.visitors > 0
-          ? snapshot.totals.engaged / snapshot.totals.visitors
-          : 0,
-      )} of visitors`,
-    },
-    {
-      key: "converted",
-      label: "Converted",
-      value: snapshot.totals.converted,
-      note: `${formatPercent(
-        snapshot.totals.visitors > 0
-          ? snapshot.totals.converted / snapshot.totals.visitors
-          : 0,
-      )} of visitors`,
-    },
-  ];
-  const widest = Math.max(...steps.map((step) => step.value), 1);
-
-  return (
-    <div className="atlas-sankey-wrap atlas-small-sample">
-      <p className="atlas-small-sample-note" role="note">
-        <Info size={13} />
-        {`Only ${formatNumber(snapshot.totals.visitors)} visitors in this window — too few for a flow chart to be read as a rate. Counts are shown directly.`}
-      </p>
-      <ol className="atlas-small-sample-steps">
-        {steps.map((step) => (
-          <li key={step.key}>
-            <span className="atlas-small-sample-label">{step.label}</span>
-            <span className="atlas-small-sample-track">
-              <span
-                className={`atlas-small-sample-bar atlas-small-sample-${step.key}`}
-                style={{ width: `${(step.value / widest) * 100}%` }}
-              />
-            </span>
-            <span className="atlas-small-sample-value">
-              <strong>{formatNumber(step.value)}</strong>
-              <small>{step.note}</small>
-            </span>
-          </li>
-        ))}
-      </ol>
-      <div className="atlas-flow-footer">
-        <span>
-          {formatNumber(snapshot.totals.pageviews)} pageviews ·{" "}
-          {formatNumber(snapshot.totals.sessions)} sessions
-        </span>
-        <span>
-          <i /> {snapshot.totals.online} online
-        </span>
-      </div>
-    </div>
   );
 }
 
