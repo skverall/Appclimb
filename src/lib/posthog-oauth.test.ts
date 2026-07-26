@@ -20,6 +20,7 @@ import {
   POSTHOG_CLIENT_ID,
   POSTHOG_REDIRECT_URI,
   clearPostHogOAuthPending,
+  listPostHogEvents,
   listPostHogProjects,
   parsePostHogOAuthToken,
   postHogOAuthClientMetadata,
@@ -263,9 +264,9 @@ describe("resolvePostHogHost", () => {
     expect(fetchMock.mock.calls[0][0]).toBe(
       "https://us.posthog.com/api/organizations/?limit=1",
     );
-    expect(fetchMock.mock.calls[0][1].headers).toEqual({
-      authorization: "Bearer access-token",
-    });
+    expect(
+      new Headers(fetchMock.mock.calls[0][1].headers).get("authorization"),
+    ).toBe("Bearer access-token");
   });
 
   it("falls back to the EU region when the US region rejects the token", async () => {
@@ -395,6 +396,57 @@ describe("listPostHogProjects", () => {
     await expect(listPostHogProjects(pendingCredentials)).rejects.toThrow(
       "posthog_organizations_unavailable",
     );
+  });
+});
+
+describe("listPostHogEvents", () => {
+  it("returns only valid event names seen in the selected project", async () => {
+    const fetchMock = vi.fn(
+      async (_url: string, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body)) as {
+          query: { kind: string; query: string };
+        };
+        expect(body.query.kind).toBe("HogQLQuery");
+        expect(body.query.query).toContain("interval 30 day");
+        return Response.json({
+          results: [
+            ["Application Opened", 18, 7, "2026-07-25T12:00:00Z"],
+            ["$screen", 120, 11, "2026-07-26T09:00:00Z"],
+            ["bad\nevent", 1, 1, "2026-07-26T09:00:00Z"],
+          ],
+        });
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      listPostHogEvents(pendingCredentials, "509825"),
+    ).resolves.toEqual([
+      {
+        name: "Application Opened",
+        eventCount: 18,
+        uniqueUsers: 7,
+        lastSeenAt: "2026-07-25T12:00:00.000Z",
+      },
+      {
+        name: "$screen",
+        eventCount: 120,
+        uniqueUsers: 11,
+        lastSeenAt: "2026-07-26T09:00:00.000Z",
+      },
+    ]);
+    expect(fetchMock.mock.calls[0][0]).toBe(
+      "https://us.posthog.com/api/projects/509825/query/",
+    );
+    expect(new Headers(fetchMock.mock.calls[0][1]?.headers).get("authorization")).toBe(
+      "Bearer access-token",
+    );
+  });
+
+  it("rejects a project id that cannot be placed in the API path", async () => {
+    await expect(
+      listPostHogEvents(pendingCredentials, "../organization"),
+    ).rejects.toThrow("invalid_posthog_project");
   });
 });
 

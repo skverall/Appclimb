@@ -34,8 +34,10 @@ import {
   connectSource,
   deleteSource,
   listSources,
+  postHogEventOptions,
   queueDueSyncs,
   queueSourceSync,
+  updatePostHogEvents,
   type SyncMessage,
 } from "./sources";
 import { passwordResetEmail } from "./mail-templates";
@@ -601,6 +603,52 @@ app.get("/v1/sources", requireAuth, async (c) =>
     data: await listSources(c.env.DB, c.get("auth").workspaceId),
     externalMutations: false,
   }),
+);
+
+app.get(
+  "/v1/sources/posthog/events",
+  requireAuth,
+  requireEntitlement,
+  async (c) =>
+    c.json({
+      data: await postHogEventOptions(c.env, c.get("auth")),
+      externalMutations: false,
+    }),
+);
+
+app.patch(
+  "/v1/sources/posthog/events",
+  requireAuth,
+  requireEntitlement,
+  async (c) => {
+    const auth = c.get("auth");
+    if (!["owner", "admin"].includes(auth.role)) {
+      return errorResponse(c, "admin_required", 403);
+    }
+    const input = await jsonBody(c.req.raw);
+    const activationEvent =
+      typeof input.activationEvent === "string"
+        ? input.activationEvent.trim()
+        : "";
+    const sessionEvent =
+      typeof input.sessionEvent === "string" ? input.sessionEvent.trim() : "";
+    const eventPattern = /^[^\u0000-\u001f\u007f]{1,200}$/u;
+    if (
+      !eventPattern.test(activationEvent) ||
+      !eventPattern.test(sessionEvent)
+    ) {
+      return errorResponse(c, "invalid_posthog_event_name", 400);
+    }
+    return c.json({
+      data: await updatePostHogEvents(
+        c.env,
+        auth,
+        activationEvent,
+        sessionEvent,
+      ),
+      externalMutations: false,
+    });
+  },
 );
 
 app.post("/v1/sources/:provider/verify", requireAuth, requireEntitlement, async (c) => {

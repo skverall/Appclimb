@@ -6,14 +6,15 @@ import {
 } from "@/lib/backend";
 import {
   clearPostHogOAuthPending,
+  listPostHogEvents,
   POSTHOG_CLIENT_ID,
   readPostHogOAuthPending,
 } from "@/lib/posthog-oauth";
 
 const inputSchema = z.object({
   projectId: z.string().trim().min(1).max(120),
-  activationEvent: z.string().trim().min(1).max(100),
-  sessionEvent: z.string().trim().min(1).max(100),
+  activationEvent: z.string().trim().min(1).max(200),
+  sessionEvent: z.string().trim().min(1).max(200),
 });
 
 export async function POST(request: Request) {
@@ -33,6 +34,28 @@ export async function POST(request: Request) {
   const parsed = inputSchema.safeParse(input);
   if (!parsed.success) {
     return Response.json({ error: "Invalid connection request" }, { status: 400 });
+  }
+  let availableEvents: Set<string>;
+  try {
+    availableEvents = new Set(
+      (await listPostHogEvents(pending, parsed.data.projectId)).map(
+        (event) => event.name,
+      ),
+    );
+  } catch {
+    return Response.json(
+      { error: "PostHog events could not be verified" },
+      { status: 502 },
+    );
+  }
+  if (
+    !availableEvents.has(parsed.data.activationEvent) ||
+    !availableEvents.has(parsed.data.sessionEvent)
+  ) {
+    return Response.json(
+      { error: "Choose events seen in this project during the last 30 days" },
+      { status: 422 },
+    );
   }
   const response = await requestWithSession("/v1/sources/posthog", {
     method: "PUT",

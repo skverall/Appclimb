@@ -118,6 +118,7 @@ export interface SourceConnection {
   provider: SourceProvider;
   label: string;
   status: "connected" | "needs-attention" | "not-connected";
+  accountLabel?: string;
   lastSyncAt?: string | null;
   nextSyncAt?: string | null;
   freshnessHours?: number | null;

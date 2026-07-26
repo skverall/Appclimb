@@ -287,7 +287,19 @@ export function AppClimbShell({
   }[sourceNavState];
   const trialProgress = Math.max(0, Math.min(100, (trialDays / 14) * 100));
   const profileName = session ? session.email.split("@")[0] : "Demo";
-  const appInitials = initialSnapshot.app.name
+  const connectedAppleName = sourceConnections.find(
+    (source) =>
+      source.provider === "app-store-connect" &&
+      source.status !== "not-connected" &&
+      source.accountLabel?.trim(),
+  )?.accountLabel;
+  const displayedAppName = connectedAppleName?.trim() || initialSnapshot.app.name;
+  const workspaceSnapshot = {
+    ...initialSnapshot,
+    app: { ...initialSnapshot.app, name: displayedAppName },
+    sources: sourceConnections,
+  };
+  const appInitials = displayedAppName
     .split(/\s+/)
     .filter(Boolean)
     .slice(0, 2)
@@ -359,6 +371,27 @@ export function AppClimbShell({
     url.searchParams.delete("auth");
     window.location.assign(`${url.pathname}${url.search}${url.hash}`);
   };
+  const openSourceSetup = (provider: SourceConnection["provider"]) => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("source", provider);
+    window.history.replaceState(
+      null,
+      "",
+      `${url.pathname}${url.search}${url.hash}`,
+    );
+    navigateTo("sources");
+  };
+  const openAcquisitionAtlas = () => {
+    setPulseProjection("acquisition");
+    navigateTo("pulse");
+    const url = new URL(window.location.href);
+    url.searchParams.set("atlas", "1");
+    window.history.replaceState(
+      null,
+      "",
+      `${url.pathname}${url.search}${url.hash}`,
+    );
+  };
 
   return (
     <div
@@ -367,16 +400,32 @@ export function AppClimbShell({
     >
       <aside className="sidebar">
         <div>
-          <BrandMark />
-          <div className="workspace-switcher">
+          <button
+            className="sidebar-brand-home"
+            type="button"
+            onClick={() => {
+              setPulseProjection("growth");
+              navigateTo("pulse");
+            }}
+            aria-label="Open AppClimb Pulse"
+          >
+            <BrandMark />
+          </button>
+          <button
+            className="workspace-switcher"
+            type="button"
+            onClick={() => openSourceSetup("app-store-connect")}
+            aria-label={`Manage ${displayedAppName}`}
+          >
             <div className="app-avatar" aria-hidden="true">
               <span>{appInitials}</span>
             </div>
             <div>
-              <strong>{initialSnapshot.app.name}</strong>
+              <strong>{displayedAppName}</strong>
               <span>Current app · {initialSnapshot.app.platform}</span>
             </div>
-          </div>
+            <ChevronRight size={16} aria-hidden="true" />
+          </button>
 
           <nav className="main-nav" aria-label="Primary navigation">
             {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
@@ -640,19 +689,15 @@ export function AppClimbShell({
           ) : activeSection === "pulse" &&
             initialSnapshot.mode === "empty" ? (
             <EmptyWorkspaceView
-              snapshot={initialSnapshot}
+              snapshot={workspaceSnapshot}
               onOpenSources={(provider) => {
                 if (provider) {
-                  const url = new URL(window.location.href);
-                  url.searchParams.set("source", provider);
-                  window.history.replaceState(
-                    null,
-                    "",
-                    `${url.pathname}${url.search}${url.hash}`,
-                  );
+                  openSourceSetup(provider);
+                  return;
                 }
                 navigateTo("sources");
               }}
+              onOpenAcquisitionAtlas={openAcquisitionAtlas}
               onOpenMethodology={() => setHelpOpen(true)}
             />
           ) : activeSection === "pulse" ? (
@@ -704,15 +749,7 @@ export function AppClimbShell({
                 window.location.assign("/");
               }}
               onOpenAcquisitionAtlas={() => {
-                setPulseProjection("acquisition");
-                navigateTo("pulse");
-                const url = new URL(window.location.href);
-                url.searchParams.set("atlas", "1");
-                window.history.replaceState(
-                  null,
-                  "",
-                  `${url.pathname}${url.search}${url.hash}`,
-                );
+                openAcquisitionAtlas();
               }}
             />
           ) : null}

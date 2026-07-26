@@ -51,6 +51,13 @@ interface JourneyDefinition {
   outcome: string;
 }
 
+interface PostHogEventOption {
+  name: string;
+  eventCount: number;
+  uniqueUsers: number;
+  lastSeenAt: string;
+}
+
 const JOURNEY: JourneyDefinition[] = [
   {
     provider: "app-store-connect",
@@ -162,7 +169,10 @@ function errorGuidance(source: SourceConnection) {
       return "AppClimb could not reach PostHog during the last import. Your saved access is still encrypted; retry after connectivity is restored.";
     case "no_data_in_window":
       if (source.provider === "app-store-connect") {
-        return "Apple returned no supported rows for this window. New Analytics Reports can take 1–2 days, and low-volume metrics may remain empty.";
+        return "Apple returned no supported rows for this window. New Analytics Reports normally take 24–48 hours, and low-volume metrics may remain empty.";
+      }
+      if (source.provider === "posthog") {
+        return "PostHog access works, but the selected event names were not seen in the last 30 days. Choose real events from this project; no reauthorization is required.";
       }
       return "The source returned no matching rows. Check the selected project and event names, or wait until those events exist.";
     case "apple_report_request_required":
@@ -283,17 +293,6 @@ export function SourcesView({
     const requestedProvider = params.get("source");
     const oauthResult = params.get("oauth");
     const oauthReason = params.get("oauth_reason");
-    if (requestedProvider || oauthResult || oauthReason) {
-      params.delete("source");
-      params.delete("oauth");
-      params.delete("oauth_reason");
-      const query = params.toString();
-      window.history.replaceState(
-        null,
-        "",
-        `${window.location.pathname}${query ? `?${query}` : ""}`,
-      );
-    }
     const applyReturn = window.setTimeout(() => {
       if (
         requestedProvider &&
@@ -343,6 +342,17 @@ export function SourcesView({
               "PostHog authorized AppClimb, but no readable project was found.",
             );
           });
+      }
+      if (requestedProvider || oauthResult || oauthReason) {
+        params.delete("source");
+        params.delete("oauth");
+        params.delete("oauth_reason");
+        const query = params.toString();
+        window.history.replaceState(
+          null,
+          "",
+          `${window.location.pathname}${query ? `?${query}` : ""}`,
+        );
       }
     }, 0);
     return () => window.clearTimeout(applyReturn);
@@ -437,12 +447,8 @@ export function SourcesView({
 
   const connectPostHogOAuth = async (formData: FormData) => {
     const projectId = String(formData.get("projectId") ?? "").trim();
-    const activationEvent = String(
-      formData.get("activationEvent") ?? "app_activated",
-    ).trim();
-    const sessionEvent = String(
-      formData.get("sessionEvent") ?? "$session_start",
-    ).trim();
+    const activationEvent = String(formData.get("activationEvent") ?? "").trim();
+    const sessionEvent = String(formData.get("sessionEvent") ?? "").trim();
     if (!projectId || !activationEvent || !sessionEvent) {
       setConnectionState("error");
       setConnectionMessage("Choose a project and confirm both event names.");
@@ -456,16 +462,35 @@ export function SourcesView({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ projectId, activationEvent, sessionEvent }),
       });
-      if (!response.ok) throw new Error("oauth_connect_failed");
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(payload?.error || "oauth_connect_failed");
+      }
       await refreshSources();
       setConnectionState("success");
       setSetupOpen(false);
       setOauthState("idle");
       setOauthProjects([]);
-    } catch {
+    } catch (error) {
       setConnectionState("error");
-      setConnectionMessage("PostHog access could not be verified. Reauthorize and retry.");
+      setConnectionMessage(
+        error instanceof Error &&
+          error.message ===
+            "Choose events seen in this project during the last 30 days"
+          ? error.message
+          : "PostHog access could not be verified. Reauthorize and retry.",
+      );
     }
+  };
+
+  const completePostHogEventSetup = async () => {
+    await refreshSources();
+    setConnectionState("success");
+    setConnectionMessage("Events saved. A fresh PostHog import is starting.");
+    setSetupOpen(false);
+    await triggerSync("posthog");
   };
 
   const revokeSource = async () => {
@@ -713,6 +738,7 @@ export function SourcesView({
                 onAdvancedChange={setAdvancedOpen}
                 onConnect={connectSource}
                 onConnectPostHogOAuth={connectPostHogOAuth}
+                onPostHogEventsSaved={completePostHogEventSetup}
                 onRevoke={revokeSource}
               />
             ) : selectedConnectable ? (
@@ -917,10 +943,28 @@ function SourceHealthView({
       )}
 
       <div className="source-health-actions">
-        <button className="primary-action" type="button" onClick={onSync} disabled={syncing}>
-          <RefreshCw className={syncing ? "spin" : undefined} size={17} />
+        <button
+          className="primary-action"
+          type="button"
+          onClick={
+            source.provider === "posthog" &&
+            source.lastErrorCode === "no_data_in_window"
+              ? onManage
+              : onSync
+          }
+          disabled={syncing}
+        >
+          {source.provider === "posthog" &&
+          source.lastErrorCode === "no_data_in_window" ? (
+            <Waypoints size={17} />
+          ) : (
+            <RefreshCw className={syncing ? "spin" : undefined} size={17} />
+          )}
           {syncing
             ? "Checking import…"
+            : source.provider === "posthog" &&
+                source.lastErrorCode === "no_data_in_window"
+              ? "Choose PostHog events"
             : health === "pending"
               ? "Check import status"
               : health === "attention"
@@ -944,6 +988,373 @@ function SourceHealthView({
   );
 }
 
+function formatEventVolume(value: number) {
+  return new Intl.NumberFormat("en", {
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+function EventSelect({
+  name,
+  label,
+  help,
+  value,
+  events,
+  disabled,
+  onChange,
+}: {
+  name: "activationEvent" | "sessionEvent";
+  label: string;
+  help: string;
+  value: string;
+  events: PostHogEventOption[];
+  disabled?: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label>
+      {label}
+      <select
+        name={name}
+        required
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        <option value="" disabled>
+          Choose an event
+        </option>
+        {events.map((event) => (
+          <option key={event.name} value={event.name}>
+            {event.name} · {formatEventVolume(event.eventCount)} events ·{" "}
+            {formatEventVolume(event.uniqueUsers)} users
+          </option>
+        ))}
+      </select>
+      <span className="field-help">{help}</span>
+    </label>
+  );
+}
+
+function PostHogOAuthProjectForm({
+  projects,
+  connectionState,
+  onConnect,
+}: {
+  projects: Array<{ id: string; name: string; organizationName: string }>;
+  connectionState: "idle" | "saving" | "success" | "error";
+  onConnect: (formData: FormData) => Promise<void>;
+}) {
+  const [projectId, setProjectId] = useState("");
+  const [events, setEvents] = useState<PostHogEventOption[]>([]);
+  const [activationEvent, setActivationEvent] = useState("");
+  const [sessionEvent, setSessionEvent] = useState("");
+  const [eventState, setEventState] = useState<
+    "idle" | "loading" | "ready" | "error"
+  >("idle");
+
+  const chooseProject = async (nextProjectId: string) => {
+    setProjectId(nextProjectId);
+    setEvents([]);
+    setActivationEvent("");
+    setSessionEvent("");
+    setEventState("loading");
+    try {
+      const response = await fetch(
+        `/api/oauth/posthog/events?projectId=${encodeURIComponent(nextProjectId)}`,
+        { cache: "no-store" },
+      );
+      if (!response.ok) throw new Error("posthog_events_failed");
+      const payload = (await response.json()) as {
+        data?: { events?: PostHogEventOption[] };
+      };
+      const available = payload.data?.events ?? [];
+      setEvents(available);
+      setEventState("ready");
+    } catch {
+      setEventState("error");
+    }
+  };
+
+  return (
+    <form className="connection-form oauth-project-form" action={onConnect}>
+      <label>
+        Project
+        <select
+          name="projectId"
+          required
+          value={projectId}
+          onChange={(event) => void chooseProject(event.target.value)}
+        >
+          <option value="" disabled>
+            Choose a PostHog project
+          </option>
+          {projects.map((project) => (
+            <option key={project.id} value={project.id}>
+              {project.organizationName} · {project.name}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      {eventState === "loading" && (
+        <div className="posthog-event-state" role="status">
+          <LoaderCircle className="spin" size={18} />
+          <span>Reading events seen in this project during the last 30 days…</span>
+        </div>
+      )}
+      {eventState === "error" && (
+        <div className="posthog-event-state is-error" role="alert">
+          <CircleAlert size={18} />
+          <span>Events could not be read. Choose the project again or reauthorize.</span>
+        </div>
+      )}
+      {eventState === "ready" && events.length === 0 && (
+        <div className="posthog-event-state" role="status">
+          <Clock3 size={18} />
+          <span>
+            No events were seen in the last 30 days. Send one test event to this
+            project, then choose the project again.
+          </span>
+        </div>
+      )}
+      {events.length > 0 && (
+        <div className="posthog-event-picker">
+          <div className="posthog-event-picker-intro">
+            <Waypoints size={18} />
+            <div>
+              <strong>Choose from real project events</strong>
+              <span>
+                AppClimb found {events.length} event
+                {events.length === 1 ? "" : "s"} in the last 30 days.
+              </span>
+            </div>
+          </div>
+          <EventSelect
+            name="activationEvent"
+            label="First value event"
+            help="The first event that proves a new user reached meaningful value."
+            value={activationEvent}
+            events={events}
+            onChange={setActivationEvent}
+          />
+          <EventSelect
+            name="sessionEvent"
+            label="Active use event"
+            help="A recurring event that best represents a real product session."
+            value={sessionEvent}
+            events={events}
+            onChange={setSessionEvent}
+          />
+        </div>
+      )}
+
+      <p className="compact-field-help">
+        AppClimb validates both names before saving. It never invents a default
+        event for your project.{" "}
+        <a
+          href="https://posthog.com/docs/product-analytics/activation"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Activation guide <ExternalLink size={12} />
+        </a>
+      </p>
+      <button
+        className="primary-action"
+        type="submit"
+        disabled={
+          connectionState === "saving" ||
+          !projectId ||
+          !activationEvent ||
+          !sessionEvent
+        }
+      >
+        {connectionState === "saving" ? (
+          <LoaderCircle className="spin" size={17} />
+        ) : (
+          <ShieldCheck size={17} />
+        )}
+        Connect selected project
+      </button>
+    </form>
+  );
+}
+
+function ExistingPostHogEventSetup({
+  onSaved,
+  onChangeAuthorization,
+}: {
+  onSaved: () => Promise<void>;
+  onChangeAuthorization: () => void;
+}) {
+  const [events, setEvents] = useState<PostHogEventOption[]>([]);
+  const [activationEvent, setActivationEvent] = useState("");
+  const [sessionEvent, setSessionEvent] = useState("");
+  const [state, setState] = useState<
+    "loading" | "ready" | "saving" | "error"
+  >("loading");
+  const [message, setMessage] = useState("");
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/connections/posthog/events", { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) throw new Error("posthog_events_failed");
+        return (await response.json()) as {
+          data?: {
+            events?: PostHogEventOption[];
+            activationEvent?: string;
+            sessionEvent?: string;
+          };
+        };
+      })
+      .then((payload) => {
+        if (!active) return;
+        const available = payload.data?.events ?? [];
+        const names = new Set(available.map((event) => event.name));
+        setEvents(available);
+        setActivationEvent(
+          names.has(payload.data?.activationEvent ?? "")
+            ? payload.data?.activationEvent ?? ""
+            : "",
+        );
+        setSessionEvent(
+          names.has(payload.data?.sessionEvent ?? "")
+            ? payload.data?.sessionEvent ?? ""
+            : "",
+        );
+        setState("ready");
+      })
+      .catch(() => {
+        if (!active) return;
+        setState("error");
+        setMessage("PostHog events could not be read. Retry or reauthorize.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [reloadKey]);
+
+  const saveEvents = async (formData: FormData) => {
+    const nextActivationEvent = String(
+      formData.get("activationEvent") ?? "",
+    ).trim();
+    const nextSessionEvent = String(formData.get("sessionEvent") ?? "").trim();
+    setState("saving");
+    setMessage("");
+    try {
+      const response = await fetch("/api/connections/posthog/events", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          activationEvent: nextActivationEvent,
+          sessionEvent: nextSessionEvent,
+        }),
+      });
+      if (!response.ok) throw new Error("posthog_events_save_failed");
+      await onSaved();
+    } catch {
+      setState("error");
+      setMessage(
+        "Those events could not be saved. Refresh the list and choose events seen in the last 30 days.",
+      );
+    }
+  };
+
+  return (
+    <div className="existing-posthog-setup">
+      <div className="posthog-event-picker-intro">
+        <Waypoints size={18} />
+        <div>
+          <strong>Map your real PostHog events</strong>
+          <span>
+            Access is already saved. Changing these events does not require
+            authorization again.
+          </span>
+        </div>
+      </div>
+      {state === "loading" ? (
+        <div className="posthog-event-state" role="status">
+          <LoaderCircle className="spin" size={18} />
+          <span>Reading the last 30 days of event names…</span>
+        </div>
+      ) : state === "error" ? (
+        <div className="posthog-event-state is-error" role="alert">
+          <CircleAlert size={18} />
+          <span>{message}</span>
+        </div>
+      ) : events.length === 0 ? (
+        <div className="posthog-event-state" role="status">
+          <Clock3 size={18} />
+          <span>
+            No events were seen in this project during the last 30 days. Send a
+            test event, then refresh this list.
+          </span>
+        </div>
+      ) : (
+        <form className="connection-form posthog-event-picker" action={saveEvents}>
+          <EventSelect
+            name="activationEvent"
+            label="First value event"
+            help="Choose the first event that proves a new user reached value."
+            value={activationEvent}
+            events={events}
+            disabled={state === "saving"}
+            onChange={setActivationEvent}
+          />
+          <EventSelect
+            name="sessionEvent"
+            label="Active use event"
+            help="Choose a recurring event that represents real product use."
+            value={sessionEvent}
+            events={events}
+            disabled={state === "saving"}
+            onChange={setSessionEvent}
+          />
+          <button
+            className="primary-action"
+            type="submit"
+            disabled={
+              state === "saving" || !activationEvent || !sessionEvent
+            }
+          >
+            {state === "saving" ? (
+              <LoaderCircle className="spin" size={17} />
+            ) : (
+              <CheckCircle2 size={17} />
+            )}
+            Save events and import
+          </button>
+        </form>
+      )}
+      <div className="posthog-event-secondary-actions">
+        <button
+          className="secondary-action"
+          type="button"
+          onClick={() => {
+            setState("loading");
+            setMessage("");
+            setReloadKey((value) => value + 1);
+          }}
+          disabled={state === "loading" || state === "saving"}
+        >
+          <RefreshCw size={15} /> Refresh events
+        </button>
+        <button
+          className="source-advanced-toggle"
+          type="button"
+          onClick={onChangeAuthorization}
+        >
+          Change project or authorization <ChevronDown size={16} />
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ConnectionSetup({
   source,
   oauthState,
@@ -953,6 +1364,7 @@ function ConnectionSetup({
   onAdvancedChange,
   onConnect,
   onConnectPostHogOAuth,
+  onPostHogEventsSaved,
   onRevoke,
 }: {
   source: SourceConnection & { provider: ConnectableProvider };
@@ -963,6 +1375,7 @@ function ConnectionSetup({
   onAdvancedChange: (open: boolean) => void;
   onConnect: (formData: FormData) => Promise<void>;
   onConnectPostHogOAuth: (formData: FormData) => Promise<void>;
+  onPostHogEventsSaved: () => Promise<void>;
   onRevoke: () => Promise<void>;
 }) {
   const setup = SOURCE_SETUP[source.provider];
@@ -988,63 +1401,18 @@ function ConnectionSetup({
           </div>
         </div>
       ) : source.provider === "posthog" && oauthState === "ready" ? (
-        <form className="connection-form oauth-project-form" action={onConnectPostHogOAuth}>
-          <label>
-            Project
-            <select name="projectId" required defaultValue="">
-              <option value="" disabled>
-                Choose a PostHog project
-              </option>
-              {oauthProjects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.organizationName} · {project.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="connection-inline-fields">
-            <label>
-              Activation event
-              <input
-                name="activationEvent"
-                defaultValue="app_activated"
-                required
-                spellCheck={false}
-              />
-            </label>
-            <label>
-              Session event
-              <input
-                name="sessionEvent"
-                defaultValue="$session_start"
-                required
-                spellCheck={false}
-              />
-            </label>
-          </div>
-          <p className="compact-field-help">
-            Activation means the first event that proves a user reached value.{" "}
-            <a
-              href="https://posthog.com/docs/product-analytics/activation"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Choose the right event <ExternalLink size={12} />
-            </a>
-          </p>
-          <button
-            className="primary-action"
-            type="submit"
-            disabled={connectionState === "saving"}
-          >
-            {connectionState === "saving" ? (
-              <LoaderCircle className="spin" size={17} />
-            ) : (
-              <ShieldCheck size={17} />
-            )}
-            Connect selected project
-          </button>
-        </form>
+        <PostHogOAuthProjectForm
+          projects={oauthProjects}
+          connectionState={connectionState}
+          onConnect={onConnectPostHogOAuth}
+        />
+      ) : source.provider === "posthog" &&
+        alreadyConfigured &&
+        !advancedOpen ? (
+        <ExistingPostHogEventSetup
+          onSaved={onPostHogEventsSaved}
+          onChangeAuthorization={() => onAdvancedChange(true)}
+        />
       ) : (
         <>
           {source.provider === "posthog" && (

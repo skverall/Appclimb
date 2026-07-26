@@ -18,7 +18,7 @@ test("trial signup creates an isolated backend workspace and can delete it", asy
   await expect(page.getByText("My AppClimb workspace")).toBeVisible();
   await expect(
     page.getByRole("heading", {
-      name: "Build your first truthful growth map",
+      name: "Add your app, then follow one clear next step.",
     }),
   ).toBeVisible();
   await expect(page.getByText("2.41M")).toHaveCount(0);

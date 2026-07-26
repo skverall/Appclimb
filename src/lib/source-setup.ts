@@ -27,8 +27,8 @@ export const SOURCE_SETUP: Record<ConnectableProvider, SourceSetup> = {
   "app-store-connect": {
     steps: [
       "Open Users and Access → Integrations in App Store Connect.",
-      "Create a team key with the Sales and Reports role, then download the .p8 file once.",
-      "Paste the identifiers below. If reports were never initialized, an Admin must request them once; Apple can take 1–2 days to prepare the first data.",
+      "Create a separate Team Key with exactly the Sales and Reports role, then download the .p8 file once.",
+      "Paste the identifiers below. For new Analytics Reports, an Admin initializes ONGOING data once and may also request ONE_TIME_SNAPSHOT history; Apple normally publishes the first files in 24–48 hours.",
     ],
     fields: [
       {
@@ -59,7 +59,7 @@ export const SOURCE_SETUP: Record<ConnectableProvider, SourceSetup> = {
         name: "privateKey",
         label: "Private key (.p8)",
         placeholder: "-----BEGIN PRIVATE KEY-----",
-        help: "Apple lets you download this file only once. Open it as text and paste the full value.",
+        help: "Use the .p8 from the Sales and Reports Team Key. Apple lets you download it only once; paste the full file value.",
         helpLabel: "Apple key guide",
         helpUrl:
           "https://developer.apple.com/help/app-store-connect/get-started/app-store-connect-api",
@@ -140,20 +140,18 @@ export const SOURCE_SETUP: Record<ConnectableProvider, SourceSetup> = {
       {
         name: "activationEvent",
         label: "Activation event · unique users",
-        placeholder: "app_activated",
+        placeholder: "your_first_value_event",
         help: "The event that best represents first product value.",
         helpLabel: "How to choose activation",
         helpUrl: "https://posthog.com/docs/product-analytics/activation",
-        defaultValue: "app_activated",
       },
       {
         name: "sessionEvent",
         label: "Session event · unique users",
-        placeholder: "$session_start",
+        placeholder: "your_active_use_event",
         help: "Used for active-user context alongside activation.",
         helpLabel: "PostHog events",
         helpUrl: "https://posthog.com/docs/data/events",
-        defaultValue: "$session_start",
       },
     ],
   },

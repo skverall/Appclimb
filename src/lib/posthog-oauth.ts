@@ -49,6 +49,13 @@ export interface PostHogProject {
   organizationName: string;
 }
 
+export interface PostHogEventOption {
+  name: string;
+  eventCount: number;
+  uniqueUsers: number;
+  lastSeenAt: string;
+}
+
 export interface PostHogOAuthToken {
   accessToken: string;
   refreshToken: string;
@@ -225,9 +232,13 @@ async function postHogJSON(
   host: string,
   path: string,
   accessToken: string,
+  init: RequestInit = {},
 ) {
+  const headers = new Headers(init.headers);
+  headers.set("authorization", `Bearer ${accessToken}`);
   return fetch(`${host}${path}`, {
-    headers: { authorization: `Bearer ${accessToken}` },
+    ...init,
+    headers,
     cache: "no-store",
     signal: AbortSignal.timeout(12_000),
   });
@@ -296,4 +307,63 @@ export async function listPostHogProjects(
         `${right.organizationName} ${right.name}`,
       ),
     );
+}
+
+export async function listPostHogEvents(
+  pending: PostHogOAuthPending,
+  projectId: string,
+): Promise<PostHogEventOption[]> {
+  if (!/^\d{1,20}$/u.test(projectId)) {
+    throw new Error("invalid_posthog_project");
+  }
+  const query = `select
+  event,
+  count() as event_count,
+  count(distinct person_id) as unique_users,
+  max(timestamp) as last_seen
+from events
+where timestamp >= now() - interval 30 day
+group by event
+order by event_count desc, event asc
+limit 200`;
+  const response = await postHogJSON(
+    pending.host,
+    `/api/projects/${encodeURIComponent(projectId)}/query/`,
+    pending.accessToken,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${pending.accessToken}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ query: { kind: "HogQLQuery", query } }),
+    },
+  );
+  if (!response.ok) {
+    throw new Error("posthog_events_unavailable");
+  }
+  const payload = (await response.json()) as { results?: unknown[] };
+  const events: PostHogEventOption[] = [];
+  for (const row of payload.results ?? []) {
+    if (!Array.isArray(row) || row.length < 4) continue;
+    const name = typeof row[0] === "string" ? row[0].trim() : "";
+    const eventCount = Number(row[1]);
+    const uniqueUsers = Number(row[2]);
+    const lastSeenAt = new Date(String(row[3]));
+    if (
+      !/^[^\u0000-\u001f\u007f]{1,200}$/u.test(name) ||
+      !Number.isFinite(eventCount) ||
+      !Number.isFinite(uniqueUsers) ||
+      !Number.isFinite(lastSeenAt.getTime())
+    ) {
+      continue;
+    }
+    events.push({
+      name,
+      eventCount,
+      uniqueUsers,
+      lastSeenAt: lastSeenAt.toISOString(),
+    });
+  }
+  return events;
 }

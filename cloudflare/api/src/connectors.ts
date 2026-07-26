@@ -173,6 +173,17 @@ export async function verifyProvider(
       `https://api.appstoreconnect.apple.com/v1/apps/${encodeURIComponent(appId)}`,
       token,
     );
+    try {
+      await getProviderJSON(
+        `https://api.appstoreconnect.apple.com/v1/apps/${encodeURIComponent(appId)}/analyticsReportRequests?limit=1`,
+        token,
+      );
+    } catch (error) {
+      if (error instanceof ProviderError && error.status === 403) {
+        throw new ProviderError("apple_reports_role_required", 403);
+      }
+      throw error;
+    }
     const data = response.data as
       | { attributes?: { name?: unknown } }
       | undefined;
@@ -183,7 +194,8 @@ export async function verifyProvider(
     return {
       provider,
       accountLabel,
-      message: "Key verified. Apple analytics availability is checked by the worker.",
+      message:
+        "App and Analytics Reports access verified. Report availability is checked by the worker.",
       checkedAt,
     };
   }

@@ -3,9 +3,12 @@
 import {
   ArrowRight,
   CheckCircle2,
+  CircleAlert,
+  Clock3,
   CloudOff,
   Compass,
   CreditCard,
+  Globe2,
   PanelTop,
   PlugZap,
   RefreshCw,
@@ -36,10 +39,12 @@ const STAGE_ICONS = {
 export function EmptyWorkspaceView({
   snapshot,
   onOpenSources,
+  onOpenAcquisitionAtlas,
   onOpenMethodology,
 }: {
   snapshot: DashboardSnapshot;
   onOpenSources: (provider?: SourceConnection["provider"]) => void;
+  onOpenAcquisitionAtlas: () => void;
   onOpenMethodology: () => void;
 }) {
   const configuredSources = snapshot.sources.filter(
@@ -48,6 +53,36 @@ export function EmptyWorkspaceView({
       source.status !== "not-connected",
   );
   const awaitingMetrics = configuredSources.length > 0;
+  const apple = snapshot.sources.find(
+    (source) => source.provider === "app-store-connect",
+  );
+  const posthog = snapshot.sources.find((source) => source.provider === "posthog");
+  const appleConfigured = Boolean(
+    apple && apple.status !== "not-connected",
+  );
+  const posthogConfigured = Boolean(
+    posthog && posthog.status !== "not-connected",
+  );
+  const applePending =
+    apple?.lastErrorCode === "apple_reports_pending" ||
+    (apple?.status === "connected" && (apple.metricCount ?? 0) === 0);
+  const posthogNeedsEvents =
+    posthog?.lastErrorCode === "no_data_in_window" ||
+    posthog?.status === "needs-attention";
+  const primaryProvider = posthogNeedsEvents
+    ? "posthog"
+    : apple?.status === "not-connected"
+      ? "app-store-connect"
+      : posthog?.status === "not-connected"
+        ? "posthog"
+        : undefined;
+  const primaryLabel = posthogNeedsEvents
+    ? "Choose PostHog events"
+    : applePending && posthog?.status === "not-connected"
+      ? "Use PostHog while Apple prepares"
+      : awaitingMetrics
+        ? "Review source status"
+        : "Add your iOS app";
 
   return (
     <section className="empty-workspace" aria-labelledby="empty-workspace-title">
@@ -57,15 +92,114 @@ export function EmptyWorkspaceView({
         </span>
         <h2 id="empty-workspace-title">
           {awaitingMetrics
-            ? "Finish your first truthful growth map"
-            : "Build your first truthful growth map"}
+            ? "Your app is added. Finish one live signal."
+            : "Add your app, then follow one clear next step."}
         </h2>
         <p>
           {awaitingMetrics
-            ? "A source is already configured, but no supported aggregate metric has completed import. Review its status or queue another sync; AppClimb will not fill the gap with sample values."
-            : "Connect one read-only source. AppClimb will import and validate real aggregate signals before it names a bottleneck."}
+            ? "Your access is saved. AppClimb will show exactly what is ready, what is waiting on a provider, and what you can finish now."
+            : "Start with App Store Connect for your iOS app. You can also add product events or a website without hunting through the dashboard."}
         </p>
       </div>
+
+      <div className="activation-path" aria-label="Workspace setup">
+        <button
+          className={`activation-path-card ${
+            appleConfigured ? "is-complete" : ""
+          }`}
+          type="button"
+          onClick={() => onOpenSources("app-store-connect")}
+        >
+          <span className="activation-step-icon">
+            {appleConfigured ? (
+              <CheckCircle2 size={18} />
+            ) : (
+              <Store size={18} />
+            )}
+          </span>
+          <span>
+            <small>iOS app</small>
+            <strong>{apple?.accountLabel || snapshot.app.name}</strong>
+            <em>
+              {appleConfigured
+                ? "Added through App Store Connect"
+                : "Add App Store Connect"}
+            </em>
+          </span>
+          <ArrowRight size={17} />
+        </button>
+
+        <button
+          className={`activation-path-card ${
+            (posthog?.metricCount ?? 0) > 0
+              ? "is-complete"
+              : posthogNeedsEvents
+                ? "needs-action"
+                : ""
+          }`}
+          type="button"
+          onClick={() => onOpenSources("posthog")}
+        >
+          <span className="activation-step-icon">
+            {posthogNeedsEvents ? (
+              <CircleAlert size={18} />
+            ) : (posthog?.metricCount ?? 0) > 0 ? (
+              <CheckCircle2 size={18} />
+            ) : (
+              <Zap size={18} />
+            )}
+          </span>
+          <span>
+            <small>Product events</small>
+            <strong>PostHog activation</strong>
+            <em>
+              {posthogNeedsEvents
+                ? "Choose events that exist in your project"
+                : (posthog?.metricCount ?? 0) > 0
+                  ? "Live product events"
+                  : posthogConfigured
+                    ? "Access saved · waiting for data"
+                    : "Connect or skip for now"}
+            </em>
+          </span>
+          <ArrowRight size={17} />
+        </button>
+
+        <button
+          className="activation-path-card"
+          type="button"
+          onClick={onOpenAcquisitionAtlas}
+        >
+          <span className="activation-step-icon">
+            <Globe2 size={18} />
+          </span>
+          <span>
+            <small>Website · optional</small>
+            <strong>Add a web property</strong>
+            <em>Install first-party Acquisition Atlas tracking</em>
+          </span>
+          <ArrowRight size={17} />
+        </button>
+      </div>
+
+      {applePending && (
+        <div className="apple-preparing-card" role="status">
+          <Clock3 size={20} />
+          <div>
+            <strong>Apple access works. The first report files are still preparing.</strong>
+            <p>
+              Apple normally needs 24–48 hours for a new Analytics Reports
+              request. AppClimb checks ready one-time history first, then keeps
+              importing ongoing daily files automatically.
+            </p>
+            <small>
+              For history, an App Store Connect Admin must request a
+              ONE_TIME_SNAPSHOT once. Keep the connected AppClimb key limited
+              to the Sales and Reports role.
+            </small>
+          </div>
+        </div>
+      )}
 
       <div className="empty-river" aria-label="Growth River stages awaiting data">
         <div className="empty-river-flow" aria-hidden="true" />
@@ -84,11 +218,9 @@ export function EmptyWorkspaceView({
         <button
           className="primary-action"
           type="button"
-          onClick={() => onOpenSources()}
+          onClick={() => onOpenSources(primaryProvider)}
         >
-          <PlugZap size={17} />{" "}
-          {awaitingMetrics ? "Review Sources" : "Connect first source"}{" "}
-          <ArrowRight size={17} />
+          <PlugZap size={17} /> {primaryLabel} <ArrowRight size={17} />
         </button>
         <button
           className="secondary-action"

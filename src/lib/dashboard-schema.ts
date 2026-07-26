@@ -119,6 +119,7 @@ export const dashboardSnapshotSchema = z.object({
       provider: sourceProviderSchema,
       label: z.string(),
       status: z.enum(["connected", "needs-attention", "not-connected"]),
+      accountLabel: z.string().optional(),
       lastSyncAt: z.string().nullish(),
       nextSyncAt: z.string().nullish(),
       freshnessHours: z.number().finite().nullish(),

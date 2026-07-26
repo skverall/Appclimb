@@ -43,21 +43,25 @@ describe("honest workspace states", () => {
       <EmptyWorkspaceView
         snapshot={snapshot}
         onOpenSources={vi.fn()}
+        onOpenAcquisitionAtlas={vi.fn()}
         onOpenMethodology={vi.fn()}
       />,
     );
 
     expect(
       screen.getByRole("heading", {
-        name: "Finish your first truthful growth map",
+        name: "Your app is added. Finish one live signal.",
       }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/no supported aggregate metric has completed import/i),
+      screen.getByText(/your access is saved/i),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /connect first source/i }),
     ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /add a web property/i }),
+    ).toBeInTheDocument();
   });
 
   it("distinguishes observed metrics without a defensible baseline", () => {

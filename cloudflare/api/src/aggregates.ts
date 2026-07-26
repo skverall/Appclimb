@@ -1,7 +1,15 @@
 import { appleToken, ProviderError } from "./connectors";
 
 const maxProviderResponse = 2 * 1024 * 1024;
-const eventNamePattern = /^[A-Za-z0-9_.$:/-]{1,100}$/u;
+const invalidEventNameCharacter = /[\u0000-\u001f\u007f]/u;
+
+function validEventName(value: string) {
+  return (
+    value.length > 0 &&
+    value.length <= 200 &&
+    !invalidEventNameCharacter.test(value)
+  );
+}
 
 export interface Aggregate {
   metricKey: string;
@@ -17,6 +25,13 @@ export interface Aggregate {
   dimensions: Record<string, string>;
   sourceUpdatedAt: string | null;
   completeness: number;
+}
+
+export interface PostHogEventOption {
+  name: string;
+  eventCount: number;
+  uniqueUsers: number;
+  lastSeenAt: string;
 }
 
 function required(
@@ -227,22 +242,10 @@ async function readPostHog(
     throw new ProviderError("invalid_posthog_host", 400);
   }
   const entries = [
-    [
-      typeof credentials.activationEvent === "string" &&
-      credentials.activationEvent.trim()
-        ? credentials.activationEvent.trim()
-        : "app_activated",
-      "activated_users",
-    ],
-    [
-      typeof credentials.sessionEvent === "string" &&
-      credentials.sessionEvent.trim()
-        ? credentials.sessionEvent.trim()
-        : "$session_start",
-      "active_users",
-    ],
+    [required(credentials, "activationEvent"), "activated_users"],
+    [required(credentials, "sessionEvent"), "active_users"],
   ] as const;
-  if (entries.some(([event]) => !eventNamePattern.test(event))) {
+  if (entries.some(([event]) => !validEventName(event))) {
     throw new ProviderError("invalid_posthog_event_name", 400);
   }
   const metricByEvent = new Map(entries);
@@ -288,6 +291,61 @@ order by day,event`;
     });
   }
   return result;
+}
+
+export async function discoverPostHogEvents(
+  credentials: Record<string, unknown>,
+  days = 30,
+): Promise<PostHogEventOption[]> {
+  const apiKey = required(credentials, "personalApiKey");
+  const projectId = required(credentials, "projectId");
+  const host = required(credentials, "host").replace(/\/+$/u, "");
+  if (!["https://us.posthog.com", "https://eu.posthog.com"].includes(host)) {
+    throw new ProviderError("invalid_posthog_host", 400);
+  }
+  const boundedDays = Math.max(1, Math.min(90, Math.trunc(days)));
+  const query = `select
+  event,
+  count() as event_count,
+  count(distinct person_id) as unique_users,
+  max(timestamp) as last_seen
+from events
+where timestamp >= now() - interval ${boundedDays} day
+group by event
+order by event_count desc, event asc
+limit 200`;
+  const payload = await providerJSON(
+    `${host}/api/projects/${encodeURIComponent(projectId)}/query/`,
+    apiKey,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query: { kind: "HogQLQuery", query } }),
+    },
+  );
+  const options: PostHogEventOption[] = [];
+  for (const row of Array.isArray(payload.results) ? payload.results : []) {
+    if (!Array.isArray(row) || row.length < 4) continue;
+    const name = typeof row[0] === "string" ? row[0].trim() : "";
+    const eventCount = numeric(row[1]);
+    const uniqueUsers = numeric(row[2]);
+    const lastSeenAt = dateValue(row[3]);
+    if (
+      !validEventName(name) ||
+      eventCount === null ||
+      uniqueUsers === null ||
+      !lastSeenAt
+    ) {
+      continue;
+    }
+    options.push({
+      name,
+      eventCount,
+      uniqueUsers,
+      lastSeenAt: lastSeenAt.toISOString(),
+    });
+  }
+  return options;
 }
 
 async function readSuperwall(
@@ -550,7 +608,7 @@ async function readApple(
     `${base}/v1/apps/${encodeURIComponent(appId)}/analyticsReportRequests?limit=200`,
     token,
   );
-  const request = (Array.isArray(requests.data) ? requests.data : [])
+  const activeRequests = (Array.isArray(requests.data) ? requests.data : [])
     .map(objectValue)
     .filter(
       (item) =>
@@ -560,25 +618,20 @@ async function readApple(
     .sort((left, right) => {
       const priority = (item: Record<string, unknown>) =>
         String(objectValue(item.attributes).accessType).toUpperCase() ===
-        "ONGOING"
+        "ONE_TIME_SNAPSHOT"
           ? 0
           : 1;
       return priority(left) - priority(right);
-    })[0];
-  const requestId = String(request?.id ?? "");
-  if (!requestId) {
+    });
+  if (!activeRequests.length) {
     throw new ProviderError("apple_report_request_required", 409);
   }
-  const requestType = String(
-    objectValue(request.attributes).accessType ?? "",
-  ).toUpperCase();
   const ongoingCutoff = new Date(
     from.getTime() - 7 * 24 * 60 * 60 * 1000,
   );
-  let reportsUrl = `${base}/v1/analyticsReportRequests/${encodeURIComponent(requestId)}/reports?limit=200`;
   const reports = new Map<
     string,
-    { id: string; name: string; lagDays: number }
+    { id: string; name: string; lagDays: number; requestType: string }
   >();
   const wantedReports = new Map([
     [
@@ -587,21 +640,29 @@ async function readApple(
     ],
     ["App Downloads Standard", { metric: "downloads", lagDays: 2 }],
   ]);
-  while (reportsUrl) {
-    const payload = await appleReportJSON(reportsUrl, token);
-    for (const raw of Array.isArray(payload.data) ? payload.data : []) {
-      const item = objectValue(raw);
-      const name = String(objectValue(item.attributes).name ?? "");
-      const wanted = wantedReports.get(name);
-      if (wanted && item.id) {
-        reports.set(wanted.metric, {
-          id: String(item.id),
-          name,
-          lagDays: wanted.lagDays,
-        });
+  for (const request of activeRequests) {
+    const requestId = String(request.id);
+    const requestType = String(
+      objectValue(request.attributes).accessType ?? "",
+    ).toUpperCase();
+    let reportsUrl = `${base}/v1/analyticsReportRequests/${encodeURIComponent(requestId)}/reports?limit=200`;
+    while (reportsUrl) {
+      const payload = await appleReportJSON(reportsUrl, token);
+      for (const raw of Array.isArray(payload.data) ? payload.data : []) {
+        const item = objectValue(raw);
+        const name = String(objectValue(item.attributes).name ?? "");
+        const wanted = wantedReports.get(name);
+        if (wanted && item.id) {
+          reports.set(`${requestId}:${wanted.metric}`, {
+            id: String(item.id),
+            name,
+            lagDays: wanted.lagDays,
+            requestType,
+          });
+        }
       }
+      reportsUrl = String(objectValue(payload.links).next ?? "");
     }
-    reportsUrl = String(objectValue(payload.links).next ?? "");
   }
   if (!reports.size) {
     throw new ProviderError("apple_reports_pending", 202);
@@ -626,7 +687,8 @@ async function readApple(
           !item.id ||
           !processingDate ||
           String(attributes.granularity).toUpperCase() !== "DAILY" ||
-          (requestType === "ONGOING" && processingDate < ongoingCutoff)
+          (report.requestType === "ONGOING" &&
+            processingDate < ongoingCutoff)
         ) {
           continue;
         }

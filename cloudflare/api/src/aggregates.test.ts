@@ -3,6 +3,7 @@ import { generateKeyPairSync } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  discoverPostHogEvents,
   parseAppleTSV,
   readAggregates,
   refreshPostHogOAuth,
@@ -28,6 +29,47 @@ afterEach(() => {
 });
 
 describe("Cloudflare source aggregates", () => {
+  it("discovers real PostHog event names from a bounded recent window", async () => {
+    const fetchMock = vi.fn(
+      async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body)) as {
+          query: { query: string };
+        };
+        expect(body.query.query).toContain("interval 30 day");
+        expect(body.query.query).toContain("limit 200");
+        return Response.json({
+          results: [
+            ["Application Opened", 23, 9, "2026-07-25T12:30:00Z"],
+            ["$screen", 91, 14, "2026-07-26T08:00:00Z"],
+            ["not\u0000valid", 1, 1, "2026-07-26T08:00:00Z"],
+          ],
+        });
+      },
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(
+      discoverPostHogEvents({
+        personalApiKey: "phx_key",
+        projectId: "509825",
+        host: "https://us.posthog.com",
+      }),
+    ).resolves.toEqual([
+      {
+        name: "Application Opened",
+        eventCount: 23,
+        uniqueUsers: 9,
+        lastSeenAt: "2026-07-25T12:30:00.000Z",
+      },
+      {
+        name: "$screen",
+        eventCount: 91,
+        uniqueUsers: 14,
+        lastSeenAt: "2026-07-26T08:00:00.000Z",
+      },
+    ]);
+  });
+
   it("runs a bounded PostHog query and maps configured events", async () => {
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const query = JSON.parse(String(init?.body)) as {
@@ -181,8 +223,18 @@ describe("Cloudflare source aggregates", () => {
                   stoppedDueToInactivity: false,
                 },
               },
+              {
+                id: "request-ongoing",
+                attributes: {
+                  accessType: "ONGOING",
+                  stoppedDueToInactivity: false,
+                },
+              },
             ],
           });
+        }
+        if (url.includes("/analyticsReportRequests/request-ongoing/reports")) {
+          return Response.json({ data: [] });
         }
         if (url.includes("/analyticsReportRequests/request-1/reports")) {
           return Response.json({
@@ -291,6 +343,13 @@ describe("Cloudflare source aggregates", () => {
       { metricKey: "product_page_views", value: 4 },
     ]);
     expect(calls.some((call) => call.method === "POST")).toBe(false);
+    expect(
+      calls.some((call) =>
+        call.url.includes(
+          "/analyticsReportRequests/request-ongoing/reports",
+        ),
+      ),
+    ).toBe(true);
     expect(
       calls
         .filter((call) => call.url.startsWith("https://segments.example.com/"))

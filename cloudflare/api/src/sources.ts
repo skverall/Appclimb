@@ -1,6 +1,19 @@
 import { audit, isEntitled, workspaceFor } from "./db";
-import { sealCredentials } from "./crypto";
-import { isSupportedProvider, verifyProvider } from "./connectors";
+import {
+  discoverPostHogEvents,
+  refreshPostHogOAuth,
+  type PostHogEventOption,
+} from "./aggregates";
+import {
+  openCredentials,
+  sealCredentials,
+  type CredentialEnvelope,
+} from "./crypto";
+import {
+  isSupportedProvider,
+  ProviderError,
+  verifyProvider,
+} from "./connectors";
 import { nowISO, requireSecret } from "./runtime";
 import type { AuthContext } from "./types";
 
@@ -63,6 +76,11 @@ interface SourceRow {
   sync_max_attempts: number | null;
   metric_count: number;
   last_metric_at: string | null;
+}
+
+interface PostHogConnectionRow {
+  id: string;
+  credential_envelope: string;
 }
 
 export async function listSources(
@@ -212,6 +230,23 @@ export async function connectSource(
       )
       .run();
   }
+  if (provider === "app-store-connect") {
+    const appleAppId =
+      typeof credentials.appId === "string" ? credentials.appId.trim() : "";
+    await env.DB.prepare(
+      `UPDATE apps
+       SET name=?,apple_app_id=?,updated_at=?
+       WHERE id=? AND workspace_id=?`,
+    )
+      .bind(
+        verification.accountLabel ?? "My iOS App",
+        appleAppId,
+        now,
+        app.id,
+        auth.workspaceId,
+      )
+      .run();
+  }
   await audit(
     env.DB,
     auth.workspaceId,
@@ -230,6 +265,136 @@ export async function connectSource(
     lastErrorCode: "",
     metricCount: 0,
   };
+}
+
+async function openPostHogConnection(
+  env: Cloudflare.Env,
+  auth: AuthContext,
+): Promise<{
+  row: PostHogConnectionRow;
+  credentials: Record<string, unknown>;
+}> {
+  const row = await env.DB.prepare(
+    `SELECT id,credential_envelope
+     FROM source_connections
+     WHERE workspace_id=? AND provider='posthog'
+       AND status IN ('connected','needs-attention')
+     LIMIT 1`,
+  )
+    .bind(auth.workspaceId)
+    .first<PostHogConnectionRow>();
+  if (!row) {
+    throw new ProviderError("source_not_connected", 404);
+  }
+  let envelope: CredentialEnvelope;
+  try {
+    envelope = JSON.parse(row.credential_envelope) as CredentialEnvelope;
+  } catch {
+    throw new ProviderError("invalid_credential_envelope", 500);
+  }
+  let credentials = await openCredentials(
+    envelope,
+    requireSecret(env, "ENVELOPE_MASTER_KEY"),
+  );
+  const refreshed = await refreshPostHogOAuth(credentials);
+  credentials = refreshed.credentials;
+  if (refreshed.changed) {
+    const resealed = await sealCredentials(
+      credentials,
+      requireSecret(env, "ENVELOPE_MASTER_KEY"),
+    );
+    await env.DB.prepare(
+      `UPDATE source_connections SET credential_envelope=?,updated_at=?
+       WHERE id=? AND workspace_id=?`,
+    )
+      .bind(
+        JSON.stringify(resealed),
+        nowISO(),
+        row.id,
+        auth.workspaceId,
+      )
+      .run();
+  }
+  return { row, credentials };
+}
+
+export async function postHogEventOptions(
+  env: Cloudflare.Env,
+  auth: AuthContext,
+): Promise<{
+  events: PostHogEventOption[];
+  activationEvent: string;
+  sessionEvent: string;
+  windowDays: number;
+}> {
+  const { credentials } = await openPostHogConnection(env, auth);
+  return {
+    events: await discoverPostHogEvents(credentials, 30),
+    activationEvent:
+      typeof credentials.activationEvent === "string"
+        ? credentials.activationEvent.trim()
+        : "",
+    sessionEvent:
+      typeof credentials.sessionEvent === "string"
+        ? credentials.sessionEvent.trim()
+        : "",
+    windowDays: 30,
+  };
+}
+
+export async function updatePostHogEvents(
+  env: Cloudflare.Env,
+  auth: AuthContext,
+  activationEvent: string,
+  sessionEvent: string,
+): Promise<{
+  activationEvent: string;
+  sessionEvent: string;
+  nextSyncAt: string;
+}> {
+  const { row, credentials } = await openPostHogConnection(env, auth);
+  const events = await discoverPostHogEvents(credentials, 30);
+  const available = new Set(events.map((event) => event.name));
+  if (!available.has(activationEvent) || !available.has(sessionEvent)) {
+    throw new ProviderError("posthog_event_not_found", 422);
+  }
+  const nextCredentials = {
+    ...credentials,
+    activationEvent,
+    sessionEvent,
+  };
+  const sealed = await sealCredentials(
+    nextCredentials,
+    requireSecret(env, "ENVELOPE_MASTER_KEY"),
+  );
+  const updatedAt = nowISO();
+  await env.DB.prepare(
+    `UPDATE source_connections SET
+       credential_envelope=?,
+       status='connected',
+       last_error_code=NULL,
+       next_sync_at=?,
+       updated_at=?
+     WHERE id=? AND workspace_id=?`,
+  )
+    .bind(
+      JSON.stringify(sealed),
+      updatedAt,
+      updatedAt,
+      row.id,
+      auth.workspaceId,
+    )
+    .run();
+  await audit(
+    env.DB,
+    auth.workspaceId,
+    auth.userId,
+    "source.configuration_updated",
+    "source",
+    "posthog",
+    { fields: ["activationEvent", "sessionEvent"] },
+  );
+  return { activationEvent, sessionEvent, nextSyncAt: updatedAt };
 }
 
 export async function deleteSource(
