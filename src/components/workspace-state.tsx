@@ -171,35 +171,52 @@ function EmptySourceCard({
   source: SourceConnection;
   onOpenSources: (provider?: SourceConnection["provider"]) => void;
 }) {
+  const statusKey =
+    source.provider === "appclimb-rank"
+      ? "roadmap"
+      : source.syncStatus === "queued" ||
+          source.syncStatus === "running" ||
+          source.syncStatus === "retrying"
+        ? "importing"
+      : source.lastErrorCode === "apple_reports_pending"
+        ? "pending"
+      : source.status === "connected" && (source.metricCount ?? 0) > 0
+        ? "live"
+      : source.status === "connected"
+        ? "saved"
+      : source.status === "needs-attention"
+        ? "attention"
+        : "unconnected";
+
+  const statusLabel = {
+    roadmap: "Roadmap",
+    importing: "Importing",
+    pending: "Preparing reports",
+    live: "Live data",
+    saved: "Access saved",
+    attention: "Needs attention",
+    unconnected: "Not connected",
+  }[statusKey];
+
   return (
     <button
-      className="empty-source-card"
+      className={`empty-source-card status-${statusKey}`}
       type="button"
       onClick={() => onOpenSources(source.provider)}
       aria-label={`Open Sources to connect ${source.label}`}
     >
-      <span className={`provider-logo provider-${source.provider}`}>
-        <ProviderMark provider={source.provider} />
-      </span>
-      <div>
+      <div className="empty-source-card-header">
+        <span className={`provider-logo provider-${source.provider}`}>
+          <ProviderMark provider={source.provider} />
+        </span>
+        <span className={`source-status-badge status-${statusKey}`}>
+          {statusLabel}
+        </span>
+      </div>
+      <div className="empty-source-card-body">
         <strong>{source.label}</strong>
         <small>{source.capabilities.slice(0, 2).join(" · ")}</small>
       </div>
-      <i>
-        {source.provider === "appclimb-rank"
-          ? "Roadmap"
-          : source.syncStatus === "queued" ||
-              source.syncStatus === "running" ||
-              source.syncStatus === "retrying"
-            ? "Importing"
-          : source.status === "connected" && (source.metricCount ?? 0) > 0
-            ? "Live data"
-          : source.status === "connected"
-            ? "Access saved · no data"
-            : source.status === "needs-attention"
-              ? "Needs attention"
-              : "Not connected"}
-      </i>
     </button>
   );
 }
