@@ -1108,11 +1108,6 @@ a {
   background: #10b981;
   box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
 }
-  height: 7px;
-  border-radius: var(--radius-circle);
-  background: var(--green-400);
-  box-shadow: 0 0 0 3px var(--green-100);
-}
 
 .workspace-content {
   min-width: 0;
