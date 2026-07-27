@@ -950,6 +950,7 @@ export function SourcesView({
         throw new Error("connection_failed");
       }
       markConnected(selected.provider);
+      await triggerSync();
     } catch {
       setConnectionState("error");
       setConnectionMessage(

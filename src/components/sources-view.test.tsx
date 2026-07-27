@@ -255,5 +255,50 @@ describe("guided Sources experience", () => {
       screen.getByRole("button", { name: /Check Apple reports now/i }),
     ).toBeInTheDocument();
   });
+
+  it("automatically triggers import immediately after saving provider credentials", async () => {
+    const snapshot = sourceSnapshot();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/apps") return Response.json({ data: [] });
+      if (url === "/api/connections/revenuecat") {
+        return Response.json({ status: "connected" }, { status: 201 });
+      }
+      if (url === "/api/sources") {
+        return Response.json({ data: snapshot.sources });
+      }
+      if (url === "/api/connections/revenuecat/sync") {
+        return Response.json({ jobId: "sync-1", status: "queued" }, { status: 202 });
+      }
+      return new Response("not found", { status: 404 });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    render(
+      <SourcesView
+        snapshot={snapshot}
+        authenticated
+        entitled
+        sources={snapshot.sources}
+        onSourcesChange={vi.fn()}
+        onOpenGrowthRiver={vi.fn()}
+        onOpenAcquisitionAtlas={vi.fn()}
+      />,
+    );
+
+    const rcRow = screen.getByText("RevenueCat").closest("button");
+    expect(rcRow).not.toBeNull();
+    fireEvent.click(rcRow!);
+
+    const form = screen.getByRole("button", { name: /verify & connect/i }).closest("form")!;
+    fireEvent.submit(form);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        "/api/connections/revenuecat/sync",
+        { method: "POST" },
+      );
+    });
+  });
 });
 

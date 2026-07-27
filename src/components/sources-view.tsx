@@ -658,6 +658,7 @@ export function SourcesView({
       setConnectionState("success");
       setSetupOpen(false);
       onRefreshSnapshot?.();
+      await triggerSync(selected.provider);
     } catch {
       setConnectionState("error");
       setConnectionMessage(

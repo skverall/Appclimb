@@ -625,6 +625,15 @@ export async function connectSource(
       app.id,
       verification.accountLabel ?? "",
     );
+  } else {
+    const workspace = await workspaceFor(env.DB, auth.userId, auth.workspaceId);
+    if (workspace && isEntitled(workspace)) {
+      try {
+        await queueSourceSync(env, auth, provider);
+      } catch {
+        // Ignored if sync queueing fails or job is already queued
+      }
+    }
   }
 
   return {
