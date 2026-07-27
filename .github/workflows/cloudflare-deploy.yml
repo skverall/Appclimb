@@ -14,50 +14,8 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  verify:
-    name: Build release candidate
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    env:
-      NEXT_TELEMETRY_DISABLED: "1"
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v5
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Install dependencies
-        run: npm ci
-
-      # Fast safety net: catches merge oddities on main. The full suite
-      # (lint, tests, coverage, API tests) runs in ci.yml on every pull request,
-      # and branch protection requires it to pass before merge.
-      - name: Typecheck
-        run: npm run typecheck -- --incremental false
-
-      - name: Build for Cloudflare Workers
-        run: npm run build:cloudflare
-
-      # Ship the exact artifact that was just built so deploy does not rebuild.
-      # OpenNext output is deterministic (no build-time env inlining today).
-      - name: Upload OpenNext build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: opennext-build
-          include-hidden-files: true
-          path: |
-            .open-next
-            .next
-          retention-days: 1
-
   deploy:
-    name: Deploy API, migrations, and web
-    needs: verify
+    name: Build, verify & deploy Cloudflare Production
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: production
@@ -79,12 +37,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Reuse the verified build artifact instead of rebuilding it.
-      - name: Download OpenNext build artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: opennext-build
-          include-hidden-files: true
+      # Fast safety net on main branch
+      - name: Typecheck
+        run: npm run typecheck -- --incremental false
+
+      - name: Build for Cloudflare Workers
+        run: npm run build:cloudflare
 
       - name: Apply D1 migrations
         run: npm run cloudflare:d1:production
@@ -116,7 +74,7 @@ jobs:
             if curl --fail --silent --show-error https://appclimb.app/sitemap.xml >/dev/null; then
               exit 0
             fi
-            sleep 10
+            sleep 2
           done
           exit 1
 
