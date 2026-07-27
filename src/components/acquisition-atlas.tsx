@@ -1409,30 +1409,99 @@ function TrackingSetup({
   collectorOrigin: string;
   onClose: () => void;
 }) {
-  const [copied, setCopied] = useState(false);
-  const copySnippet = async () => {
+  const [tab, setTab] = useState<"html" | "agent">("html");
+  const [copiedHtml, setCopiedHtml] = useState(false);
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
+
+  const aiAgentPrompt = useMemo(() => {
+    return [
+      `# Add AppClimb Web Analytics to ${property.domain}`,
+      ``,
+      `Please integrate AppClimb first-party web analytics into our website repository.`,
+      ``,
+      `## 1. Add Tracking Script`,
+      `Add this script tag before the closing </body> tag in the root layout or main index.html file:`,
+      `\`\`\`html`,
+      snippet,
+      `\`\`\``,
+      ``,
+      `## 2. (Optional) Custom Conversion Events`,
+      `When a key goal occurs (e.g., account registration, checkout start), record the conversion:`,
+      `\`\`\`javascript`,
+      `if (typeof window !== "undefined") {`,
+      `  window.appclimbAnalytics?.track("conversion", { goal: "account_created" });`,
+      `}`,
+      `\`\`\``,
+      ``,
+      `## 3. (Optional for Next.js / Edge)`,
+      `Set APPCLIMB_TRACKING_TOKEN="${property.trackingToken}" in server environment variables to automatically forward AI crawler user agents to ${collectorOrigin}/api/track/crawler.`,
+    ].join("\n");
+  }, [property.domain, property.trackingToken, snippet, collectorOrigin]);
+
+  const copyHtml = async () => {
     await navigator.clipboard.writeText(snippet);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1800);
+    setCopiedHtml(true);
+    window.setTimeout(() => setCopiedHtml(false), 1800);
   };
+
+  const copyPrompt = async () => {
+    await navigator.clipboard.writeText(aiAgentPrompt);
+    setCopiedPrompt(true);
+    window.setTimeout(() => setCopiedPrompt(false), 1800);
+  };
+
   return (
     <article className="atlas-setup-panel">
-      <div>
-        <span className="eyebrow">Install on {property.domain}</span>
-        <h3>One first-party script</h3>
-        <p>
-          Add this before the closing <code>&lt;/body&gt;</code>. It respects
-          Do Not Track and uses session storage unless you explicitly switch to
-          persistent mode after consent.
-        </p>
+      <div className="atlas-setup-header">
+        <div>
+          <span className="eyebrow">Website Analytics Integration</span>
+          <h3>Install tracking on {property.domain}</h3>
+          <p>
+            Add AppClimb first-party analytics snippet to your website to track
+            visitors, AI referrals (ChatGPT, Claude, Perplexity), UTM campaigns, and
+            server-side crawlers.
+          </p>
+        </div>
+        <div className="atlas-setup-tabs" role="tablist" aria-label="Installation method">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "html"}
+            className={tab === "html" ? "active" : ""}
+            onClick={() => setTab("html")}
+          >
+            <Code2 size={14} /> HTML Snippet
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "agent"}
+            className={tab === "agent" ? "active" : ""}
+            onClick={() => setTab("agent")}
+          >
+            <Sparkles size={14} /> AI Agent Prompt
+          </button>
+        </div>
       </div>
-      <div className="atlas-code-block">
-        <code>{snippet}</code>
-        <button type="button" onClick={() => void copySnippet()}>
-          {copied ? <Check size={15} /> : <Clipboard size={15} />}
-          {copied ? "Copied" : "Copy"}
-        </button>
-      </div>
+
+      {tab === "html" ? (
+        <div className="atlas-code-block">
+          <code>{snippet}</code>
+          <button type="button" onClick={() => void copyHtml()}>
+            {copiedHtml ? <Check size={15} /> : <Clipboard size={15} />}
+            {copiedHtml ? "Copied" : "Copy code"}
+          </button>
+        </div>
+      ) : (
+        <div className="atlas-code-block atlas-agent-prompt-block">
+          <code>{aiAgentPrompt}</code>
+          <button type="button" onClick={() => void copyPrompt()}>
+            {copiedPrompt ? <Check size={15} /> : <Clipboard size={15} />}
+            {copiedPrompt ? "Copied Prompt" : "Copy AI Prompt"}
+          </button>
+        </div>
+      )}
+
       <div className="atlas-server-note">
         <Bot size={19} />
         <div>
