@@ -49,6 +49,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: opennext-build
+          include-hidden-files: true
           path: |
             .open-next
             .next
@@ -83,6 +84,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: opennext-build
+          include-hidden-files: true
 
       - name: Apply D1 migrations
         run: npm run cloudflare:d1:production
