@@ -265,6 +265,14 @@ export async function connectSource(
       )
       .run();
   }
+  if (verification.accountLabel && verification.accountLabel.trim()) {
+    await env.DB.prepare(
+      `UPDATE apps SET name = ?, updated_at = ?
+       WHERE id = ? AND workspace_id = ? AND (name = 'My iOS App' OR name IS NULL OR name = '')`,
+    )
+      .bind(verification.accountLabel.trim(), now, app.id, auth.workspaceId)
+      .run();
+  }
   if (provider === "app-store-connect") {
     const appleAppId =
       typeof credentials.appId === "string" ? credentials.appId.trim() : "";

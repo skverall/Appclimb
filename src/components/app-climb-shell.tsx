@@ -110,8 +110,11 @@ export function AppClimbShell({
   );
   const [replayIndex, setReplayIndex] = useState(initialSnapshot.events.length);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [appModalOpen, setAppModalOpen] = useState(false);
+  const [customAppName, setCustomAppName] = useState(initialSnapshot.app.name);
   const [helpOpen, setHelpOpen] = useState(false);
   const [billingOpen, setBillingOpen] = useState(false);
+
   const [deletingAccount, setDeletingAccount] = useState(false);
   const [accountError, setAccountError] = useState("");
   const [avatarKey, setAvatarKey] = useState<AvatarKey>(
@@ -294,7 +297,26 @@ export function AppClimbShell({
       source.status !== "not-connected" &&
       source.accountLabel?.trim(),
   )?.accountLabel;
-  const displayedAppName = connectedAppleName?.trim() || initialSnapshot.app.name;
+  const displayedAppName =
+    connectedAppleName?.trim() ||
+    (customAppName !== "My iOS App" ? customAppName : "") ||
+    initialSnapshot.app.name;
+
+  const saveAppName = async (nextName: string): Promise<boolean> => {
+    if (!nextName.trim()) return false;
+    setCustomAppName(nextName.trim());
+    try {
+      const response = await fetch("/api/apps", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name: nextName.trim() }),
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  };
+
   const appInitials = displayedAppName
     .split(/\s+/)
     .filter(Boolean)
@@ -410,7 +432,7 @@ export function AppClimbShell({
           <button
             className="workspace-switcher"
             type="button"
-            onClick={() => openSourceSetup("app-store-connect")}
+            onClick={() => setAppModalOpen(true)}
             aria-label={`Manage ${displayedAppName}`}
           >
             <div className="app-avatar" aria-hidden="true">
@@ -925,6 +947,17 @@ export function AppClimbShell({
         </ModalDialog>
       )}
 
+      {appModalOpen && (
+        <AppInfoModal
+          appName={displayedAppName}
+          platform={initialSnapshot.app.platform}
+          sourceConnections={sourceConnections}
+          onSaveName={saveAppName}
+          onOpenSource={openSourceSetup}
+          onClose={() => setAppModalOpen(false)}
+        />
+      )}
+
       {helpOpen && (
         <ModalDialog
           labelledBy="help-title"
@@ -962,3 +995,145 @@ export function AppClimbShell({
     </div>
   );
 }
+
+function AppInfoModal({
+  appName,
+  platform,
+  sourceConnections,
+  onSaveName,
+  onOpenSource,
+  onClose,
+}: {
+  appName: string;
+  platform: string;
+  sourceConnections: SourceConnection[];
+  onSaveName: (name: string) => Promise<boolean>;
+  onOpenSource: (provider: SourceConnection["provider"]) => void;
+  onClose: () => void;
+}) {
+  const [editingName, setEditingName] = useState(appName);
+  const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState("");
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editingName.trim() || saving) return;
+    setSaving(true);
+    setSaveMessage("");
+    const success = await onSaveName(editingName.trim());
+    setSaving(false);
+    if (success) {
+      setSaved(true);
+      setSaveMessage("App name updated successfully.");
+      window.setTimeout(() => setSaveMessage(""), 2200);
+    } else {
+      setSaved(false);
+      setSaveMessage("Could not update app name. Try again.");
+    }
+  };
+
+  return (
+    <ModalDialog
+      labelledBy="app-modal-title"
+      onClose={onClose}
+      dialogClassName="settings-dialog app-info-dialog"
+      closeLabel="Close app settings"
+    >
+      <span className="eyebrow">App & Workspace Settings · {platform}</span>
+      <h2 id="app-modal-title">{appName}</h2>
+
+      <form onSubmit={handleSave} className="connection-form app-name-form" style={{ marginTop: "1rem" }}>
+        <label>
+          App Name
+          <div style={{ display: "flex", gap: "0.5rem", marginTop: "0.25rem" }}>
+            <input
+              type="text"
+              value={editingName}
+              onChange={(event) => setEditingName(event.target.value)}
+              placeholder="e.g. Currency Converter"
+              required
+              style={{ flex: 1 }}
+            />
+            <button
+              type="submit"
+              className="primary-action"
+              style={{ width: "auto", padding: "0 1rem" }}
+              disabled={saving || !editingName.trim()}
+            >
+              {saving ? "Saving…" : "Save"}
+            </button>
+          </div>
+        </label>
+        {saveMessage && (
+          <p
+            className={saved ? "connection-message success" : "connection-message error"}
+            role={saved ? "status" : "alert"}
+            style={{ fontSize: "0.85rem", marginTop: "0.35rem" }}
+          >
+            {saveMessage}
+          </p>
+        )}
+      </form>
+
+      <div style={{ marginTop: "1.5rem" }}>
+        <span className="eyebrow" style={{ marginBottom: "0.5rem", display: "block" }}>
+          Connected Growth Sources
+        </span>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          {(["app-store-connect", "posthog", "revenuecat", "superwall"] as const).map((provider) => {
+            const source = sourceConnections.find((item) => item.provider === provider);
+            const providerLabel = {
+              "app-store-connect": "App Store Connect",
+              posthog: "PostHog",
+              revenuecat: "RevenueCat",
+              superwall: "Superwall",
+            }[provider];
+            const isConnected = source && source.status !== "not-connected";
+            const isPending = source?.lastErrorCode === "apple_reports_pending";
+
+            return (
+              <div
+                key={provider}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "0.65rem 0.85rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border, rgba(0,0,0,0.08))",
+                  background: "var(--surface-subtle, rgba(0,0,0,0.02))",
+                }}
+              >
+                <div>
+                  <strong style={{ display: "block", fontSize: "0.9rem" }}>{providerLabel}</strong>
+                  <small style={{ opacity: 0.75, fontSize: "0.8rem" }}>
+                    {isPending
+                      ? "Apple preparing reports"
+                      : isConnected
+                        ? source.accountLabel
+                          ? `Connected · ${source.accountLabel}`
+                          : "Connected"
+                        : "Not connected"}
+                  </small>
+                </div>
+                <button
+                  type="button"
+                  className="secondary-action"
+                  style={{ width: "auto", padding: "0.35rem 0.75rem", fontSize: "0.8rem" }}
+                  onClick={() => {
+                    onClose();
+                    onOpenSource(provider);
+                  }}
+                >
+                  Manage
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </ModalDialog>
+  );
+}
+

@@ -399,3 +399,48 @@ export async function recordKeywordObservations(
   }
   return { observedOn, applied };
 }
+
+export async function updateWorkspaceApp(
+  env: Cloudflare.Env,
+  auth: AuthContext,
+  name: string,
+  storefront?: string,
+) {
+  const trimmedName = name.trim().slice(0, 120);
+  if (!trimmedName) {
+    throw new ProviderError("invalid_app_name", 400);
+  }
+  const app = await env.DB.prepare(
+    "SELECT id FROM apps WHERE workspace_id = ? ORDER BY created_at LIMIT 1",
+  )
+    .bind(auth.workspaceId)
+    .first<{ id: string }>();
+  if (!app) {
+    throw new ProviderError("app_not_found", 404);
+  }
+  const now = nowISO();
+  const validStorefront = storefront ? boundedStorefront(storefront) : undefined;
+  if (validStorefront) {
+    await env.DB.prepare(
+      "UPDATE apps SET name = ?, default_storefront = ?, updated_at = ? WHERE id = ? AND workspace_id = ?",
+    )
+      .bind(trimmedName, validStorefront, now, app.id, auth.workspaceId)
+      .run();
+  } else {
+    await env.DB.prepare(
+      "UPDATE apps SET name = ?, updated_at = ? WHERE id = ? AND workspace_id = ?",
+    )
+      .bind(trimmedName, now, app.id, auth.workspaceId)
+      .run();
+  }
+  await audit(
+    env.DB,
+    auth.workspaceId,
+    auth.userId,
+    "app.updated",
+    "app",
+    app.id,
+    { name: trimmedName, storefront: validStorefront },
+  );
+  return { id: app.id, name: trimmedName, storefront: validStorefront };
+}

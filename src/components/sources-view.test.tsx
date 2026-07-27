@@ -210,4 +210,42 @@ describe("guided Sources experience", () => {
     ).toBeInTheDocument();
     expect(screen.getAllByText("12 metric points live").length).toBeGreaterThan(0);
   });
+
+  it("displays actionable status and trigger button when Apple reports are pending", async () => {
+    const snapshot = sourceSnapshot();
+    const apple = snapshot.sources.find(
+      (source) => source.provider === "app-store-connect",
+    );
+    if (!apple) throw new Error("App Store Connect fixture missing");
+    apple.status = "connected";
+    apple.lastErrorCode = "apple_reports_pending";
+    apple.lastSyncAt = "2026-07-27T10:00:00.000Z";
+
+    render(
+      <SourcesView
+        snapshot={snapshot}
+        authenticated
+        entitled
+        sources={snapshot.sources}
+        onSourcesChange={vi.fn()}
+        onOpenGrowthRiver={vi.fn()}
+        onOpenAcquisitionAtlas={vi.fn()}
+      />,
+    );
+
+    const appleRow = screen.getByText("App Store Connect").closest("button");
+    expect(appleRow).not.toBeNull();
+    fireEvent.click(appleRow!);
+
+    expect(
+      screen.getByRole("heading", { name: "App Store Connect" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Apple ASC API confirmed your Analytics Reports request is active/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /Check Apple reports now/i }),
+    ).toBeInTheDocument();
+  });
 });
+

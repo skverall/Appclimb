@@ -9,6 +9,7 @@ import {
   listWorkspaceApps,
   recordKeywordObservations,
   sanitizeClientAppMetadata,
+  updateWorkspaceApp,
 } from "./apps-keywords";
 import {
   addAiVisibilityPrompt,
@@ -805,6 +806,18 @@ app.post("/v1/apps", requireAuth, async (c) => {
     },
     201,
   );
+});
+
+app.patch("/v1/apps", requireAuth, async (c) => {
+  const auth = c.get("auth");
+  if (!["owner", "admin"].includes(auth.role)) {
+    return errorResponse(c, "admin_required", 403);
+  }
+  const input = await jsonBody(c.req.raw);
+  const name = typeof input.name === "string" ? input.name : "";
+  const storefront = typeof input.storefront === "string" ? input.storefront : undefined;
+  const data = await updateWorkspaceApp(c.env, auth, name, storefront);
+  return c.json({ data });
 });
 
 app.get("/v1/ai-visibility", requireAuth, async (c) => {

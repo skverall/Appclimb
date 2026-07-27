@@ -775,6 +775,7 @@ export function SourcesView({
             ) : selectedConnectable ? (
               <SourceHealthView
                 source={selectedConnectable}
+                snapshot={snapshot}
                 syncing={syncingProvider === selectedConnectable.provider}
                 onSync={() => void triggerSync(selectedConnectable.provider)}
                 onOpenGrowthRiver={onOpenGrowthRiver}
@@ -872,6 +873,7 @@ function SourceJourneyCard({
 
 function SourceHealthView({
   source,
+  snapshot,
   syncing,
   onSync,
   onOpenGrowthRiver,
@@ -879,6 +881,7 @@ function SourceHealthView({
   onConnect,
 }: {
   source: SourceConnection & { provider: ConnectableProvider };
+  snapshot?: DashboardSnapshot;
   syncing: boolean;
   onSync: () => void;
   onOpenGrowthRiver: () => void;
@@ -886,6 +889,10 @@ function SourceHealthView({
   onConnect: () => void;
 }) {
   const health = dataHealth(source);
+  const lastCheckTime = source.lastSyncAt
+    ? new Date(source.lastSyncAt).toLocaleString()
+    : null;
+
   if (source.status === "not-connected") {
     return (
       <div className="source-health-view source-connect-intro">
@@ -941,16 +948,39 @@ function SourceHealthView({
         </div>
       </div>
 
+      {source.provider === "posthog" && source.accountLabel && (
+        <div className="posthog-auto-map-note" style={{ marginBottom: "0.5rem" }}>
+          <Waypoints size={18} />
+          <div>
+            <strong>Linked to PostHog Project: {source.accountLabel}</strong>
+            <span>
+              Connected to app: {snapshot?.app?.name ?? "Current App"}. Product events are mapped automatically.
+            </span>
+          </div>
+        </div>
+      )}
+
       {health === "pending" && (
         <div className="source-pending-note" role="status">
           <Clock3 size={18} />
-          <div>
+          <div style={{ width: "100%" }}>
             <strong>Apple is preparing reports (1–2 days)</strong>
-            <span>
-              Apple accepted the request. As soon as files appear, AppClimb
-              imports the one-time historical snapshot first, then keeps the
-              ongoing daily reports up to date automatically.
-            </span>
+            <p style={{ margin: "0.3rem 0 0.5rem 0", fontSize: "0.85rem", lineHeight: 1.45 }}>
+              Apple ASC API confirmed your Analytics Reports request is active. Initial daily report TSVs take Apple 24–48 hours to compile after request creation. AppClimb checks Apple automatically.
+            </p>
+            {lastCheckTime && (
+              <div style={{ fontSize: "0.8rem", opacity: 0.85, marginBottom: "0.5rem" }}>
+                <strong>Last checked:</strong> {lastCheckTime}
+              </div>
+            )}
+            <a
+              href="https://appstoreconnect.apple.com/apps/analytics"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.85rem", textDecoration: "underline" }}
+            >
+              Open App Store Connect Analytics <ExternalLink size={13} />
+            </a>
           </div>
         </div>
       )}
@@ -999,7 +1029,7 @@ function SourceHealthView({
                 source.lastErrorCode === "no_data_in_window"
               ? "Review PostHog pulse"
             : health === "pending"
-              ? "Check import status"
+              ? "Check Apple reports now"
               : health === "attention"
                 ? "Retry import"
                 : health === "syncing"
@@ -1020,6 +1050,7 @@ function SourceHealthView({
     </div>
   );
 }
+
 
 function formatEventVolume(value: number) {
   return new Intl.NumberFormat("en", {

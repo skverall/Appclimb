@@ -40,3 +40,24 @@ export async function POST(request: Request) {
   }
   return relayBackendResponse(response);
 }
+
+const updateAppSchema = z.object({
+  name: z.string().min(1).max(120),
+  storefront: z.string().regex(/^[A-Z]{2}$/u).optional(),
+});
+
+export async function PATCH(request: Request) {
+  const parsed = updateAppSchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) {
+    return Response.json({ error: "Invalid app name or storefront" }, { status: 400 });
+  }
+  const response = await requestWithSession("/v1/apps", {
+    method: "PATCH",
+    body: JSON.stringify(parsed.data),
+  });
+  if (!response) {
+    return Response.json({ error: "Authentication required" }, { status: 401 });
+  }
+  return relayBackendResponse(response);
+}
+
