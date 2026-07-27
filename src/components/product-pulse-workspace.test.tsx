@@ -215,7 +215,9 @@ describe("ProductPulseWorkspace", () => {
       ).toBeInTheDocument();
 
       fireEvent.click(
-        screen.getByRole("button", { name: /Open Acquisition Atlas/i }),
+        screen.getByRole("button", {
+          name: /Verify install in Acquisition Atlas/i,
+        }),
       );
       expect(assign).toHaveBeenCalled();
       const target = String(assign.mock.calls[0]?.[0] ?? "");

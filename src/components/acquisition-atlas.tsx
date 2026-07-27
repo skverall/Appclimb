@@ -35,6 +35,7 @@ import {
 } from "react";
 
 import { BrandIcon, SourceBrandIcon } from "@/components/brand-icon";
+import { TrackingVerificationGate } from "@/components/tracking-verification-gate";
 import type {
   AcquisitionBreakdownRow,
   AcquisitionChannel,
@@ -167,6 +168,11 @@ export function AcquisitionAtlas({
   const [error, setError] = useState("");
   const [setupOpen, setSetupOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+  const [verifyAttempted, setVerifyAttempted] = useState(false);
+  const [justVerified, setJustVerified] = useState(false);
+  /** After a successful verify, let the user stay on the confetti screen until Continue. */
+  const [dismissVerifiedGate, setDismissVerifiedGate] = useState(false);
   const collectorOrigin =
     typeof window === "undefined"
       ? "https://appclimb.app"
@@ -175,7 +181,7 @@ export function AcquisitionAtlas({
   const loadSnapshot = useCallback(async () => {
     if (!authenticated || demo) {
       setSnapshot(demoAcquisitionSnapshotForWindow(windowDays));
-      return;
+      return null;
     }
     setLoading(true);
     setError("");
@@ -195,20 +201,23 @@ export function AcquisitionAtlas({
         throw new Error("invalid_snapshot");
       }
       const envelope = payload as AcquisitionEnvelope;
-      setSnapshot({
+      const next: AcquisitionSnapshot = {
         ...(envelope.data as Omit<
           AcquisitionSnapshot,
           "mode" | "windowDays"
         >),
         mode: envelope.meta?.mode ?? "empty",
         windowDays: envelope.meta?.windowDays ?? windowDays,
-      });
+      };
+      setSnapshot(next);
+      return next;
     } catch (loadError) {
       setError(
         loadError instanceof Error && loadError.message === "plan_required"
           ? "Acquisition Atlas is available while your workspace access is active."
           : "Acquisition data could not be loaded. Your Growth River data is unchanged.",
       );
+      return null;
     } finally {
       setLoading(false);
     }
@@ -219,10 +228,48 @@ export function AcquisitionAtlas({
     return () => window.clearTimeout(timer);
   }, [loadSnapshot]);
 
+  // New app / empty property: reset the verification celebration gate.
+  useEffect(() => {
+    setDismissVerifiedGate(false);
+    setJustVerified(false);
+    setVerifyAttempted(false);
+  }, [appId, snapshot.property?.id]);
+
   const property = snapshot.property;
   const trackingSnippet = property?.trackingToken
     ? `<script\n  src="${collectorOrigin}/appclimb-analytics.js"\n  data-token="${property.trackingToken}"\n  data-storage="session"\n  defer\n></script>`
     : "";
+
+  const hasLiveSignal =
+    snapshot.mode === "live" ||
+    snapshot.totals.pageviews > 0 ||
+    snapshot.totals.visitors > 0 ||
+    snapshot.crawlers.requests > 0;
+
+  const needsInstallGate =
+    Boolean(authenticated && !demo && property?.trackingToken) &&
+    !dismissVerifiedGate &&
+    (justVerified || !hasLiveSignal);
+
+  const verifyConnection = async () => {
+    setVerifying(true);
+    setVerifyAttempted(true);
+    setJustVerified(false);
+    try {
+      const next = await loadSnapshot();
+      const connected =
+        next &&
+        (next.mode === "live" ||
+          next.totals.pageviews > 0 ||
+          next.totals.visitors > 0 ||
+          next.crawlers.requests > 0);
+      if (connected) {
+        setJustVerified(true);
+      }
+    } finally {
+      setVerifying(false);
+    }
+  };
 
   return (
     <section
@@ -342,6 +389,23 @@ export function AcquisitionAtlas({
           onConnected={(created) => {
             setSnapshot((current) => ({ ...current, property: created }));
             setSetupOpen(true);
+            setDismissVerifiedGate(false);
+            setJustVerified(false);
+            setVerifyAttempted(false);
+          }}
+        />
+      ) : needsInstallGate && property ? (
+        <TrackingVerificationGate
+          property={property}
+          snippet={trackingSnippet}
+          collectorOrigin={collectorOrigin}
+          checking={verifying || loading}
+          lastCheckFailed={verifyAttempted && !justVerified && !hasLiveSignal}
+          verified={justVerified || hasLiveSignal}
+          onCheck={() => void verifyConnection()}
+          onVerifiedContinue={() => {
+            setDismissVerifiedGate(true);
+            setJustVerified(false);
           }}
         />
       ) : (

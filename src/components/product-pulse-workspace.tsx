@@ -948,7 +948,7 @@ function AddAppDialog({
                   onClick={() => onAdded(webSuccess.id, { openAtlas: true })}
                 >
                   <Waypoints size={16} />
-                  Open Acquisition Atlas
+                  Verify install in Acquisition Atlas
                 </button>
                 <button
                   type="button"
