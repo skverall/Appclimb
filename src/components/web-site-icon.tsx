@@ -22,8 +22,10 @@ type WebSiteIconProps = {
 };
 
 /**
- * Renders a website favicon with a multi-source fallback chain so Web SaaS
- * tabs and the workspace switcher show a real site icon instead of a globe.
+ * Renders a website favicon, resolved through the same-origin `/api/site-icon`
+ * proxy, so Web SaaS tabs and the workspace switcher show the real site icon
+ * instead of a globe. Falls back to a branded letter tile when the site has no
+ * usable icon at all.
  */
 export function WebSiteIcon({
   domain,
@@ -118,11 +120,15 @@ export function WebSiteIcon({
         alt=""
         width={size}
         height={size}
+        loading="lazy"
+        decoding="async"
         onError={() => setIndex((current) => current + 1)}
         style={{
           width: "100%",
           height: "100%",
-          objectFit: "cover",
+          // Favicons are not reliably square; `contain` avoids cropping a
+          // wordmark down to an unreadable sliver.
+          objectFit: "contain",
           display: "block",
         }}
       />

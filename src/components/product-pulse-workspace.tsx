@@ -38,7 +38,6 @@ import {
   searchAppStoreCatalog,
   type CatalogApp,
 } from "@/lib/itunes";
-import { preferredWebFaviconUrl } from "@/lib/web-favicon";
 
 interface WorkspaceApp {
   id: string;
@@ -543,10 +542,11 @@ function AddAppDialog({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           platform: "web",
+          // No iconUrl: the API records its own absolute default, and the UI
+          // resolves the live icon through /api/site-icon.
           metadata: {
             domain: cleanWebDomain,
             name: webName.trim() || cleanWebDomain,
-            iconUrl: preferredWebFaviconUrl(cleanWebDomain),
           },
         }),
       });

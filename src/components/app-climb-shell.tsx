@@ -153,9 +153,8 @@ export function AppClimbShell({
         ? app.appStoreId.slice(4)
         : "");
     if (isWeb && domain) {
-      if (app.iconUrl && !app.iconUrl.includes("google.com/s2/favicons")) {
-        return app.iconUrl;
-      }
+      // Stored web icon URLs point at public favicon hosts the CSP blocks, so
+      // the same-origin proxy always wins here.
       return preferredWebFaviconUrl(domain);
     }
     return app.iconUrl || "";

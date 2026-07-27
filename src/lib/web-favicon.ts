@@ -1,7 +1,10 @@
 /**
  * Favicon URL helpers for Web SaaS apps.
- * Multiple public resolvers are tried because any single host can 404 or
- * return an empty icon for a given domain.
+ *
+ * The browser never loads a public favicon host directly: the app CSP allows
+ * `img-src 'self'` only, so every third-party icon URL is blocked before the
+ * request leaves the page. Icons are resolved by `/api/site-icon` instead,
+ * which fetches and verifies them server-side.
  */
 
 export function normalizeWebDomain(value: string): string {
@@ -12,46 +15,53 @@ export function normalizeWebDomain(value: string): string {
     .replace(/^https?:\/\//u, "")
     .replace(/^www\./u, "")
     .replace(/\/.*$/u, "")
+    // Trailing root dot first, so a fully qualified `example.com.:8443` still
+    // has its port stripped.
+    .replace(/\.$/u, "")
     .replace(/:\d+$/u, "")
     .replace(/\.$/u, "");
 }
 
-/** Best default icon URL to persist for a web domain. */
+/** Same-origin icon URL for a web domain; resolved server-side on request. */
 export function preferredWebFaviconUrl(domain: string): string {
   const cleaned = normalizeWebDomain(domain);
   if (!cleaned) return "";
-  return `https://icons.duckduckgo.com/ip3/${encodeURIComponent(cleaned)}.ico`;
+  return `/api/site-icon?domain=${encodeURIComponent(cleaned)}`;
 }
 
 /**
- * Ordered favicon candidates for a domain. Prefer a stored URL first, then
- * public resolvers that tend to work from browsers without CORS issues.
+ * True when the app CSP can actually render an icon URL. Anything else has to
+ * go through the proxy, however good the stored value looks.
+ */
+function isRenderableIconUrl(url: string): boolean {
+  if (url.startsWith("/")) return true;
+  if (url.startsWith("data:image/")) return true;
+  try {
+    const { protocol, hostname } = new URL(url);
+    if (protocol !== "https:") return false;
+    // Mirrors the `img-src` allowlist in next.config.ts.
+    return hostname === "appclimb.app" || hostname.endsWith(".mzstatic.com");
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Ordered favicon candidates for a domain: a stored URL first when the CSP
+ * permits it, then the proxy, which runs its own multi-source resolution.
  */
 export function webFaviconCandidates(
   domain: string,
   preferred?: string | null,
 ): string[] {
-  const cleaned = normalizeWebDomain(domain);
   const urls: string[] = [];
   const pref = preferred?.trim();
-  const isGoogleFavicon = pref?.includes("google.com/s2/favicons");
 
-  if (pref && !isGoogleFavicon) {
+  if (pref && isRenderableIconUrl(pref)) {
     urls.push(pref);
   }
-  if (cleaned) {
-    urls.push(
-      `https://icons.duckduckgo.com/ip3/${encodeURIComponent(cleaned)}.ico`,
-      `https://icon.horse/icon/${encodeURIComponent(cleaned)}`,
-      `https://unavatar.io/${encodeURIComponent(cleaned)}`,
-      `https://${cleaned}/favicon.ico`,
-      `https://www.${cleaned}/favicon.ico`,
-      `https://www.google.com/s2/favicons?domain=${encodeURIComponent(cleaned)}&sz=128`,
-    );
-  }
-  if (pref && isGoogleFavicon) {
-    urls.push(pref);
-  }
+  urls.push(preferredWebFaviconUrl(domain));
+
   return [...new Set(urls.filter(Boolean))];
 }
 
