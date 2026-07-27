@@ -495,35 +495,57 @@ function AddAppDialog({
                 The App Store catalog could not be reached. Try again.
               </div>
             )}
-            {searchActive && results.map((app) => (
-              <button
-                className="app-search-result"
-                type="button"
-                key={app.appStoreId}
-                disabled={Boolean(addingId)}
-                onClick={() => void add(app)}
-              >
-                <span className="catalog-app-icon">
-                  {app.name
-                    .split(/\s+/u)
-                    .slice(0, 2)
-                    .map((word) => word[0])
-                    .join("")
-                    .toUpperCase()}
-                </span>
-                <span>
-                  <strong>{app.name}</strong>
-                  <small>
-                    {app.developer} · {app.genre}
-                  </small>
-                </span>
-                {addingId === app.appStoreId ? (
-                  <LoaderCircle className="spin" size={18} />
-                ) : (
-                  <Plus size={18} />
-                )}
-              </button>
-            ))}
+            {searchActive && results.map((app) => {
+              const initials = app.name
+                .split(/\s+/u)
+                .slice(0, 2)
+                .map((word) => word[0])
+                .join("")
+                .toUpperCase();
+              return (
+                <button
+                  className="app-search-result"
+                  type="button"
+                  key={app.appStoreId}
+                  disabled={Boolean(addingId)}
+                  onClick={() => void add(app)}
+                >
+                  <span className="catalog-app-icon">
+                    {app.iconUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={app.iconUrl}
+                        alt=""
+                        loading="lazy"
+                        onError={(event) => {
+                          // Degrade to the initials placeholder if the icon
+                          // fails to load (CSP, network, or a removed asset).
+                          const target = event.currentTarget;
+                          target.style.display = "none";
+                          target.parentElement?.setAttribute(
+                            "data-initials",
+                            initials,
+                          );
+                        }}
+                      />
+                    ) : (
+                      initials
+                    )}
+                  </span>
+                  <span>
+                    <strong>{app.name}</strong>
+                    <small>
+                      {app.developer} · {app.genre}
+                    </small>
+                  </span>
+                  {addingId === app.appStoreId ? (
+                    <LoaderCircle className="spin" size={18} />
+                  ) : (
+                    <Plus size={18} />
+                  )}
+                </button>
+              );
+            })}
           </div>
         </>
       )}

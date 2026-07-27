@@ -57,7 +57,8 @@ describe("ProductPulseWorkspace", () => {
                 bundleId: "com.aydmaxx.carddealertracker",
                 sellerName: "Aydmaxx",
                 primaryGenreName: "Business",
-                artworkUrl100: "",
+                artworkUrl100:
+                  "https://is1-ssl.mzstatic.com/image/thumb/icon.png/100x100bb.jpg",
                 trackViewUrl: "https://apps.apple.com/app/id6756513314",
               },
             ],
@@ -86,6 +87,16 @@ describe("ProductPulseWorkspace", () => {
         ).toBeInTheDocument();
       },
       { timeout: 2_000 },
+    );
+
+    // The real App Store icon must be rendered, not a letter placeholder.
+    const resultButton = screen.getByRole("button", {
+      name: /Car Dealer Tracker/i,
+    });
+    const icon = resultButton.querySelector("img");
+    expect(icon).not.toBeNull();
+    expect(icon?.getAttribute("src")).toBe(
+      "https://is1-ssl.mzstatic.com/image/thumb/icon.png/100x100bb.jpg",
     );
 
     fireEvent.click(screen.getByRole("tab", { name: "Google Play" }));
