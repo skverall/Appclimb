@@ -123,6 +123,8 @@ function retryDelaySeconds(attempt: number): number {
   return Math.min(30 * 60, 15 * 2 ** Math.max(0, Math.min(8, attempt)));
 }
 
+import { queueDiagnosisRun } from "./diagnosis/queue";
+
 async function completeSync(
   env: Cloudflare.Env,
   job: SyncJobRow,
@@ -164,6 +166,19 @@ async function completeSync(
       now.toISOString(),
     ),
   ]);
+
+  if (job.app_id) {
+    try {
+      await queueDiagnosisRun(env, job.workspace_id, job.app_id);
+    } catch (error) {
+      log("warn", "queue_diagnosis_after_sync_failed", {
+        jobId: job.id,
+        workspaceId: job.workspace_id,
+        appId: job.app_id,
+        error: error instanceof Error ? error.message : "unknown",
+      });
+    }
+  }
 }
 
 async function failSync(

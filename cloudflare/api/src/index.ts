@@ -1301,9 +1301,12 @@ async function constantTimeStrings(left: string, right: string): Promise<boolean
   return difference === 0;
 }
 
-type QueueMessage = SyncMessage | AiVisibilityMessage;
+import { processDiagnosisMessage } from "./diagnosis/queue";
+import type { QueueMessage as SourceQueueMessage } from "./sources";
 
-const worker: ExportedHandler<Cloudflare.Env, QueueMessage> = {
+type AppQueueMessage = SourceQueueMessage | AiVisibilityMessage;
+
+const worker: ExportedHandler<Cloudflare.Env, AppQueueMessage> = {
   fetch: app.fetch,
   async queue(batch, env): Promise<void> {
     for (const message of batch.messages) {
@@ -1311,7 +1314,9 @@ const worker: ExportedHandler<Cloudflare.Env, QueueMessage> = {
         const result =
           message.body.type === "ai-visibility-scan"
             ? await processAiVisibilityMessage(env, message.body)
-            : await processSyncMessage(env, message.body);
+            : message.body.type === "diagnosis-run"
+              ? await processDiagnosisMessage(env, message.body)
+              : await processSyncMessage(env, message.body);
         if (result.retry) {
           message.retry({
             delaySeconds: Math.min(3600, 60 * 2 ** message.attempts),
@@ -1324,11 +1329,15 @@ const worker: ExportedHandler<Cloudflare.Env, QueueMessage> = {
           jobId:
             message.body.type === "source-sync"
               ? message.body.jobId
-              : message.body.scanId,
+              : message.body.type === "diagnosis-run"
+                ? `${message.body.workspaceId}:${message.body.appId}`
+                : message.body.scanId,
           provider:
             message.body.type === "source-sync"
               ? message.body.provider
-              : "deepseek",
+              : message.body.type === "diagnosis-run"
+                ? "diagnosis"
+                : "deepseek",
           attempts: message.attempts,
           error: error instanceof Error ? error.message : "unknown",
         });

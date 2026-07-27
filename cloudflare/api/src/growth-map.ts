@@ -1,3 +1,4 @@
+import { deriveWorkspaceReadiness } from "./diagnosis/readiness";
 import { isEntitled, workspaceFor } from "./db";
 import { listSources } from "./sources";
 import type { AuthContext } from "./types";
@@ -157,6 +158,43 @@ export async function growthMapSnapshot(
       flowWidth: Math.max(30, 155 * Math.sqrt(value / Math.max(top, value, 1))),
     };
   });
+  const latestRunRow = entitled
+    ? await env.DB.prepare(
+        `SELECT id,status,created_at,diagnosis_version,input_hash,primary_insight_id,
+                limitations,missing_requirements
+         FROM diagnosis_runs
+         WHERE workspace_id = ? AND app_id = ?
+         ORDER BY created_at DESC LIMIT 1`,
+      )
+        .bind(auth.workspaceId, selectedApp.id)
+        .first<{
+          id: string;
+          status: string;
+          created_at: string;
+          diagnosis_version: string | null;
+          input_hash: string | null;
+          primary_insight_id: string | null;
+          limitations: string | null;
+          missing_requirements: string | null;
+        }>()
+    : null;
+
+  const webPropertyRow = selectedApp.platform === "Web"
+    ? await env.DB.prepare(
+        `SELECT id,domain,first_event_at,last_event_at,primary_conversion_goal
+         FROM web_properties
+         WHERE workspace_id = ? LIMIT 1`,
+      )
+        .bind(auth.workspaceId)
+        .first<{
+          id: string;
+          domain: string;
+          first_event_at: string | null;
+          last_event_at: string | null;
+          primary_conversion_goal: string | null;
+        }>()
+    : null;
+
   const eventResult = entitled
     ? await env.DB.prepare(
         `SELECT id,occurred_at,label,detail,event_type
@@ -218,7 +256,7 @@ export async function growthMapSnapshot(
   const actionsResult = entitled
     ? await env.DB.prepare(
         `SELECT id,insight_id,title,rationale,experiment_template,status,
-                external_mutation_allowed
+                external_mutation_allowed,structured_plan
          FROM action_proposals WHERE workspace_id = ? AND app_id = ?
          ORDER BY created_at DESC LIMIT 30`,
       )
@@ -231,6 +269,7 @@ export async function growthMapSnapshot(
           experiment_template: string;
           status: string;
           external_mutation_allowed: number;
+          structured_plan: string | null;
         }>()
     : { results: [] };
   const trust = confidence(metrics, now);
@@ -294,6 +333,72 @@ export async function growthMapSnapshot(
   const flow = [...flowByKey.entries()]
     .sort(([left], [right]) => left.localeCompare(right, undefined, { numeric: true }))
     .map(([id, item]) => ({ id, ...item }));
+
+  // Distinct dates in window to estimate complete days
+  const distinctDays = new Set(metrics.map((m) => m.occurred_at.slice(0, 10))).size;
+
+  const readiness = deriveWorkspaceReadiness({
+    app: {
+      id: selectedApp.id,
+      name: selectedApp.name,
+      platform: selectedApp.platform as "iOS" | "Web",
+    },
+    webProperty: webPropertyRow
+      ? {
+          id: webPropertyRow.id,
+          domain: webPropertyRow.domain,
+          firstEventAt: webPropertyRow.first_event_at,
+          lastEventAt: webPropertyRow.last_event_at,
+          primaryConversionGoal: webPropertyRow.primary_conversion_goal,
+        }
+      : null,
+    sources: sources.map((s) => ({
+      provider: s.provider as any,
+      status: s.status as any,
+      lastErrorCode: (s as any).lastErrorCode,
+      metricCount: (s as any).metricCount,
+      lastMetricAt: (s as any).lastMetricAt,
+    })),
+    metricCount: metrics.length,
+    completeDays: distinctDays,
+    hasDiagnosisRun: Boolean(latestRunRow),
+    hasConfirmedInsight: insightResult.results.some((i) => i.rank === 1),
+    isDiagnosisRunning: latestRunRow?.status === "running" || latestRunRow?.status === "queued",
+  });
+
+  const diagnosisSummary = latestRunRow
+    ? {
+        status: (latestRunRow.status as any) || "not_ready",
+        generatedAt: latestRunRow.created_at,
+        version: latestRunRow.diagnosis_version,
+        primaryInsightId: latestRunRow.primary_insight_id,
+        limitations: parseJSON<string[]>(latestRunRow.limitations, []),
+        missingRequirements: parseJSON<string[]>(latestRunRow.missing_requirements, []),
+      }
+    : {
+        status: "not_ready" as const,
+        generatedAt: null,
+        version: null,
+      };
+
+  const actionProposals = actionsResult.results.map((item) => {
+    const actionPlan = parseJSON<any>(item.structured_plan, undefined);
+    return {
+      id: item.id,
+      insightId: item.insight_id,
+      title: item.title,
+      rationale: item.rationale,
+      experimentTemplate: item.experiment_template,
+      status: item.status,
+      externalMutationAllowed: Boolean(item.external_mutation_allowed) as false,
+      ...(actionPlan ? { actionPlan } : {}),
+    };
+  });
+
+  const actionPlans = actionProposals
+    .map((ap) => ap.actionPlan)
+    .filter((ap): ap is NonNullable<typeof ap> => Boolean(ap));
+
   return {
     data: {
       generatedAt: now.toISOString(),
@@ -312,6 +417,8 @@ export async function growthMapSnapshot(
             : ""),
         period: "Last 30 days",
       },
+      readiness,
+      diagnosis: diagnosisSummary,
       confidence: {
         ...trust,
         note: `${connectedCount} sources connected`,
@@ -348,15 +455,8 @@ export async function growthMapSnapshot(
         effort: item.effort,
         rank: item.rank,
       })),
-      actionProposals: actionsResult.results.map((item) => ({
-        id: item.id,
-        insightId: item.insight_id,
-        title: item.title,
-        rationale: item.rationale,
-        experimentTemplate: item.experiment_template,
-        status: item.status,
-        externalMutationAllowed: Boolean(item.external_mutation_allowed),
-      })),
+      actionProposals,
+      actionPlans,
       experiments: [],
       sources,
       posthogPulse: {

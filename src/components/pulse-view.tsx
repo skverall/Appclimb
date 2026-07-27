@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   CalendarDays,
   CheckCircle2,
@@ -13,6 +14,8 @@ import { InsightPanel } from "@/components/insight-panel";
 import { ProductPulseWorkspace } from "@/components/product-pulse-workspace";
 import { RetentionHeatmap } from "@/components/retention-heatmap";
 import { VoiceClusters } from "@/components/voice-clusters";
+import { IOSDecisionWorkspace } from "@/components/decision-home/ios-decision-workspace";
+import { WebDecisionWorkspace } from "@/components/decision-home/web-decision-workspace";
 import type { DashboardSnapshot, SourceConnection } from "@/lib/contracts";
 
 export function PulseView({
@@ -34,12 +37,62 @@ export function PulseView({
   sources: SourceConnection[];
   onOpenSources: () => void;
 }) {
-  return (
-    <section className="pulse-view">
+  const isWeb = snapshot.app.platform === "Web";
+
+  const handleActionClick = (kind: string, provider?: string) => {
+    if (kind === "connect_source" || kind === "retry_source") {
+      onOpenSources();
+    } else if (kind === "open_action_plan" || kind === "open_diagnosis") {
+      const firstInsight = snapshot.insights[0];
+      if (firstInsight) {
+        onOpenInsight(firstInsight.id);
+      }
+    }
+  };
+
+  const renderSupportingAnalytics = () => (
+    <div className="space-y-6">
       <ProductPulseWorkspace
         snapshot={snapshot}
         onOpenSources={onOpenSources}
       />
+      <div className="supporting-grid">
+        <RetentionHeatmap
+          rows={snapshot.retention}
+          mode={snapshot.mode}
+        />
+        <VoiceClusters
+          clusters={snapshot.customerClusters}
+          mode={snapshot.mode}
+        />
+      </div>
+    </div>
+  );
+
+  const renderGrowthRiverComponent = () => (
+    <div className="space-y-4">
+      <GrowthRiver
+        stages={snapshot.stages}
+        insights={snapshot.insights}
+        activeInsightId={selectedInsightId}
+        replayIndex={replayIndex}
+        eventCount={snapshot.events.length}
+        onSelectInsight={onSelectInsight}
+        illustrativeReplay={snapshot.mode === "demo"}
+        sources={sources}
+      />
+      <GrowthReplay
+        events={snapshot.events}
+        replayIndex={replayIndex}
+        onReplayIndexChange={onReplayIndexChange}
+        mode={snapshot.mode}
+      />
+    </div>
+  );
+
+  return (
+    <section className="pulse-view space-y-6">
+      {/* Top Filter Strip */}
       <div className="filter-row">
         <div
           className="filter-control"
@@ -81,44 +134,52 @@ export function PulseView({
         </div>
       </div>
 
-      <div className="pulse-grid">
-        <div className="river-column">
-          <GrowthRiver
-            stages={snapshot.stages}
-            insights={snapshot.insights}
-            activeInsightId={selectedInsightId}
-            replayIndex={replayIndex}
-            eventCount={snapshot.events.length}
-            onSelectInsight={onSelectInsight}
-            illustrativeReplay={snapshot.mode === "demo"}
-            sources={sources}
-          />
-          <GrowthReplay
-            events={snapshot.events}
-            replayIndex={replayIndex}
-            onReplayIndexChange={onReplayIndexChange}
-            mode={snapshot.mode}
-          />
-          <div className="supporting-grid">
-            <RetentionHeatmap
-              rows={snapshot.retention}
-              mode={snapshot.mode}
+      {/* Decision Home Primary Workspace */}
+      {isWeb ? (
+        <WebDecisionWorkspace
+          snapshot={snapshot}
+          onActionClick={handleActionClick}
+          onOpenActionPlan={() => {
+            const firstInsight = snapshot.insights[0];
+            if (firstInsight) onOpenInsight(firstInsight.id);
+          }}
+          onOpenEvidence={() => {
+            const firstInsight = snapshot.insights[0];
+            if (firstInsight) onOpenInsight(firstInsight.id);
+          }}
+          renderAcquisitionAtlas={renderSupportingAnalytics}
+        />
+      ) : (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className="lg:col-span-2 space-y-6">
+            <IOSDecisionWorkspace
+              snapshot={snapshot}
+              onActionClick={handleActionClick}
+              onOpenActionPlan={() => {
+                const firstInsight = snapshot.insights[0];
+                if (firstInsight) onOpenInsight(firstInsight.id);
+              }}
+              onOpenEvidence={() => {
+                const firstInsight = snapshot.insights[0];
+                if (firstInsight) onOpenInsight(firstInsight.id);
+              }}
+              renderGrowthRiver={renderGrowthRiverComponent}
+              renderSupportingAnalytics={renderSupportingAnalytics}
             />
-            <VoiceClusters
-              clusters={snapshot.customerClusters}
-              mode={snapshot.mode}
+          </div>
+
+          <div className="lg:col-span-1">
+            <InsightPanel
+              insights={snapshot.insights}
+              evidence={snapshot.evidence}
+              actionProposals={snapshot.actionProposals}
+              selectedInsightId={selectedInsightId}
+              onSelectInsight={onSelectInsight}
+              onOpenInsight={onOpenInsight}
             />
           </div>
         </div>
-        <InsightPanel
-          insights={snapshot.insights}
-          evidence={snapshot.evidence}
-          actionProposals={snapshot.actionProposals}
-          selectedInsightId={selectedInsightId}
-          onSelectInsight={onSelectInsight}
-          onOpenInsight={onOpenInsight}
-        />
-      </div>
+      )}
     </section>
   );
 }

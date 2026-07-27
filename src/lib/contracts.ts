@@ -18,6 +18,146 @@ export type StageId =
   | "paid"
   | "renew";
 
+export type AccessStatus =
+  | "not_connected"
+  | "verifying"
+  | "verified"
+  | "revoked"
+  | "error";
+
+export type DataStatus =
+  | "none"
+  | "provider_pending"
+  | "collecting"
+  | "ready"
+  | "stale"
+  | "failed";
+
+export type MappingStatus =
+  | "not_required"
+  | "automatic_unconfirmed"
+  | "confirmed"
+  | "manual"
+  | "insufficient_events"
+  | "invalid";
+
+export type DiagnosisEligibility =
+  | "blocked"
+  | "eligible"
+  | "queued"
+  | "running"
+  | "ready"
+  | "no_confirmed_issue"
+  | "failed";
+
+export type DiagnosisStatus =
+  | "not_ready"
+  | "queued"
+  | "running"
+  | "ready"
+  | "no_confirmed_issue"
+  | "failed";
+
+export type ComparisonType =
+  | "same_source_funnel"
+  | "cohort"
+  | "time_baseline"
+  | "aggregate_directional"
+  | "not_comparable";
+
+export interface CapabilityReadiness {
+  status: "unsupported" | "blocked" | "collecting" | "ready";
+  reasonCode?: string;
+}
+
+export interface WorkspaceReadiness {
+  state:
+    | "product_required"
+    | "installation_required"
+    | "source_required"
+    | "source_pending"
+    | "collecting"
+    | "diagnosis_running"
+    | "diagnosis_ready"
+    | "no_confirmed_issue"
+    | "attention";
+  progress: number;
+  primaryAction: {
+    kind:
+      | "add_product"
+      | "install_web_tracking"
+      | "connect_source"
+      | "confirm_posthog_mapping"
+      | "retry_source"
+      | "open_diagnosis"
+      | "open_action_plan"
+      | "wait";
+    provider?: SourceProvider;
+    reasonCode: string;
+  };
+  capabilities: {
+    acquisition: CapabilityReadiness;
+    activation: CapabilityReadiness;
+    monetization: CapabilityReadiness;
+    retention: CapabilityReadiness;
+  };
+  blockers: Array<{
+    code: string;
+    provider?: SourceProvider;
+    required: boolean;
+    current?: number;
+    target?: number;
+    lastCheckedAt?: string;
+    nextCheckAt?: string;
+  }>;
+}
+
+export interface StructuredActionStep {
+  order: number;
+  title: string;
+  instruction: string;
+  effort: "small" | "medium" | "large";
+}
+
+export interface ActionPlan {
+  targetStageId?: StageId;
+  problem: string;
+  desiredOutcome: string;
+  whyThisAction: string;
+  steps: StructuredActionStep[];
+  prerequisites: string[];
+  instrumentation: string[];
+  primaryMetric: {
+    key: string;
+    label: string;
+    current?: number;
+    targetDirection: "up" | "down";
+    successThreshold?: number;
+  };
+  guardrails: Array<{
+    key: string;
+    label: string;
+    failureThreshold?: number;
+  }>;
+  segment?: string;
+  minimumSample?: number;
+  minimumCompleteDays?: number;
+  stopCondition: string;
+  rollbackCondition?: string;
+  evidenceIds?: string[];
+  sourceProviders?: SourceProvider[];
+}
+
+export interface DiagnosisSummary {
+  status: DiagnosisStatus;
+  generatedAt: string | null;
+  version: string | null;
+  primaryInsightId?: string | null;
+  limitations?: string[];
+  missingRequirements?: string[];
+  errorCode?: string | null;
+}
+
 export interface MetricPoint {
   id: string;
   workspaceId: string;
@@ -49,6 +189,9 @@ export interface GrowthStage {
   evidenceIds: string[];
   flowWidth: number;
   benchmark?: number;
+  comparisonType?: ComparisonType;
+  readinessReason?: string;
+  sampleSize?: number;
 }
 
 export type ChangeEventType =
@@ -100,6 +243,7 @@ export interface ActionProposal {
   experimentTemplate: string;
   status: "proposed" | "accepted" | "dismissed";
   externalMutationAllowed: false;
+  actionPlan?: ActionPlan;
 }
 
 export interface Experiment {
@@ -112,12 +256,19 @@ export interface Experiment {
   status: "draft" | "ready" | "running" | "completed";
   source: SourceProvider;
   startedAt?: string;
+  endedAt?: string;
+  actionProposalId?: string;
+  evidenceIds?: string[];
+  result?: string;
 }
 
 export interface SourceConnection {
   provider: SourceProvider;
   label: string;
   status: "connected" | "needs-attention" | "not-connected";
+  accessStatus?: AccessStatus;
+  dataStatus?: DataStatus;
+  mappingStatus?: MappingStatus;
   accountLabel?: string;
   lastSyncAt?: string | null;
   nextSyncAt?: string | null;
@@ -180,6 +331,8 @@ export interface DashboardSnapshot {
     iconUrl?: string;
     period: string;
   };
+  readiness?: WorkspaceReadiness;
+  diagnosis?: DiagnosisSummary;
   confidence: {
     score: number;
     level: ConfidenceLevel;
@@ -190,9 +343,11 @@ export interface DashboardSnapshot {
   evidence: Evidence[];
   insights: Insight[];
   actionProposals: ActionProposal[];
+  actionPlans?: ActionPlan[];
   experiments: Experiment[];
   sources: SourceConnection[];
   retention: RetentionCell[];
   customerClusters: CustomerCluster[];
   posthogPulse?: PostHogPulse;
 }
+

@@ -477,6 +477,8 @@ export async function deleteSource(
   );
 }
 
+import type { DiagnosisMessage } from "./diagnosis/queue";
+
 export interface SyncMessage {
   type: "source-sync";
   jobId: string;
@@ -484,6 +486,9 @@ export interface SyncMessage {
   connectionId: string;
   provider: string;
 }
+
+export type QueueMessage = SyncMessage | DiagnosisMessage;
+
 
 export async function queueSourceSync(
   env: Cloudflare.Env,
