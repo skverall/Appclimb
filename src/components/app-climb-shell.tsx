@@ -23,6 +23,10 @@ import Link from "next/link";
 
 import { logout } from "@/app/actions";
 import { lookupAppStoreIcon } from "@/lib/itunes";
+import {
+  looksLikeWebDomain,
+  preferredWebFaviconUrl,
+} from "@/lib/web-favicon";
 import { AcquisitionAtlas } from "@/components/acquisition-atlas";
 import { AiVisibilityView } from "@/components/ai-visibility-view";
 import { AccountSecurity } from "@/components/account-security";
@@ -35,6 +39,7 @@ import {
   ProfileAvatar,
 } from "@/components/profile-avatar";
 import { PulseView } from "@/components/pulse-view";
+import { WebSiteIcon } from "@/components/web-site-icon";
 import {
   DiagnoseView,
   LabView,
@@ -139,22 +144,45 @@ export function AppClimbShell({
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [activeAppIcon, setActiveAppIcon] = useState(initialSnapshot.app.iconUrl || "");
 
+  const resolveAppIcon = useCallback((app: DashboardSnapshot["app"]) => {
+    if (app.iconUrl) return app.iconUrl;
+    const isWeb = app.platform === "Web";
+    const domain =
+      app.bundleId ||
+      (looksLikeWebDomain(app.name) ? app.name : "") ||
+      (app.appStoreId?.startsWith("web:")
+        ? app.appStoreId.slice(4)
+        : "");
+    if (isWeb && looksLikeWebDomain(domain)) {
+      return preferredWebFaviconUrl(domain);
+    }
+    return "";
+  }, []);
+
   useEffect(() => {
     setSnapshot(initialSnapshot);
-    if (initialSnapshot.app.iconUrl) {
-      setActiveAppIcon(initialSnapshot.app.iconUrl);
-    } else {
-      const appStoreId = (initialSnapshot.app as { appStoreId?: string; apple_app_id?: string }).appStoreId ||
-        (initialSnapshot.app as { apple_app_id?: string }).apple_app_id;
-      if (appStoreId) {
-        lookupAppStoreIcon(appStoreId)
-          .then((icon) => {
-            if (icon) setActiveAppIcon(icon);
-          })
-          .catch(() => undefined);
-      }
+    const resolved = resolveAppIcon(initialSnapshot.app);
+    if (resolved) {
+      setActiveAppIcon(resolved);
+      return;
     }
-  }, [initialSnapshot]);
+    const appStoreId =
+      initialSnapshot.app.appStoreId ||
+      (initialSnapshot.app as { apple_app_id?: string }).apple_app_id;
+    if (
+      appStoreId &&
+      !appStoreId.startsWith("web:") &&
+      /^\d+$/u.test(appStoreId)
+    ) {
+      lookupAppStoreIcon(appStoreId)
+        .then((icon) => {
+          if (icon) setActiveAppIcon(icon);
+        })
+        .catch(() => undefined);
+    } else {
+      setActiveAppIcon("");
+    }
+  }, [initialSnapshot, resolveAppIcon]);
 
   const refreshSnapshot = useCallback(async () => {
     if (snapshot.mode === "demo") return;
@@ -167,12 +195,13 @@ export function AppClimbShell({
       if (data.data) {
         setSnapshot(data.data);
         setSourceConnections(data.data.sources);
-        if (data.data.app.iconUrl) setActiveAppIcon(data.data.app.iconUrl);
+        const resolved = resolveAppIcon(data.data.app);
+        if (resolved) setActiveAppIcon(resolved);
       }
     } catch {
       // Ignore background refresh failure
     }
-  }, [snapshot.mode, snapshot.app.id]);
+  }, [snapshot.mode, snapshot.app.id, resolveAppIcon]);
 
   const selectedInsight = useMemo<Insight | undefined>(
     () =>
@@ -474,10 +503,41 @@ export function AppClimbShell({
             onClick={() => setAppModalOpen(true)}
             aria-label={`Manage ${displayedAppName}`}
           >
-            <div className="app-avatar" aria-hidden="true" style={{ overflow: "hidden", display: "grid", placeItems: "center" }}>
-              {activeAppIcon ? (
+            <div
+              className="app-avatar"
+              aria-hidden="true"
+              style={{
+                overflow: "hidden",
+                display: "grid",
+                placeItems: "center",
+              }}
+            >
+              {snapshot.app.platform === "Web" ? (
+                <WebSiteIcon
+                  domain={
+                    snapshot.app.bundleId ||
+                    (snapshot.app.appStoreId?.startsWith("web:")
+                      ? snapshot.app.appStoreId.slice(4)
+                      : "") ||
+                    snapshot.app.name
+                  }
+                  name={snapshot.app.name}
+                  iconUrl={activeAppIcon || snapshot.app.iconUrl}
+                  size={36}
+                  rounded={10}
+                  fallback="letter"
+                />
+              ) : activeAppIcon ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={activeAppIcon} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <img
+                  src={activeAppIcon}
+                  alt=""
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                  }}
+                />
               ) : (
                 <span>{appInitials}</span>
               )}

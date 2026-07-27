@@ -173,6 +173,8 @@ export interface DashboardSnapshot {
     id: string;
     name: string;
     platform: "iOS" | "Web";
+    /** Domain for Web apps, bundle id for iOS when available. */
+    bundleId?: string;
     appStoreId?: string;
     storefront: string;
     iconUrl?: string;

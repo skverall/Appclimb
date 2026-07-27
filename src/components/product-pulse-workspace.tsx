@@ -27,6 +27,7 @@ import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ModalDialog } from "@/components/modal-dialog";
+import { WebSiteIcon } from "@/components/web-site-icon";
 import type { DashboardSnapshot, PostHogPulse } from "@/lib/contracts";
 import {
   cleanSearchResult,
@@ -37,6 +38,7 @@ import {
   searchAppStoreCatalog,
   type CatalogApp,
 } from "@/lib/itunes";
+import { preferredWebFaviconUrl } from "@/lib/web-favicon";
 
 interface WorkspaceApp {
   id: string;
@@ -350,54 +352,15 @@ function PostHogOverview({
 }
 
 function DomainFavicon({ domain, name }: { domain: string; name: string }) {
-  const [error, setError] = useState(false);
-
-  if (error || !domain) {
-    return (
-      <span
-        className="catalog-app-icon web-fallback-icon"
-        style={{
-          width: "40px",
-          height: "40px",
-          borderRadius: "10px",
-          background: "linear-gradient(135deg, #0f766e, #14b8a6)",
-          color: "#ffffff",
-          display: "grid",
-          placeItems: "center",
-          fontWeight: 700,
-          fontSize: "16px",
-          flexShrink: 0,
-        }}
-      >
-        {(name || domain).charAt(0).toUpperCase()}
-      </span>
-    );
-  }
-
   return (
-    <span
+    <WebSiteIcon
       className="catalog-app-icon"
-      style={{
-        width: "40px",
-        height: "40px",
-        borderRadius: "10px",
-        overflow: "hidden",
-        display: "grid",
-        placeItems: "center",
-        background: "var(--surface-subtle)",
-        flexShrink: 0,
-      }}
-    >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={`https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico`}
-        alt=""
-        width={28}
-        height={28}
-        onError={() => setError(true)}
-        style={{ objectFit: "contain" }}
-      />
-    </span>
+      domain={domain}
+      name={name}
+      size={40}
+      rounded={10}
+      fallback="letter"
+    />
   );
 }
 
@@ -420,24 +383,29 @@ function TabAppIcon({
       .map((w) => w[0])
       .join("")
       .toUpperCase() || "A";
-  const effectiveIconUrl =
-    iconUrl ||
-    (isWeb && bundleId
-      ? `https://icons.duckduckgo.com/ip3/${encodeURIComponent(bundleId)}.ico`
-      : undefined);
 
-  if (failed || !effectiveIconUrl) {
+  if (isWeb) {
     return (
-      <span className="mini-app-icon">
-        {isWeb ? <Globe size={13} /> : initials}
-      </span>
+      <WebSiteIcon
+        className="mini-app-icon"
+        domain={bundleId || name}
+        name={name}
+        iconUrl={iconUrl}
+        size={24}
+        rounded={6}
+        fallback="letter"
+      />
     );
+  }
+
+  if (failed || !iconUrl) {
+    return <span className="mini-app-icon">{initials}</span>;
   }
 
   return (
     <span className="mini-app-icon">
       {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img src={effectiveIconUrl} alt="" onError={() => setFailed(true)} />
+      <img src={iconUrl} alt="" onError={() => setFailed(true)} />
     </span>
   );
 }
@@ -578,7 +546,7 @@ function AddAppDialog({
           metadata: {
             domain: cleanWebDomain,
             name: webName.trim() || cleanWebDomain,
-            iconUrl: `https://icons.duckduckgo.com/ip3/${encodeURIComponent(cleanWebDomain)}.ico`,
+            iconUrl: preferredWebFaviconUrl(cleanWebDomain),
           },
         }),
       });

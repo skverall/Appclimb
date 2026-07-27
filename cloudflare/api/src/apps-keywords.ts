@@ -121,7 +121,7 @@ export function sanitizeWebAppMetadata(
   const iconUrl =
     typeof raw.iconUrl === "string" && raw.iconUrl.trim()
       ? raw.iconUrl.slice(0, 1024)
-      : `https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico`;
+      : `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`;
 
   return { domain, name, iconUrl };
 }
@@ -222,16 +222,25 @@ export async function listWorkspaceApps(
     )
     .bind(workspaceId)
     .all<AppRow>();
-  return rows.results.map((row) => ({
-    id: row.id,
-    name: row.name,
-    platform: row.platform,
-    bundleId: row.bundle_id ?? "",
-    appStoreId: row.apple_app_id ?? "",
-    storefront: row.default_storefront,
-    iconUrl: row.icon_url ?? "",
-    configured: Boolean(row.apple_app_id),
-  }));
+  return rows.results.map((row) => {
+    const bundleId = row.bundle_id ?? "";
+    const isWeb = row.platform === "Web";
+    const iconUrl =
+      row.icon_url ||
+      (isWeb && bundleId
+        ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(bundleId)}&sz=128`
+        : "");
+    return {
+      id: row.id,
+      name: row.name,
+      platform: row.platform,
+      bundleId,
+      appStoreId: row.apple_app_id ?? "",
+      storefront: row.default_storefront,
+      iconUrl,
+      configured: Boolean(row.apple_app_id),
+    };
+  });
 }
 
 export async function addAppStoreApp(
