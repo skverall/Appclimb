@@ -6,11 +6,12 @@ import {
 } from "./workspace-navigation";
 
 describe("workspace navigation", () => {
-  it("accepts supported sections and falls back to Pulse", () => {
-    expect(workspaceSectionFromValue("lab")).toBe("lab");
+  it("accepts Growth CI sections and maps legacy sections to growth", () => {
+    expect(workspaceSectionFromValue("lab")).toBe("growth");
     expect(workspaceSectionFromValue(["sources", "pulse"])).toBe("sources");
-    expect(workspaceSectionFromValue("admin")).toBe("pulse");
-    expect(workspaceSectionFromValue(undefined)).toBe("pulse");
+    expect(workspaceSectionFromValue("admin")).toBe("growth");
+    expect(workspaceSectionFromValue(undefined)).toBe("growth");
+    expect(workspaceSectionFromValue("growth")).toBe("growth");
   });
 
   it("keeps only insight ids that belong to the loaded workspace", () => {
