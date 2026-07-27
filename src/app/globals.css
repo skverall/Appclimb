@@ -9537,6 +9537,191 @@ a {
   overflow: visible;
 }
 
+.atlas-flow-legend strong {
+  color: var(--n-800);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+}
+
+.atlas-flow-legend-good {
+  color: var(--green-600);
+}
+
+/* Per-stage direction. A Sankey has no innate up-is-good axis, so the
+   familiar arrow carries that meaning instead. */
+.atlas-stage-trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 3px;
+  font-size: var(--text-3xs);
+  font-style: normal;
+  font-weight: var(--weight-semibold);
+}
+
+.atlas-stage-trend.up {
+  color: var(--green-600);
+}
+
+.atlas-stage-trend.down {
+  color: var(--coral-700);
+}
+
+.atlas-funnel-headings > div {
+  transition: transform 140ms ease;
+}
+
+.atlas-funnel-headings > div.is-hovered {
+  transform: translateX(-50%) translateY(-2px);
+}
+
+.atlas-spill {
+  transition: opacity 160ms ease;
+}
+
+.atlas-spill-label {
+  fill: var(--coral-700);
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.atlas-stage-hit {
+  cursor: default;
+}
+
+.atlas-flow-tooltip {
+  position: absolute;
+  z-index: 4;
+  bottom: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: max-content;
+  max-width: 250px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--card);
+  box-shadow: var(--shadow-lg);
+  color: var(--n-700);
+  font-size: var(--text-3xs);
+  line-height: var(--leading-snug);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.atlas-flow-tooltip strong {
+  color: var(--n-900);
+  font-size: var(--text-2xs);
+}
+
+.atlas-flow-tooltip-value {
+  font-family: var(--font-display), sans-serif;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-tight);
+  line-height: 1.1;
+}
+
+.atlas-flow-tooltip-loss {
+  color: var(--coral-700);
+}
+
+.atlas-flow-tooltip-trend.up {
+  color: var(--green-600);
+  font-weight: var(--weight-semibold);
+}
+
+.atlas-flow-tooltip-trend.down {
+  color: var(--coral-700);
+  font-weight: var(--weight-semibold);
+}
+
+.atlas-flow-tooltip-muted {
+  color: var(--n-500);
+}
+
+/* Visitor journey period filters. */
+.atlas-visitor-ranges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px 10px;
+}
+
+.atlas-range-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.atlas-range-chips button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-full, 999px);
+  background: transparent;
+  color: var(--n-600);
+  font-size: var(--text-3xs);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  transition:
+    background 140ms ease,
+    color 140ms ease,
+    border-color 140ms ease;
+}
+
+.atlas-range-chips button:hover {
+  border-color: var(--n-400);
+  color: var(--n-800);
+}
+
+.atlas-range-chips button.active {
+  border-color: transparent;
+  background: var(--n-900);
+  color: var(--card);
+}
+
+.atlas-range-chips button small {
+  color: inherit;
+  font-weight: var(--weight-bold);
+  opacity: 0.62;
+}
+
+.atlas-visitor-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-3xs);
+  font-weight: var(--weight-semibold);
+}
+
+.atlas-visitor-delta.up {
+  color: var(--green-600);
+}
+
+.atlas-visitor-delta.down {
+  color: var(--coral-700);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .atlas-range-chips button {
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .atlas-funnel-headings > div,
+  .atlas-spill {
+    transition: none;
+  }
+}
+
 .atlas-flow-footer {
   display: flex;
   align-items: center;

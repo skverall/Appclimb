@@ -41,6 +41,7 @@ import type {
   AcquisitionBreakdownRow,
   AcquisitionChannel,
   AcquisitionEnvelope,
+  AcquisitionSeriesPoint,
   AcquisitionSnapshot,
   CrawlerCategory,
 } from "@/lib/acquisition";
@@ -82,6 +83,71 @@ const CRAWLER_TAB_LABELS: Record<CrawlerCategory, string> = {
 
 type BreakdownTab = "channel" | "referrer" | "campaign" | "utm";
 type CrawlerChartShape = "area" | "bars" | "line";
+type VisitorRange = "today" | "yesterday" | "7d" | "all";
+
+/**
+ * Yesterday needs at least this many visitors before a day-over-day figure is
+ * expressed as a percentage rather than as two counts.
+ */
+const VISITOR_DELTA_MIN_BASE = 5;
+
+/**
+ * Today against yesterday, phrased so it cannot overstate its own precision.
+ *
+ * A percentage off a handful of visitors is false precision: 1 visitor
+ * yesterday and 11 today is a truthful "+1000%" and a useless one. Below
+ * `VISITOR_DELTA_MIN_BASE` the comparison is stated in whole visitors instead,
+ * which is the same restraint the funnel applies to its own rates.
+ */
+export function describeDayOverDay(
+  today: number,
+  yesterday: number,
+): { direction: "up" | "down"; label: string } | null {
+  if (yesterday === 0 && today === 0) return null;
+  const direction = today >= yesterday ? "up" : "down";
+  if (yesterday < VISITOR_DELTA_MIN_BASE) {
+    return {
+      direction,
+      label: `${formatNumber(today)} today vs ${formatNumber(yesterday)} yesterday`,
+    };
+  }
+  return {
+    direction,
+    label: `${formatPercent(Math.abs((today - yesterday) / yesterday))} vs yesterday`,
+  };
+}
+
+const VISITOR_RANGE_LABELS: Record<VisitorRange, string> = {
+  today: "Today",
+  yesterday: "Yesterday",
+  "7d": "Last 7 days",
+  all: "All",
+};
+
+/**
+ * Whole days between a visit and the snapshot it belongs to. Days are counted
+ * in UTC against the snapshot's own date so a row cannot drift into a
+ * different bucket while the page sits open. Returns null for an unparseable
+ * or future timestamp rather than guessing a bucket for it.
+ */
+export function visitorBucket(
+  lastSeen: string,
+  reference: number,
+): number | null {
+  const seen = Date.parse(lastSeen);
+  if (Number.isNaN(seen) || Number.isNaN(reference)) return null;
+  const startOfDay = (value: number) => {
+    const date = new Date(value);
+    return Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate(),
+    );
+  };
+  const diff = startOfDay(reference) - startOfDay(seen);
+  if (diff < 0) return 0;
+  return Math.floor(diff / 86_400_000);
+}
 
 /** Sankey geometry. The funnel headings derive their position from these too. */
 const FLOW = {
@@ -110,6 +176,49 @@ const FLOW_BAND_CENTER = FLOW.bandTop + FLOW.bandHeight / 2;
  * a caveat is shown alongside it so the shape is not read as a settled rate.
  */
 const FLOW_MIN_VISITORS = 50;
+
+/** How far a dropped-off band travels before it dissolves out of the plot. */
+const FLOW_DROP_OFFSET = 26;
+
+type FlowStageId = "visitors" | "engaged" | "converted";
+
+interface FlowStage {
+  id: FlowStageId;
+  label: string;
+  count: number;
+  shareOfVisitors: number;
+  /** Fraction of the previous stop that carried over. Null at the entry stop. */
+  keptFromPrevious: number | null;
+  lostFromPrevious: number | null;
+  previousLabel: string | null;
+  x: number;
+  trend: { change: number; days: number } | null;
+}
+
+/**
+ * A Sankey funnel has no innate "up is good" reading, so each stage carries an
+ * explicit direction derived from the series: the most recent half of the
+ * window against the half before it. This is the same period-over-period
+ * comparison the crawler card uses, and it is the only one a single snapshot
+ * supports. Below `minPoints` days the comparison is withheld rather than
+ * shown at low confidence.
+ */
+function stageTrend(
+  series: AcquisitionSeriesPoint[],
+  pick: (point: AcquisitionSeriesPoint) => number,
+  minPoints = 4,
+): { change: number; days: number } | null {
+  if (series.length < minPoints) return null;
+  const ordered = [...series].sort((a, b) => a.date.localeCompare(b.date));
+  const half = Math.floor(ordered.length / 2);
+  if (half === 0) return null;
+  const previous = ordered.slice(0, half).reduce((sum, p) => sum + pick(p), 0);
+  const recent = ordered
+    .slice(ordered.length - half)
+    .reduce((sum, p) => sum + pick(p), 0);
+  if (previous === 0) return null;
+  return { change: (recent - previous) / previous, days: half };
+}
 
 function channelColor(label: string) {
   return (
@@ -465,6 +574,52 @@ function AcquisitionFlow({
     snapshot.totals.visitors > 0 &&
     snapshot.totals.visitors < FLOW_MIN_VISITORS;
 
+  const [hoveredStage, setHoveredStage] = useState<FlowStageId | null>(null);
+
+  /**
+   * The three funnel stops, each with the two things a first-time reader needs
+   * and the chart alone cannot convey: how many of the previous stop carried
+   * over, and whether that is better or worse than the previous period.
+   */
+  const stages = useMemo<FlowStage[]>(() => {
+    const { visitors, engaged, converted } = snapshot.totals;
+    return [
+      {
+        id: "visitors",
+        label: "Visitors",
+        count: visitors,
+        shareOfVisitors: visitors > 0 ? 1 : 0,
+        keptFromPrevious: null,
+        lostFromPrevious: null,
+        previousLabel: null,
+        x: FLOW.visitorsX,
+        trend: stageTrend(snapshot.series, (p) => p.visitors),
+      },
+      {
+        id: "engaged",
+        label: "Engaged",
+        count: engaged,
+        shareOfVisitors: engagedRate,
+        keptFromPrevious: visitors > 0 ? engaged / visitors : null,
+        lostFromPrevious: Math.max(0, visitors - engaged),
+        previousLabel: "Visitors",
+        x: FLOW.engagedX,
+        trend: stageTrend(snapshot.series, (p) => p.engaged),
+      },
+      {
+        id: "converted",
+        label: "Converted",
+        count: converted,
+        shareOfVisitors: convertedRate,
+        keptFromPrevious: engaged > 0 ? converted / engaged : null,
+        lostFromPrevious: Math.max(0, engaged - converted),
+        previousLabel: "Engaged",
+        x: FLOW.convertedX,
+        trend: stageTrend(snapshot.series, (p) => p.converted),
+      },
+    ];
+  }, [snapshot.totals, snapshot.series, engagedRate, convertedRate]);
+
   /**
    * Each channel enters as its own band and lands stacked against the visitors
    * node, so ribbon thickness stays proportional to visitors on both edges.
@@ -521,6 +676,88 @@ function AcquisitionFlow({
     FLOW_BAND_CENTER + convertedHeight / 2,
   );
 
+  /**
+   * The people who did not carry over.
+   *
+   * Convergence alone reads as "the line got thinner", not as "these many
+   * people left" — the single most common misreading of a Sankey by someone
+   * who has not seen one before. Each loss is therefore drawn as its own band
+   * that spills away from the flow and dissolves, so the narrowing has a
+   * visible cause. The spills open outward while the kept ribbon converges
+   * inward, so the two never overlap.
+   */
+  const spills = useMemo(() => {
+    function spillPair(
+      fromX: number,
+      inflowTop: number,
+      inflowBottom: number,
+      toX: number,
+      keptTop: number,
+      keptBottom: number,
+      lostCount: number,
+      id: string,
+    ) {
+      const lost = inflowBottom - inflowTop - (keptBottom - keptTop);
+      if (lost <= 0.5 || lostCount <= 0) return [];
+      const half = lost / 2;
+      return [
+        {
+          id: `${id}-top`,
+          path: ribbonPath(
+            fromX,
+            inflowTop,
+            inflowTop,
+            toX,
+            keptTop - FLOW_DROP_OFFSET - half,
+            keptTop - FLOW_DROP_OFFSET,
+          ),
+        },
+        {
+          id: `${id}-bottom`,
+          path: ribbonPath(
+            fromX,
+            inflowBottom,
+            inflowBottom,
+            toX,
+            keptBottom + FLOW_DROP_OFFSET,
+            keptBottom + FLOW_DROP_OFFSET + half,
+          ),
+        },
+      ];
+    }
+
+    return [
+      ...spillPair(
+        FLOW.visitorsX + FLOW.nodeWidth,
+        FLOW.bandTop,
+        FLOW.bandTop + FLOW.bandHeight,
+        FLOW.engagedX,
+        FLOW_BAND_CENTER - engagedHeight / 2,
+        FLOW_BAND_CENTER + engagedHeight / 2,
+        Math.max(0, snapshot.totals.visitors - snapshot.totals.engaged),
+        "engaged",
+      ),
+      ...spillPair(
+        FLOW.engagedX + FLOW.nodeWidth,
+        FLOW_BAND_CENTER - engagedHeight / 2,
+        FLOW_BAND_CENTER + engagedHeight / 2,
+        FLOW.convertedX,
+        FLOW_BAND_CENTER - convertedHeight / 2,
+        FLOW_BAND_CENTER + convertedHeight / 2,
+        Math.max(0, snapshot.totals.engaged - snapshot.totals.converted),
+        "converted",
+      ),
+    ];
+  }, [
+    engagedHeight,
+    convertedHeight,
+    snapshot.totals.visitors,
+    snapshot.totals.engaged,
+    snapshot.totals.converted,
+  ]);
+
+  const hovered = stages.find((stage) => stage.id === hoveredStage) ?? null;
+
   return (
     <article className={`atlas-flow-card ${loading ? "atlas-loading" : ""}`}>
       {loading && (
@@ -565,8 +802,20 @@ function AcquisitionFlow({
             <span>Sources will appear after the first visit.</span>
           </div>
         )}
+        {/*
+         * Read as: how to read it, then what is good, then the caveat. A first
+         * time reader has no prior for a Sankey, so the direction of "better"
+         * is stated outright rather than implied by the shape.
+         */}
         <div className="atlas-flow-legend">
-          <span>Band width = visitors · colour = channel above</span>
+          <strong>Read left to right</strong>
+          <span>
+            Each band is people. It narrows where they drop off, and the faded
+            bands are the ones who left.
+          </span>
+          <span className="atlas-flow-legend-good">
+            Wider on the right is better — more visitors reaching the end.
+          </span>
           <span>Human traffic only — crawlers are charted separately</span>
         </div>
       </div>
@@ -584,21 +833,35 @@ function AcquisitionFlow({
          */}
         <div className="atlas-sankey-plot">
         <div className="atlas-funnel-headings" aria-hidden="true">
-          <div style={{ left: flowNodeCenterPercent(FLOW.visitorsX) }}>
-            <span>Visitors</span>
-            <strong>{formatNumber(snapshot.totals.visitors)}</strong>
-            <small>100% of total</small>
-          </div>
-          <div style={{ left: flowNodeCenterPercent(FLOW.engagedX) }}>
-            <span>Engaged</span>
-            <strong>{formatNumber(snapshot.totals.engaged)}</strong>
-            <small>{formatPercent(engagedRate)} of visitors</small>
-          </div>
-          <div style={{ left: flowNodeCenterPercent(FLOW.convertedX) }}>
-            <span>Converted</span>
-            <strong>{formatNumber(snapshot.totals.converted)}</strong>
-            <small>{formatPercent(convertedRate)} of visitors</small>
-          </div>
+          {stages.map((stage) => (
+            <div
+              key={stage.id}
+              className={hoveredStage === stage.id ? "is-hovered" : ""}
+              style={{ left: flowNodeCenterPercent(stage.x) }}
+            >
+              <span>{stage.label}</span>
+              <strong>{formatNumber(stage.count)}</strong>
+              <small>
+                {stage.id === "visitors"
+                  ? "100% of total"
+                  : `${formatPercent(stage.shareOfVisitors)} of visitors`}
+              </small>
+              {stage.trend && (
+                <em
+                  className={`atlas-stage-trend ${
+                    stage.trend.change >= 0 ? "up" : "down"
+                  }`}
+                >
+                  {stage.trend.change >= 0 ? (
+                    <TrendingUp size={11} />
+                  ) : (
+                    <TrendingDown size={11} />
+                  )}
+                  {formatPercent(Math.abs(stage.trend.change))}
+                </em>
+              )}
+            </div>
+          ))}
         </div>
         <svg
           className="atlas-sankey"
@@ -634,6 +897,12 @@ function AcquisitionFlow({
               <stop offset="0%" stopColor="#2f9a92" stopOpacity=".72" />
               <stop offset="100%" stopColor="#1c7f79" stopOpacity=".92" />
             </linearGradient>
+            {/* Loss dissolves rather than ending in a hard edge, so it reads
+                as leaving the funnel instead of arriving somewhere. */}
+            <linearGradient id="atlas-spill-gradient" x1="0" x2="1">
+              <stop offset="0%" stopColor="#bc584b" stopOpacity=".42" />
+              <stop offset="100%" stopColor="#bc584b" stopOpacity="0" />
+            </linearGradient>
           </defs>
 
           {ribbons.map((ribbon) => (
@@ -646,16 +915,17 @@ function AcquisitionFlow({
             </path>
           ))}
 
-          <path d={engagedRibbon} fill="url(#atlas-engaged-gradient)">
-            <title>
-              {`${formatNumber(snapshot.totals.engaged)} engaged visitors`}
-            </title>
-          </path>
-          <path d={convertedRibbon} fill="url(#atlas-converted-gradient)">
-            <title>
-              {`${formatNumber(snapshot.totals.converted)} converted visitors`}
-            </title>
-          </path>
+          {spills.map((spill) => (
+            <path
+              key={spill.id}
+              d={spill.path}
+              fill="url(#atlas-spill-gradient)"
+              className="atlas-spill"
+            />
+          ))}
+
+          <path d={engagedRibbon} fill="url(#atlas-engaged-gradient)" />
+          <path d={convertedRibbon} fill="url(#atlas-converted-gradient)" />
 
           <rect
             x={FLOW.visitorsX}
@@ -681,7 +951,94 @@ function AcquisitionFlow({
             rx={FLOW.nodeWidth / 2}
             fill="#1c7f79"
           />
+
+          {/* The loss labelled in words, so the spill does not have to be
+              decoded. Only drawn where something was actually lost. */}
+          {stages.map((stage) =>
+            stage.lostFromPrevious && stage.lostFromPrevious > 0 ? (
+              <text
+                key={`${stage.id}-loss`}
+                className="atlas-spill-label"
+                x={stage.x - 6}
+                y={FLOW.bandTop + FLOW.bandHeight + 30}
+                textAnchor="end"
+              >
+                {`−${formatNumber(stage.lostFromPrevious)} left`}
+              </text>
+            ) : null,
+          )}
+
+          {/* Full-height hover targets. Pointer areas are kept off the ribbons
+              themselves so a thin band is still easy to hit. */}
+          {stages.map((stage, index) => {
+            const previousX =
+              index === 0 ? 0 : (stages[index - 1].x + stage.x) / 2;
+            const nextX =
+              index === stages.length - 1
+                ? FLOW.viewWidth
+                : (stages[index + 1].x + stage.x) / 2;
+            return (
+              <rect
+                key={`${stage.id}-hit`}
+                className="atlas-stage-hit"
+                x={previousX}
+                y={0}
+                width={Math.max(1, nextX - previousX)}
+                height={FLOW.viewHeight}
+                fill="transparent"
+                onMouseEnter={() => setHoveredStage(stage.id)}
+                onMouseLeave={() =>
+                  setHoveredStage((current) =>
+                    current === stage.id ? null : current,
+                  )
+                }
+              />
+            );
+          })}
         </svg>
+
+        {hovered && (
+          <div
+            className="atlas-flow-tooltip"
+            role="status"
+            style={{ left: flowNodeCenterPercent(hovered.x) }}
+          >
+            <strong>{hovered.label}</strong>
+            <span className="atlas-flow-tooltip-value">
+              {formatNumber(hovered.count)}
+            </span>
+            {hovered.keptFromPrevious !== null && hovered.previousLabel ? (
+              <span>
+                {formatPercent(hovered.keptFromPrevious)} of{" "}
+                {hovered.previousLabel.toLowerCase()} continued here
+              </span>
+            ) : (
+              <span>Everyone who reached the site in this window</span>
+            )}
+            {hovered.lostFromPrevious ? (
+              <span className="atlas-flow-tooltip-loss">
+                {formatNumber(hovered.lostFromPrevious)} did not continue
+              </span>
+            ) : null}
+            {hovered.trend ? (
+              <span
+                className={
+                  hovered.trend.change >= 0
+                    ? "atlas-flow-tooltip-trend up"
+                    : "atlas-flow-tooltip-trend down"
+                }
+              >
+                {hovered.trend.change >= 0 ? "Up" : "Down"}{" "}
+                {formatPercent(Math.abs(hovered.trend.change))} vs the previous{" "}
+                {hovered.trend.days} days
+              </span>
+            ) : (
+              <span className="atlas-flow-tooltip-muted">
+                Not enough days yet to compare with the previous period
+              </span>
+            )}
+          </div>
+        )}
         </div>
         <div className="atlas-flow-footer">
           <span>
@@ -885,22 +1242,63 @@ const COLLAPSED_VISITORS = 6;
 function VisitorJourneys({ snapshot }: { snapshot: AcquisitionSnapshot }) {
   const [query, setQuery] = useState("");
   const [expanded, setExpanded] = useState(false);
+  const [range, setRange] = useState<VisitorRange>("all");
   // Rows age against the snapshot they belong to, not wall-clock time: the
   // figures beside them are frozen at `generatedAt`, and the header already
   // reports how stale the snapshot itself is.
   const reference = Date.parse(snapshot.generatedAt);
+
+  /**
+   * Counts are computed before the search filter so the range chips keep
+   * reporting the size of each period rather than the size of the current
+   * search, and a chip that would show nothing says so up front.
+   */
+  const rangeCounts = useMemo(() => {
+    const counts = { today: 0, yesterday: 0, "7d": 0, all: 0 };
+    for (const visitor of snapshot.visitors) {
+      counts.all += 1;
+      const bucket = visitorBucket(visitor.lastSeen, reference);
+      if (bucket === null) continue;
+      if (bucket === 0) counts.today += 1;
+      if (bucket === 1) counts.yesterday += 1;
+      if (bucket < 7) counts["7d"] += 1;
+    }
+    return counts;
+  }, [snapshot.visitors, reference]);
+
   const visitors = useMemo(() => {
     const normalized = query.trim().toLowerCase();
-    if (!normalized) return snapshot.visitors;
-    return snapshot.visitors.filter((visitor) =>
-      [
+    return snapshot.visitors.filter((visitor) => {
+      if (range !== "all") {
+        const bucket = visitorBucket(visitor.lastSeen, reference);
+        if (bucket === null) return false;
+        if (range === "today" && bucket !== 0) return false;
+        if (range === "yesterday" && bucket !== 1) return false;
+        if (range === "7d" && bucket >= 7) return false;
+      }
+      if (!normalized) return true;
+      return [
         visitor.alias,
         visitor.source,
         visitor.channel,
         visitor.countryCode ?? "",
-      ].some((value) => value.toLowerCase().includes(normalized)),
-    );
-  }, [query, snapshot.visitors]);
+      ].some((value) => value.toLowerCase().includes(normalized));
+    });
+  }, [query, range, snapshot.visitors, reference]);
+
+  /**
+   * Today against yesterday. The list shows who came; this answers the question
+   * the card is actually opened with — is traffic going up or down.
+   *
+   * A percentage off a handful of visitors is false precision: 1 visitor
+   * yesterday and 11 today is a truthful "+1000%" and a useless one. Below the
+   * threshold the comparison is stated in whole visitors instead, which is
+   * the same restraint the flow applies to its own rates.
+   */
+  const dayOverDay = useMemo(
+    () => describeDayOverDay(rangeCounts.today, rangeCounts.yesterday),
+    [rangeCounts],
+  );
 
   return (
     <article className="atlas-card atlas-visitors-card">
@@ -921,6 +1319,38 @@ function VisitorJourneys({ snapshot }: { snapshot: AcquisitionSnapshot }) {
             placeholder="Search visitors…"
           />
         </label>
+      </div>
+      <div className="atlas-visitor-ranges">
+        <div className="atlas-range-chips" role="tablist">
+          {(["today", "yesterday", "7d", "all"] as VisitorRange[]).map(
+            (option) => (
+              <button
+                key={option}
+                type="button"
+                role="tab"
+                aria-selected={range === option}
+                className={range === option ? "active" : ""}
+                onClick={() => {
+                  setRange(option);
+                  setExpanded(false);
+                }}
+              >
+                {VISITOR_RANGE_LABELS[option]}
+                <small>{formatNumber(rangeCounts[option])}</small>
+              </button>
+            ),
+          )}
+        </div>
+        {dayOverDay && (
+          <span className={`atlas-visitor-delta ${dayOverDay.direction}`}>
+            {dayOverDay.direction === "up" ? (
+              <TrendingUp size={12} />
+            ) : (
+              <TrendingDown size={12} />
+            )}
+            {dayOverDay.label}
+          </span>
+        )}
       </div>
       <div className="atlas-visitor-head" aria-hidden="true">
         <span>Visitor</span>
@@ -992,7 +1422,13 @@ function VisitorJourneys({ snapshot }: { snapshot: AcquisitionSnapshot }) {
             ),
           )
         ) : (
-          <CardEmpty label="No matching visitor journeys" />
+          <CardEmpty
+            label={
+              range === "all"
+                ? "No matching visitor journeys"
+                : `No visitors in ${VISITOR_RANGE_LABELS[range].toLowerCase()}`
+            }
+          />
         )}
       </div>
       <div className="atlas-card-footer">
@@ -1012,7 +1448,7 @@ function VisitorJourneys({ snapshot }: { snapshot: AcquisitionSnapshot }) {
 
 function CrawlerCurrent({ snapshot }: { snapshot: AcquisitionSnapshot }) {
   const availableCategories = snapshot.crawlers.categories;
-  const [tab, setTab] = useState<CrawlerCategory>("ai_answer");
+  const [tab, setTab] = useState<CrawlerCategory>("search_index");
   const [shape, setShape] = useState<CrawlerChartShape>("area");
   const [pagesExpanded, setPagesExpanded] = useState(false);
   const activeCount =
@@ -1097,8 +1533,13 @@ function CrawlerCurrent({ snapshot }: { snapshot: AcquisitionSnapshot }) {
         </span>
       </div>
       <div className="atlas-tabs crawler-tabs" role="tablist">
+        {/*
+         * Indexing leads because it is the category that decides whether the
+         * site can be found at all, and in practice it carries the most
+         * requests by a wide margin. AI answers sits second.
+         */}
         {(
-          ["ai_answer", "search_index", "model_training"] as CrawlerCategory[]
+          ["search_index", "ai_answer", "model_training"] as CrawlerCategory[]
         ).map((category) => (
           <button
             key={category}
