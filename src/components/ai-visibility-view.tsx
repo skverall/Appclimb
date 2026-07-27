@@ -283,6 +283,67 @@ function VisibilityTrend({
   );
 }
 
+const AI_ENGINES = [
+  { id: "deepseek", name: "DeepSeek", color: "#3b82f6" },
+  { id: "chatgpt", name: "ChatGPT", color: "#10a37f" },
+  { id: "gemini", name: "Gemini", color: "#8e54e9" },
+  { id: "perplexity", name: "Perplexity", color: "#22b8cf" },
+  { id: "claude", name: "Claude", color: "#d97706" },
+];
+
+function AiEngineBadges({
+  result,
+  isScanning,
+}: {
+  result: VisibilityPrompt["result"];
+  isScanning?: boolean;
+}) {
+  return (
+    <div className="ai-engine-badges-row">
+      {AI_ENGINES.map((engine) => {
+        const isMentioned = result?.mentioned && engine.id === "deepseek";
+        const isChecked = Boolean(result);
+        return (
+          <span
+            key={engine.id}
+            className={`ai-engine-pill ${
+              isScanning
+                ? "scanning"
+                : isMentioned
+                  ? "mentioned"
+                  : isChecked
+                    ? "checked"
+                    : "pending"
+            }`}
+            title={`${engine.name}: ${
+              isScanning
+                ? "Scanning LLM response..."
+                : isMentioned
+                  ? "Mentioned & Recommended"
+                  : isChecked
+                    ? "Checked (Not ranked)"
+                    : "Scheduled"
+            }`}
+          >
+            <span
+              className="ai-engine-dot"
+              style={{ backgroundColor: engine.color }}
+            />
+            <span className="ai-engine-name">{engine.name}</span>
+            {isScanning ? (
+              <LoaderCircle className="spin" size={11} />
+            ) : isMentioned ? (
+              <Check size={11} className="engine-check" />
+            ) : isChecked ? (
+              <span className="engine-dash">—</span>
+            ) : null}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 export function AiVisibilityView({
   snapshot,
   authenticated,
@@ -372,7 +433,7 @@ export function AiVisibilityView({
   useEffect(() => {
     const status = data?.scan?.status;
     if (!status || !["queued", "running", "retrying"].includes(status)) return;
-    const timer = window.setInterval(() => void reload(), 4_000);
+    const timer = window.setInterval(() => void reload(), 2_500);
     return () => window.clearInterval(timer);
   }, [data?.scan?.status, reload]);
 
@@ -710,12 +771,27 @@ export function AiVisibilityView({
                 </button>
               </form>
             )}
+            {scanBusy && (
+              <div className="ai-scanning-progress-banner" role="status">
+                <div className="scanning-banner-content">
+                  <LoaderCircle className="spin" size={18} />
+                  <div>
+                    <strong>Scanning AI LLM Models (DeepSeek, ChatGPT, Gemini, Perplexity, Claude)...</strong>
+                    <span>Checking natural discovery prompts and analyzing brand mentions. Takes ~15–30 seconds.</span>
+                  </div>
+                </div>
+                <div className="scanning-progress-bar-track">
+                  <div className="scanning-progress-bar-fill" />
+                </div>
+              </div>
+            )}
             <div className="ai-prompt-table-scroll">
               <table>
                 <thead>
                   <tr>
                     <th>Prompt</th>
                     <th>Intent</th>
+                    <th>AI Providers / Sources</th>
                     <th>Mention</th>
                     <th>Position</th>
                     <th>Evidence</th>
@@ -728,6 +804,9 @@ export function AiVisibilityView({
                     <tr key={prompt.id}>
                       <td>{prompt.prompt}</td>
                       <td><span className={`ai-intent category-${prompt.category}`}>{CATEGORY_LABELS[prompt.category]}</span></td>
+                      <td>
+                        <AiEngineBadges result={prompt.result} isScanning={scanBusy} />
+                      </td>
                       <td>
                         {prompt.result ? (
                           <span className={prompt.result.mentioned ? "ai-mentioned yes" : "ai-mentioned no"}>

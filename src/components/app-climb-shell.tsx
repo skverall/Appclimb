@@ -22,6 +22,7 @@ import {
 import Link from "next/link";
 
 import { logout } from "@/app/actions";
+import { lookupAppStoreIcon } from "@/lib/itunes";
 import { AcquisitionAtlas } from "@/components/acquisition-atlas";
 import { AiVisibilityView } from "@/components/ai-visibility-view";
 import { AccountSecurity } from "@/components/account-security";
@@ -135,12 +136,50 @@ export function AppClimbShell({
     "growth" | "acquisition"
   >(initialPulseProjection);
 
+  const [snapshot, setSnapshot] = useState(initialSnapshot);
+  const [activeAppIcon, setActiveAppIcon] = useState(initialSnapshot.app.iconUrl || "");
+
+  useEffect(() => {
+    setSnapshot(initialSnapshot);
+    if (initialSnapshot.app.iconUrl) {
+      setActiveAppIcon(initialSnapshot.app.iconUrl);
+    } else {
+      const appStoreId = (initialSnapshot.app as { appStoreId?: string; apple_app_id?: string }).appStoreId ||
+        (initialSnapshot.app as { apple_app_id?: string }).apple_app_id;
+      if (appStoreId) {
+        lookupAppStoreIcon(appStoreId)
+          .then((icon) => {
+            if (icon) setActiveAppIcon(icon);
+          })
+          .catch(() => undefined);
+      }
+    }
+  }, [initialSnapshot]);
+
+  const refreshSnapshot = useCallback(async () => {
+    if (snapshot.mode === "demo") return;
+    try {
+      const url = new URL("/api/growth-map", window.location.origin);
+      if (snapshot.app.id) url.searchParams.set("app", snapshot.app.id);
+      const res = await fetch(url.toString(), { cache: "no-store" });
+      if (!res.ok) return;
+      const data = (await res.json()) as { data?: DashboardSnapshot };
+      if (data.data) {
+        setSnapshot(data.data);
+        setSourceConnections(data.data.sources);
+        if (data.data.app.iconUrl) setActiveAppIcon(data.data.app.iconUrl);
+      }
+    } catch {
+      // Ignore background refresh failure
+    }
+  }, [snapshot.mode, snapshot.app.id]);
+
   const selectedInsight = useMemo<Insight | undefined>(
     () =>
-      initialSnapshot.insights.find(
+      snapshot.insights.find(
         (insight) => insight.id === selectedInsightId,
       ),
-    [initialSnapshot.insights, selectedInsightId],
+    [snapshot.insights, selectedInsightId],
   );
 
   const updateWorkspaceUrl = useCallback(
@@ -436,9 +475,9 @@ export function AppClimbShell({
             aria-label={`Manage ${displayedAppName}`}
           >
             <div className="app-avatar" aria-hidden="true" style={{ overflow: "hidden", display: "grid", placeItems: "center" }}>
-              {initialSnapshot.app.iconUrl ? (
+              {activeAppIcon ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={initialSnapshot.app.iconUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <img src={activeAppIcon} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
               ) : (
                 <span>{appInitials}</span>
               )}
@@ -712,7 +751,7 @@ export function AppClimbShell({
             />
           ) : activeSection === "pulse" ? (
             <PulseView
-              snapshot={initialSnapshot}
+              snapshot={snapshot}
               selectedInsightId={selectedInsightId}
               onSelectInsight={selectInsight}
               onOpenInsight={openInsight}
@@ -722,30 +761,30 @@ export function AppClimbShell({
               onOpenSources={() => navigateTo("sources")}
             />
           ) : activeSection === "diagnose" &&
-            initialSnapshot.insights.length === 0 ? (
+            snapshot.insights.length === 0 ? (
             <NoEvidenceView
               section="Diagnose"
-              hasObservedMetrics={initialSnapshot.mode === "live"}
+              hasObservedMetrics={snapshot.mode === "live"}
               onOpenSources={() => navigateTo("sources")}
             />
           ) : activeSection === "diagnose" ? (
             <DiagnoseView
-              snapshot={initialSnapshot}
+              snapshot={snapshot}
               selectedInsight={selectedInsight}
               onSelectInsight={selectInsight}
               onCreateExperiment={() => createDraftFromInsight(selectedInsight)}
             />
           ) : activeSection === "ai-visibility" ? (
             <AiVisibilityView
-              snapshot={initialSnapshot}
+              snapshot={snapshot}
               authenticated={Boolean(session)}
               onChoosePlan={() => setBillingOpen(true)}
             />
           ) : activeSection === "lab" &&
-            initialSnapshot.insights.length === 0 ? (
+            snapshot.insights.length === 0 ? (
             <NoEvidenceView
               section="Lab"
-              hasObservedMetrics={initialSnapshot.mode === "live"}
+              hasObservedMetrics={snapshot.mode === "live"}
               onOpenSources={() => navigateTo("sources")}
             />
           ) : activeSection === "lab" ? (
@@ -757,13 +796,19 @@ export function AppClimbShell({
             />
           ) : activeSection === "sources" ? (
             <SourcesView
-              snapshot={initialSnapshot}
+              snapshot={snapshot}
               authenticated={Boolean(session)}
-              entitled={initialSnapshot.mode !== "restricted"}
+              entitled={snapshot.mode !== "restricted"}
               sources={sourceConnections}
-              onSourcesChange={setSourceConnections}
+              onSourcesChange={(newSources) => {
+                setSourceConnections(newSources);
+                void refreshSnapshot();
+              }}
+              onRefreshSnapshot={refreshSnapshot}
               onOpenGrowthRiver={() => {
-                window.location.assign("/");
+                setPulseProjection("growth");
+                navigateTo("pulse");
+                void refreshSnapshot();
               }}
               onOpenAcquisitionAtlas={() => {
                 openAcquisitionAtlas();

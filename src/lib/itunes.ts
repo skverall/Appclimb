@@ -219,3 +219,27 @@ export function deriveKeywordSuggestions(
           : "Store metadata",
   }));
 }
+
+/**
+ * Look up an app by its App Store ID and return its 100x100 artwork URL.
+ */
+export async function lookupAppStoreIcon(
+  appStoreId: string,
+  country = "US",
+  options: { fetchImpl?: typeof fetch } = {},
+): Promise<string | null> {
+  const cleanId = appStoreId.replace(/\D/gu, "");
+  if (!cleanId) return null;
+  const fetchFn = options.fetchImpl || fetch;
+  const url = `${ITUNES_ORIGIN}/lookup?id=${cleanId}&country=${encodeURIComponent(country)}`;
+  try {
+    const res = await fetchFn(url);
+    if (!res.ok) return null;
+    const body = (await res.json()) as { results?: AppStoreResult[] };
+    const result = body.results?.[0];
+    return typeof result?.artworkUrl100 === "string" ? result.artworkUrl100 : null;
+  } catch {
+    return null;
+  }
+}
+

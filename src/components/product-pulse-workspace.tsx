@@ -29,6 +29,7 @@ import {
   deriveKeywordSuggestions,
   keywordRankPosition,
   lookupAppStoreApp,
+  lookupAppStoreIcon,
   searchAppStoreCatalog,
   type CatalogApp,
 } from "@/lib/itunes";
@@ -567,6 +568,8 @@ export function AppSelector({
   const [deletingApp, setDeletingApp] = useState<WorkspaceApp | null>(null);
   const [deletingState, setDeletingState] = useState<"idle" | "loading" | "error">("idle");
 
+  const [fetchedIcons, setFetchedIcons] = useState<Record<string, string>>({});
+
   const loadApps = useCallback(() => {
     if (snapshot.mode === "demo") return;
     fetch("/api/apps", { cache: "no-store" })
@@ -581,6 +584,34 @@ export function AppSelector({
   useEffect(() => {
     loadApps();
   }, [loadApps]);
+
+  useEffect(() => {
+    // Look up missing icons for any workspace app that has appStoreId
+    const targets = apps.filter((app) => !app.iconUrl && app.appStoreId && !fetchedIcons[app.id]);
+    for (const app of targets) {
+      if (!app.appStoreId) continue;
+      lookupAppStoreIcon(app.appStoreId)
+        .then((icon) => {
+          if (icon) setFetchedIcons((prev) => ({ ...prev, [app.id]: icon }));
+        })
+        .catch(() => undefined);
+    }
+  }, [apps, fetchedIcons]);
+
+  useEffect(() => {
+    // Also look up icon for snapshot.app if missing
+    if (!snapshot.app.iconUrl && snapshot.app.id && !fetchedIcons[snapshot.app.id]) {
+      const appStoreId = (snapshot.app as { appStoreId?: string; apple_app_id?: string }).appStoreId ||
+        (snapshot.app as { apple_app_id?: string }).apple_app_id;
+      if (appStoreId) {
+        lookupAppStoreIcon(appStoreId)
+          .then((icon) => {
+            if (icon) setFetchedIcons((prev) => ({ ...prev, [snapshot.app.id]: icon }));
+          })
+          .catch(() => undefined);
+      }
+    }
+  }, [snapshot.app, fetchedIcons]);
 
   const selectApp = (appId: string) => {
     const url = new URL(window.location.href);
@@ -610,7 +641,7 @@ export function AppSelector({
     }
   };
 
-  const currentAppIcon = snapshot.app.iconUrl || apps.find((item) => item.id === snapshot.app.id)?.iconUrl;
+  const currentAppIcon = snapshot.app.iconUrl || fetchedIcons[snapshot.app.id] || apps.find((item) => item.id === snapshot.app.id)?.iconUrl;
 
   const getInitials = (name: string) =>
     name
@@ -688,10 +719,10 @@ export function AppSelector({
                         }}
                       >
                         <span className="mini-app-icon">
-                          {app.iconUrl ? (
+                          {app.iconUrl || fetchedIcons[app.id] ? (
                             // eslint-disable-next-line @next/next/no-img-element
                             <img
-                              src={app.iconUrl}
+                              src={app.iconUrl || fetchedIcons[app.id]}
                               alt=""
                               onError={(event) => {
                                 event.currentTarget.style.display = "none";

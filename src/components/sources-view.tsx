@@ -224,6 +224,7 @@ export function SourcesView({
   entitled,
   sources,
   onSourcesChange,
+  onRefreshSnapshot,
   onOpenGrowthRiver,
   onOpenAcquisitionAtlas,
 }: {
@@ -232,6 +233,7 @@ export function SourcesView({
   entitled: boolean;
   sources: SourceConnection[];
   onSourcesChange: (sources: SourceConnection[]) => void;
+  onRefreshSnapshot?: () => void;
   onOpenGrowthRiver: () => void;
   onOpenAcquisitionAtlas: () => void;
 }) {
@@ -430,6 +432,7 @@ export function SourcesView({
           source.syncStatus !== "queued" &&
           source.syncStatus !== "running"
         ) {
+          onRefreshSnapshot?.();
           break;
         }
       }
@@ -462,6 +465,7 @@ export function SourcesView({
       await refreshSources();
       setConnectionState("success");
       setSetupOpen(false);
+      onRefreshSnapshot?.();
     } catch {
       setConnectionState("error");
       setConnectionMessage(
@@ -497,6 +501,8 @@ export function SourcesView({
       setSetupOpen(false);
       setOauthState("idle");
       setOauthProjects([]);
+      onRefreshSnapshot?.();
+      void triggerSync("posthog");
     } catch (error) {
       setConnectionState("error");
       setConnectionMessage(
