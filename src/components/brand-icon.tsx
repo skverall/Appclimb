@@ -1,9 +1,9 @@
 import React from "react";
 import {
+  Compass,
   Globe2,
   Link as LinkIcon,
   Megaphone,
-  MousePointerClick,
   Search,
   Sparkles,
   Users,
@@ -23,6 +23,13 @@ export function BrandIcon({
   fallbackToDefault = true,
 }: BrandIconProps) {
   const norm = (name || "").toLowerCase().trim();
+  const style: React.CSSProperties = {
+    width: `${size}px`,
+    height: `${size}px`,
+    maxWidth: `${size}px`,
+    maxHeight: `${size}px`,
+    flexShrink: 0,
+  };
 
   // 1. Google
   if (
@@ -35,6 +42,7 @@ export function BrandIcon({
         width={size}
         height={size}
         viewBox="0 0 24 24"
+        style={style}
         className={`brand-icon brand-icon-google ${className}`}
         aria-hidden="true"
       >
@@ -58,7 +66,7 @@ export function BrandIcon({
     );
   }
 
-  // 2. ChatGPT / OpenAI
+  // 2. ChatGPT / OpenAI (Official OpenAI 6-petal vortex emblem)
   if (
     norm.includes("chatgpt") ||
     norm.includes("openai") ||
@@ -70,20 +78,12 @@ export function BrandIcon({
         width={size}
         height={size}
         viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className={`brand-icon brand-icon-chatgpt ${className}`}
-        style={{ color: "#10a37f" }}
+        fill="currentColor"
+        style={{ ...style, color: "#10a37f" }}
+        className={`brand-icon brand-icon-openai ${className}`}
         aria-hidden="true"
       >
-        <path d="M12 2a10 10 0 0 1 10 10c0 5.523-4.477 10-10 10S2 17.523 2 12A10 10 0 0 1 12 2z" fill="#10a37f" fillOpacity="0.12" stroke="none"/>
-        <path d="M16.5 12a4.5 4.5 0 1 1-9 0 4.5 4.5 0 0 1 9 0z" />
-        <path d="M12 7.5v9" />
-        <path d="M8.1 9.75l7.8 4.5" />
-        <path d="M8.1 14.25l7.8-4.5" />
+        <path d="M22.282 9.821a5.985 5.985 0 0 0-.516-4.91 6.046 6.046 0 0 0-6.51-2.9A6.065 6.065 0 0 0 4.981 4.18a5.985 5.985 0 0 0-3.998 2.9 6.046 6.046 0 0 0 .743 7.097 5.98 5.98 0 0 0 .51 4.911 6.051 6.051 0 0 0 6.515 2.9A5.985 5.985 0 0 0 13.26 24a6.056 6.056 0 0 0 5.772-4.206 5.99 5.99 0 0 0 3.997-2.9 6.056 6.056 0 0 0-.747-7.073zM13.26 22.23a4.476 4.476 0 0 1-2.876-1.04l.141-.081 4.779-2.758a.798.798 0 0 0 .394-.684v-6.74l2.02 1.166a.072.072 0 0 1 .038.052v5.583a4.508 4.508 0 0 1-4.496 4.498zm-9.014-3.447a4.48 4.48 0 0 1-.536-3.003l.142.085 4.78 2.758a.794.794 0 0 0 .79 0l5.836-3.37v2.332a.08.08 0 0 1-.033.067L9.4 20.47a4.507 4.507 0 0 1-5.154-1.687zM2.784 8.544a4.47 4.47 0 0 1 2.34-1.961v5.68a.79.79 0 0 0 .393.684l5.836 3.37-2.02 1.166a.08.08 0 0 1-.075.006l-4.836-2.793a4.506 4.506 0 0 1-1.638-6.152zm15.74 3.738l-5.836-3.37 2.02-1.166a.08.08 0 0 1 .075-.006l4.836 2.793a4.506 4.506 0 0 1 .684 6.969 4.486 4.486 0 0 1-2.39 1.144v-5.68a.79.79 0 0 0-.389-.684zm2.183-3.642l-.142-.085-4.78-2.758a.794.794 0 0 0-.79 0l-5.836 3.37V6.835a.08.08 0 0 1 .033-.067l4.825-2.786a4.507 4.507 0 0 1 6.69 4.757zm-10.702 3.448l-2.02-1.166a.072.072 0 0 1-.038-.052V5.281a4.508 4.508 0 0 1 7.372-3.458l-.141.081-4.779 2.758a.798.798 0 0 0-.394.684v6.74z" />
       </svg>
     );
   }
@@ -95,6 +95,7 @@ export function BrandIcon({
         width={size}
         height={size}
         viewBox="0 0 24 24"
+        style={style}
         className={`brand-icon brand-icon-instagram ${className}`}
         aria-hidden="true"
       >
@@ -122,7 +123,32 @@ export function BrandIcon({
     );
   }
 
-  // 4. Apple / iOS / macOS / Safari
+  // 4. App Store (Apple App Store modern 3-capsule emblem)
+  if (
+    norm.includes("app store") ||
+    norm.includes("appstore") ||
+    norm === "app-store-connect"
+  ) {
+    return (
+      <svg
+        width={size}
+        height={size}
+        viewBox="0 0 512 512"
+        style={{ ...style, borderRadius: "22%" }}
+        className={`brand-icon brand-icon-appstore ${className}`}
+        aria-hidden="true"
+      >
+        <rect width="512" height="512" rx="112" fill="#157EFB" />
+        <g fill="#FFFFFF">
+          <rect x="232" y="80" width="48" height="352" rx="24" transform="rotate(-30 256 256)" />
+          <rect x="232" y="80" width="48" height="352" rx="24" transform="rotate(30 256 256)" />
+          <rect x="110" y="300" width="292" height="48" rx="24" />
+        </g>
+      </svg>
+    );
+  }
+
+  // 5. Apple / iOS / macOS / Safari
   if (
     norm.includes("apple") ||
     norm.includes("applebot") ||
@@ -136,6 +162,7 @@ export function BrandIcon({
         height={size}
         viewBox="0 0 24 24"
         fill="currentColor"
+        style={style}
         className={`brand-icon brand-icon-apple ${className}`}
         aria-hidden="true"
       >
@@ -144,7 +171,7 @@ export function BrandIcon({
     );
   }
 
-  // 5. Claude / Anthropic
+  // 6. Claude / Anthropic
   if (
     norm.includes("claude") ||
     norm.includes("claudebot") ||
@@ -156,6 +183,7 @@ export function BrandIcon({
         height={size}
         viewBox="0 0 24 24"
         fill="#D97757"
+        style={style}
         className={`brand-icon brand-icon-claude ${className}`}
         aria-hidden="true"
       >
@@ -164,7 +192,7 @@ export function BrandIcon({
     );
   }
 
-  // 6. Perplexity
+  // 7. Perplexity
   if (norm.includes("perplexity")) {
     return (
       <svg
@@ -176,6 +204,7 @@ export function BrandIcon({
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
+        style={style}
         className={`brand-icon brand-icon-perplexity ${className}`}
         aria-hidden="true"
       >
@@ -185,7 +214,7 @@ export function BrandIcon({
     );
   }
 
-  // 7. Bing / Microsoft / Edge / Windows
+  // 8. Bing / Microsoft / Edge / Windows
   if (
     norm.includes("bing") ||
     norm.includes("microsoft") ||
@@ -197,6 +226,7 @@ export function BrandIcon({
         width={size}
         height={size}
         viewBox="0 0 24 24"
+        style={style}
         className={`brand-icon brand-icon-microsoft ${className}`}
         aria-hidden="true"
       >
@@ -208,7 +238,7 @@ export function BrandIcon({
     );
   }
 
-  // 8. DuckDuckGo
+  // 9. DuckDuckGo
   if (norm.includes("duckduckgo")) {
     return (
       <svg
@@ -216,6 +246,7 @@ export function BrandIcon({
         height={size}
         viewBox="0 0 24 24"
         fill="#DE5833"
+        style={style}
         className={`brand-icon brand-icon-duckduckgo ${className}`}
         aria-hidden="true"
       >
@@ -226,7 +257,7 @@ export function BrandIcon({
     );
   }
 
-  // 9. Brave
+  // 10. Brave
   if (norm.includes("brave")) {
     return (
       <svg
@@ -234,6 +265,7 @@ export function BrandIcon({
         height={size}
         viewBox="0 0 24 24"
         fill="#FF1B2D"
+        style={style}
         className={`brand-icon brand-icon-brave ${className}`}
         aria-hidden="true"
       >
@@ -242,7 +274,7 @@ export function BrandIcon({
     );
   }
 
-  // 10. Yahoo
+  // 11. Yahoo
   if (norm.includes("yahoo")) {
     return (
       <svg
@@ -250,6 +282,7 @@ export function BrandIcon({
         height={size}
         viewBox="0 0 24 24"
         fill="#6001D2"
+        style={style}
         className={`brand-icon brand-icon-yahoo ${className}`}
         aria-hidden="true"
       >
@@ -259,13 +292,14 @@ export function BrandIcon({
     );
   }
 
-  // 11. Yandex
+  // 12. Yandex
   if (norm.includes("yandex")) {
     return (
       <svg
         width={size}
         height={size}
         viewBox="0 0 24 24"
+        style={style}
         className={`brand-icon brand-icon-yandex ${className}`}
         aria-hidden="true"
       >
@@ -275,7 +309,7 @@ export function BrandIcon({
     );
   }
 
-  // 12. Facebook / Meta
+  // 13. Facebook / Meta
   if (norm.includes("facebook") || norm.includes("meta")) {
     return (
       <svg
@@ -283,6 +317,7 @@ export function BrandIcon({
         height={size}
         viewBox="0 0 24 24"
         fill="#1877F2"
+        style={style}
         className={`brand-icon brand-icon-facebook ${className}`}
         aria-hidden="true"
       >
@@ -295,7 +330,7 @@ export function BrandIcon({
     );
   }
 
-  // 13. Twitter / X
+  // 14. Twitter / X
   if (
     norm.includes("twitter") ||
     norm === "x" ||
@@ -308,6 +343,7 @@ export function BrandIcon({
         height={size}
         viewBox="0 0 24 24"
         fill="currentColor"
+        style={style}
         className={`brand-icon brand-icon-x ${className}`}
         aria-hidden="true"
       >
@@ -316,7 +352,7 @@ export function BrandIcon({
     );
   }
 
-  // 14. LinkedIn
+  // 15. LinkedIn
   if (norm.includes("linkedin")) {
     return (
       <svg
@@ -324,6 +360,7 @@ export function BrandIcon({
         height={size}
         viewBox="0 0 24 24"
         fill="#0A66C2"
+        style={style}
         className={`brand-icon brand-icon-linkedin ${className}`}
         aria-hidden="true"
       >
@@ -332,7 +369,7 @@ export function BrandIcon({
     );
   }
 
-  // 15. TikTok
+  // 16. TikTok
   if (norm.includes("tiktok")) {
     return (
       <svg
@@ -340,6 +377,7 @@ export function BrandIcon({
         height={size}
         viewBox="0 0 24 24"
         fill="currentColor"
+        style={style}
         className={`brand-icon brand-icon-tiktok ${className}`}
         aria-hidden="true"
       >
@@ -348,7 +386,7 @@ export function BrandIcon({
     );
   }
 
-  // 16. YouTube
+  // 17. YouTube
   if (norm.includes("youtube")) {
     return (
       <svg
@@ -356,6 +394,7 @@ export function BrandIcon({
         height={size}
         viewBox="0 0 24 24"
         fill="#FF0000"
+        style={style}
         className={`brand-icon brand-icon-youtube ${className}`}
         aria-hidden="true"
       >
@@ -364,7 +403,7 @@ export function BrandIcon({
     );
   }
 
-  // 17. Reddit
+  // 18. Reddit
   if (norm.includes("reddit")) {
     return (
       <svg
@@ -372,6 +411,7 @@ export function BrandIcon({
         height={size}
         viewBox="0 0 24 24"
         fill="#FF4500"
+        style={style}
         className={`brand-icon brand-icon-reddit ${className}`}
         aria-hidden="true"
       >
@@ -381,7 +421,7 @@ export function BrandIcon({
     );
   }
 
-  // 18. GitHub
+  // 19. GitHub
   if (norm.includes("github")) {
     return (
       <svg
@@ -389,6 +429,7 @@ export function BrandIcon({
         height={size}
         viewBox="0 0 24 24"
         fill="currentColor"
+        style={style}
         className={`brand-icon brand-icon-github ${className}`}
         aria-hidden="true"
       >
@@ -397,7 +438,7 @@ export function BrandIcon({
     );
   }
 
-  // 19. Product Hunt
+  // 20. Product Hunt
   if (norm.includes("product hunt") || norm.includes("producthunt")) {
     return (
       <svg
@@ -405,6 +446,7 @@ export function BrandIcon({
         height={size}
         viewBox="0 0 24 24"
         fill="#DA552F"
+        style={style}
         className={`brand-icon brand-icon-producthunt ${className}`}
         aria-hidden="true"
       >
@@ -414,7 +456,7 @@ export function BrandIcon({
     );
   }
 
-  // 20. Hacker News / Y Combinator
+  // 21. Hacker News / Y Combinator
   if (
     norm.includes("hacker news") ||
     norm.includes("ycombinator") ||
@@ -426,6 +468,7 @@ export function BrandIcon({
         height={size}
         viewBox="0 0 24 24"
         fill="#FF6600"
+        style={style}
         className={`brand-icon brand-icon-ycombinator ${className}`}
         aria-hidden="true"
       >
@@ -435,7 +478,7 @@ export function BrandIcon({
     );
   }
 
-  // 21. ByteDance / Bytespider
+  // 22. ByteDance / Bytespider
   if (norm.includes("bytedance") || norm.includes("bytespider")) {
     return (
       <svg
@@ -443,6 +486,7 @@ export function BrandIcon({
         height={size}
         viewBox="0 0 24 24"
         fill="#00C4B3"
+        style={style}
         className={`brand-icon brand-icon-bytedance ${className}`}
         aria-hidden="true"
       >
@@ -452,7 +496,7 @@ export function BrandIcon({
     );
   }
 
-  // 22. Amazon
+  // 23. Amazon
   if (norm.includes("amazon") || norm.includes("amazonbot")) {
     return (
       <svg
@@ -460,6 +504,7 @@ export function BrandIcon({
         height={size}
         viewBox="0 0 24 24"
         fill="#FF9900"
+        style={style}
         className={`brand-icon brand-icon-amazon ${className}`}
         aria-hidden="true"
       >
@@ -469,7 +514,7 @@ export function BrandIcon({
     );
   }
 
-  // 23. DeepSeek
+  // 24. DeepSeek
   if (norm.includes("deepseek")) {
     return (
       <svg
@@ -477,6 +522,7 @@ export function BrandIcon({
         height={size}
         viewBox="0 0 24 24"
         fill="#4D6BFE"
+        style={style}
         className={`brand-icon brand-icon-deepseek ${className}`}
         aria-hidden="true"
       >
@@ -486,13 +532,14 @@ export function BrandIcon({
     );
   }
 
-  // 24. Chrome
+  // 25. Chrome
   if (norm.includes("chrome")) {
     return (
       <svg
         width={size}
         height={size}
         viewBox="0 0 24 24"
+        style={style}
         className={`brand-icon brand-icon-chrome ${className}`}
         aria-hidden="true"
       >
@@ -506,7 +553,7 @@ export function BrandIcon({
     );
   }
 
-  // 25. Firefox
+  // 26. Firefox
   if (norm.includes("firefox")) {
     return (
       <svg
@@ -514,6 +561,7 @@ export function BrandIcon({
         height={size}
         viewBox="0 0 24 24"
         fill="#FF7139"
+        style={style}
         className={`brand-icon brand-icon-firefox ${className}`}
         aria-hidden="true"
       >
@@ -523,7 +571,7 @@ export function BrandIcon({
     );
   }
 
-  // 26. Linux
+  // 27. Linux
   if (norm.includes("linux")) {
     return (
       <svg
@@ -531,6 +579,7 @@ export function BrandIcon({
         height={size}
         viewBox="0 0 24 24"
         fill="#FCC624"
+        style={style}
         className={`brand-icon brand-icon-linux ${className}`}
         aria-hidden="true"
       >
@@ -543,7 +592,7 @@ export function BrandIcon({
     );
   }
 
-  // 27. Android
+  // 28. Android
   if (norm.includes("android")) {
     return (
       <svg
@@ -551,6 +600,7 @@ export function BrandIcon({
         height={size}
         viewBox="0 0 24 24"
         fill="#3DDC84"
+        style={style}
         className={`brand-icon brand-icon-android ${className}`}
         aria-hidden="true"
       >
@@ -562,20 +612,33 @@ export function BrandIcon({
     );
   }
 
-  // 28. Channel Types (Organic Search, AI Referral, Social, Direct, Campaigns, Referral)
-  if (norm.includes("organic search") || norm.includes("search")) {
+  // 29. Channel Types (Organic Search, AI Referral, Social, Direct, Campaigns, Referral)
+  if (
+    norm === "organic search" ||
+    norm.includes("organic search") ||
+    norm === "search"
+  ) {
     return (
       <Search
         size={size}
+        style={style}
         className={`brand-icon brand-icon-search ${className}`}
         aria-hidden="true"
       />
     );
   }
-  if (norm.includes("ai referral") || norm.includes("ai")) {
+  if (
+    norm === "ai referral" ||
+    norm === "ai" ||
+    norm.startsWith("ai ") ||
+    norm.endsWith(" ai") ||
+    norm.includes("ai referral") ||
+    norm.includes("ai-referral")
+  ) {
     return (
       <Sparkles
         size={size}
+        style={style}
         className={`brand-icon brand-icon-ai ${className}`}
         aria-hidden="true"
       />
@@ -585,6 +648,7 @@ export function BrandIcon({
     return (
       <Users
         size={size}
+        style={style}
         className={`brand-icon brand-icon-social ${className}`}
         aria-hidden="true"
       />
@@ -592,8 +656,9 @@ export function BrandIcon({
   }
   if (norm.includes("direct")) {
     return (
-      <MousePointerClick
+      <Compass
         size={size}
+        style={style}
         className={`brand-icon brand-icon-direct ${className}`}
         aria-hidden="true"
       />
@@ -603,15 +668,21 @@ export function BrandIcon({
     return (
       <Megaphone
         size={size}
+        style={style}
         className={`brand-icon brand-icon-campaign ${className}`}
         aria-hidden="true"
       />
     );
   }
-  if (norm.includes("referral") || norm.includes("http") || norm.includes(".")) {
+  if (
+    norm.includes("referral") ||
+    norm.includes("http") ||
+    norm.includes(".")
+  ) {
     return (
       <LinkIcon
         size={size}
+        style={style}
         className={`brand-icon brand-icon-referral ${className}`}
         aria-hidden="true"
       />
@@ -623,6 +694,7 @@ export function BrandIcon({
   return (
     <Globe2
       size={size}
+      style={style}
       className={`brand-icon brand-icon-default ${className}`}
       aria-hidden="true"
     />
@@ -680,4 +752,3 @@ export function SourceBrandIcon({
     />
   );
 }
-

@@ -9220,6 +9220,28 @@ a {
   display: inline-block;
   vertical-align: middle;
   flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  min-width: 16px;
+  max-width: 16px;
+  min-height: 16px;
+  max-height: 16px;
+  object-fit: contain;
+}
+
+.atlas-source-icon,
+.atlas-channel-icon,
+.atlas-visitor-source-icon,
+.atlas-provider-icon,
+.atlas-os-icon,
+.atlas-browser-icon {
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  max-width: 16px !important;
+  min-height: 16px !important;
+  max-height: 16px !important;
+  flex-shrink: 0 !important;
 }
 
 .atlas-source-label-wrap {
@@ -9227,11 +9249,14 @@ a {
   align-items: center;
   gap: 8px;
   min-width: 0;
+  overflow: hidden;
 }
 
 .atlas-source-label-wrap > div {
   min-width: 0;
+  overflow: hidden;
 }
+
 
 .atlas-channel-row > div {
   min-width: 0;
