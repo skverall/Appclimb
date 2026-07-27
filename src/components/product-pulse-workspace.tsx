@@ -347,6 +347,99 @@ function PostHogOverview({
   );
 }
 
+function DomainFavicon({ domain, name }: { domain: string; name: string }) {
+  const [error, setError] = useState(false);
+
+  if (error || !domain) {
+    return (
+      <span
+        className="catalog-app-icon web-fallback-icon"
+        style={{
+          width: "40px",
+          height: "40px",
+          borderRadius: "10px",
+          background: "linear-gradient(135deg, #0f766e, #14b8a6)",
+          color: "#ffffff",
+          display: "grid",
+          placeItems: "center",
+          fontWeight: 700,
+          fontSize: "16px",
+          flexShrink: 0,
+        }}
+      >
+        {(name || domain).charAt(0).toUpperCase()}
+      </span>
+    );
+  }
+
+  return (
+    <span
+      className="catalog-app-icon"
+      style={{
+        width: "40px",
+        height: "40px",
+        borderRadius: "10px",
+        overflow: "hidden",
+        display: "grid",
+        placeItems: "center",
+        background: "var(--surface-subtle)",
+        flexShrink: 0,
+      }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={`https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico`}
+        alt=""
+        width={28}
+        height={28}
+        onError={() => setError(true)}
+        style={{ objectFit: "contain" }}
+      />
+    </span>
+  );
+}
+
+function TabAppIcon({
+  name,
+  iconUrl,
+  isWeb,
+  bundleId,
+}: {
+  name: string;
+  iconUrl?: string;
+  isWeb: boolean;
+  bundleId?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  const initials =
+    name
+      .split(/\s+/u)
+      .slice(0, 2)
+      .map((w) => w[0])
+      .join("")
+      .toUpperCase() || "A";
+  const effectiveIconUrl =
+    iconUrl ||
+    (isWeb && bundleId
+      ? `https://icons.duckduckgo.com/ip3/${encodeURIComponent(bundleId)}.ico`
+      : undefined);
+
+  if (failed || !effectiveIconUrl) {
+    return (
+      <span className="mini-app-icon">
+        {isWeb ? <Globe size={13} /> : initials}
+      </span>
+    );
+  }
+
+  return (
+    <span className="mini-app-icon">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={effectiveIconUrl} alt="" onError={() => setFailed(true)} />
+    </span>
+  );
+}
+
 function AddAppDialog({
   onClose,
   onAdded,
@@ -469,7 +562,7 @@ function AddAppDialog({
           metadata: {
             domain: cleanWebDomain,
             name: webName.trim() || cleanWebDomain,
-            iconUrl: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(cleanWebDomain)}&sz=128`,
+            iconUrl: `https://icons.duckduckgo.com/ip3/${encodeURIComponent(cleanWebDomain)}.ico`,
           },
         }),
       });
@@ -566,18 +659,15 @@ function AddAppDialog({
 
           {cleanWebDomain && cleanWebDomain.includes(".") ? (
             <div className="web-preview-card" style={{ marginTop: "16px", padding: "14px", border: "1px solid var(--border)", borderRadius: "10px", display: "flex", alignItems: "center", gap: "12px", background: "var(--surface-subtle)" }}>
-              <span className="catalog-app-icon" style={{ width: "40px", height: "40px", borderRadius: "8px", overflow: "hidden", display: "grid", placeItems: "center" }}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(cleanWebDomain)}&sz=128`} alt="" width={32} height={32} />
-              </span>
-              <div style={{ flex: 1 }}>
-                <strong style={{ display: "block", fontSize: "14px" }}>{webName.trim() || cleanWebDomain}</strong>
+              <DomainFavicon domain={cleanWebDomain} name={webName.trim() || cleanWebDomain} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <strong style={{ display: "block", fontSize: "14px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{webName.trim() || cleanWebDomain}</strong>
                 <small style={{ color: "var(--foreground-muted)", fontSize: "12px" }}>{cleanWebDomain} · Web SaaS</small>
               </div>
               <button
                 type="button"
                 className="primary-action"
-                style={{ padding: "8px 16px", borderRadius: "8px", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}
+                style={{ padding: "8px 16px", borderRadius: "8px", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", flexShrink: 0 }}
                 disabled={Boolean(addingId)}
                 onClick={() => void addWebSaaS()}
               >
@@ -801,29 +891,17 @@ export function AppSelector({
                   if (!isActive) selectApp(app.id);
                 }}
               >
-                <span className="mini-app-icon">
-                  {iconUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={iconUrl}
-                      alt=""
-                      onError={(event) => {
-                        event.currentTarget.style.display = "none";
-                        event.currentTarget.parentElement?.setAttribute(
-                          "data-initials",
-                          getInitials(app.name),
-                        );
-                      }}
-                    />
-                  ) : (
-                    getInitials(app.name)
-                  )}
-                </span>
+                <TabAppIcon
+                  name={app.name}
+                  iconUrl={iconUrl}
+                  isWeb={Boolean(isWeb)}
+                  bundleId={app.bundleId}
+                />
                 <span className="tab-app-name">{app.name}</span>
                 <span className={`platform-badge ${isWeb ? "web" : "ios"}`}>
                   {isWeb ? "Web" : "iOS"}
                 </span>
-                <span className="storefront-badge">{app.storefront || "US"}</span>
+                {!isWeb && <span className="storefront-badge">{app.storefront || "US"}</span>}
                 {displayApps.length > 1 && (
                   <button
                     className="tab-delete-btn"

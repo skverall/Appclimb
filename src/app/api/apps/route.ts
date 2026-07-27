@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { relayBackendResponse, requestWithSession } from "@/lib/backend";
 
-const metadataSchema = z.object({
+const appStoreMetadataSchema = z.object({
   appStoreId: z.string().regex(/^\d{1,20}$/u),
   name: z.string().min(1).max(120),
   bundleId: z.string().max(255).optional(),
@@ -12,11 +12,23 @@ const metadataSchema = z.object({
   storeUrl: z.string().max(1024).optional(),
 });
 
-const addAppSchema = z.object({
-  platform: z.literal("app-store"),
-  storefront: z.string().regex(/^[A-Z]{2}$/u),
-  metadata: metadataSchema,
+const webMetadataSchema = z.object({
+  domain: z.string().min(1).max(255),
+  name: z.string().min(1).max(120),
+  iconUrl: z.string().max(1024).optional(),
 });
+
+const addAppSchema = z.discriminatedUnion("platform", [
+  z.object({
+    platform: z.literal("app-store"),
+    storefront: z.string().regex(/^[A-Z]{2}$/u),
+    metadata: appStoreMetadataSchema,
+  }),
+  z.object({
+    platform: z.literal("web"),
+    metadata: webMetadataSchema,
+  }),
+]);
 
 export async function GET() {
   const response = await requestWithSession("/v1/apps");

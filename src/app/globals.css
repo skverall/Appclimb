@@ -6171,25 +6171,31 @@ a {
 
 .pulse-app-selector .mini-app-icon,
 .pulse-app-selector-trigger .mini-app-icon,
-.dropdown-app-item .mini-app-icon {
+.dropdown-app-item .mini-app-icon,
+.workspace-app-tab .mini-app-icon {
   display: grid;
-  flex: 0 0 28px;
-  width: 28px;
-  height: 28px;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
+  min-width: 24px;
+  min-height: 24px;
   place-items: center;
-  border-radius: var(--radius-sm);
+  border-radius: 6px;
   overflow: hidden;
   color: var(--teal-dark);
   background: linear-gradient(145deg, var(--teal-100), var(--teal-25));
   font-size: var(--text-2xs);
   font-weight: var(--weight-bold);
+  flex-shrink: 0;
 }
 
 .pulse-app-selector-trigger .mini-app-icon img,
-.dropdown-app-item .mini-app-icon img {
+.dropdown-app-item .mini-app-icon img,
+.workspace-app-tab .mini-app-icon img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
 .pulse-app-dropdown-menu {
@@ -7181,7 +7187,7 @@ a {
 
 .app-platform-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 5px;
   margin: 20px 0 12px;
   padding: 4px;
