@@ -34,6 +34,7 @@ import {
   useState,
 } from "react";
 
+import { BrandIcon, SourceBrandIcon } from "@/components/brand-icon";
 import type {
   AcquisitionBreakdownRow,
   AcquisitionChannel,
@@ -469,6 +470,12 @@ function AcquisitionFlow({
                     ] ?? CHANNEL_COLORS.Referral,
                 }}
               />
+              <SourceBrandIcon
+                channel={channel.label}
+                detail={channel.detail}
+                size={16}
+                className="atlas-channel-icon"
+              />
               <div>
                 <strong>{channel.label}</strong>
                 <small>{channel.detail || channel.key}</small>
@@ -692,9 +699,17 @@ function BreakdownCard({ snapshot }: { snapshot: AcquisitionSnapshot }) {
         {activeRows.length > 0 ? (
           activeRows.map((row) => (
             <div className="atlas-source-row" key={row.key}>
-              <div>
-                <strong>{row.label}</strong>
-                {row.detail && <small>{row.detail}</small>}
+              <div className="atlas-source-label-wrap">
+                <SourceBrandIcon
+                  channel={row.label}
+                  detail={row.detail}
+                  size={16}
+                  className="atlas-source-icon"
+                />
+                <div>
+                  <strong>{row.label}</strong>
+                  {row.detail && <small>{row.detail}</small>}
+                </div>
               </div>
               <div>
                 <span
@@ -865,16 +880,16 @@ function VisitorJourneys({ snapshot }: { snapshot: AcquisitionSnapshot }) {
                 {visitor.countryCode || "Unknown"}
               </span>
               <span>
-                <BrowserGlyph browser={visitor.browser} />
+                <BrandIcon name={visitor.os} size={14} className="atlas-os-icon" />
+                <BrandIcon name={visitor.browser} size={14} className="atlas-browser-icon" />
                 {visitor.os} / {visitor.browser}
               </span>
               <span className="atlas-visitor-source">
-                <i
-                  style={{
-                    background:
-                      CHANNEL_COLORS[visitor.channel] ??
-                      CHANNEL_COLORS.Referral,
-                  }}
+                <SourceBrandIcon
+                  channel={visitor.channel}
+                  detail={visitor.source}
+                  size={16}
+                  className="atlas-visitor-source-icon"
                 />
                 <span>
                   <strong>{visitor.channel}</strong>
@@ -1522,21 +1537,14 @@ function TrackingSetup({
 }
 
 function ProviderGlyph({ name }: { name: string }) {
-  if (
-    name.toLowerCase().includes("openai") ||
-    name.toLowerCase().includes("chatgpt")
-  ) {
-    return <Sparkles size={16} aria-hidden="true" />;
-  }
-  if (name.toLowerCase().includes("google")) {
-    return <Search size={16} aria-hidden="true" />;
-  }
-  return <Bot size={16} aria-hidden="true" />;
-}
-
-function BrowserGlyph({ browser }: { browser: string }) {
-  const className = `atlas-browser atlas-browser-${browser.toLowerCase()}`;
-  return <i className={className} aria-hidden="true" />;
+  return (
+    <BrandIcon
+      name={name}
+      size={16}
+      className="atlas-provider-icon"
+      fallbackToDefault={true}
+    />
+  );
 }
 
 function CardEmpty({ label }: { label: string }) {
