@@ -2,12 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Activity,
   CheckCircle2,
   ChevronRight,
-  Code2,
   ExternalLink,
-  FlaskConical,
   Gauge,
   HelpCircle,
   LogIn,
@@ -27,8 +24,6 @@ import {
   looksLikeWebDomain,
   preferredWebFaviconUrl,
 } from "@/lib/web-favicon";
-import { AcquisitionAtlas } from "@/components/acquisition-atlas";
-import { AiVisibilityView } from "@/components/ai-visibility-view";
 import { AccountSecurity } from "@/components/account-security";
 import { BrandMark } from "@/components/brand-mark";
 import { ModalDialog } from "@/components/modal-dialog";
@@ -38,18 +33,16 @@ import {
   type AvatarKey,
   ProfileAvatar,
 } from "@/components/profile-avatar";
-import { PulseView } from "@/components/pulse-view";
 import { WebSiteIcon } from "@/components/web-site-icon";
-import {
-  DiagnoseView,
-  LabView,
-} from "@/components/workspace-views";
 import { SourcesView } from "@/components/sources-view";
 import {
-  NoEvidenceView,
   RestrictedWorkspaceView,
   UnavailableWorkspaceView,
 } from "@/components/workspace-state";
+import {
+  GrowthCiWorkspace,
+  type GrowthCiSnapshot,
+} from "@/components/growth-ci/growth-ci-workspace";
 import type {
   DashboardSnapshot,
   Insight,
@@ -69,6 +62,7 @@ import {
   trackProductEvent,
 } from "@/lib/product-events";
 import "@/app/decision-lab.css";
+import "@/components/growth-ci/growth-ci.css";
 import {
   type WorkspaceSection,
   workspaceInsightFromValue,
@@ -80,21 +74,9 @@ const NAV_ITEMS: {
   label: string;
   icon: typeof Gauge;
 }[] = [
-  { id: "pulse", label: "Pulse", icon: Gauge },
-  { id: "diagnose", label: "Diagnose", icon: Activity },
-  { id: "ai-visibility", label: "AI Visibility", icon: Sparkles },
-  { id: "lab", label: "Lab", icon: FlaskConical },
-  { id: "sources", label: "Sources", icon: PlugZap },
+  { id: "growth", label: "Growth CI", icon: Gauge },
+  { id: "sources", label: "Settings", icon: PlugZap },
 ];
-
-/**
- * Both Pulse projections report on the same workspace, so the Atlas opens on
- * the window the Growth River filter row already shows.
- */
-function analyticsWindowDays(period: string): 7 | 30 | 90 {
-  const days = Number(period.match(/\d+/)?.[0]);
-  return days === 7 || days === 90 ? days : 30;
-}
 
 /**
  * Local edits layered over a server-rendered value.
@@ -276,16 +258,13 @@ export function AppClimbShell({
       method: "pushState" | "replaceState" = "pushState",
     ) => {
       const url = new URL(window.location.href);
-      if (section === "pulse") {
+      if (section === "growth" || section === "pulse") {
         url.searchParams.delete("view");
       } else {
         url.searchParams.set("view", section);
       }
-      if ((section === "diagnose" || section === "lab") && insightId) {
-        url.searchParams.set("insight", insightId);
-      } else {
-        url.searchParams.delete("insight");
-      }
+      url.searchParams.delete("insight");
+      url.searchParams.delete("atlas");
       window.history[method](null, "", `${url.pathname}${url.search}${url.hash}`);
     },
     [],
@@ -689,10 +668,9 @@ export function AppClimbShell({
             className="sidebar-brand-home"
             type="button"
             onClick={() => {
-              setPulseProjection("growth");
-              navigateTo("pulse");
+              navigateTo("growth");
             }}
-            aria-label="Open AppClimb Pulse"
+            aria-label="Open AppClimb Growth CI"
           >
             <BrandMark />
           </button>
@@ -963,118 +941,19 @@ export function AppClimbShell({
         </header>
 
         <main className="workspace-content">
-          {activeSection === "pulse" &&
-            initialSnapshot.mode !== "unavailable" &&
-            initialSnapshot.mode !== "restricted" && (
-              <div
-                className="pulse-projection-switch"
-                role="tablist"
-                aria-label="Pulse projection"
-              >
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={pulseProjection === "growth"}
-                  className={pulseProjection === "growth" ? "active" : ""}
-                  onClick={() => selectPulseProjection("growth")}
-                >
-                  <Gauge size={14} /> Growth River
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={pulseProjection === "acquisition"}
-                  className={
-                    pulseProjection === "acquisition" ? "active" : ""
-                  }
-                  onClick={() => selectPulseProjection("acquisition")}
-                >
-                  <Code2 size={14} /> Acquisition Atlas
-                </button>
-              </div>
-            )}
           {initialSnapshot.mode === "unavailable" ? (
             <UnavailableWorkspaceView onRetry={retryWorkspace} />
           ) : initialSnapshot.mode === "restricted" &&
-            activeSection !== "sources" &&
-            activeSection !== "ai-visibility" ? (
+            activeSection !== "sources" ? (
             <RestrictedWorkspaceView
               onOpenBilling={() => setBillingOpen(true)}
               onOpenSources={() => navigateTo("sources")}
             />
-          ) : activeSection === "pulse" &&
-            pulseProjection === "acquisition" ? (
-            <AcquisitionAtlas
-              authenticated={Boolean(session)}
-              demo={initialSnapshot.mode === "demo"}
-              defaultWindowDays={analyticsWindowDays(
-                initialSnapshot.app.period,
-              )}
+          ) : activeSection === "growth" || activeSection === "pulse" ? (
+            <GrowthCiHome
               appId={snapshot.app.id}
-            />
-          ) : activeSection === "pulse" ? (
-            <PulseView
-              snapshot={snapshot}
-              selectedInsightId={selectedInsightId}
-              onSelectInsight={selectInsight}
-              onOpenInsight={openInsight}
-              replayIndex={replayIndex}
-              onReplayIndexChange={setReplayIndex}
-              sources={sourceConnections}
-              onOpenSources={() => navigateTo("sources")}
-            />
-          ) : activeSection === "diagnose" &&
-            snapshot.insights.length === 0 ? (
-            <NoEvidenceView
-              section="Diagnose"
-              hasObservedMetrics={snapshot.mode === "live"}
-              onOpenSources={() => navigateTo("sources")}
-            />
-          ) : activeSection === "diagnose" ? (
-            <DiagnoseView
-              snapshot={snapshot}
-              selectedInsight={selectedInsight}
-              onSelectInsight={selectInsight}
-              onCreateExperiment={() => {
-                void createDraftFromInsight(selectedInsight);
-              }}
-              experiments={experiments}
-              savingExperiment={experimentBusy}
-              onSendFeedback={(action, reason) => {
-                void submitInsightFeedback(action, reason);
-              }}
-              onActionPlanOpened={(insightId) =>
-                trackProductEvent("action_plan_opened", { insightId })
-              }
-              feedbackState={feedbackState}
-              feedbackError={feedbackError}
-            />
-          ) : activeSection === "ai-visibility" ? (
-            <AiVisibilityView
-              snapshot={snapshot}
-              authenticated={Boolean(session)}
-              onChoosePlan={() => setBillingOpen(true)}
-            />
-          ) : activeSection === "lab" &&
-            snapshot.insights.length === 0 ? (
-            <NoEvidenceView
-              section="Lab"
-              hasObservedMetrics={snapshot.mode === "live"}
-              onOpenSources={() => navigateTo("sources")}
-            />
-          ) : activeSection === "lab" ? (
-            <LabView
-              selectedInsight={selectedInsight}
-              experiments={experiments}
-              latestCreatedExperimentId={latestCreatedExperimentId}
-              onCreateDraft={() => {
-                void createDraftFromInsight(selectedInsight);
-              }}
-              persistence={experimentsPersist ? "saved" : "session"}
-              busy={experimentBusy}
-              errorMessage={experimentError}
-              onUpdateExperiment={updateExperiment}
-              onDeleteExperiment={removeExperiment}
+              demo={initialSnapshot.mode === "demo"}
+              onOpenSettings={() => navigateTo("sources")}
             />
           ) : activeSection === "sources" ? (
             <SourcesView
@@ -1088,12 +967,11 @@ export function AppClimbShell({
               }}
               onRefreshSnapshot={refreshSnapshot}
               onOpenGrowthRiver={() => {
-                setPulseProjection("growth");
-                navigateTo("pulse");
+                navigateTo("growth");
                 void refreshSnapshot();
               }}
               onOpenAcquisitionAtlas={() => {
-                openAcquisitionAtlas();
+                navigateTo("growth");
               }}
             />
           ) : null}
@@ -1466,6 +1344,115 @@ function AppInfoModal({
         </div>
       </div>
     </ModalDialog>
+  );
+}
+
+function GrowthCiHome(props: {
+  appId: string;
+  demo: boolean;
+  onOpenSettings: () => void;
+}) {
+  const [snapshot, setSnapshot] = useState<GrowthCiSnapshot | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    if (props.demo || !props.appId) {
+      setSnapshot(null);
+      setError(null);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/growth-ci?appId=${encodeURIComponent(props.appId)}`,
+        { cache: "no-store" },
+      );
+      const payload = (await response.json()) as {
+        data?: GrowthCiSnapshot;
+        error?: string;
+      };
+      if (!response.ok) {
+        setError(payload.error ?? `growth_ci_${response.status}`);
+        setSnapshot(null);
+        return;
+      }
+      setSnapshot(payload.data ?? null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "growth_ci_unavailable");
+    } finally {
+      setLoading(false);
+    }
+  }, [props.appId, props.demo]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  if (props.demo) {
+    return (
+      <div className="growth-ci-workspace">
+        <section className="growth-ci-verdict growth-ci-verdict--bad">
+          <div>
+            <h2>Activation regressed after 2.4.1</h2>
+            <p>42% → 31% · 214 vs 196 users · high confidence (synthetic demo)</p>
+            <p className="growth-ci-subtle">
+              Sign in and connect RevenueCat + PostHog to evaluate your real
+              releases. Demo data is labeled and never used in private workspaces.
+            </p>
+          </div>
+        </section>
+        <section className="growth-ci-grid">
+          <article className="growth-ci-card">
+            <h3>Growth Task</h3>
+            <p className="growth-ci-task-title">
+              Restore first-value activation without harming trial starts
+            </p>
+            <p className="growth-ci-subtle">
+              Status: available · agent-ready packet for Hermes / Codex / Grok /
+              Claude
+            </p>
+          </article>
+          <article className="growth-ci-card">
+            <h3>Verification</h3>
+            <p className="growth-ci-subtle">
+              After 2.4.2 ships, AppClimb compares the fix cohort to the broken
+              release and closes only from production evidence.
+            </p>
+          </article>
+        </section>
+      </div>
+    );
+  }
+
+  return (
+    <GrowthCiWorkspace
+      snapshot={snapshot}
+      loading={loading}
+      error={error}
+      onRefresh={() => void refresh()}
+      onOpenSettings={props.onOpenSettings}
+      onCopyTask={() => {
+        if (!snapshot?.task?.packet) return;
+        void navigator.clipboard.writeText(
+          JSON.stringify(snapshot.task.packet, null, 2),
+        );
+      }}
+      onDismissIncident={(incidentId) => {
+        void (async () => {
+          await fetch(`/api/growth-ci/incidents/${incidentId}/dismiss`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              appId: props.appId,
+              reason: "dismissed_from_ui",
+            }),
+          });
+          await refresh();
+        })();
+      }}
+    />
   );
 }
 

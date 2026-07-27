@@ -81,8 +81,11 @@ describe("normalizeProductEvents", () => {
     expect(Number.isFinite(Date.parse(event.occurredAt))).toBe(true);
   });
 
-  it("covers all 21 documented events", () => {
-    expect(PRODUCT_EVENT_NAMES).toHaveLength(21);
+  it("covers the Growth CI product event allow-list", () => {
+    expect(PRODUCT_EVENT_NAMES.length).toBeGreaterThanOrEqual(21);
+    expect(PRODUCT_EVENT_NAMES).toContain("release_verdict_completed");
+    expect(PRODUCT_EVENT_NAMES).toContain("agent_task_claimed");
+    expect(PRODUCT_EVENT_NAMES).toContain("verification_completed");
   });
 });
 

@@ -1,0 +1,197 @@
+.growth-ci-workspace {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 3rem;
+}
+
+.growth-ci-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.growth-ci-app {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.growth-ci-app h1 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 650;
+}
+
+.growth-ci-app-icon {
+  border-radius: 10px;
+  object-fit: cover;
+  background: color-mix(in oklab, CanvasText 8%, Canvas);
+}
+
+.growth-ci-app-icon--empty {
+  width: 40px;
+  height: 40px;
+}
+
+.growth-ci-header-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.growth-ci-icon-btn,
+.growth-ci-btn {
+  border: 1px solid color-mix(in oklab, CanvasText 14%, Canvas);
+  background: Canvas;
+  color: CanvasText;
+  border-radius: 10px;
+  padding: 0.45rem 0.7rem;
+  cursor: pointer;
+  font: inherit;
+}
+
+.growth-ci-btn--ghost {
+  background: transparent;
+}
+
+.growth-ci-subtle {
+  color: color-mix(in oklab, CanvasText 62%, Canvas);
+  margin: 0.25rem 0 0;
+  font-size: 0.92rem;
+}
+
+.growth-ci-verdict {
+  display: flex;
+  gap: 0.9rem;
+  padding: 1.1rem 1.2rem;
+  border-radius: 16px;
+  border: 1px solid color-mix(in oklab, CanvasText 12%, Canvas);
+  background: color-mix(in oklab, CanvasText 3%, Canvas);
+}
+
+.growth-ci-verdict h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+}
+
+.growth-ci-verdict--bad {
+  border-color: color-mix(in oklab, tomato 45%, Canvas);
+  background: color-mix(in oklab, tomato 10%, Canvas);
+}
+
+.growth-ci-verdict--good {
+  border-color: color-mix(in oklab, seagreen 40%, Canvas);
+  background: color-mix(in oklab, seagreen 8%, Canvas);
+}
+
+.growth-ci-verdict--ok {
+  border-color: color-mix(in oklab, royalblue 30%, Canvas);
+}
+
+.growth-ci-verdict--wait {
+  border-color: color-mix(in oklab, goldenrod 40%, Canvas);
+  background: color-mix(in oklab, goldenrod 8%, Canvas);
+}
+
+.growth-ci-verdict--config {
+  border-color: color-mix(in oklab, darkorange 40%, Canvas);
+}
+
+.growth-ci-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+}
+
+.growth-ci-card {
+  border: 1px solid color-mix(in oklab, CanvasText 12%, Canvas);
+  border-radius: 14px;
+  padding: 1rem;
+  background: Canvas;
+}
+
+.growth-ci-card h3 {
+  margin: 0 0 0.75rem;
+  font-size: 0.95rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.growth-ci-dl {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem 0.75rem;
+  margin: 0;
+}
+
+.growth-ci-dl dt {
+  font-size: 0.78rem;
+  color: color-mix(in oklab, CanvasText 55%, Canvas);
+}
+
+.growth-ci-dl dd {
+  margin: 0.1rem 0 0;
+  font-weight: 600;
+}
+
+.growth-ci-limitations {
+  margin: 0.75rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.88rem;
+  color: color-mix(in oklab, CanvasText 70%, Canvas);
+}
+
+.growth-ci-task-title {
+  font-weight: 600;
+  margin: 0 0 0.4rem;
+}
+
+.growth-ci-hypothesis {
+  font-size: 0.9rem;
+  margin: 0.6rem 0;
+}
+
+.growth-ci-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0.75rem 0;
+}
+
+.growth-ci-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.growth-ci-table th,
+.growth-ci-table td {
+  text-align: left;
+  padding: 0.45rem 0.35rem;
+  border-bottom: 1px solid color-mix(in oklab, CanvasText 10%, Canvas);
+}
+
+.growth-ci-sources-row ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.growth-ci-banner {
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+}
+
+.growth-ci-banner--error {
+  background: color-mix(in oklab, tomato 12%, Canvas);
+  border: 1px solid color-mix(in oklab, tomato 35%, Canvas);
+}
+
+@media (max-width: 640px) {
+  .growth-ci-dl {
+    grid-template-columns: 1fr;
+  }
+}

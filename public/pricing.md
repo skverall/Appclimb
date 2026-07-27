@@ -1,21 +1,21 @@
 # AppClimb Pricing
 
-Last updated: 2026-07-25
+Last updated: 2026-07-28
 
-## Trial
+## Free
 
 - Price: USD 0
-- Duration: 14 days
 - Card required: No
-- Includes: interactive River Atlas demo, account controls, available source setup, and early-access product surfaces
+- Includes: one iOS app, RevenueCat + PostHog connection, first complete release verdict, one Growth Task export/copy, limited history, bounded manual refresh
 
-## Monthly
+## Pro monthly
 
 - Price: USD 12.99 per month
 - Billing interval: Monthly
 - Billing provider: Paddle
+- Includes: automatic six-hour monitoring, ongoing release verdicts, Agent Bridge, verification loop, 90-day history, digests
 
-## Yearly
+## Pro yearly
 
 - Price: USD 129 per year
 - Monthly equivalent: USD 10.75
@@ -24,12 +24,12 @@ Last updated: 2026-07-25
 
 ## Current product status
 
-- Available now: clearly labeled interactive demo, authentication, trial, billing, account controls, secure source setup foundation, and production first-party Acquisition Atlas collection for AppClimb's own website
-- Production-verified Acquisition Atlas scope: web referrers, UTM campaigns, landing pages, account/checkout/paid-activation goals, and separately counted crawler requests for the appclimb.app property
-- In development: complete live imports, real end-to-end growth diagnosis, and Growth Replay based on customer data
+- Product promise: Growth CI for AI-built iOS subscription apps
+- Available foundation: authentication, Paddle billing, encrypted RevenueCat/PostHog connections, Cloudflare Workers/D1/Queues
+- In development on `feat/growth-ci`: release evaluation, one incident/task loop, Agent Bridge, single-screen UI
+- Production verification of the full Growth CI loop is not claimed until a real app completes it
 
-AppClimb is in early access. Most visible demo metrics are synthetic sample data and are labeled as such. A crawler detected by user agent is not described as IP-verified.
+Existing active Paddle subscriptions remain entitled. New users get the first release verdict free rather than a pure calendar trial.
 
 Human-readable pricing: https://appclimb.app/pricing
-Product overview: https://appclimb.app/ios-subscription-analytics
 Contact: aydmaxx@gmail.com
