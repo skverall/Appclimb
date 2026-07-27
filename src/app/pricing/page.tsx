@@ -8,37 +8,39 @@ import { absoluteUrl } from "@/lib/site";
 export const metadata = {
   title: "Pricing",
   description:
-    "Start AppClimb early access free for 14 days, with demo and live-data status clearly labeled.",
+    "Growth CI for iOS subscription apps. First complete release verdict free, then $12.99/month or $129/year for ongoing monitoring and Agent Bridge.",
   alternates: { canonical: "/pricing" },
   openGraph: {
     title: "AppClimb Pricing",
     description:
-      "14-day no-card early access, then $12.99 monthly or $129 yearly.",
+      "First release verdict free. Pro is $12.99 monthly or $129 yearly for automatic Growth CI and Agent Bridge.",
     url: "/pricing",
   },
 };
 
 const accessDetails = [
   {
-    status: "Available now",
-    detail: "interactive River Atlas demo with clearly labeled synthetic data",
-    inDevelopment: false,
-  },
-  {
-    status: "Available now",
-    detail: "account, 14-day trial, pricing and secure source setup",
-    inDevelopment: false,
-  },
-  {
-    status: "Foundation available",
+    status: "Free",
     detail:
-      "read-only setup for App Store Connect, RevenueCat, PostHog and Superwall",
+      "one iOS app, RevenueCat + PostHog, first complete release verdict, one Growth Task export",
     inDevelopment: false,
   },
   {
-    status: "In development",
-    detail: "complete live imports, real diagnosis and Growth Replay",
-    inDevelopment: true,
+    status: "Pro",
+    detail:
+      "automatic six-hour monitoring, ongoing verdicts, Agent Bridge, verification loop, 90-day history",
+    inDevelopment: false,
+  },
+  {
+    status: "Core sources",
+    detail: "RevenueCat (money) and PostHog (behavior) only for measurement activation",
+    inDevelopment: false,
+  },
+  {
+    status: "Honest limits",
+    detail:
+      "low-volume apps get collecting / inconclusive — never fabricated advice",
+    inDevelopment: false,
   },
 ];
 
@@ -48,96 +50,121 @@ export default function PricingPage() {
       <JsonLd
         data={{
           "@context": "https://schema.org",
-          "@type": "WebApplication",
-          name: "AppClimb",
-          url: absoluteUrl("/pricing"),
-          applicationCategory: "BusinessApplication",
-          operatingSystem: "Any modern web browser",
+          "@type": "Product",
+          name: "AppClimb Growth CI",
+          description:
+            "Growth CI for AI-built iOS subscription apps. Connect RevenueCat and PostHog, evaluate releases, and verify agent fixes with production data.",
+          brand: { "@type": "Brand", name: "AppClimb" },
           offers: [
             {
               "@type": "Offer",
-              name: "AppClimb Monthly",
-              price: "12.99",
+              name: "Free first verdict",
+              price: "0",
               priceCurrency: "USD",
-              availability: "https://schema.org/InStock",
+              url: absoluteUrl("/pricing"),
             },
             {
               "@type": "Offer",
-              name: "AppClimb Yearly",
+              name: "Pro monthly",
+              price: "12.99",
+              priceCurrency: "USD",
+              url: absoluteUrl("/pricing"),
+            },
+            {
+              "@type": "Offer",
+              name: "Pro yearly",
               price: "129",
               priceCurrency: "USD",
-              availability: "https://schema.org/InStock",
+              url: absoluteUrl("/pricing"),
             },
           ],
         }}
       />
-      <main className="pricing-page">
-        <nav className="pricing-nav" aria-label="Pricing navigation">
-          <Link href="/" aria-label="Back to AppClimb">
+      <main className="marketing-page pricing-page">
+        <header className="marketing-top">
+          <Link href="/" className="marketing-brand">
             <BrandMark />
           </Link>
-          <Link href="/" className="pricing-back">
-            <ArrowLeft size={16} aria-hidden="true" /> Explore the interactive
-            demo
+          <Link href="/" className="marketing-back">
+            <ArrowLeft size={16} /> Back
           </Link>
-        </nav>
+        </header>
 
         <section className="pricing-hero">
-          <span className="eyebrow">Stage 0 early access</span>
-          <h1>Try the River Atlas concept with product status made clear.</h1>
+          <p className="eyebrow">Pricing</p>
+          <h1>Growth CI for AI-built iOS subscription apps.</h1>
           <p>
-            The 14-day trial includes the labeled interactive demo and available
-            account and source setup. Complete live funnel coverage is still in
-            development.
+            Your agents ship. AppClimb proves whether the release helped. First
+            complete release verdict free — then Pro for continuous monitoring
+            and Agent Bridge.
           </p>
         </section>
 
-        <section className="pricing-card" aria-labelledby="pricing-title">
-          <div>
-            <span className="eyebrow">AppClimb early access</span>
-            <h2 id="pricing-title">One plan for the River Atlas foundation.</h2>
+        <section className="pricing-grid" aria-labelledby="pricing-title">
+          <div className="pricing-card">
+            <h2 id="pricing-title">Free</h2>
+            <p className="price">
+              $0 <span>first verdict</span>
+            </p>
             <ul>
-              {accessDetails.map(({ status, detail, inDevelopment }) => {
-                const StatusIcon = inDevelopment ? Clock3 : Check;
-
-                return (
-                  <li key={status + detail}>
-                    <StatusIcon size={16} aria-hidden="true" />
-                    <span>
-                      <strong>{status}:</strong> {detail}
-                    </span>
-                  </li>
-                );
-              })}
+              <li>
+                <Check size={16} /> One iOS app
+              </li>
+              <li>
+                <Check size={16} /> RevenueCat + PostHog
+              </li>
+              <li>
+                <Check size={16} /> First complete release verdict
+              </li>
+              <li>
+                <Check size={16} /> One Growth Task export/copy
+              </li>
             </ul>
           </div>
-          <div className="pricing-options">
-            <article>
-              <span>Monthly</span>
-              <strong>$12.99</strong>
-              <small>per month</small>
-            </article>
-            <article className="recommended">
-              <span>Yearly · save 17%</span>
-              <strong>$129</strong>
-              <small>per year</small>
-            </article>
-            <Link href="/login" className="pricing-cta">
-              Start 14-day early access
-            </Link>
-            <p>
-              <ShieldCheck size={15} aria-hidden="true" />
-              Billing and taxes are handled securely by Paddle.
+          <div className="pricing-card pricing-card-featured">
+            <h2>Pro</h2>
+            <p className="price">
+              $12.99 <span>/ month</span>
             </p>
+            <p className="price-alt">or $129 / year</p>
+            <ul>
+              <li>
+                <Check size={16} /> Automatic six-hour monitoring
+              </li>
+              <li>
+                <Check size={16} /> Ongoing release verdicts
+              </li>
+              <li>
+                <Check size={16} /> Agent Bridge + skill/cron
+              </li>
+              <li>
+                <Check size={16} /> Verification loop + 90-day history
+              </li>
+            </ul>
+            <Link href="/login" className="primary-action">
+              Start with free verdict
+            </Link>
           </div>
         </section>
 
-        <footer className="pricing-footer">
-          <Link href="/privacy">Privacy</Link>
-          <Link href="/terms">Terms</Link>
-          <Link href="/refunds">Refunds</Link>
-          <Link href="/pricing.md">Machine-readable pricing</Link>
-        </footer>
+        <section className="pricing-status" aria-labelledby="status-title">
+          <h2 id="status-title">What you get</h2>
+          <ul>
+            {accessDetails.map((item) => (
+              <li key={item.detail}>
+                <span className="status-pill">
+                  {item.inDevelopment ? (
+                    <Clock3 size={14} />
+                  ) : (
+                    <ShieldCheck size={14} />
+                  )}
+                  {item.status}
+                </span>
+                <span>{item.detail}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
       </main>
     </>
   );

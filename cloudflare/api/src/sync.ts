@@ -364,18 +364,55 @@ export async function processSyncMessage(
       try {
         const { isGrowthCiEnabled } = await import("./growth-ci/flags");
         if (isGrowthCiEnabled(env)) {
-          const { discoverReleasesFromCohorts } = await import(
-            "./growth-ci/releases"
+          const { ensureGrowthContract } = await import(
+            "./growth-ci/contracts"
           );
-          const discovered = await discoverReleasesFromCohorts(
-            env,
+          const { assessGrowthCiAccess } = await import(
+            "./growth-ci/entitlement"
+          );
+          const contract = await ensureGrowthContract(
+            env.DB,
             job.workspace_id,
             job.app_id,
           );
-          log("info", "release_discovery_after_sync", {
-            jobId: job.id,
-            discovered,
-          });
+          const workspaceRow = await env.DB.prepare(
+            `SELECT subscription_status, trial_ends_at, entitlement_ends_at
+             FROM workspaces WHERE id=? LIMIT 1`,
+          )
+            .bind(job.workspace_id)
+            .first<{
+              subscription_status: string;
+              trial_ends_at: string;
+              entitlement_ends_at: string | null;
+            }>();
+          const access = assessGrowthCiAccess(
+            {
+              subscriptionStatus: workspaceRow?.subscription_status ?? "none",
+              trialEndsAt:
+                workspaceRow?.trial_ends_at ?? "1970-01-01T00:00:00.000Z",
+              entitlementEndsAt: workspaceRow?.entitlement_ends_at ?? undefined,
+            },
+            contract.free_verdict_consumed_at,
+          );
+          if (access.canRunReleaseChecks) {
+            const { discoverReleasesFromCohorts } = await import(
+              "./growth-ci/releases"
+            );
+            const discovered = await discoverReleasesFromCohorts(
+              env,
+              job.workspace_id,
+              job.app_id,
+            );
+            log("info", "release_discovery_after_sync", {
+              jobId: job.id,
+              discovered,
+            });
+          } else {
+            log("info", "release_discovery_skipped_quota", {
+              jobId: job.id,
+              reason: access.reason,
+            });
+          }
         }
       } catch (error) {
         log("warn", "release_discovery_failed", {

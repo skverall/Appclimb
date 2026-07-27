@@ -190,6 +190,78 @@
   border: 1px solid color-mix(in oklab, tomato 35%, Canvas);
 }
 
+.growth-ci-banner--ok {
+  background: color-mix(in oklab, seagreen 10%, Canvas);
+  border: 1px solid color-mix(in oklab, seagreen 30%, Canvas);
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+}
+
+.growth-ci-readiness-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.growth-ci-readiness-list li {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.25rem 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 12px;
+  border: 1px solid color-mix(in oklab, CanvasText 10%, Canvas);
+}
+
+.growth-ci-readiness-list li[data-status="ready"] {
+  border-color: color-mix(in oklab, seagreen 35%, Canvas);
+}
+
+.growth-ci-readiness-list li[data-status="blocked"],
+.growth-ci-readiness-list li[data-status="missing"] {
+  border-color: color-mix(in oklab, darkorange 40%, Canvas);
+}
+
+.growth-ci-readiness-list p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.growth-ci-pill {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.75;
+}
+
+.growth-ci-token-list {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.growth-ci-token-list li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid color-mix(in oklab, CanvasText 8%, Canvas);
+}
+
+.growth-ci-settings input {
+  border: 1px solid color-mix(in oklab, CanvasText 14%, Canvas);
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+  font: inherit;
+  width: 100%;
+  background: Canvas;
+  color: CanvasText;
+}
+
 .growth-ci-add-label {
   display: grid;
   gap: 0.4rem;

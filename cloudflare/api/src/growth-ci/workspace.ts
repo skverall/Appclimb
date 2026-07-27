@@ -2,6 +2,8 @@ import { ensureGrowthContract, thresholdsFromRow } from "./contracts";
 import { exportGrowthContractYaml } from "../release-impact/task-packet";
 import { listAppReleases, getLatestReleaseCheck } from "./releases";
 import type { AgentTaskRow, GrowthIncidentRow } from "./types";
+import { computeMeasurementReadiness } from "./readiness";
+import { assessGrowthCiAccess } from "./entitlement";
 
 function parseJson<T>(value: string | null | undefined, fallback: T): T {
   if (!value) return fallback;
@@ -52,7 +54,8 @@ export async function growthCiWorkspaceSnapshot(
       `SELECT status,mode,confidence,session_event,activation_event,
               version_property,build_property,version_property_status,
               version_property_confirmed_at,first_observed_version,
-              last_observed_version,activation_window_days,confirmed_at
+              last_observed_version,activation_window_days,confirmed_at,
+              version_candidates
        FROM posthog_mappings
        WHERE workspace_id=? AND (app_id=? OR app_id IS NULL)
        ORDER BY CASE WHEN app_id=? THEN 0 ELSE 1 END
@@ -123,18 +126,74 @@ export async function growthCiWorkspaceSnapshot(
       .first<AgentTaskRow>();
   }
 
+  const sessionEvent =
+    (mapping?.session_event as string) || contractRow.session_event || "";
+  const activationEvent =
+    (mapping?.activation_event as string) || contractRow.activation_event || "";
+  const versionProperty =
+    (mapping?.version_property as string) || contractRow.version_property || "";
+  const versionPropertyStatus =
+    (mapping?.version_property_status as string) ||
+    contractRow.version_property_status ||
+    "unconfirmed";
+
   const yaml = exportGrowthContractYaml({
     appId: app.id,
-    sessionEvent:
-      (mapping?.session_event as string) || contractRow.session_event,
-    activationEvent:
-      (mapping?.activation_event as string) || contractRow.activation_event,
-    versionProperty:
-      (mapping?.version_property as string) || contractRow.version_property,
+    sessionEvent,
+    activationEvent,
+    versionProperty,
     buildProperty:
       (mapping?.build_property as string) || contractRow.build_property,
     contract: thresholds,
   });
+
+  const sourceList = sources.results ?? [];
+  const revenueCat = sourceList.find((s) => s.provider === "revenuecat");
+  const posthog = sourceList.find((s) => s.provider === "posthog");
+  const readiness = computeMeasurementReadiness({
+    revenueCatConnected: Boolean(revenueCat),
+    revenueCatHasData: Boolean(
+      revenueCat &&
+        (revenueCat.first_data_at || revenueCat.last_synced_at),
+    ),
+    posthogConnected: Boolean(posthog),
+    mappingStatus: (mapping?.status as string) ?? null,
+    sessionEvent,
+    activationEvent,
+    versionProperty,
+    versionPropertyStatus,
+  });
+
+  const workspaceRow = await db
+    .prepare(
+      `SELECT subscription_status, trial_ends_at, entitlement_ends_at
+       FROM workspaces WHERE id=? LIMIT 1`,
+    )
+    .bind(workspaceId)
+    .first<{
+      subscription_status: string;
+      trial_ends_at: string;
+      entitlement_ends_at: string | null;
+    }>();
+  const access = assessGrowthCiAccess(
+    {
+      subscriptionStatus: workspaceRow?.subscription_status ?? "none",
+      trialEndsAt:
+        workspaceRow?.trial_ends_at ?? "1970-01-01T00:00:00.000Z",
+      entitlementEndsAt: workspaceRow?.entitlement_ends_at ?? undefined,
+    },
+    contractRow.free_verdict_consumed_at,
+  );
+
+  let versionCandidates: unknown[] = [];
+  try {
+    const raw = mapping?.version_candidates;
+    if (typeof raw === "string" && raw) {
+      versionCandidates = JSON.parse(raw) as unknown[];
+    }
+  } catch {
+    versionCandidates = [];
+  }
 
   return {
     product: "growth_ci" as const,
@@ -146,7 +205,7 @@ export async function growthCiWorkspaceSnapshot(
       storefront: app.default_storefront,
       platform: "ios" as const,
     },
-    sources: (sources.results ?? []).map((s) => ({
+    sources: sourceList.map((s) => ({
       id: s.id,
       provider: s.provider,
       status: s.status,
@@ -169,8 +228,26 @@ export async function growthCiWorkspaceSnapshot(
           lastObservedVersion: mapping.last_observed_version,
           activationWindowDays: mapping.activation_window_days,
           confirmedAt: mapping.confirmed_at,
+          versionCandidates,
         }
-      : null,
+      : {
+          status: "not_connected",
+          mode: "automatic",
+          confidence: 0,
+          sessionEvent: contractRow.session_event,
+          activationEvent: contractRow.activation_event,
+          versionProperty: contractRow.version_property,
+          buildProperty: contractRow.build_property,
+          versionPropertyStatus: contractRow.version_property_status,
+          versionPropertyConfirmedAt: contractRow.version_property_confirmed_at,
+          firstObservedVersion: contractRow.first_observed_version,
+          lastObservedVersion: contractRow.last_observed_version,
+          activationWindowDays: contractRow.activation_window_days,
+          confirmedAt: null,
+          versionCandidates: [],
+        },
+    readiness,
+    access,
     contract: {
       version: contractRow.contract_version,
       thresholds,

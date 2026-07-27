@@ -26,15 +26,40 @@ export interface GrowthCiSnapshot {
   }>;
   mapping: {
     status: string;
+    mode?: string;
+    confidence?: number;
     sessionEvent: string;
     activationEvent: string;
     versionProperty: string;
+    buildProperty?: string;
     versionPropertyStatus: string;
+    versionPropertyConfirmedAt?: string | null;
+    activationWindowDays?: number;
+    confirmedAt?: string | null;
+    versionCandidates?: unknown[];
   } | null;
+  readiness?: {
+    money: { status: string; label: string; detail: string };
+    activation: { status: string; label: string; detail: string };
+    version: { status: string; label: string; detail: string };
+    overall: string;
+    nextAction: string;
+  };
+  access?: {
+    freeVerdictRemaining: boolean;
+    canRunReleaseChecks: boolean;
+    canUseAgentBridge: boolean;
+    reason: string;
+  };
   contract: {
     version: string;
     freeVerdictConsumedAt: string | null;
     yaml: string;
+    thresholds?: {
+      minimumNewUsers: number;
+      activationWindowDays: number;
+      maximumCollectionDays: number;
+    };
   };
   latestRelease: {
     id: string;
@@ -190,6 +215,47 @@ export function GrowthCiWorkspace(props: {
 
       {snapshot ? (
         <>
+          {snapshot.readiness && snapshot.readiness.overall !== "ready" ? (
+            <section className="growth-ci-card">
+              <h3>Setup checklist</h3>
+              <ul className="growth-ci-readiness-list">
+                {[
+                  snapshot.readiness.money,
+                  snapshot.readiness.activation,
+                  snapshot.readiness.version,
+                ].map((item) => (
+                  <li key={item.label} data-status={item.status}>
+                    <strong>{item.label}</strong>
+                    <span className="growth-ci-pill">{item.status}</span>
+                    <p className="growth-ci-subtle">{item.detail}</p>
+                  </li>
+                ))}
+              </ul>
+              <p>
+                <strong>Next:</strong> {snapshot.readiness.nextAction}{" "}
+                <button
+                  type="button"
+                  className="growth-ci-btn growth-ci-btn--ghost"
+                  onClick={props.onOpenSettings}
+                >
+                  Open Settings
+                </button>
+              </p>
+            </section>
+          ) : null}
+
+          {snapshot.access?.reason === "free_exhausted" ? (
+            <div className="growth-ci-banner growth-ci-banner--error">
+              Free first verdict used. Upgrade to Pro for ongoing release
+              monitoring and Agent Bridge.
+            </div>
+          ) : snapshot.access?.reason === "free_first_verdict" ? (
+            <div className="growth-ci-banner growth-ci-banner--ok">
+              Free plan: your first complete release verdict is free. Agent
+              Bridge requires Pro.
+            </div>
+          ) : null}
+
           <section
             className={`growth-ci-verdict ${verdictTone(release?.verdict)}`}
             aria-labelledby="growth-ci-verdict-title"

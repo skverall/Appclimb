@@ -41,6 +41,7 @@ import {
   UnavailableWorkspaceView,
 } from "@/components/workspace-state";
 import { AddIosAppDialog } from "@/components/growth-ci/add-ios-app-dialog";
+import { GrowthCiSettings } from "@/components/growth-ci/growth-ci-settings";
 import {
   GrowthCiWorkspace,
   type GrowthCiSnapshot,
@@ -146,6 +147,10 @@ export function AppClimbShell({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [appModalOpen, setAppModalOpen] = useState(false);
   const [addAppOpen, setAddAppOpen] = useState(false);
+  const [legacySourcesOpen, setLegacySourcesOpen] = useState(false);
+  const [growthSnapshot, setGrowthSnapshot] = useState<GrowthCiSnapshot | null>(
+    null,
+  );
   const [customAppName, setCustomAppName] = useState(initialSnapshot.app.name);
   const [helpOpen, setHelpOpen] = useState(false);
   const [billingOpen, setBillingOpen] = useState(false);
@@ -788,14 +793,14 @@ export function AppClimbShell({
                     : sessionUnavailable
                       ? "Private workspace"
                     : subscriptionStatus === "trialing" && trialDays > 0
-                      ? "Free trial"
+                      ? "Trial"
                       : workspaceEntitled
                         ? "Access active"
-                      : "Demo workspace"}
+                      : "Free first verdict"}
               </span>
               <strong>
                 {activeSubscription
-                  ? "Plan active"
+                  ? "Pro active"
                   : billingAttention
                     ? "Workspace access limited"
                     : sessionUnavailable
@@ -804,7 +809,7 @@ export function AppClimbShell({
                       ? `${trialDays} days left`
                       : workspaceEntitled
                         ? "Current entitlement"
-                      : "Explore River Atlas"}
+                      : "Growth CI free tier"}
               </strong>
             </div>
             {!activeSubscription && !sessionUnavailable && (
@@ -957,28 +962,68 @@ export function AppClimbShell({
               appName={displayedAppName}
               appIconUrl={activeAppIcon || snapshot.app.iconUrl || null}
               demo={initialSnapshot.mode === "demo"}
-              onOpenSettings={() => navigateTo("sources")}
+              onOpenSettings={() => {
+                setLegacySourcesOpen(false);
+                navigateTo("sources");
+              }}
               onAddApp={() => setAddAppOpen(true)}
+              onSnapshot={setGrowthSnapshot}
             />
           ) : activeSection === "sources" ? (
-            <SourcesView
-              snapshot={snapshot}
-              authenticated={Boolean(session)}
-              entitled={snapshot.mode !== "restricted"}
-              sources={sourceConnections}
-              onSourcesChange={(newSources: SourceConnection[]) => {
-                setSourceConnections(newSources);
-                void refreshSnapshot();
-              }}
-              onRefreshSnapshot={refreshSnapshot}
-              onOpenGrowthRiver={() => {
-                navigateTo("growth");
-                void refreshSnapshot();
-              }}
-              onOpenAcquisitionAtlas={() => {
-                navigateTo("growth");
-              }}
-            />
+            legacySourcesOpen ? (
+              <div>
+                <div style={{ padding: "0.75rem 1rem" }}>
+                  <button
+                    type="button"
+                    className="growth-ci-btn growth-ci-btn--ghost"
+                    onClick={() => setLegacySourcesOpen(false)}
+                  >
+                    ← Back to Growth CI Settings
+                  </button>
+                </div>
+                <SourcesView
+                  snapshot={snapshot}
+                  authenticated={Boolean(session)}
+                  entitled={snapshot.mode !== "restricted"}
+                  sources={sourceConnections}
+                  onSourcesChange={(newSources: SourceConnection[]) => {
+                    setSourceConnections(newSources);
+                    void refreshSnapshot();
+                  }}
+                  onRefreshSnapshot={refreshSnapshot}
+                  onOpenGrowthRiver={() => {
+                    navigateTo("growth");
+                    void refreshSnapshot();
+                  }}
+                  onOpenAcquisitionAtlas={() => {
+                    navigateTo("growth");
+                  }}
+                />
+              </div>
+            ) : (
+              <GrowthCiSettings
+                appId={snapshot.app.id}
+                snapshot={growthSnapshot}
+                onRefresh={() => {
+                  // Force Growth CI home refresh by reloading workspace data
+                  void refreshSnapshot();
+                  if (snapshot.app.id) {
+                    void fetch(
+                      `/api/growth-ci?appId=${encodeURIComponent(snapshot.app.id)}`,
+                      { cache: "no-store" },
+                    )
+                      .then((response) => response.json())
+                      .then((payload: unknown) => {
+                        const data = (payload as { data?: GrowthCiSnapshot })
+                          ?.data;
+                        if (data) setGrowthSnapshot(data);
+                      })
+                      .catch(() => undefined);
+                  }
+                }}
+                onOpenLegacySources={() => setLegacySourcesOpen(true)}
+              />
+            )
           ) : null}
         </main>
       </div>
@@ -1372,6 +1417,7 @@ function GrowthCiHome(props: {
   demo: boolean;
   onOpenSettings: () => void;
   onAddApp: () => void;
+  onSnapshot?: (snapshot: GrowthCiSnapshot | null) => void;
 }) {
   const [snapshot, setSnapshot] = useState<GrowthCiSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1380,6 +1426,7 @@ function GrowthCiHome(props: {
   const refresh = useCallback(async () => {
     if (props.demo || !props.appId) {
       setSnapshot(null);
+      props.onSnapshot?.(null);
       setError(null);
       return;
     }
@@ -1397,7 +1444,7 @@ function GrowthCiHome(props: {
       if (!response.ok) {
         setError(payload.error ?? `growth_ci_${response.status}`);
         // Keep a minimal local snapshot so the app identity remains visible.
-        setSnapshot({
+        const fallback: GrowthCiSnapshot = {
           product: "growth_ci",
           app: {
             id: props.appId,
@@ -1416,16 +1463,19 @@ function GrowthCiHome(props: {
           history: [],
           incident: null,
           task: null,
-        });
+        };
+        setSnapshot(fallback);
+        props.onSnapshot?.(fallback);
         return;
       }
       setSnapshot(payload.data ?? null);
+      props.onSnapshot?.(payload.data ?? null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "growth_ci_unavailable");
     } finally {
       setLoading(false);
     }
-  }, [props.appId, props.appIconUrl, props.appName, props.demo]);
+  }, [props.appId, props.appIconUrl, props.appName, props.demo, props.onSnapshot]);
 
   useEffect(() => {
     void refresh();

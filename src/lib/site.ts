@@ -9,7 +9,7 @@ export const PUBLIC_PAGES = [
     path: "/",
     title: "AppClimb — Visual growth diagnosis for iOS subscription apps",
     description:
-      "Explore the interactive River Atlas demo and see how AppClimb connects acquisition, activation, paywall, subscription, and retention signals.",
+      "Connect RevenueCat and PostHog. AppClimb evaluates every iOS release, sends one evidence-backed task to your coding agent, and verifies the fix with production data.",
     changeFrequency: "weekly" as const,
     priority: 1,
     lastModified: SITE_UPDATED,

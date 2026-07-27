@@ -27,7 +27,7 @@ const manrope = Manrope({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "AppClimb — Visual growth diagnosis for iOS subscription apps",
+    default: "AppClimb — Growth CI for iOS subscription apps",
     template: "%s · AppClimb",
   },
   description: SITE_DESCRIPTION,

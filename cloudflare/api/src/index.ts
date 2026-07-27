@@ -118,6 +118,8 @@ import {
   dismissGrowthIncident,
 } from "./growth-ci/workspace";
 import { ensureGrowthContract, updateContractMeasurement } from "./growth-ci/contracts";
+import { discoverVersionCandidatesForApp } from "./growth-ci/version-discovery";
+import { assessGrowthCiAccess } from "./growth-ci/entitlement";
 import type { ReleaseCheckMessage } from "./growth-ci/types";
 
 const app = new Hono<AppEnvironment>();
@@ -935,6 +937,28 @@ app.get("/v1/growth-ci/contract", requireAuth, async (c) => {
   return c.json({ data: row });
 });
 
+app.get("/v1/growth-ci/version-candidates", requireAuth, async (c) => {
+  if (!isGrowthCiEnabled(c.env)) {
+    return errorResponse(c, "growth_ci_disabled", 404);
+  }
+  const auth = c.get("auth");
+  const appId = (c.req.query("appId") ?? "").trim();
+  if (!appId) return errorResponse(c, "app_id_required", 400);
+  try {
+    const data = await discoverVersionCandidatesForApp(
+      c.env,
+      auth.workspaceId,
+      appId,
+    );
+    return c.json({ data });
+  } catch (error) {
+    if (error instanceof ProviderError) {
+      return errorResponse(c, error.message, error.status as 400);
+    }
+    throw error;
+  }
+});
+
 app.post("/v1/growth-ci/mapping/version", requireAuth, async (c) => {
   if (!isGrowthCiEnabled(c.env)) {
     return errorResponse(c, "growth_ci_disabled", 404);
@@ -1026,6 +1050,22 @@ app.post("/v1/growth-ci/mapping/version", requireAuth, async (c) => {
   } catch {
     // non-fatal
   }
+  if (confirm) {
+    try {
+      const { recordProductEvents } = await import("./product-events");
+      await recordProductEvents(c.env.DB, auth, {
+        events: [
+          {
+            name: "measurement_contract_confirmed",
+            occurredAt: nowISO(),
+            properties: { appId, versionProperty },
+          },
+        ],
+      });
+    } catch {
+      // non-fatal analytics
+    }
+  }
   return c.json({
     data: {
       versionProperty,
@@ -1071,6 +1111,32 @@ app.post("/v1/agent-tokens", requireAuth, async (c) => {
   const appId = typeof input.appId === "string" ? input.appId.trim() : "";
   const name = typeof input.name === "string" ? input.name : "Agent token";
   if (!appId) return errorResponse(c, "app_id_required", 400);
+  const contract = await ensureGrowthContract(
+    c.env.DB,
+    auth.workspaceId,
+    appId,
+  );
+  const workspaceRow = await c.env.DB.prepare(
+    `SELECT subscription_status, trial_ends_at, entitlement_ends_at
+     FROM workspaces WHERE id=? LIMIT 1`,
+  )
+    .bind(auth.workspaceId)
+    .first<{
+      subscription_status: string;
+      trial_ends_at: string;
+      entitlement_ends_at: string | null;
+    }>();
+  const access = assessGrowthCiAccess(
+    {
+      subscriptionStatus: workspaceRow?.subscription_status ?? "none",
+      trialEndsAt: workspaceRow?.trial_ends_at ?? "1970-01-01T00:00:00.000Z",
+      entitlementEndsAt: workspaceRow?.entitlement_ends_at ?? undefined,
+    },
+    contract.free_verdict_consumed_at,
+  );
+  if (!access.canUseAgentBridge) {
+    return errorResponse(c, "agent_bridge_requires_pro", 402);
+  }
   const created = await createAgentToken(c.env.DB, {
     workspaceId: auth.workspaceId,
     appId,
