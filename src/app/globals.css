@@ -7161,6 +7161,17 @@ a {
   font-weight: var(--weight-heavy);
 }
 
+.catalog-app-icon img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  object-fit: cover;
+}
+
+.catalog-app-icon[data-initials]::before {
+  content: attr(data-initials);
+}
+
 .app-search-result span:nth-child(2) {
   min-width: 0;
 }
@@ -10265,12 +10276,19 @@ a {
 .atlas-setup-panel {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(240px, 0.8fr) minmax(360px, 1.2fr);
+  grid-template-columns: minmax(240px, 0.85fr) minmax(360px, 1.15fr);
   gap: 18px;
   margin-bottom: 13px;
   padding: 18px;
   border-color: var(--teal-200);
   background: var(--n-25);
+}
+
+.atlas-setup-header {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .atlas-setup-panel h3 {
@@ -10286,9 +10304,42 @@ a {
   line-height: var(--leading-normal);
 }
 
+.atlas-setup-tabs {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--n-150);
+  border-radius: var(--radius-md);
+  background: var(--n-0);
+}
+
+.atlas-setup-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--ink-muted);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  transition: all 0.15s ease;
+}
+
+.atlas-setup-tabs button:hover {
+  color: var(--ink-main);
+}
+
+.atlas-setup-tabs button.active {
+  color: var(--teal-dark);
+  background: var(--teal-50);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
 .atlas-code-block {
   position: relative;
   min-width: 0;
+  max-height: 200px;
   padding: 13px 78px 13px 13px;
   overflow: hidden;
   border-radius: var(--radius-md);
@@ -10296,13 +10347,21 @@ a {
   background: var(--n-900);
 }
 
+.atlas-agent-prompt-block {
+  max-height: 220px;
+  color: var(--n-200);
+}
+
 .atlas-code-block code {
   display: block;
+  max-height: 174px;
+  overflow-y: auto;
   overflow-x: auto;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-size: var(--text-3xs);
   line-height: var(--leading-normal);
-  white-space: pre;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .atlas-code-block button {
@@ -10313,11 +10372,18 @@ a {
   min-height: 28px;
   align-items: center;
   gap: 5px;
-  padding: 0 8px;
+  padding: 0 10px;
   border-radius: var(--radius-sm);
   color: var(--n-200);
   background: var(--n-850);
   font-size: var(--text-3xs);
+  font-weight: var(--weight-semibold);
+  transition: background 0.15s ease;
+}
+
+.atlas-code-block button:hover {
+  background: var(--n-800);
+  color: #fff;
 }
 
 .atlas-server-note {
