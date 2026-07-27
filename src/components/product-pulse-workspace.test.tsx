@@ -45,17 +45,20 @@ describe("ProductPulseWorkspace", () => {
         if (url.startsWith("/api/keywords?")) {
           return Response.json({ data: [] });
         }
-        if (url.startsWith("/api/apps/search?")) {
+        // Catalog search now runs in the browser against iTunes directly
+        // (Apple blocks Cloudflare Workers IPs, but allows CORS *).
+        if (url.startsWith("https://itunes.apple.com/search")) {
           return Response.json({
-            data: [
+            resultCount: 1,
+            results: [
               {
-                appStoreId: "6756513314",
-                name: "Car Dealer Tracker",
+                trackId: 6756513314,
+                trackName: "Car Dealer Tracker",
                 bundleId: "com.aydmaxx.carddealertracker",
-                developer: "Aydmaxx",
-                genre: "Business",
-                iconUrl: "",
-                storeUrl: "https://apps.apple.com/app/id6756513314",
+                sellerName: "Aydmaxx",
+                primaryGenreName: "Business",
+                artworkUrl100: "",
+                trackViewUrl: "https://apps.apple.com/app/id6756513314",
               },
             ],
           });

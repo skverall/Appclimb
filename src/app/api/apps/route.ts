@@ -2,10 +2,20 @@ import { z } from "zod";
 
 import { relayBackendResponse, requestWithSession } from "@/lib/backend";
 
+const metadataSchema = z.object({
+  appStoreId: z.string().regex(/^\d{1,20}$/u),
+  name: z.string().min(1).max(120),
+  bundleId: z.string().max(255).optional(),
+  developer: z.string().max(160).optional(),
+  genre: z.string().max(80).optional(),
+  iconUrl: z.string().max(1024).optional(),
+  storeUrl: z.string().max(1024).optional(),
+});
+
 const addAppSchema = z.object({
   platform: z.literal("app-store"),
-  appStoreId: z.string().regex(/^\d{1,20}$/u),
   storefront: z.string().regex(/^[A-Z]{2}$/u),
+  metadata: metadataSchema,
 });
 
 export async function GET() {

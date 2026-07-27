@@ -173,6 +173,7 @@ export interface DashboardSnapshot {
     id: string;
     name: string;
     platform: "iOS";
+    appStoreId?: string;
     storefront: string;
     period: string;
   };

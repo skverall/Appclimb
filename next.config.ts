@@ -11,8 +11,8 @@ const contentSecurityPolicy = [
   `script-src 'self' 'unsafe-inline'${developmentEval} https://cdn.paddle.com https://*.paddle.com https://public.profitwell.com`,
   "style-src 'self' 'unsafe-inline' https://cdn.paddle.com",
   "font-src 'self' data:",
-  "img-src 'self' data: blob: https://*.paddle.com",
-  "connect-src 'self' https://*.paddle.com",
+  "img-src 'self' data: blob: https://*.paddle.com https://is*-ssl.mzstatic.com",
+  "connect-src 'self' https://*.paddle.com https://itunes.apple.com",
   "frame-src https://*.paddle.com",
   "upgrade-insecure-requests",
 ].join("; ");

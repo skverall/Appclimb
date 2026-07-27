@@ -611,7 +611,11 @@ Purpose:
 
 Required:
 
-- daily keyword monitoring;
+- daily keyword monitoring. As of 2026-07-27, keyword rank observation is
+  on-demand (the user taps "Check new ranks"), not an unattended daily
+  background job: Apple blocks Cloudflare Workers IPs from itunes.apple.com,
+  and no free non-Cloudflare egress exists. Unattended daily monitoring
+  requires a founder decision to add an external egress proxy;
 - storefront and country comparisons;
 - keyword opportunity visuals;
 - competitor discovery and comparison;

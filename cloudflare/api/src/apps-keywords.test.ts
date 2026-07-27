@@ -1,62 +1,56 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { searchAppStoreCatalog } from "./apps-keywords";
+import { sanitizeClientAppMetadata } from "./apps-keywords";
 
-afterEach(() => {
-  vi.unstubAllGlobals();
-});
-
-describe("searchAppStoreCatalog", () => {
-  it("returns a small sanitized App Store result set", async () => {
-    const providerFetch = vi.fn(
-      async (input: RequestInfo | URL, init?: RequestInit) => {
-        void input;
-        void init;
-        return Response.json({
-        resultCount: 1,
-        results: [
-          {
-            trackId: 123456,
-            trackName: "Car Dealer Tracker",
-            bundleId: "com.example.dealer",
-            sellerName: "Example Studio",
-            primaryGenreName: "Business",
-            artworkUrl100: "https://example.com/icon.png",
-            trackViewUrl: "https://apps.apple.com/app/id123456",
-          },
-        ],
-        });
-      },
-    );
-    vi.stubGlobal("fetch", providerFetch);
-
-    await expect(searchAppStoreCatalog("car dealer", "US")).resolves.toEqual([
-      {
-        appStoreId: "123456",
-        name: "Car Dealer Tracker",
-        bundleId: "com.example.dealer",
-        developer: "Example Studio",
-        genre: "Business",
-        iconUrl: "https://example.com/icon.png",
-        storeUrl: "https://apps.apple.com/app/id123456",
-      },
-    ]);
-    expect(String(providerFetch.mock.calls[0]?.[0])).toContain(
-      "term=car+dealer",
-    );
-    expect(String(providerFetch.mock.calls[0]?.[0])).toContain("limit=8");
+describe("sanitizeClientAppMetadata", () => {
+  it("accepts well-formed metadata and bounds every field", () => {
+    const cleaned = sanitizeClientAppMetadata({
+      appStoreId: "123456",
+      name: "Car Dealer Tracker",
+      bundleId: "com.example.dealer",
+      developer: "Example Studio",
+      genre: "Business",
+      iconUrl: "https://example.com/icon.png",
+      storeUrl: "https://apps.apple.com/app/id123456",
+    });
+    expect(cleaned).toEqual({
+      appStoreId: "123456",
+      name: "Car Dealer Tracker",
+      bundleId: "com.example.dealer",
+      developer: "Example Studio",
+      genre: "Business",
+      iconUrl: "https://example.com/icon.png",
+      storeUrl: "https://apps.apple.com/app/id123456",
+    });
   });
 
-  it("rejects broad or malformed searches before calling Apple", async () => {
-    const providerFetch = vi.fn();
-    vi.stubGlobal("fetch", providerFetch);
+  it("rejects a non-numeric appStoreId", () => {
+    expect(() =>
+      sanitizeClientAppMetadata({ appStoreId: "abc", name: "App" }),
+    ).toThrow(/invalid_app_store_id/u);
+  });
 
-    await expect(searchAppStoreCatalog("x", "US")).rejects.toMatchObject({
-      code: "invalid_app_search",
+  it("rejects a missing or empty name", () => {
+    expect(() =>
+      sanitizeClientAppMetadata({ appStoreId: "1", name: "   " }),
+    ).toThrow(/invalid_app_metadata/u);
+  });
+
+  it("truncates over-long display fields to their column limits", () => {
+    const cleaned = sanitizeClientAppMetadata({
+      appStoreId: "1",
+      name: "x".repeat(500),
+      bundleId: "b".repeat(500),
+      developer: "d".repeat(500),
+      genre: "g".repeat(200),
+      iconUrl: "i".repeat(2000),
+      storeUrl: "s".repeat(2000),
     });
-    await expect(searchAppStoreCatalog("valid", "USA")).rejects.toMatchObject({
-      code: "invalid_storefront",
-    });
-    expect(providerFetch).not.toHaveBeenCalled();
+    expect(cleaned.name).toHaveLength(120);
+    expect(cleaned.bundleId).toHaveLength(255);
+    expect(cleaned.developer).toHaveLength(160);
+    expect(cleaned.genre).toHaveLength(80);
+    expect(cleaned.iconUrl).toHaveLength(1024);
+    expect(cleaned.storeUrl).toHaveLength(1024);
   });
 });

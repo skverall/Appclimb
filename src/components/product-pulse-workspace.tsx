@@ -23,6 +23,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ModalDialog } from "@/components/modal-dialog";
 import type { DashboardSnapshot, PostHogPulse } from "@/lib/contracts";
+import {
+  deriveKeywordSuggestions,
+  keywordRankPosition,
+  lookupAppStoreApp,
+  searchAppStoreCatalog,
+  type CatalogApp,
+} from "@/lib/itunes";
 
 interface WorkspaceApp {
   id: string;
@@ -32,16 +39,6 @@ interface WorkspaceApp {
   appStoreId: string;
   storefront: string;
   configured: boolean;
-}
-
-interface CatalogApp {
-  appStoreId: string;
-  name: string;
-  bundleId: string;
-  developer: string;
-  genre: string;
-  iconUrl: string;
-  storeUrl: string;
 }
 
 interface KeywordTrack {
@@ -367,18 +364,11 @@ function AddAppDialog({
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setState("loading");
-      fetch(
-        `/api/apps/search?platform=app-store&storefront=US&q=${encodeURIComponent(
-          query.trim(),
-        )}`,
-        { cache: "no-store", signal: controller.signal },
-      )
-        .then(async (response) => {
-          if (!response.ok) throw new Error("app_search_failed");
-          return (await response.json()) as { data?: CatalogApp[] };
-        })
-        .then((payload) => {
-          setResults(payload.data ?? []);
+      // Apple blocks Cloudflare Workers IPs from itunes.apple.com, so the
+      // catalog search runs in the browser, which iTunes allows via CORS *.
+      searchAppStoreCatalog(query, "US", { signal: controller.signal })
+        .then((catalog) => {
+          setResults(catalog);
           setState("ready");
         })
         .catch((error) => {
@@ -396,13 +386,24 @@ function AddAppDialog({
     setAddingId(app.appStoreId);
     setState("loading");
     try {
+      // The client already holds the cleaned catalog metadata from the search,
+      // so the server stores it directly instead of re-querying iTunes (which
+      // Apple blocks from Workers).
       const response = await fetch("/api/apps", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           platform: "app-store",
-          appStoreId: app.appStoreId,
           storefront: "US",
+          metadata: {
+            appStoreId: app.appStoreId,
+            name: app.name,
+            bundleId: app.bundleId,
+            developer: app.developer,
+            genre: app.genre,
+            iconUrl: app.iconUrl,
+            storeUrl: app.storeUrl,
+          },
         }),
       });
       const payload = (await response.json().catch(() => null)) as
@@ -666,6 +667,9 @@ function KeywordTerrain({ snapshot }: { snapshot: DashboardSnapshot }) {
       setSuggestions((values) =>
         values.filter((value) => value.keyword !== clean),
       );
+      // Observe the rank for the freshly added track immediately. The server
+      // no longer does this because Apple blocks Workers IPs.
+      await observeRanks([clean.toLocaleLowerCase().replace(/\s+/gu, " ")]);
       await reload();
     } catch {
       setState("error");
@@ -674,18 +678,21 @@ function KeywordTerrain({ snapshot }: { snapshot: DashboardSnapshot }) {
 
   const loadSuggestions = async () => {
     setSuggestionsOpen(true);
-    if (suggestions.length) return;
+    if (suggestions.length || !snapshot.app.appStoreId) return;
     setState("loading");
     try {
-      const response = await fetch(
-        `/api/keywords/suggestions?appId=${encodeURIComponent(snapshot.app.id)}`,
-        { cache: "no-store" },
+      // Suggestions are derived in the browser from the iTunes /lookup payload
+      // the client fetches (iTunes allows CORS *). The server no longer does
+      // this because Apple blocks Workers IPs.
+      const raw = await lookupAppStoreApp(
+        snapshot.app.appStoreId,
+        snapshot.app.storefront,
       );
-      if (!response.ok) throw new Error("suggestions_failed");
-      const payload = (await response.json()) as { data?: Suggestion[] };
       const tracked = new Set(tracks.map((track) => track.keyword));
       setSuggestions(
-        (payload.data ?? []).filter((item) => !tracked.has(item.keyword)),
+        deriveKeywordSuggestions(raw, snapshot.app.name).filter(
+          (item) => !tracked.has(item.keyword),
+        ),
       );
       setState("ready");
     } catch {
@@ -693,15 +700,40 @@ function KeywordTerrain({ snapshot }: { snapshot: DashboardSnapshot }) {
     }
   };
 
+  // Probe iTunes (from the browser, which Apple allows) for the rank position
+  // of the app for each keyword, then POST the observations to the server.
+  const observeRanks = async (keywords: string[]) => {
+    const appStoreId = snapshot.app.appStoreId;
+    const storefront = snapshot.app.storefront;
+    if (!appStoreId || !keywords.length) return;
+    const observations = await Promise.all(
+      keywords.map(async (kw) => {
+        try {
+          const rank = await keywordRankPosition(kw, storefront, appStoreId);
+          return { keyword: kw, storefront, rank };
+        } catch {
+          return {
+            keyword: kw,
+            storefront,
+            rank: null,
+          };
+        }
+      }),
+    );
+    await fetch("/api/keywords/observations", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        appId: snapshot.app.id,
+        observations,
+      }),
+    });
+  };
+
   const runCheck = async () => {
     setState("saving");
     try {
-      const response = await fetch("/api/keywords/check", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ appId: snapshot.app.id }),
-      });
-      if (!response.ok) throw new Error("keyword_check_failed");
+      await observeRanks(tracks.map((track) => track.keyword));
       await reload();
     } catch {
       setState("error");
@@ -758,8 +790,9 @@ function KeywordTerrain({ snapshot }: { snapshot: DashboardSnapshot }) {
       <div className="keyword-truth-note">
         <BadgeCheck size={16} />
         <span>
-          Rank is the observed App Store search-result position. Apple Ads adds
-          official 1–5 search popularity; AppClimb never fabricates volume.
+          Rank is the observed App Store search-result position, refreshed on
+          demand. Apple Ads adds official 1–5 search popularity; AppClimb never
+          fabricates volume.
         </span>
         <button
           type="button"

@@ -5,12 +5,10 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import {
   addAppStoreApp,
   addKeywordTrack,
-  checkKeywordRanks,
-  keywordSuggestions,
   listKeywordTracks,
   listWorkspaceApps,
-  refreshDueKeywordRanks,
-  searchAppStoreCatalog,
+  recordKeywordObservations,
+  sanitizeClientAppMetadata,
 } from "./apps-keywords";
 import {
   addAiVisibilityPrompt,
@@ -767,24 +765,10 @@ app.get("/v1/apps", requireAuth, async (c) =>
 );
 
 app.get("/v1/apps/search", requireAuth, async (c) => {
-  const platform = (c.req.query("platform") ?? "app-store").trim();
-  if (platform === "google-play") {
-    return errorResponse(c, "google_play_authorization_required", 409);
-  }
-  if (platform !== "app-store") {
-    return errorResponse(c, "unsupported_app_catalog", 400);
-  }
-  return c.json({
-    data: await searchAppStoreCatalog(
-      c.req.query("q") ?? "",
-      c.req.query("storefront") ?? "US",
-    ),
-    meta: {
-      platform: "app-store",
-      source: "Apple Search API",
-      privateAnalytics: false,
-    },
-  });
+  // Apple blocks Cloudflare Workers IPs (403/429) from itunes.apple.com, so
+  // catalog search now runs in the browser. Kept as an explicit 410 so the
+  // contract stays honest instead of returning a misleading empty list.
+  return errorResponse(c, "app_catalog_search_is_client_side", 410);
 });
 
 app.post("/v1/apps", requireAuth, async (c) => {
@@ -802,12 +786,20 @@ app.post("/v1/apps", requireAuth, async (c) => {
       input.platform === "google-play" ? 409 : 400,
     );
   }
+  // Catalog metadata comes from the browser's iTunes lookup. The server
+  // validates appStoreId (numeric) and bounds every field; it no longer
+  // re-verifies the listing exists, because Apple blocks server-side lookups.
+  const metadata = sanitizeClientAppMetadata(
+    input.metadata && typeof input.metadata === "object"
+      ? (input.metadata as Record<string, unknown>)
+      : (input as Record<string, unknown>),
+  );
   return c.json(
     {
       data: await addAppStoreApp(
         c.env,
         auth,
-        typeof input.appStoreId === "string" ? input.appStoreId : "",
+        metadata,
         typeof input.storefront === "string" ? input.storefront : "US",
       ),
     },
@@ -926,14 +918,10 @@ app.get(
   "/v1/keywords/suggestions",
   requireAuth,
   requireEntitlement,
-  async (c) =>
-    c.json({
-      data: await keywordSuggestions(
-        c.env,
-        c.get("auth"),
-        (c.req.query("appId") ?? "").trim(),
-      ),
-    }),
+  // Suggestions are now derived in the browser from the iTunes /lookup
+  // payload the client already fetched. Honest 410 instead of a misleading
+  // empty list.
+  (c) => errorResponse(c, "keyword_suggestions_are_client_side", 410),
 );
 
 app.post("/v1/keywords", requireAuth, requireEntitlement, async (c) => {
@@ -947,20 +935,56 @@ app.post("/v1/keywords", requireAuth, requireEntitlement, async (c) => {
     typeof input.keyword === "string" ? input.keyword : "",
     typeof input.storefront === "string" ? input.storefront : "US",
   );
-  const check = await checkKeywordRanks(c.env, auth, appId, 1);
-  return c.json({ data, check }, 201);
+  // Rank observation is now performed by the client (POST /v1/keywords/
+  // observations) immediately after adding a track; the server no longer
+  // performs the iTunes call that Apple blocks from Workers.
+  return c.json({ data }, 201);
 });
 
-app.post("/v1/keywords/check", requireAuth, requireEntitlement, async (c) => {
-  const input = await jsonBody(c.req.raw);
-  return c.json({
-    data: await checkKeywordRanks(
+app.post(
+  "/v1/keywords/check",
+  requireAuth,
+  requireEntitlement,
+  // Server-side rank checking is retired: Apple blocks Workers IPs, and no
+  // free non-Cloudflare egress exists. The client performs the check and
+  // POSTs observations to /v1/keywords/observations. Kept as 410 for honesty.
+  (c) => errorResponse(c, "keyword_check_is_client_side", 410),
+);
+
+app.post(
+  "/v1/keywords/observations",
+  requireAuth,
+  requireEntitlement,
+  async (c) => {
+    const input = await jsonBody(c.req.raw);
+    const auth = c.get("auth");
+    const appId = typeof input.appId === "string" ? input.appId.trim() : "";
+    const observations = Array.isArray(input.observations)
+      ? (input.observations as {
+          keyword?: unknown;
+          storefront?: unknown;
+          rank?: unknown;
+        }[])
+      : [];
+    const data = await recordKeywordObservations(
       c.env,
-      c.get("auth"),
-      typeof input.appId === "string" ? input.appId.trim() : "",
-    ),
-  });
-});
+      auth,
+      appId,
+      observations.map((observation) => ({
+        keyword: typeof observation.keyword === "string" ? observation.keyword : "",
+        storefront:
+          typeof observation.storefront === "string"
+            ? observation.storefront
+            : "US",
+        rank:
+          typeof observation.rank === "number" || observation.rank === null
+            ? observation.rank
+            : null,
+      })),
+    );
+    return c.json({ data }, 201);
+  },
+);
 
 app.get("/v1/growth-map", requireAuth, async (c) => {
   const snapshot = await growthMapSnapshot(
@@ -1262,8 +1286,10 @@ const worker: ExportedHandler<Cloudflare.Env, QueueMessage> = {
           return;
         }
         if (event.cron === "7 * * * *") {
-          const keywordRanks = await refreshDueKeywordRanks(env);
-          log("info", "keyword_ranks_refreshed", { keywordRanks });
+          // Background keyword rank refresh is retired: Apple blocks Workers
+          // IPs from itunes.apple.com and no free non-Cloudflare egress exists.
+          // Rank observation is now on-demand via the client.
+          log("info", "keyword_ranks_cron_retired");
           return;
         }
         if (event.cron === "23 3 * * *") {

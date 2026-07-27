@@ -109,7 +109,7 @@ export async function growthMapSnapshot(
     throw new Error("workspace_not_found");
   }
   const selectedApp = await env.DB.prepare(
-    `SELECT id,name,platform,default_storefront
+    `SELECT id,name,platform,apple_app_id,default_storefront
      FROM apps
      WHERE workspace_id=? AND id=?
      LIMIT 1`,
@@ -119,6 +119,7 @@ export async function growthMapSnapshot(
       id: string;
       name: string;
       platform: string;
+      apple_app_id: string | null;
       default_storefront: string;
     }>();
   if (!selectedApp) throw new Error("app_not_found");
@@ -299,6 +300,7 @@ export async function growthMapSnapshot(
         id: selectedApp.id,
         name: selectedApp.name,
         platform: selectedApp.platform,
+        appStoreId: selectedApp.apple_app_id ?? "",
         storefront: selectedApp.default_storefront,
         period: "Last 30 days",
       },

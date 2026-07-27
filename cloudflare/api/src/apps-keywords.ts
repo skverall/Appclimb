@@ -3,20 +3,14 @@ import { ProviderError } from "./connectors";
 import { nowISO } from "./runtime";
 import type { AuthContext } from "./types";
 
-const APP_STORE_ORIGIN = "https://itunes.apple.com";
+// Apple's iTunes Search API blocks traffic from Cloudflare Workers IP ranges
+// (403 / 429). Catalog search, app lookup, keyword rank checks, and metadata
+// suggestions therefore run from the user's browser (iTunes allows this via
+// `access-control-allow-origin: *`). This module only persists what the client
+// already observed; it never calls itunes.apple.com from the server.
+
 const storefrontPattern = /^[A-Z]{2}$/u;
 const keywordPattern = /^[^\u0000-\u001f\u007f]{1,80}$/u;
-
-interface AppStoreResult {
-  trackId?: number;
-  trackName?: string;
-  bundleId?: string;
-  sellerName?: string;
-  primaryGenreName?: string;
-  artworkUrl100?: string;
-  trackViewUrl?: string;
-  description?: string;
-}
 
 interface AppRow {
   id: string;
@@ -44,6 +38,21 @@ interface KeywordRankRow {
   rank: number | null;
 }
 
+/**
+ * Cleaned catalog metadata sent from the browser after a successful iTunes
+ * search/lookup. Every field is bounded to its column limit so a hostile
+ * payload cannot overflow D1, and appStoreId must be numeric.
+ */
+export interface ClientAppMetadata {
+  appStoreId: string;
+  name: string;
+  bundleId?: string;
+  developer?: string;
+  genre?: string;
+  iconUrl?: string;
+  storeUrl?: string;
+}
+
 function boundedStorefront(value: string) {
   const storefront = value.trim().toUpperCase();
   if (!storefrontPattern.test(storefront)) {
@@ -52,73 +61,30 @@ function boundedStorefront(value: string) {
   return storefront;
 }
 
-function cleanSearchResult(result: AppStoreResult) {
-  const appStoreId = Number(result.trackId);
-  const name = typeof result.trackName === "string" ? result.trackName.trim() : "";
-  if (!Number.isInteger(appStoreId) || appStoreId <= 0 || !name) return null;
-  return {
-    appStoreId: String(appStoreId),
-    name: name.slice(0, 120),
-    bundleId:
-      typeof result.bundleId === "string" ? result.bundleId.slice(0, 255) : "",
-    developer:
-      typeof result.sellerName === "string" ? result.sellerName.slice(0, 160) : "",
-    genre:
-      typeof result.primaryGenreName === "string"
-        ? result.primaryGenreName.slice(0, 80)
-        : "",
-    iconUrl:
-      typeof result.artworkUrl100 === "string" ? result.artworkUrl100 : "",
-    storeUrl:
-      typeof result.trackViewUrl === "string" ? result.trackViewUrl : "",
-  };
-}
-
-async function appleJSON(path: string): Promise<Record<string, unknown>> {
-  const response = await fetch(`${APP_STORE_ORIGIN}${path}`, {
-    headers: { accept: "application/json" },
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (!response.ok) {
-    throw new ProviderError("app_store_catalog_unavailable", 502, true);
-  }
-  return (await response.json()) as Record<string, unknown>;
-}
-
-export async function searchAppStoreCatalog(query: string, country: string) {
-  const term = query.trim();
-  if (term.length < 2 || term.length > 80) {
-    throw new ProviderError("invalid_app_search", 400);
-  }
-  const storefront = boundedStorefront(country);
-  const parameters = new URLSearchParams({
-    term,
-    country: storefront,
-    media: "software",
-    entity: "software",
-    limit: "8",
-    explicit: "No",
-  });
-  const payload = await appleJSON(`/search?${parameters}`);
-  return (Array.isArray(payload.results) ? payload.results : [])
-    .map((result) => cleanSearchResult(result as AppStoreResult))
-    .filter((result): result is NonNullable<typeof result> => result !== null);
-}
-
-async function lookupAppStoreApp(appStoreId: string, storefront: string) {
+export function sanitizeClientAppMetadata(
+  raw: Record<string, unknown>,
+): ClientAppMetadata {
+  const appStoreId =
+    typeof raw.appStoreId === "string" ? raw.appStoreId.trim() : "";
   if (!/^\d{1,20}$/u.test(appStoreId)) {
     throw new ProviderError("invalid_app_store_id", 400);
   }
-  const parameters = new URLSearchParams({
-    id: appStoreId,
-    country: boundedStorefront(storefront),
-    entity: "software",
-  });
-  const payload = await appleJSON(`/lookup?${parameters}`);
-  const result = (Array.isArray(payload.results) ? payload.results : [])[0];
-  const clean = cleanSearchResult((result ?? {}) as AppStoreResult);
-  if (!clean) throw new ProviderError("app_not_found_in_storefront", 404);
-  return { clean, raw: (result ?? {}) as AppStoreResult };
+  const name =
+    typeof raw.name === "string" ? raw.name.trim().slice(0, 120) : "";
+  if (!name) {
+    throw new ProviderError("invalid_app_metadata", 400);
+  }
+  return {
+    appStoreId,
+    name,
+    bundleId:
+      typeof raw.bundleId === "string" ? raw.bundleId.slice(0, 255) : "",
+    developer:
+      typeof raw.developer === "string" ? raw.developer.slice(0, 160) : "",
+    genre: typeof raw.genre === "string" ? raw.genre.slice(0, 80) : "",
+    iconUrl: typeof raw.iconUrl === "string" ? raw.iconUrl.slice(0, 1024) : "",
+    storeUrl: typeof raw.storeUrl === "string" ? raw.storeUrl.slice(0, 1024) : "",
+  };
 }
 
 export async function listWorkspaceApps(
@@ -146,19 +112,18 @@ export async function listWorkspaceApps(
 export async function addAppStoreApp(
   env: Cloudflare.Env,
   auth: AuthContext,
-  appStoreId: string,
-  country: string,
+  metadata: ClientAppMetadata,
+  rawStorefront: string,
 ) {
-  const storefront = boundedStorefront(country);
-  const { clean } = await lookupAppStoreApp(appStoreId, storefront);
+  const storefront = boundedStorefront(rawStorefront);
   const existing = await env.DB.prepare(
     `SELECT id FROM apps
      WHERE workspace_id=? AND apple_app_id=? LIMIT 1`,
   )
-    .bind(auth.workspaceId, clean.appStoreId)
+    .bind(auth.workspaceId, metadata.appStoreId)
     .first<{ id: string }>();
   if (existing) {
-    return { id: existing.id, ...clean, storefront, created: false };
+    return { id: existing.id, ...metadata, storefront, created: false };
   }
   const placeholder = await env.DB.prepare(
     `SELECT a.id,
@@ -190,9 +155,9 @@ export async function addAppStoreApp(
        WHERE id=? AND workspace_id=?`,
     )
       .bind(
-        clean.name,
-        clean.bundleId || null,
-        clean.appStoreId,
+        metadata.name,
+        metadata.bundleId || null,
+        metadata.appStoreId,
         storefront,
         now,
         id,
@@ -209,9 +174,9 @@ export async function addAppStoreApp(
       .bind(
         id,
         auth.workspaceId,
-        clean.name,
-        clean.bundleId || null,
-        clean.appStoreId,
+        metadata.name,
+        metadata.bundleId || null,
+        metadata.appStoreId,
         storefront,
         now,
         now,
@@ -225,9 +190,14 @@ export async function addAppStoreApp(
     "app.added",
     "app",
     id,
-    { catalog: "app-store", appStoreId: clean.appStoreId, storefront },
+    {
+      catalog: "app-store",
+      appStoreId: metadata.appStoreId,
+      storefront,
+      observedByClient: true,
+    },
   );
-  return { id, ...clean, storefront, created: true };
+  return { id, ...metadata, storefront, created: true };
 }
 
 async function ownedApp(
@@ -350,171 +320,82 @@ export async function listKeywordTracks(
   });
 }
 
-async function observeKeyword(
-  db: D1Database,
-  track: KeywordTrackRow,
-  appStoreId: string,
-  workspaceId: string,
+export interface ClientKeywordObservation {
+  keyword: string;
+  storefront: string;
+  rank: number | null;
+}
+
+/**
+ * Persist keyword rank observations collected by the browser from iTunes.
+ * Each observation is matched against tracks owned by the workspace so a
+ * client cannot write ranks for keywords that are not tracked for this app.
+ * Upserts on (keyword_track_id, observed_on) exactly like the previous server
+ * `observeKeyword`.
+ */
+export async function recordKeywordObservations(
+  env: Cloudflare.Env,
+  auth: AuthContext,
+  appId: string,
+  observations: ClientKeywordObservation[],
 ) {
-  const parameters = new URLSearchParams({
-    term: track.keyword,
-    country: boundedStorefront(track.storefront),
-    media: "software",
-    entity: "software",
-    limit: "200",
-    explicit: "No",
-  });
-  const payload = await appleJSON(`/search?${parameters}`);
-  const results = Array.isArray(payload.results) ? payload.results : [];
-  const index = results.findIndex(
-    (result) =>
-      String((result as AppStoreResult).trackId ?? "") === appStoreId,
-  );
+  const app = await ownedApp(env.DB, auth.workspaceId, appId);
+  if (!app.apple_app_id) {
+    throw new ProviderError("app_store_app_required", 409);
+  }
+  const tracks = await env.DB.prepare(
+    `SELECT id,storefront,keyword FROM keyword_tracks
+     WHERE workspace_id=? AND app_id=? AND active=1`,
+  )
+    .bind(auth.workspaceId, appId)
+    .all<{ id: string; storefront: string; keyword: string }>();
+  const byKey = new Map<string, string>();
+  for (const track of tracks.results) {
+    byKey.set(`${track.storefront}\u0000${track.keyword}`, track.id);
+  }
   const observedOn = new Date().toISOString().slice(0, 10);
-  await db
-    .prepare(
+  let applied = 0;
+  for (const observation of observations.slice(0, 50)) {
+    const keyword = observation.keyword
+      .trim()
+      .replace(/\s+/gu, " ")
+      .toLocaleLowerCase();
+    const storefront = boundedStorefront(observation.storefront);
+    const rank =
+      observation.rank == null
+        ? null
+        : Math.max(1, Math.min(200, Math.trunc(observation.rank)));
+    const trackId = byKey.get(`${storefront}\u0000${keyword}`);
+    if (!trackId) continue;
+    await env.DB.prepare(
       `INSERT INTO keyword_rank_points(
         id,workspace_id,app_id,keyword_track_id,observed_on,rank,created_at
       ) VALUES(?,?,?,?,?,?,?)
       ON CONFLICT(keyword_track_id,observed_on)
       DO UPDATE SET rank=excluded.rank,created_at=excluded.created_at`,
     )
-    .bind(
-      crypto.randomUUID(),
-      workspaceId,
-      track.app_id,
-      track.id,
-      observedOn,
-      index >= 0 ? index + 1 : null,
-      nowISO(),
-    )
-    .run();
-}
-
-export async function checkKeywordRanks(
-  env: Cloudflare.Env,
-  auth: AuthContext,
-  appId: string,
-  maximum = 5,
-) {
-  const app = await ownedApp(env.DB, auth.workspaceId, appId);
-  if (!app.apple_app_id) {
-    throw new ProviderError("app_store_app_required", 409);
+      .bind(
+        crypto.randomUUID(),
+        auth.workspaceId,
+        appId,
+        trackId,
+        observedOn,
+        rank,
+        nowISO(),
+      )
+      .run();
+    applied += 1;
   }
-  const today = new Date().toISOString().slice(0, 10);
-  const tracks = await env.DB.prepare(
-    `SELECT kt.id,kt.app_id,kt.storefront,kt.keyword,kt.active,kt.created_at
-     FROM keyword_tracks kt
-     LEFT JOIN keyword_rank_points krp
-       ON krp.keyword_track_id=kt.id AND krp.observed_on=?
-     WHERE kt.workspace_id=? AND kt.app_id=? AND kt.active=1
-       AND krp.id IS NULL
-     ORDER BY kt.created_at LIMIT ?`,
-  )
-    .bind(today, auth.workspaceId, appId, Math.max(1, Math.min(5, maximum)))
-    .all<KeywordTrackRow>();
-  await Promise.all(
-    tracks.results.map((track) =>
-      observeKeyword(env.DB, track, app.apple_app_id!, auth.workspaceId),
-    ),
-  );
-  return { checked: tracks.results.length, observedOn: today };
-}
-
-export async function refreshDueKeywordRanks(
-  env: Cloudflare.Env,
-  maximum = 15,
-) {
-  const today = new Date().toISOString().slice(0, 10);
-  const rows = await env.DB.prepare(
-    `SELECT kt.id,kt.workspace_id,kt.app_id,kt.storefront,kt.keyword,
-            kt.active,kt.created_at,a.apple_app_id
-     FROM keyword_tracks kt
-     JOIN apps a ON a.id=kt.app_id AND a.workspace_id=kt.workspace_id
-     LEFT JOIN (
-       SELECT keyword_track_id,MAX(observed_on) AS last_observed_on
-       FROM keyword_rank_points
-       GROUP BY keyword_track_id
-     ) latest ON latest.keyword_track_id=kt.id
-     WHERE kt.active=1 AND a.apple_app_id IS NOT NULL
-       AND (latest.last_observed_on IS NULL OR latest.last_observed_on < ?)
-     ORDER BY
-       CASE WHEN latest.last_observed_on IS NULL THEN 0 ELSE 1 END,
-       latest.last_observed_on,
-       kt.created_at
-     LIMIT ?`,
-  )
-    .bind(today, Math.max(1, Math.min(15, maximum)))
-    .all<KeywordTrackRow & { workspace_id: string; apple_app_id: string }>();
-  await Promise.all(
-    rows.results.map((track) =>
-      observeKeyword(env.DB, track, track.apple_app_id, track.workspace_id),
-    ),
-  );
-  return rows.results.length;
-}
-
-const suggestionStopWords = new Set([
-  "and",
-  "app",
-  "for",
-  "from",
-  "get",
-  "in",
-  "is",
-  "of",
-  "on",
-  "the",
-  "to",
-  "with",
-  "your",
-]);
-
-export async function keywordSuggestions(
-  env: Cloudflare.Env,
-  auth: AuthContext,
-  appId: string,
-) {
-  const app = await ownedApp(env.DB, auth.workspaceId, appId);
-  if (!app.apple_app_id) {
-    throw new ProviderError("app_store_app_required", 409);
+  if (applied > 0) {
+    await audit(
+      env.DB,
+      auth.workspaceId,
+      auth.userId,
+      "keyword.observed",
+      "app",
+      appId,
+      { observedOn, applied },
+    );
   }
-  const { raw } = await lookupAppStoreApp(
-    app.apple_app_id,
-    app.default_storefront,
-  );
-  const title = String(raw.trackName ?? app.name).toLocaleLowerCase();
-  const genre = String(raw.primaryGenreName ?? "").toLocaleLowerCase();
-  const words = `${title} ${String(raw.description ?? "")}`
-    .toLocaleLowerCase()
-    .match(/[\p{L}\p{N}]{3,}/gu)
-    ?.filter((word) => !suggestionStopWords.has(word)) ?? [];
-  const counts = new Map<string, number>();
-  for (const word of words) counts.set(word, (counts.get(word) ?? 0) + 1);
-  const candidates = [
-    title,
-    genre,
-    ...title.split(/\s+/u).map((word) => `${word} ${genre}`.trim()),
-    ...[...counts.entries()]
-      .sort((left, right) => right[1] - left[1])
-      .slice(0, 12)
-      .map(([word]) => word),
-  ]
-    .map((value) => value.trim().replace(/\s+/gu, " "))
-    .filter(
-      (value, index, values) =>
-        value.length >= 3 &&
-        value.length <= 80 &&
-        values.indexOf(value) === index,
-    )
-    .slice(0, 8);
-  return candidates.map((keyword, index) => ({
-    keyword,
-    reason:
-      index === 0
-        ? "App title"
-        : keyword === genre
-          ? "App Store category"
-          : "Store metadata",
-  }));
+  return { observedOn, applied };
 }
