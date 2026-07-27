@@ -748,6 +748,7 @@ export function AppClimbShell({
               defaultWindowDays={analyticsWindowDays(
                 initialSnapshot.app.period,
               )}
+              appId={snapshot.app.id}
             />
           ) : activeSection === "pulse" ? (
             <PulseView

@@ -440,12 +440,20 @@ function TabAppIcon({
   );
 }
 
+interface WebAddResult {
+  id: string;
+  name: string;
+  domain: string;
+  trackingToken?: string;
+  propertyCreated?: boolean;
+}
+
 function AddAppDialog({
   onClose,
   onAdded,
 }: {
   onClose: () => void;
-  onAdded: (appId: string) => void;
+  onAdded: (appId: string, options?: { openAtlas?: boolean }) => void;
 }) {
   const [platform, setPlatform] = useState<"app-store" | "web" | "google-play">(
     "app-store",
@@ -458,6 +466,9 @@ function AddAppDialog({
     "idle",
   );
   const [addingId, setAddingId] = useState("");
+  const [webError, setWebError] = useState("");
+  const [webSuccess, setWebSuccess] = useState<WebAddResult | null>(null);
+  const [copiedSnippet, setCopiedSnippet] = useState(false);
 
   const parsedId = useMemo(() => {
     if (platform !== "app-store") return null;
@@ -552,6 +563,7 @@ function AddAppDialog({
   const addWebSaaS = async () => {
     if (!cleanWebDomain || !cleanWebDomain.includes(".")) return;
     setAddingId(cleanWebDomain);
+    setWebError("");
     setState("loading");
     try {
       const response = await fetch("/api/apps", {
@@ -566,16 +578,61 @@ function AddAppDialog({
           },
         }),
       });
-      const payload = (await response.json().catch(() => null)) as
-        | { data?: { id?: string } }
-        | null;
-      if (!response.ok || !payload?.data?.id) throw new Error("web_add_failed");
-      onAdded(payload.data.id);
-    } catch {
+      const payload = (await response.json().catch(() => null)) as {
+        data?: {
+          id?: string;
+          name?: string;
+          bundleId?: string;
+          property?: {
+            trackingToken?: string;
+            domain?: string;
+            created?: boolean;
+          };
+        };
+        error?: string;
+      } | null;
+      if (!response.ok || !payload?.data?.id) {
+        const code = payload?.error ?? "web_add_failed";
+        if (code === "admin_required") {
+          throw new Error("Only workspace owners and admins can add a website.");
+        }
+        if (code === "invalid_domain" || code === "invalid_web_property") {
+          throw new Error("Enter a valid domain such as cardealertracker.app.");
+        }
+        if (response.status === 401) {
+          throw new Error("Sign in again, then retry adding this website.");
+        }
+        throw new Error(
+          "Could not add this Web SaaS. Check the domain and try again.",
+        );
+      }
+      const domain =
+        payload.data.property?.domain ||
+        payload.data.bundleId ||
+        cleanWebDomain;
+      setWebSuccess({
+        id: payload.data.id,
+        name: payload.data.name || webName.trim() || domain,
+        domain,
+        trackingToken: payload.data.property?.trackingToken,
+        propertyCreated: payload.data.property?.created,
+      });
+      setState("ready");
+      setAddingId("");
+    } catch (error) {
       setAddingId("");
       setState("error");
+      setWebError(
+        error instanceof Error
+          ? error.message
+          : "Could not add this Web SaaS. Try again.",
+      );
     }
   };
+
+  const webSnippet = webSuccess?.trackingToken
+    ? `<script\n  src="${typeof window === "undefined" ? "https://appclimb.app" : window.location.origin}/appclimb-analytics.js"\n  data-token="${webSuccess.trackingToken}"\n  data-storage="session"\n  defer\n></script>`
+    : "";
 
   return (
     <ModalDialog
@@ -637,48 +694,268 @@ function AddAppDialog({
         </div>
       ) : platform === "web" ? (
         <div className="web-saas-add-container">
-          <label className="app-catalog-search">
-            <Globe size={18} />
-            <input
-              value={webUrl}
-              onChange={(event) => setWebUrl(event.target.value)}
-              placeholder="Paste site URL or domain (e.g. appclimb.app)"
-              autoComplete="off"
-            />
-          </label>
-
-          <label className="web-name-input" style={{ marginTop: "12px", display: "block" }}>
-            <span style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>Web SaaS Name (Optional)</span>
-            <input
-              value={webName}
-              onChange={(event) => setWebName(event.target.value)}
-              placeholder={cleanWebDomain ? cleanWebDomain : "e.g. AppClimb Web Analytics"}
-              style={{ width: "100%", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--border)" }}
-            />
-          </label>
-
-          {cleanWebDomain && cleanWebDomain.includes(".") ? (
-            <div className="web-preview-card" style={{ marginTop: "16px", padding: "14px", border: "1px solid var(--border)", borderRadius: "10px", display: "flex", alignItems: "center", gap: "12px", background: "var(--surface-subtle)" }}>
-              <DomainFavicon domain={cleanWebDomain} name={webName.trim() || cleanWebDomain} />
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <strong style={{ display: "block", fontSize: "14px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{webName.trim() || cleanWebDomain}</strong>
-                <small style={{ color: "var(--foreground-muted)", fontSize: "12px" }}>{cleanWebDomain} · Web SaaS</small>
-              </div>
-              <button
-                type="button"
-                className="primary-action"
-                style={{ padding: "8px 16px", borderRadius: "8px", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", flexShrink: 0 }}
-                disabled={Boolean(addingId)}
-                onClick={() => void addWebSaaS()}
+          {webSuccess ? (
+            <div className="web-saas-success" style={{ display: "grid", gap: "14px" }}>
+              <div
+                className="web-preview-card"
+                style={{
+                  padding: "14px",
+                  border: "1px solid var(--border)",
+                  borderRadius: "10px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "12px",
+                  background: "var(--surface-subtle)",
+                }}
               >
-                {addingId === cleanWebDomain ? <LoaderCircle className="spin" size={16} /> : <Plus size={16} />}
-                Add Web SaaS
-              </button>
+                <DomainFavicon domain={webSuccess.domain} name={webSuccess.name} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <strong
+                    style={{
+                      display: "block",
+                      fontSize: "14px",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {webSuccess.name}
+                  </strong>
+                  <small style={{ color: "var(--foreground-muted)", fontSize: "12px" }}>
+                    {webSuccess.domain} · Web SaaS connected
+                  </small>
+                </div>
+                <BadgeCheck size={20} color="var(--accent, #0f766e)" />
+              </div>
+
+              <div
+                style={{
+                  padding: "14px",
+                  border: "1px solid var(--border)",
+                  borderRadius: "10px",
+                  display: "grid",
+                  gap: "10px",
+                  background: "var(--surface)",
+                }}
+              >
+                <div>
+                  <strong style={{ display: "block", fontSize: "13px" }}>
+                    What you get next
+                  </strong>
+                  <ul
+                    style={{
+                      margin: "8px 0 0",
+                      paddingLeft: "18px",
+                      color: "var(--foreground-muted)",
+                      fontSize: "13px",
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    <li>First-party visitors, referrers, UTMs, and landing pages</li>
+                    <li>AI answer / search / training crawler visibility</li>
+                    <li>PostHog product events once that source is connected</li>
+                  </ul>
+                </div>
+
+                {webSnippet ? (
+                  <>
+                    <span style={{ fontSize: "12px", fontWeight: 600 }}>
+                      Install on {webSuccess.domain} (before {"</body>"})
+                    </span>
+                    <pre
+                      style={{
+                        margin: 0,
+                        padding: "10px 12px",
+                        borderRadius: "8px",
+                        background: "var(--surface-subtle)",
+                        border: "1px solid var(--border)",
+                        fontSize: "11px",
+                        overflowX: "auto",
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-all",
+                      }}
+                    >
+                      {webSnippet}
+                    </pre>
+                    <button
+                      type="button"
+                      className="secondary-action"
+                      style={{
+                        justifySelf: "start",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                      onClick={() => {
+                        void navigator.clipboard.writeText(webSnippet).then(() => {
+                          setCopiedSnippet(true);
+                          window.setTimeout(() => setCopiedSnippet(false), 1600);
+                        });
+                      }}
+                    >
+                      {copiedSnippet ? <Check size={15} /> : <Plus size={15} />}
+                      {copiedSnippet ? "Copied" : "Copy install snippet"}
+                    </button>
+                  </>
+                ) : (
+                  <p style={{ margin: 0, fontSize: "13px", color: "var(--foreground-muted)" }}>
+                    Website saved. Open Acquisition Atlas to finish install if a
+                    tracking token is not shown yet.
+                  </p>
+                )}
+              </div>
+
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  className="primary-action"
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: "8px",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                  onClick={() => onAdded(webSuccess.id, { openAtlas: true })}
+                >
+                  <Waypoints size={16} />
+                  Open Acquisition Atlas
+                </button>
+                <button
+                  type="button"
+                  className="secondary-action"
+                  style={{ padding: "8px 16px", borderRadius: "8px" }}
+                  onClick={() => onAdded(webSuccess.id)}
+                >
+                  Open website pulse
+                </button>
+              </div>
             </div>
           ) : (
-            <div className="app-search-empty" style={{ marginTop: "16px" }}>
-              Enter your Web SaaS product domain to track web metrics, crawlers, and PostHog analytics.
-            </div>
+            <>
+              <label className="app-catalog-search">
+                <Globe size={18} />
+                <input
+                  value={webUrl}
+                  onChange={(event) => {
+                    setWebUrl(event.target.value);
+                    setWebError("");
+                  }}
+                  placeholder="Paste site URL or domain (e.g. appclimb.app)"
+                  autoComplete="off"
+                />
+              </label>
+
+              <label
+                className="web-name-input"
+                style={{ marginTop: "12px", display: "block" }}
+              >
+                <span
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    display: "block",
+                    marginBottom: "4px",
+                  }}
+                >
+                  Web SaaS Name (Optional)
+                </span>
+                <input
+                  value={webName}
+                  onChange={(event) => setWebName(event.target.value)}
+                  placeholder={
+                    cleanWebDomain
+                      ? cleanWebDomain
+                      : "e.g. AppClimb Web Analytics"
+                  }
+                  style={{
+                    width: "100%",
+                    padding: "8px 12px",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border)",
+                  }}
+                />
+              </label>
+
+              {cleanWebDomain && cleanWebDomain.includes(".") ? (
+                <div
+                  className="web-preview-card"
+                  style={{
+                    marginTop: "16px",
+                    padding: "14px",
+                    border: "1px solid var(--border)",
+                    borderRadius: "10px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "12px",
+                    background: "var(--surface-subtle)",
+                  }}
+                >
+                  <DomainFavicon
+                    domain={cleanWebDomain}
+                    name={webName.trim() || cleanWebDomain}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <strong
+                      style={{
+                        display: "block",
+                        fontSize: "14px",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {webName.trim() || cleanWebDomain}
+                    </strong>
+                    <small
+                      style={{
+                        color: "var(--foreground-muted)",
+                        fontSize: "12px",
+                      }}
+                    >
+                      {cleanWebDomain} · Web SaaS
+                    </small>
+                  </div>
+                  <button
+                    type="button"
+                    className="primary-action"
+                    style={{
+                      padding: "8px 16px",
+                      borderRadius: "8px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      cursor: "pointer",
+                      flexShrink: 0,
+                    }}
+                    disabled={Boolean(addingId)}
+                    onClick={() => void addWebSaaS()}
+                  >
+                    {addingId === cleanWebDomain ? (
+                      <LoaderCircle className="spin" size={16} />
+                    ) : (
+                      <Plus size={16} />
+                    )}
+                    Add Web SaaS
+                  </button>
+                </div>
+              ) : (
+                <div className="app-search-empty" style={{ marginTop: "16px" }}>
+                  Enter any Web SaaS domain (you can add as many as you need) to
+                  track visitors, crawlers, campaigns, and product analytics.
+                </div>
+              )}
+
+              {webError && (
+                <div
+                  className="app-search-empty is-error"
+                  role="alert"
+                  style={{ marginTop: "12px" }}
+                >
+                  {webError}
+                </div>
+              )}
+            </>
           )}
         </div>
       ) : (
@@ -821,11 +1098,16 @@ export function AppSelector({
     }
   }, [snapshot.app, fetchedIcons]);
 
-  const selectApp = (appId: string) => {
+  const selectApp = (appId: string, options?: { openAtlas?: boolean }) => {
     const url = new URL(window.location.href);
     url.searchParams.set("app", appId);
     url.searchParams.delete("insight");
-    window.location.assign(url);
+    if (options?.openAtlas) {
+      url.searchParams.set("atlas", "1");
+    } else {
+      url.searchParams.delete("atlas");
+    }
+    window.location.assign(url.toString());
   };
 
   const deleteApp = async (appId: string) => {

@@ -254,25 +254,40 @@ export async function createProperty(
   auth: AuthContext,
   nameValue: unknown,
   domainValue: unknown,
+  appIdValue?: unknown,
 ): Promise<Record<string, unknown>> {
   const name = safeText(nameValue, 120);
   const domain = normalizeHostname(safeText(domainValue, 253));
   if (!name || !validDomain(domain)) {
     throw new Error("invalid_web_property");
   }
+  // One property per domain per workspace. Any number of distinct Web SaaS
+  // domains can be added (cardealertracker.app, appclimb.app, etc.).
   const existing = await env.DB.prepare(
-    "SELECT id FROM web_properties WHERE workspace_id = ?",
+    `SELECT id FROM web_properties
+     WHERE workspace_id = ? AND domain = ? COLLATE NOCASE
+     LIMIT 1`,
   )
-    .bind(auth.workspaceId)
+    .bind(auth.workspaceId, domain)
     .first<{ id: string }>();
   if (existing) {
     throw new Error("web_property_exists");
   }
-  const app = await env.DB.prepare(
-    "SELECT id FROM apps WHERE workspace_id = ? ORDER BY created_at LIMIT 1",
-  )
-    .bind(auth.workspaceId)
-    .first<{ id: string }>();
+  const preferredAppId =
+    typeof appIdValue === "string" && appIdValue.trim()
+      ? appIdValue.trim()
+      : null;
+  const app = preferredAppId
+    ? await env.DB.prepare(
+        "SELECT id FROM apps WHERE workspace_id = ? AND id = ? LIMIT 1",
+      )
+        .bind(auth.workspaceId, preferredAppId)
+        .first<{ id: string }>()
+    : await env.DB.prepare(
+        "SELECT id FROM apps WHERE workspace_id = ? ORDER BY created_at LIMIT 1",
+      )
+        .bind(auth.workspaceId)
+        .first<{ id: string }>();
   const id = crypto.randomUUID();
   const now = new Date().toISOString();
   await env.DB.prepare(
@@ -293,7 +308,7 @@ export async function createProperty(
     "web_property.created",
     "web_property",
     id,
-    { domain },
+    { domain, appId: app?.id ?? null },
   );
   return {
     id,
@@ -303,6 +318,91 @@ export async function createProperty(
     tokenVersion: 1,
     retentionDays: 90,
     createdAt: now,
+    appId: app?.id ?? null,
+  };
+}
+
+/**
+ * Ensures a first-party web property exists for a Web SaaS app so Acquisition
+ * Atlas can collect visitors, UTMs, and crawlers immediately after add.
+ */
+export async function ensureWebPropertyForApp(
+  env: Cloudflare.Env,
+  auth: AuthContext,
+  appId: string,
+  name: string,
+  domainValue: string,
+): Promise<{
+  id: string;
+  name: string;
+  domain: string;
+  trackingToken: string;
+  tokenVersion: number;
+  retentionDays: number;
+  createdAt: string;
+  created: boolean;
+}> {
+  const domain = normalizeHostname(safeText(domainValue, 253));
+  if (!validDomain(domain)) {
+    throw new Error("invalid_web_property");
+  }
+  const existing = await env.DB.prepare(
+    `SELECT id,name,domain,token_version,retention_days,created_at,app_id
+     FROM web_properties
+     WHERE workspace_id = ? AND domain = ? COLLATE NOCASE
+     LIMIT 1`,
+  )
+    .bind(auth.workspaceId, domain)
+    .first<{
+      id: string;
+      name: string;
+      domain: string;
+      token_version: number;
+      retention_days: number;
+      created_at: string;
+      app_id: string | null;
+    }>();
+
+  if (existing) {
+    if (!existing.app_id) {
+      await env.DB.prepare(
+        `UPDATE web_properties
+         SET app_id = ?, updated_at = ?
+         WHERE id = ? AND workspace_id = ? AND app_id IS NULL`,
+      )
+        .bind(appId, new Date().toISOString(), existing.id, auth.workspaceId)
+        .run();
+    }
+    const trackingToken = await issueTrackingToken(
+      requireSecret(env, "JWT_SECRET"),
+      {
+        w: auth.workspaceId,
+        p: existing.id,
+        v: existing.token_version,
+      },
+    );
+    return {
+      id: existing.id,
+      name: existing.name,
+      domain: existing.domain,
+      trackingToken,
+      tokenVersion: existing.token_version,
+      retentionDays: existing.retention_days,
+      createdAt: existing.created_at,
+      created: false,
+    };
+  }
+
+  const property = await createProperty(env, auth, name, domain, appId);
+  return {
+    id: String(property.id),
+    name: String(property.name),
+    domain: String(property.domain),
+    trackingToken: String(property.trackingToken),
+    tokenVersion: Number(property.tokenVersion) || 1,
+    retentionDays: Number(property.retentionDays) || 90,
+    createdAt: String(property.createdAt),
+    created: true,
   };
 }
 
@@ -473,6 +573,55 @@ interface PropertyRow {
   created_at: string;
 }
 
+async function resolveWebProperty(
+  db: D1Database,
+  workspaceId: string,
+  appId = "",
+): Promise<PropertyRow | null> {
+  const selectCols =
+    "id,name,domain,token_version,retention_days,created_at";
+  if (appId) {
+    const byApp = await db
+      .prepare(
+        `SELECT ${selectCols} FROM web_properties
+         WHERE workspace_id = ? AND app_id = ?
+         ORDER BY created_at LIMIT 1`,
+      )
+      .bind(workspaceId, appId)
+      .first<PropertyRow>();
+    if (byApp) return byApp;
+
+    const webApp = await db
+      .prepare(
+        `SELECT bundle_id FROM apps
+         WHERE workspace_id = ? AND id = ? AND platform = 'Web'
+         LIMIT 1`,
+      )
+      .bind(workspaceId, appId)
+      .first<{ bundle_id: string | null }>();
+    if (webApp?.bundle_id) {
+      const byDomain = await db
+        .prepare(
+          `SELECT ${selectCols} FROM web_properties
+           WHERE workspace_id = ? AND domain = ? COLLATE NOCASE
+           LIMIT 1`,
+        )
+        .bind(workspaceId, webApp.bundle_id)
+        .first<PropertyRow>();
+      if (byDomain) return byDomain;
+    }
+  }
+
+  return db
+    .prepare(
+      `SELECT ${selectCols} FROM web_properties
+       WHERE workspace_id = ?
+       ORDER BY created_at LIMIT 1`,
+    )
+    .bind(workspaceId)
+    .first<PropertyRow>();
+}
+
 function aliasFor(id: string): string {
   const adjectives = [
     "Amber",
@@ -498,18 +647,14 @@ export async function webAnalyticsSnapshot(
   env: Cloudflare.Env,
   workspaceId: string,
   windowDays: number,
+  appId = "",
 ): Promise<Record<string, unknown>> {
   const generatedAt = new Date();
   const from = new Date(
     generatedAt.getTime() - windowDays * 24 * 60 * 60 * 1000,
   ).toISOString();
   const now = generatedAt.toISOString();
-  const property = await env.DB.prepare(
-    `SELECT id,name,domain,token_version,retention_days,created_at
-     FROM web_properties WHERE workspace_id = ?`,
-  )
-    .bind(workspaceId)
-    .first<PropertyRow>();
+  const property = await resolveWebProperty(env.DB, workspaceId, appId);
   const empty = {
     generatedAt: now,
     totals: {

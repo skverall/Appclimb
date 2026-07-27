@@ -145,6 +145,7 @@ export function AcquisitionAtlas({
   authenticated,
   demo,
   defaultWindowDays = 30,
+  appId = "",
 }: {
   authenticated: boolean;
   demo: boolean;
@@ -153,6 +154,8 @@ export function AcquisitionAtlas({
    * projection it shares the Pulse screen with.
    */
   defaultWindowDays?: 7 | 30 | 90;
+  /** Active workspace app — scopes multi-property Acquisition data. */
+  appId?: string;
 }) {
   const [windowDays, setWindowDays] = useState<7 | 30 | 90>(defaultWindowDays);
   const [snapshot, setSnapshot] = useState<AcquisitionSnapshot>(
@@ -177,7 +180,9 @@ export function AcquisitionAtlas({
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(`/api/acquisition?days=${windowDays}`, {
+      const params = new URLSearchParams({ days: String(windowDays) });
+      if (appId) params.set("appId", appId);
+      const response = await fetch(`/api/acquisition?${params.toString()}`, {
         cache: "no-store",
       });
       if (!response.ok) {
@@ -207,7 +212,7 @@ export function AcquisitionAtlas({
     } finally {
       setLoading(false);
     }
-  }, [authenticated, demo, windowDays]);
+  }, [authenticated, demo, windowDays, appId]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => void loadSnapshot(), 0);
@@ -1340,7 +1345,7 @@ function ConnectWebsite({
       setError(
         connectError instanceof Error &&
           connectError.message === "web_property_exists"
-          ? "This workspace already has a web property."
+          ? "This domain is already connected. Add a different Web SaaS domain, or open the existing property."
           : "Use a valid hostname such as example.com.",
       );
     } finally {

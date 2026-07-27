@@ -2,6 +2,7 @@ import { audit } from "./db";
 import { ProviderError } from "./connectors";
 import { nowISO } from "./runtime";
 import type { AuthContext } from "./types";
+import { ensureWebPropertyForApp } from "./web-analytics";
 
 // Apple's iTunes Search API blocks traffic from Cloudflare Workers IP ranges
 // (403 / 429). Catalog search, app lookup, keyword rank checks, and metadata
@@ -97,9 +98,20 @@ export interface WebAppMetadata {
 export function sanitizeWebAppMetadata(
   raw: Record<string, unknown>,
 ): WebAppMetadata {
-  const rawDomain = typeof raw.domain === "string" ? raw.domain.trim().toLowerCase() : "";
-  const domain = rawDomain.replace(/^https?:\/\//u, "").replace(/\/.*$/u, "");
-  if (!domain || !domain.includes(".")) {
+  const rawDomain =
+    typeof raw.domain === "string" ? raw.domain.trim().toLowerCase() : "";
+  const domain = rawDomain
+    .replace(/^https?:\/\//u, "")
+    .replace(/^www\./u, "")
+    .replace(/\/.*$/u, "")
+    .replace(/:\d+$/u, "")
+    .replace(/\.$/u, "");
+  if (
+    !domain ||
+    domain.length > 253 ||
+    !domain.includes(".") ||
+    /[ /:@?#]/u.test(domain)
+  ) {
     throw new ProviderError("invalid_domain", 400);
   }
   const name =
@@ -109,7 +121,7 @@ export function sanitizeWebAppMetadata(
   const iconUrl =
     typeof raw.iconUrl === "string" && raw.iconUrl.trim()
       ? raw.iconUrl.slice(0, 1024)
-      : `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`;
+      : `https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico`;
 
   return { domain, name, iconUrl };
 }
@@ -119,50 +131,84 @@ export async function addWebApp(
   auth: AuthContext,
   metadata: WebAppMetadata,
 ) {
-  const appId = `web:${metadata.domain}`;
+  const catalogKey = `web:${metadata.domain}`;
   const existing = await env.DB.prepare(
     `SELECT id FROM apps WHERE workspace_id=? AND (apple_app_id=? OR bundle_id=?) LIMIT 1`,
   )
-    .bind(auth.workspaceId, appId, metadata.domain)
+    .bind(auth.workspaceId, catalogKey, metadata.domain)
     .first<{ id: string }>();
 
-  if (existing) {
-    return { id: existing.id, ...metadata, storefront: "US", created: false };
+  const id = existing?.id ?? crypto.randomUUID();
+  const now = nowISO();
+  let created = false;
+
+  if (!existing) {
+    await env.DB.prepare(
+      `INSERT INTO apps(
+        id, workspace_id, name, platform, bundle_id, apple_app_id,
+        default_storefront, icon_url, shared_app_user_id_confirmed, created_at, updated_at
+      ) VALUES(?,?,?,'Web',?,?,?,?,0,?,?)`,
+    )
+      .bind(
+        id,
+        auth.workspaceId,
+        metadata.name,
+        metadata.domain,
+        catalogKey,
+        "US",
+        metadata.iconUrl || null,
+        now,
+        now,
+      )
+      .run();
+
+    await audit(
+      env.DB,
+      auth.workspaceId,
+      auth.userId,
+      "app.add",
+      "apps",
+      id,
+      { platform: "web", domain: metadata.domain, name: metadata.name },
+    );
+    created = true;
   }
 
-  const id = crypto.randomUUID();
-  const now = nowISO();
-
-  await env.DB.prepare(
-    `INSERT INTO apps(
-      id, workspace_id, name, platform, bundle_id, apple_app_id,
-      default_storefront, icon_url, shared_app_user_id_confirmed, created_at, updated_at
-    ) VALUES(?,?,?,'Web',?,?,?,?,0,?,?)`,
-  )
-    .bind(
-      id,
-      auth.workspaceId,
-      metadata.name,
-      metadata.domain,
-      appId,
-      "US",
-      metadata.iconUrl || null,
-      now,
-      now,
-    )
-    .run();
-
-  await audit(
-    env.DB,
-    auth.workspaceId,
-    auth.userId,
-    "app.add",
-    "apps",
+  // Always ensure Acquisition Atlas has a property + signed token for this
+  // domain so the add flow returns immediately useful install data.
+  const property = await ensureWebPropertyForApp(
+    env,
+    auth,
     id,
-    { platform: "web", domain: metadata.domain, name: metadata.name },
+    metadata.name,
+    metadata.domain,
   );
 
-  return { id, name: metadata.name, platform: "Web", bundleId: metadata.domain, appStoreId: appId, storefront: "US", iconUrl: metadata.iconUrl, created: true };
+  return {
+    id,
+    name: metadata.name,
+    platform: "Web",
+    bundleId: metadata.domain,
+    appStoreId: catalogKey,
+    storefront: "US",
+    iconUrl: metadata.iconUrl,
+    created,
+    property: {
+      id: property.id,
+      name: property.name,
+      domain: property.domain,
+      trackingToken: property.trackingToken,
+      tokenVersion: property.tokenVersion,
+      retentionDays: property.retentionDays,
+      createdAt: property.createdAt,
+      created: property.created,
+    },
+    nextSteps: [
+      "Install the AppClimb tracking snippet on this domain",
+      "Open Acquisition Atlas to verify first visitors and crawlers",
+      "Connect PostHog later for product-behavior events",
+    ],
+  };
 }
 
 export async function listWorkspaceApps(

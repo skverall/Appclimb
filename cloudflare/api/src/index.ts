@@ -783,17 +783,32 @@ app.post("/v1/apps", requireAuth, async (c) => {
   const input = await jsonBody(c.req.raw);
 
   if (input.platform === "web") {
-    const metadata = sanitizeWebAppMetadata(
-      input.metadata && typeof input.metadata === "object"
-        ? (input.metadata as Record<string, unknown>)
-        : (input as Record<string, unknown>),
-    );
-    return c.json(
-      {
-        data: await addWebApp(c.env, auth, metadata),
-      },
-      201,
-    );
+    try {
+      const metadata = sanitizeWebAppMetadata(
+        input.metadata && typeof input.metadata === "object"
+          ? (input.metadata as Record<string, unknown>)
+          : (input as Record<string, unknown>),
+      );
+      return c.json(
+        {
+          data: await addWebApp(c.env, auth, metadata),
+        },
+        201,
+      );
+    } catch (error) {
+      if (error instanceof ProviderError) {
+        const status =
+          error.status === 400 || error.status === 403 || error.status === 409
+            ? error.status
+            : 400;
+        return errorResponse(c, error.message, status);
+      }
+      const code = error instanceof Error ? error.message : "web_add_failed";
+      if (code === "invalid_web_property" || code === "invalid_domain") {
+        return errorResponse(c, code, 400);
+      }
+      throw error;
+    }
   }
 
   if (input.platform !== "app-store") {
@@ -1041,10 +1056,12 @@ app.get("/v1/web-analytics", requireAuth, requireEntitlement, async (c) => {
   if (![7, 30, 90].includes(days)) {
     return errorResponse(c, "invalid_analytics_window", 400);
   }
+  const appId = (c.req.query("appId") ?? c.req.query("app") ?? "").trim();
   const snapshot = await webAnalyticsSnapshot(
     c.env,
     c.get("auth").workspaceId,
     days,
+    appId,
   );
   const hasData =
     Number((snapshot.totals as { pageviews?: number }).pageviews ?? 0) > 0 ||
@@ -1074,6 +1091,7 @@ app.post("/v1/web-analytics/property", requireAuth, requireEntitlement, async (c
       auth,
       input.name,
       input.domain,
+      input.appId,
     );
     return c.json(
       {

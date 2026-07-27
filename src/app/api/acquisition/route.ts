@@ -15,8 +15,11 @@ export async function GET(request: Request) {
       { status: 400 },
     );
   }
+  const appId = (url.searchParams.get("appId") ?? url.searchParams.get("app") ?? "").trim();
+  const backendQuery = new URLSearchParams({ days });
+  if (appId) backendQuery.set("appId", appId);
   const response = await requestWithSession(
-    `/v1/web-analytics?days=${days}`,
+    `/v1/web-analytics?${backendQuery.toString()}`,
   );
   if (response) {
     return relayBackendResponse(response);

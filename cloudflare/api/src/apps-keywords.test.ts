@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { sanitizeClientAppMetadata } from "./apps-keywords";
+import {
+  sanitizeClientAppMetadata,
+  sanitizeWebAppMetadata,
+} from "./apps-keywords";
 
 describe("sanitizeClientAppMetadata", () => {
   it("accepts well-formed metadata and bounds every field", () => {
@@ -52,5 +55,30 @@ describe("sanitizeClientAppMetadata", () => {
     expect(cleaned.genre).toHaveLength(80);
     expect(cleaned.iconUrl).toHaveLength(1024);
     expect(cleaned.storeUrl).toHaveLength(1024);
+  });
+});
+
+describe("sanitizeWebAppMetadata", () => {
+  it("normalizes domains from full URLs", () => {
+    expect(
+      sanitizeWebAppMetadata({
+        domain: "https://www.cardealertracker.app/pricing",
+        name: "Car Dealer Tracker",
+      }),
+    ).toEqual({
+      domain: "cardealertracker.app",
+      name: "Car Dealer Tracker",
+      iconUrl:
+        "https://icons.duckduckgo.com/ip3/cardealertracker.app.ico",
+    });
+  });
+
+  it("rejects invalid domains", () => {
+    expect(() => sanitizeWebAppMetadata({ domain: "not-a-domain" })).toThrow(
+      /invalid_domain/u,
+    );
+    expect(() => sanitizeWebAppMetadata({ domain: "" })).toThrow(
+      /invalid_domain/u,
+    );
   });
 });
