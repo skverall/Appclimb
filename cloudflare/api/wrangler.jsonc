@@ -24,8 +24,8 @@
     "EXTERNAL_MUTATIONS_ENABLED": "false",
     "HISTORY_RETENTION_DAYS": "90",
     "SYNC_INTERVAL_HOURS": "6",
-    "GROWTH_CI_ENABLED": "false",
-    "AGENT_BRIDGE_ENABLED": "false",
+    "GROWTH_CI_ENABLED": "true",
+    "AGENT_BRIDGE_ENABLED": "true",
     "LEGACY_SURFACES_ENABLED": "false"
   },
   "d1_databases": [
