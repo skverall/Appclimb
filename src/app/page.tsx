@@ -18,9 +18,9 @@ import { redirect } from "next/navigation";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "AppClimb — Visual growth diagnosis for iOS subscription apps",
+  title: "AppClimb — Growth CI for iOS subscription apps",
   description:
-    "Explore an interactive River Atlas demo that maps acquisition, activation, paywall, subscription, and retention evidence into one growth journey.",
+    "Connect RevenueCat and PostHog. AppClimb evaluates every iOS release, sends one evidence-backed task to your coding agent, and closes it when real user data confirms the fix.",
   alternates: {
     canonical: "/",
   },

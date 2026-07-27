@@ -190,6 +190,91 @@
   border: 1px solid color-mix(in oklab, tomato 35%, Canvas);
 }
 
+.growth-ci-add-label {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.9rem;
+  margin: 1rem 0 0.75rem;
+}
+
+.growth-ci-add-search {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid color-mix(in oklab, CanvasText 14%, Canvas);
+  border-radius: 12px;
+  padding: 0.55rem 0.75rem;
+}
+
+.growth-ci-add-search input {
+  border: 0;
+  outline: none;
+  background: transparent;
+  width: 100%;
+  font: inherit;
+}
+
+.growth-ci-add-results {
+  list-style: none;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.growth-ci-add-results button {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  gap: 0.75rem;
+  align-items: center;
+  text-align: left;
+  border: 1px solid color-mix(in oklab, CanvasText 12%, Canvas);
+  border-radius: 12px;
+  padding: 0.65rem 0.75rem;
+  background: Canvas;
+  cursor: pointer;
+  font: inherit;
+}
+
+.growth-ci-add-results img {
+  border-radius: 9px;
+}
+
+.growth-ci-add-results strong {
+  display: block;
+}
+
+.growth-ci-add-results small {
+  color: color-mix(in oklab, CanvasText 60%, Canvas);
+}
+
+.growth-ci-add-action {
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+
+.growth-ci-sidebar-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+  margin: 0.65rem 0 0.25rem;
+  border: 1px dashed color-mix(in oklab, CanvasText 22%, Canvas);
+  background: transparent;
+  border-radius: 12px;
+  padding: 0.55rem 0.7rem;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.growth-ci-sidebar-add:hover {
+  background: color-mix(in oklab, CanvasText 4%, Canvas);
+}
+
 @media (max-width: 640px) {
   .growth-ci-dl {
     grid-template-columns: 1fr;

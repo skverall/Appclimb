@@ -19,7 +19,7 @@ export async function growthCiWorkspaceSnapshot(
 ) {
   const app = await db
     .prepare(
-      `SELECT id,name,bundle_id,icon_url,storefront,platform
+      `SELECT id,name,bundle_id,icon_url,default_storefront,platform
        FROM apps WHERE id=? AND workspace_id=? LIMIT 1`,
     )
     .bind(appId, workspaceId)
@@ -28,7 +28,7 @@ export async function growthCiWorkspaceSnapshot(
       name: string;
       bundle_id: string | null;
       icon_url: string | null;
-      storefront: string | null;
+      default_storefront: string | null;
       platform: string | null;
     }>();
   if (!app) return null;
@@ -38,7 +38,7 @@ export async function growthCiWorkspaceSnapshot(
 
   const sources = await db
     .prepare(
-      `SELECT id,provider,status,last_success_at,last_error_code,first_data_at
+      `SELECT id,provider,status,last_synced_at,last_error_code,first_data_at
        FROM source_connections
        WHERE workspace_id=? AND app_id=?
          AND provider IN ('revenuecat','posthog','app-store-connect','superwall')
@@ -143,14 +143,14 @@ export async function growthCiWorkspaceSnapshot(
       name: app.name,
       bundleId: app.bundle_id,
       iconUrl: app.icon_url,
-      storefront: app.storefront,
+      storefront: app.default_storefront,
       platform: "ios" as const,
     },
     sources: (sources.results ?? []).map((s) => ({
       id: s.id,
       provider: s.provider,
       status: s.status,
-      lastSuccessAt: s.last_success_at,
+      lastSuccessAt: s.last_synced_at,
       lastErrorCode: s.last_error_code,
       firstDataAt: s.first_data_at,
     })),

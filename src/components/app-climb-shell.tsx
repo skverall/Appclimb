@@ -10,6 +10,7 @@ import {
   LogIn,
   LogOut,
   PlugZap,
+  Plus,
   RefreshCw,
   Settings,
   ShieldCheck,
@@ -39,6 +40,7 @@ import {
   RestrictedWorkspaceView,
   UnavailableWorkspaceView,
 } from "@/components/workspace-state";
+import { AddIosAppDialog } from "@/components/growth-ci/add-ios-app-dialog";
 import {
   GrowthCiWorkspace,
   type GrowthCiSnapshot,
@@ -143,6 +145,7 @@ export function AppClimbShell({
   const [replayIndex, setReplayIndex] = useState(initialSnapshot.events.length);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [appModalOpen, setAppModalOpen] = useState(false);
+  const [addAppOpen, setAddAppOpen] = useState(false);
   const [customAppName, setCustomAppName] = useState(initialSnapshot.app.name);
   const [helpOpen, setHelpOpen] = useState(false);
   const [billingOpen, setBillingOpen] = useState(false);
@@ -729,6 +732,18 @@ export function AppClimbShell({
             <ChevronRight size={16} aria-hidden="true" />
           </button>
 
+          {session && snapshot.mode !== "demo" ? (
+            <button
+              type="button"
+              className="growth-ci-sidebar-add"
+              aria-label="Add iOS app"
+              onClick={() => setAddAppOpen(true)}
+            >
+              <Plus size={16} />
+              <span>Add iOS app</span>
+            </button>
+          ) : null}
+
           <nav className="main-nav" aria-label="Primary navigation">
             {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
               <button
@@ -875,37 +890,24 @@ export function AppClimbShell({
           <div>
             <p className="eyebrow">{initialSnapshot.workspaceName}</p>
             <h1>{NAV_ITEMS.find((item) => item.id === activeSection)?.label}</h1>
-          </div>
-          {/**
-           * Two clusters, not one queue. Read-only state chips come first and
-           * carry no border, then the interactive controls. Previously the two
-           * status indicators sat at opposite ends with three buttons between
-           * them, and both were styled as bordered pills, so nothing in the row
-           * signalled what could be clicked.
-           */}
-          <div className="topbar-actions">
+          </div>          <div className="topbar-actions">
             <div className="topbar-state-group" role="status">
               <span
                 className={`workspace-status workspace-status-${initialSnapshot.mode ?? "demo"}`}
               >
                 {workspaceStatus}
               </span>
-              <div className="readonly-pill">
-                <span />
-                Read-only
-              </div>
             </div>
             <div className="topbar-control-group">
-              <Link
-                className="topbar-demo-action"
-                href={
-                  initialSnapshot.mode === "demo" && session ? "/" : "/?demo=1"
-                }
-              >
-                {initialSnapshot.mode === "demo" && session
-                  ? "Open workspace"
-                  : "View demo"}
-              </Link>
+              {session && snapshot.mode !== "demo" ? (
+                <button
+                  className="topbar-demo-action"
+                  type="button"
+                  onClick={() => setAddAppOpen(true)}
+                >
+                  <Plus size={14} /> Add iOS app
+                </button>
+              ) : null}
               <button
                 className="icon-button"
                 type="button"
@@ -952,8 +954,11 @@ export function AppClimbShell({
           ) : activeSection === "growth" || activeSection === "pulse" ? (
             <GrowthCiHome
               appId={snapshot.app.id}
+              appName={displayedAppName}
+              appIconUrl={activeAppIcon || snapshot.app.iconUrl || null}
               demo={initialSnapshot.mode === "demo"}
               onOpenSettings={() => navigateTo("sources")}
+              onAddApp={() => setAddAppOpen(true)}
             />
           ) : activeSection === "sources" ? (
             <SourcesView
@@ -1168,6 +1173,17 @@ export function AppClimbShell({
         />
       )}
 
+      {addAppOpen && (
+        <AddIosAppDialog
+          storefront={snapshot.app.storefront || "US"}
+          onClose={() => setAddAppOpen(false)}
+          onAdded={() => {
+            setAddAppOpen(false);
+            window.location.href = "/";
+          }}
+        />
+      )}
+
       {helpOpen && (
         <ModalDialog
           labelledBy="help-title"
@@ -1175,27 +1191,29 @@ export function AppClimbShell({
           dialogClassName="settings-dialog help-dialog"
           closeLabel="Close help"
         >
-          <span className="eyebrow">Getting started</span>
-          <h2 id="help-title">From raw data to the next experiment</h2>
+          <span className="eyebrow">Growth CI</span>
+          <h2 id="help-title">Evaluate a release in three steps</h2>
           <ol className="help-steps">
             <li>
-              <strong>Connect one source</strong>
-              <span>Start in Sources with the system you trust most.</span>
+              <strong>Add your iOS app</strong>
+              <span>Paste an App Store URL or search by name.</span>
             </li>
             <li>
-              <strong>Open the first bottleneck</strong>
-              <span>Pulse highlights the earliest evidence-backed loss.</span>
-            </li>
-            <li>
-              <strong>Create a draft in Lab</strong>
+              <strong>Connect RevenueCat + PostHog</strong>
               <span>
-                Keep the hypothesis, primary metric and guardrail together.
+                Open Settings, connect both sources, and confirm session,
+                activation, and version mapping.
+              </span>
+            </li>
+            <li>
+              <strong>Ship with your agent</strong>
+              <span>
+                AppClimb opens one growth task when a regression is confirmed.
+                Your coding agent claims it; verification uses production data.
               </span>
             </li>
           </ol>
           <div className="settings-legal">
-            <Link href="/guides/ios-subscription-growth">Growth guide</Link>
-            <Link href="/blog">Field notes</Link>
             <Link href="/pricing">Pricing</Link>
             <Link href="/privacy">Privacy</Link>
             <Link href="/terms">Terms</Link>
@@ -1349,8 +1367,11 @@ function AppInfoModal({
 
 function GrowthCiHome(props: {
   appId: string;
+  appName: string;
+  appIconUrl: string | null;
   demo: boolean;
   onOpenSettings: () => void;
+  onAddApp: () => void;
 }) {
   const [snapshot, setSnapshot] = useState<GrowthCiSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1375,7 +1396,27 @@ function GrowthCiHome(props: {
       };
       if (!response.ok) {
         setError(payload.error ?? `growth_ci_${response.status}`);
-        setSnapshot(null);
+        // Keep a minimal local snapshot so the app identity remains visible.
+        setSnapshot({
+          product: "growth_ci",
+          app: {
+            id: props.appId,
+            name: props.appName,
+            iconUrl: props.appIconUrl,
+            bundleId: null,
+          },
+          sources: [],
+          mapping: null,
+          contract: {
+            version: "1.0.0",
+            freeVerdictConsumedAt: null,
+            yaml: "",
+          },
+          latestRelease: null,
+          history: [],
+          incident: null,
+          task: null,
+        });
         return;
       }
       setSnapshot(payload.data ?? null);
@@ -1384,7 +1425,7 @@ function GrowthCiHome(props: {
     } finally {
       setLoading(false);
     }
-  }, [props.appId, props.demo]);
+  }, [props.appId, props.appIconUrl, props.appName, props.demo]);
 
   useEffect(() => {
     void refresh();
@@ -1426,6 +1467,31 @@ function GrowthCiHome(props: {
     );
   }
 
+  if (!props.appId) {
+    return (
+      <div className="growth-ci-workspace">
+        <section className="growth-ci-verdict growth-ci-verdict--config">
+          <div>
+            <h2>Add your iOS app to start Growth CI</h2>
+            <p>
+              AppClimb evaluates every production release for one iOS subscription
+              app using RevenueCat and PostHog.
+            </p>
+            <div className="growth-ci-actions">
+              <button
+                type="button"
+                className="growth-ci-btn"
+                onClick={props.onAddApp}
+              >
+                <Plus size={16} /> Add iOS app
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <GrowthCiWorkspace
       snapshot={snapshot}
@@ -1433,6 +1499,7 @@ function GrowthCiHome(props: {
       error={error}
       onRefresh={() => void refresh()}
       onOpenSettings={props.onOpenSettings}
+      onAddApp={props.onAddApp}
       onCopyTask={() => {
         if (!snapshot?.task?.packet) return;
         void navigator.clipboard.writeText(

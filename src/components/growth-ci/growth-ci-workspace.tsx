@@ -114,6 +114,7 @@ export function GrowthCiWorkspace(props: {
   error?: string | null;
   onRefresh?: () => void;
   onOpenSettings?: () => void;
+  onAddApp?: () => void;
   onDismissIncident?: (incidentId: string) => void;
   onCopyTask?: () => void;
 }) {
@@ -143,11 +144,20 @@ export function GrowthCiWorkspace(props: {
             <p className="growth-ci-subtle">
               {release
                 ? `${release.version}${release.buildNumber ? ` (${release.buildNumber})` : ""} · ${release.firstObservedLabel}`
-                : "Connect RevenueCat + PostHog to evaluate releases"}
+                : "Connect RevenueCat + PostHog in Settings to evaluate releases"}
             </p>
           </div>
         </div>
         <div className="growth-ci-header-actions">
+          {props.onAddApp ? (
+            <button
+              type="button"
+              className="growth-ci-btn"
+              onClick={props.onAddApp}
+            >
+              Add iOS app
+            </button>
+          ) : null}
           <button
             type="button"
             className="growth-ci-icon-btn"

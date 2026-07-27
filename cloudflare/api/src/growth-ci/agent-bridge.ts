@@ -312,7 +312,7 @@ export async function getAgentStatus(
 
   const sources = await db
     .prepare(
-      `SELECT provider,status,last_success_at
+      `SELECT provider,status,last_synced_at
        FROM source_connections
        WHERE workspace_id=? AND app_id=? AND provider IN ('revenuecat','posthog')`,
     )
@@ -375,7 +375,7 @@ export async function getAgentStatus(
     sources: (sources.results ?? []).map((s) => ({
       provider: s.provider,
       status: s.status,
-      lastSuccessAt: s.last_success_at,
+      lastSuccessAt: s.last_synced_at,
     })),
     // Explicit: no credentials, no raw rows
   };
