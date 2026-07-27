@@ -75,7 +75,10 @@ export function buildTrackingAgentPrompt(
 
   lines.push(
     `## Constraints`,
-    `- Do not substitute a third-party analytics vendor (no GA, no DataFast)`,
+    // Never name another analytics product here. The prompt is handed to the
+    // customer's own coding agent, and naming a vendor both reads as an
+    // endorsement and invites the agent to go install it instead.
+    `- Use this snippet as written; do not substitute another analytics vendor`,
     `- Do not change or regenerate the token value`,
     `- Serve the script only on ${domain}`,
     `- Do not fire synthetic or test events to make the dashboard look populated`,

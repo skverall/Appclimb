@@ -5,6 +5,7 @@ import {
   isDashboardSnapshot,
 } from "@/lib/dashboard-schema";
 import { demoSnapshot } from "@/lib/demo-data";
+import { deriveWorkspaceReadiness } from "../../cloudflare/api/src/diagnosis/readiness";
 
 describe("dashboardSnapshotSchema", () => {
   it("accepts the complete demo contract", () => {
@@ -251,4 +252,125 @@ describe("Decision System V2 snapshot fields", () => {
   it("still accepts a snapshot that carries none of the new fields", () => {
     expect(isDashboardSnapshot(demoSnapshot)).toBe(true);
   });
+});
+
+/**
+ * Cross-boundary contract check.
+ *
+ * The validator and the readiness derivation live on opposite sides of the
+ * Worker/Next boundary and were written by different agents. A disagreement
+ * between them is invisible in isolation — `isDashboardSnapshot` simply returns
+ * false and `page.tsx` degrades the whole workspace to "unavailable" without an
+ * error — so the real backend output is asserted against the real validator
+ * here. This caught `progress` being emitted as a percent while the schema
+ * bounded it to 0-1, which broke Pulse for every authenticated user.
+ */
+describe("readiness output satisfies the snapshot validator", () => {
+  const cases: Array<[string, Parameters<typeof deriveWorkspaceReadiness>[0]]> = [
+    [
+      "no product",
+      {
+        app: null,
+        sources: [],
+        metricCount: 0,
+        completeDays: 0,
+        hasDiagnosisRun: false,
+        hasConfirmedInsight: false,
+      },
+    ],
+    [
+      "web app awaiting its first event",
+      {
+        app: { id: "a", name: "Site", platform: "Web" },
+        webProperty: { id: "p", domain: "example.com", firstEventAt: null },
+        sources: [],
+        metricCount: 0,
+        completeDays: 0,
+        hasDiagnosisRun: false,
+        hasConfirmedInsight: false,
+      },
+    ],
+    [
+      "iOS app without App Store Connect",
+      {
+        app: { id: "a", name: "App", platform: "iOS" },
+        sources: [],
+        metricCount: 0,
+        completeDays: 0,
+        hasDiagnosisRun: false,
+        hasConfirmedInsight: false,
+      },
+    ],
+    [
+      "Apple reports pending",
+      {
+        app: { id: "a", name: "App", platform: "iOS" },
+        sources: [
+          {
+            provider: "app-store-connect",
+            status: "connected",
+            lastErrorCode: "no_data_in_window",
+          },
+        ],
+        metricCount: 0,
+        completeDays: 0,
+        hasDiagnosisRun: false,
+        hasConfirmedInsight: false,
+      },
+    ],
+    [
+      "collecting a baseline",
+      {
+        app: { id: "a", name: "App", platform: "iOS" },
+        sources: [{ provider: "app-store-connect", status: "connected" }],
+        metricCount: 15,
+        completeDays: 1,
+        hasDiagnosisRun: false,
+        hasConfirmedInsight: false,
+      },
+    ],
+    [
+      "diagnosis ready",
+      {
+        app: { id: "a", name: "App", platform: "iOS" },
+        sources: [{ provider: "app-store-connect", status: "connected" }],
+        metricCount: 150,
+        completeDays: 14,
+        hasDiagnosisRun: true,
+        hasConfirmedInsight: true,
+      },
+    ],
+    [
+      "source needs attention",
+      {
+        app: { id: "a", name: "App", platform: "iOS" },
+        sources: [
+          {
+            provider: "posthog",
+            status: "needs-attention",
+            lastErrorCode: "authorization_expired",
+          },
+        ],
+        metricCount: 0,
+        completeDays: 0,
+        hasDiagnosisRun: false,
+        hasConfirmedInsight: false,
+      },
+    ],
+  ];
+
+  for (const [name, input] of cases) {
+    it(`accepts the payload for: ${name}`, () => {
+      const snapshot = structuredClone(
+        demoSnapshot,
+      ) as unknown as Record<string, unknown>;
+      snapshot.readiness = deriveWorkspaceReadiness(input);
+
+      const result = dashboardSnapshotSchema.safeParse(snapshot);
+      // Surface the offending path rather than a bare `false`.
+      expect(
+        result.success ? [] : result.error.issues.map((i) => i.path.join(".")),
+      ).toEqual([]);
+    });
+  }
 });

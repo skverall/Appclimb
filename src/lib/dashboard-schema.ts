@@ -86,7 +86,11 @@ const workspaceReadinessSchema = z.object({
     "no_confirmed_issue",
     "attention",
   ]),
-  progress: z.number().finite().min(0).max(1),
+  // Percent complete, 0-100. `deriveWorkspaceReadiness` emits whole percents
+  // (0, 20, 25, 45, 60, 85, 100) and the readiness card renders them as such.
+  // A 0-1 bound here rejects every authenticated snapshot, which silently
+  // degrades the whole workspace to the "unavailable" state.
+  progress: z.number().finite().min(0).max(100),
   primaryAction: z.object({
     kind: z.enum([
       "add_product",
