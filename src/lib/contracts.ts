@@ -172,7 +172,7 @@ export interface DashboardSnapshot {
   app: {
     id: string;
     name: string;
-    platform: "iOS";
+    platform: "iOS" | "Web";
     appStoreId?: string;
     storefront: string;
     iconUrl?: string;

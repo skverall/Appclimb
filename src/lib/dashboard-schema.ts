@@ -30,7 +30,7 @@ export const dashboardSnapshotSchema = z.object({
   app: z.object({
     id: z.string(),
     name: z.string(),
-    platform: z.literal("iOS"),
+    platform: z.enum(["iOS", "Web"]),
     storefront: z.string(),
     period: z.string(),
   }),

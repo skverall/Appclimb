@@ -26,4 +26,10 @@ describe("dashboardSnapshotSchema", () => {
     snapshot.sources[0].lastSyncAt = null;
     expect(dashboardSnapshotSchema.safeParse(snapshot).success).toBe(true);
   });
+
+  it("accepts Web platform app snapshots", () => {
+    const snapshot = structuredClone(demoSnapshot);
+    snapshot.app.platform = "Web";
+    expect(isDashboardSnapshot(snapshot)).toBe(true);
+  });
 });
