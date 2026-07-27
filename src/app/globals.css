@@ -13234,8 +13234,71 @@ a {
 }
 
 /* Horizontal Workspace App Tabs */
+.pulse-app-switcher-bar {
+  width: 100%;
+  max-width: 100%;
+  margin-bottom: 0.75rem;
+}
+
+.store-visibility-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.optional-enrichment-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem 1.15rem;
+  background: var(--surface-subtle, #f8fafc);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: var(--radius-lg, 12px);
+}
+
+.optional-enrichment-banner .enrichment-copy {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.optional-enrichment-banner .enrichment-icon {
+  color: var(--teal-medium, #14b8a6);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.optional-enrichment-banner strong {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--foreground, #0f172a);
+}
+
+.optional-enrichment-banner p {
+  font-size: 0.8125rem;
+  color: var(--foreground-muted, #64748b);
+  margin: 0.15rem 0 0 0;
+  line-height: 1.4;
+}
+
+.optional-enrichment-banner button {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.setup-progress-lower {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
 .pulse-app-tabs-container {
   width: 100%;
+  max-width: 100%;
   overflow-x: auto;
   padding-bottom: 4px;
 }

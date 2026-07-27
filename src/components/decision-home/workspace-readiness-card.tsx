@@ -203,13 +203,14 @@ function stateCopy(readiness: WorkspaceReadiness): StateCopy {
 
     case "source_required":
       return {
-        tone: "violet",
-        badge: "Setup required",
-        headline: "Complete data setup to unlock your first diagnosis",
-        description: provider
-          ? `${provider} is the next required source. AppClimb will not guess a bottleneck without it.`
-          : "Connect the next required data source. AppClimb will not guess a bottleneck without it.",
-        ctaLabel: provider ? `Connect ${provider}` : "Connect data source",
+        tone: "blue",
+        badge: "Optional enrichment",
+        headline: provider
+          ? `Connect ${provider} for full-funnel diagnosis`
+          : "Connect private sources for full-funnel diagnosis",
+        description:
+          "App Store Connect is an optional connector for private downloads, sales, subscriptions, and full-funnel diagnosis. Pulse provides store visibility now, and you can connect private sources in Sources when ready.",
+        ctaLabel: "Connect in Sources",
         icon: <Link2 size={18} />,
         ctaIsAction: true,
       };

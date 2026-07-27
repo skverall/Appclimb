@@ -8,7 +8,6 @@ import {
   BarChart3,
   CalendarClock,
   Check,
-  ChevronDown,
   CircleAlert,
   Clipboard,
   Code2,
@@ -1165,7 +1164,6 @@ export function AppSelector({
 }) {
   const [apps, setApps] = useState<WorkspaceApp[]>([]);
   const [addOpen, setAddOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
   const [deletingApp, setDeletingApp] = useState<WorkspaceApp | null>(null);
   const [deletingState, setDeletingState] = useState<"idle" | "loading" | "error">("idle");
 
@@ -1248,14 +1246,6 @@ export function AppSelector({
   };
 
   const currentAppIcon = snapshot.app.iconUrl || fetchedIcons[snapshot.app.id] || apps.find((item) => item.id === snapshot.app.id)?.iconUrl;
-
-  const getInitials = (name: string) =>
-    name
-      .split(/\s+/u)
-      .slice(0, 2)
-      .map((word) => word[0])
-      .join("")
-      .toUpperCase();
 
   const displayApps: WorkspaceApp[] = apps.length > 0 ? apps : [
     {
@@ -1396,7 +1386,7 @@ function keywordStrength(rank: number | null, checked: boolean) {
   return { label: "Weak", level: "weak" };
 }
 
-function KeywordTerrain({ snapshot }: { snapshot: DashboardSnapshot }) {
+export function KeywordTerrain({ snapshot }: { snapshot: DashboardSnapshot }) {
   const [tracks, setTracks] = useState<KeywordTrack[]>(
     snapshot.mode === "demo" ? demoKeywordTracks : [],
   );
@@ -1797,16 +1787,10 @@ export function ProductPulseWorkspace({
   onOpenSources: () => void;
 }) {
   return (
-    <>
-      <div className="pulse-product-toolbar">
-        <AppSelector snapshot={snapshot} />
-      </div>
-      <PostHogOverview
-        pulse={snapshot.posthogPulse}
-        onOpenSources={onOpenSources}
-        demo={snapshot.mode === "demo"}
-      />
-      <KeywordTerrain snapshot={snapshot} />
-    </>
+    <PostHogOverview
+      pulse={snapshot.posthogPulse}
+      onOpenSources={onOpenSources}
+      demo={snapshot.mode === "demo"}
+    />
   );
 }

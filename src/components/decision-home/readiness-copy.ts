@@ -183,7 +183,7 @@ export function capabilityReason(code?: string): string {
     case "setup_required":
       return "Setup not finished";
     case "connect_acquisition_source":
-      return "Needs App Store Connect";
+      return "App Store Connect optional";
     case "connect_posthog":
       return "Needs PostHog";
     case "connect_revenuecat_or_superwall":

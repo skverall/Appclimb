@@ -11,7 +11,7 @@ import {
 import { GrowthReplay } from "@/components/growth-replay";
 import { GrowthRiver } from "@/components/growth-river";
 import { InsightPanel } from "@/components/insight-panel";
-import { ProductPulseWorkspace } from "@/components/product-pulse-workspace";
+import { AppSelector, ProductPulseWorkspace } from "@/components/product-pulse-workspace";
 import { RetentionHeatmap } from "@/components/retention-heatmap";
 import { VoiceClusters } from "@/components/voice-clusters";
 import { EvidenceModal } from "@/components/decision-home/evidence-modal";
@@ -139,6 +139,9 @@ export function PulseView({
 
   return (
     <section className="pulse-view">
+      <div className="pulse-app-switcher-bar">
+        <AppSelector snapshot={snapshot} />
+      </div>
       <div className="filter-row">
         <div
           className="filter-control"

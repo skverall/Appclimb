@@ -11,7 +11,7 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { ProductPulseWorkspace } from "@/components/product-pulse-workspace";
+import { AppSelector } from "@/components/product-pulse-workspace";
 import { demoSnapshot } from "@/lib/demo-data";
 
 afterEach(() => {
@@ -76,7 +76,7 @@ describe("ProductPulseWorkspace", () => {
     );
 
     render(
-      <ProductPulseWorkspace snapshot={snapshot} onOpenSources={vi.fn()} />,
+      <AppSelector snapshot={snapshot} />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Add app" }));
     expect(
@@ -185,7 +185,7 @@ describe("ProductPulseWorkspace", () => {
       );
 
       render(
-        <ProductPulseWorkspace snapshot={snapshot} onOpenSources={vi.fn()} />,
+        <AppSelector snapshot={snapshot} />,
       );
       fireEvent.click(screen.getByLabelText("Add app"));
       fireEvent.click(screen.getByRole("tab", { name: "Web SaaS" }));

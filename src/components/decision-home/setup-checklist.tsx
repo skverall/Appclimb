@@ -190,8 +190,8 @@ function buildSteps(
         }
       : {
           id: "connect",
-          title: "Connect App Store Connect",
-          description: "Read-only API key with access to Analytics Reports.",
+          title: "Connect App Store Connect (optional)",
+          description: "Read-only API key for private downloads, sales, and full-funnel diagnosis.",
           completed: connectionDone,
           current: state === "source_required",
           actionKind: "connect_source",
