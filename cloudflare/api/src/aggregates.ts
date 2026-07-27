@@ -627,6 +627,206 @@ order by day,event`;
       to,
     )),
   );
+  result.push(
+    ...(await readVersionReleaseCohorts(
+      credentials,
+      host,
+      apiKey,
+      projectId,
+      sessionEvent,
+      activationEvent,
+      from,
+      to,
+    )),
+  );
+  return result;
+}
+
+/**
+ * Version-aware activation cohorts for Growth CI release evaluation.
+ *
+ * Requires a confirmed version property on credentials. Property keys are
+ * validated before HogQL interpolation. Missing/invalid mapping returns [].
+ */
+async function readVersionReleaseCohorts(
+  credentials: Record<string, unknown>,
+  host: string,
+  apiKey: string,
+  projectId: string,
+  sessionEvent: string,
+  activationEvent: string,
+  from: Date,
+  to: Date,
+): Promise<Aggregate[]> {
+  const versionProperty =
+    typeof credentials.versionProperty === "string"
+      ? credentials.versionProperty.trim()
+      : "";
+  const buildProperty =
+    typeof credentials.buildProperty === "string"
+      ? credentials.buildProperty.trim()
+      : "";
+  const versionConfirmed =
+    credentials.versionPropertyStatus === "confirmed" ||
+    credentials.versionPropertyConfirmed === true;
+  if (
+    !versionProperty ||
+    !versionConfirmed ||
+    !sessionEvent ||
+    !activationEvent ||
+    sessionEvent === activationEvent ||
+    !validEventName(sessionEvent) ||
+    !validEventName(activationEvent)
+  ) {
+    return [];
+  }
+  // Strict property key validation (no SQL concatenation of untrusted input)
+  const safeProp = /^\$?[A-Za-z_][A-Za-z0-9_]*$/u;
+  if (!safeProp.test(versionProperty)) return [];
+  if (buildProperty && !safeProp.test(buildProperty)) return [];
+
+  const windowDays = activationWindowDays(credentials);
+  const cohortEnd = new Date(to.getTime() - windowDays * dayMilliseconds);
+  const cohortStart = new Date(
+    Math.max(
+      from.getTime(),
+      cohortEnd.getTime() - COHORT_SPAN_DAYS * dayMilliseconds,
+    ),
+  );
+  if (!(cohortStart < cohortEnd)) return [];
+  const lookbackStart = new Date(
+    cohortStart.getTime() - COHORT_NEW_USER_LOOKBACK_DAYS * dayMilliseconds,
+  );
+
+  const versionExpr = `toString(properties.${versionProperty})`;
+  const buildExpr = buildProperty
+    ? `toString(properties.${buildProperty})`
+    : `''`;
+
+  const query = `with first_sessions as (
+  select
+    person_id as person,
+    min(timestamp) as first_at,
+    argMin(${versionExpr}, timestamp) as version,
+    argMin(${buildExpr}, timestamp) as build
+  from events
+  where timestamp >= toDateTime('${clickhouseTime(lookbackStart)}','UTC')
+    and timestamp < toDateTime('${clickhouseTime(cohortEnd)}','UTC')
+    and event = ${quoteEvent(sessionEvent)}
+  group by person_id
+  having min(timestamp) >= toDateTime('${clickhouseTime(cohortStart)}','UTC')
+    and version != ''
+    and version is not null
+),
+activation as (
+  select person_id as person, min(timestamp) as activated_at
+  from events
+  where timestamp >= toDateTime('${clickhouseTime(cohortStart)}','UTC')
+    and timestamp < toDateTime('${clickhouseTime(to)}','UTC')
+    and event = ${quoteEvent(activationEvent)}
+  group by person_id
+)
+select
+  f.version as version,
+  f.build as build,
+  count() as new_users,
+  sum(ifNull(activated,0)) as activated_users,
+  min(f.first_at) as first_session_at,
+  max(f.first_at) as last_session_at
+from (
+  select
+    f.person as person,
+    f.version as version,
+    f.build as build,
+    f.first_at as first_at,
+    if(
+      a.activated_at >= f.first_at
+      and a.activated_at <= f.first_at + interval ${windowDays} day,
+      1,
+      0
+    ) as activated
+  from first_sessions as f
+  left join activation as a on a.person = f.person
+) as f
+group by f.version, f.build
+order by new_users desc
+limit 50`;
+
+  let payload: Record<string, unknown>;
+  try {
+    payload = await providerJSON(
+      `${host}/api/projects/${encodeURIComponent(projectId)}/query/`,
+      apiKey,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ query: { kind: "HogQLQuery", query } }),
+      },
+    );
+  } catch {
+    return [];
+  }
+
+  const completeDays = Math.max(
+    0,
+    Math.floor((cohortEnd.getTime() - cohortStart.getTime()) / dayMilliseconds),
+  );
+  const result: Aggregate[] = [];
+  const sourceUpdatedAt = new Date().toISOString();
+  const occurredAt = new Date(cohortEnd.getTime() - 1).toISOString();
+  const mappingConfirmed =
+    credentials.mappingMode === "manual" ||
+    credentials.mappingStatus === "confirmed" ||
+    credentials.mappingConfirmed === true;
+
+  for (const row of Array.isArray(payload.results) ? payload.results : []) {
+    if (!Array.isArray(row) || row.length < 4) continue;
+    const version = typeof row[0] === "string" ? row[0].trim().slice(0, 64) : "";
+    const build =
+      typeof row[1] === "string" ? row[1].trim().slice(0, 64) : String(row[1] ?? "").slice(0, 64);
+    const newUsers = numeric(row[2]);
+    const activatedUsers = numeric(row[3]);
+    if (!version || newUsers === null || activatedUsers === null || newUsers <= 0) {
+      continue;
+    }
+    const firstSessionAt = dateValue(row[4]);
+    const lastSessionAt = dateValue(row[5]);
+    const dimensions: Record<string, string> = {
+      version,
+      build,
+      cohortStart: cohortStart.toISOString(),
+      cohortEnd: cohortEnd.toISOString(),
+      activationWindowDays: String(windowDays),
+      sessionEvent,
+      activationEvent,
+      versionProperty,
+      completeDays: String(completeDays),
+      mappingConfirmed: mappingConfirmed ? "true" : "false",
+      firstSessionAt: firstSessionAt?.toISOString() ?? "",
+      lastSessionAt: lastSessionAt?.toISOString() ?? "",
+    };
+    result.push({
+      metricKey: "release_cohort_new_users",
+      occurredAt,
+      value: Math.trunc(newUsers),
+      unit: "count",
+      dimensions,
+      sourceUpdatedAt,
+      completeness: 1,
+    });
+    result.push({
+      metricKey: "release_cohort_activated_users",
+      occurredAt,
+      value: Math.max(
+        0,
+        Math.min(Math.trunc(newUsers), Math.trunc(activatedUsers)),
+      ),
+      unit: "count",
+      dimensions,
+      sourceUpdatedAt,
+      completeness: 1,
+    });
+  }
   return result;
 }
 

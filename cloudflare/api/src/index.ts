@@ -89,6 +89,36 @@ import {
   webAnalyticsSnapshot,
   webInstallSnapshot,
 } from "./web-analytics";
+import {
+  areLegacySurfacesEnabled,
+  isAgentBridgeEnabled,
+  isGrowthCiEnabled,
+  readGrowthCiFlags,
+} from "./growth-ci/flags";
+import {
+  processReleaseCheckMessage,
+  queueDueReleaseChecks,
+  recoverStaleReleaseChecks,
+} from "./growth-ci/checks";
+import {
+  authenticateAgentToken,
+  agentHasScope,
+  createAgentToken,
+  listAgentTokens,
+  revokeAgentToken,
+  getAgentStatus,
+  getNextAgentTask,
+  claimAgentTask,
+  reportAgentTaskEvent,
+  reportAgentRelease,
+  getTaskVerification,
+} from "./growth-ci/agent-bridge";
+import {
+  growthCiWorkspaceSnapshot,
+  dismissGrowthIncident,
+} from "./growth-ci/workspace";
+import { ensureGrowthContract, updateContractMeasurement } from "./growth-ci/contracts";
+import type { ReleaseCheckMessage } from "./growth-ci/types";
 
 const app = new Hono<AppEnvironment>();
 
@@ -793,6 +823,11 @@ app.post("/v1/apps", requireAuth, async (c) => {
   const input = await jsonBody(c.req.raw);
 
   if (input.platform === "web") {
+    // Growth CI is iOS-only. Web SaaS app creation is retired unless legacy
+    // surfaces are explicitly re-enabled for migration access.
+    if (isGrowthCiEnabled(c.env) && !areLegacySurfacesEnabled(c.env)) {
+      return errorResponse(c, "ios_only_growth_ci", 400);
+    }
     try {
       const metadata = sanitizeWebAppMetadata(
         input.metadata && typeof input.metadata === "object"
@@ -825,9 +860,9 @@ app.post("/v1/apps", requireAuth, async (c) => {
     return errorResponse(
       c,
       input.platform === "google-play"
-        ? "google_play_authorization_required"
+        ? "google_play_not_supported"
         : "unsupported_app_catalog",
-      input.platform === "google-play" ? 409 : 400,
+      input.platform === "google-play" ? 400 : 400,
     );
   }
   // Catalog metadata comes from the browser's iTunes lookup. The server
@@ -873,7 +908,350 @@ app.delete("/v1/apps/:id", requireAuth, async (c) => {
   return c.json({ data });
 });
 
+// ---------------------------------------------------------------------------
+// Growth CI workspace + Agent Bridge (user JWT + agent tokens)
+// ---------------------------------------------------------------------------
+
+app.get("/v1/growth-ci", requireAuth, async (c) => {
+  if (!isGrowthCiEnabled(c.env)) {
+    return errorResponse(c, "growth_ci_disabled", 404);
+  }
+  const auth = c.get("auth");
+  const appId = (c.req.query("appId") ?? "").trim();
+  if (!appId) return errorResponse(c, "app_id_required", 400);
+  const data = await growthCiWorkspaceSnapshot(c.env.DB, auth.workspaceId, appId);
+  if (!data) return errorResponse(c, "app_not_found", 404);
+  return c.json({ data, flags: readGrowthCiFlags(c.env) });
+});
+
+app.get("/v1/growth-ci/contract", requireAuth, async (c) => {
+  if (!isGrowthCiEnabled(c.env)) {
+    return errorResponse(c, "growth_ci_disabled", 404);
+  }
+  const auth = c.get("auth");
+  const appId = (c.req.query("appId") ?? "").trim();
+  if (!appId) return errorResponse(c, "app_id_required", 400);
+  const row = await ensureGrowthContract(c.env.DB, auth.workspaceId, appId);
+  return c.json({ data: row });
+});
+
+app.post("/v1/growth-ci/mapping/version", requireAuth, async (c) => {
+  if (!isGrowthCiEnabled(c.env)) {
+    return errorResponse(c, "growth_ci_disabled", 404);
+  }
+  const auth = c.get("auth");
+  if (!["owner", "admin"].includes(auth.role)) {
+    return errorResponse(c, "admin_required", 403);
+  }
+  const input = await jsonBody(c.req.raw);
+  const appId = typeof input.appId === "string" ? input.appId.trim() : "";
+  const versionProperty =
+    typeof input.versionProperty === "string" ? input.versionProperty.trim() : "";
+  const buildProperty =
+    typeof input.buildProperty === "string" ? input.buildProperty.trim() : "";
+  const confirm = input.confirm === true;
+  if (!appId || !versionProperty) {
+    return errorResponse(c, "invalid_version_mapping", 400);
+  }
+  if (!/^\$?[A-Za-z_][A-Za-z0-9_]*$/u.test(versionProperty)) {
+    return errorResponse(c, "invalid_property_key", 400);
+  }
+  if (buildProperty && !/^\$?[A-Za-z_][A-Za-z0-9_]*$/u.test(buildProperty)) {
+    return errorResponse(c, "invalid_property_key", 400);
+  }
+  const confirmedAt = confirm ? nowISO() : null;
+  await updateContractMeasurement(c.env.DB, auth.workspaceId, appId, {
+    versionProperty,
+    buildProperty,
+    versionPropertyStatus: confirm ? "confirmed" : "unconfirmed",
+    versionPropertyConfirmedAt: confirmedAt,
+  });
+  // Best-effort mirror onto posthog_mappings when present
+  try {
+    await c.env.DB.prepare(
+      `UPDATE posthog_mappings SET
+        version_property=?,
+        build_property=?,
+        version_property_status=?,
+        version_property_confirmed_at=?,
+        updated_at=?
+       WHERE workspace_id=? AND (app_id=? OR app_id IS NULL)`,
+    )
+      .bind(
+        versionProperty,
+        buildProperty,
+        confirm ? "confirmed" : "unconfirmed",
+        confirmedAt,
+        nowISO(),
+        auth.workspaceId,
+        appId,
+      )
+      .run();
+  } catch {
+    // mapping table columns may lag in older local DBs mid-migration
+  }
+  // Also seal into PostHog credentials when connected
+  try {
+    const connection = await c.env.DB.prepare(
+      `SELECT id,credential_envelope FROM source_connections
+       WHERE workspace_id=? AND app_id=? AND provider='posthog' LIMIT 1`,
+    )
+      .bind(auth.workspaceId, appId)
+      .first<{ id: string; credential_envelope: string }>();
+    if (connection) {
+      const { openCredentials, sealCredentials } = await import("./crypto");
+      const envelope = JSON.parse(connection.credential_envelope);
+      const credentials = await openCredentials(
+        envelope,
+        requireSecret(c.env, "ENVELOPE_MASTER_KEY"),
+      );
+      const next = {
+        ...credentials,
+        versionProperty,
+        buildProperty,
+        versionPropertyStatus: confirm ? "confirmed" : "unconfirmed",
+        versionPropertyConfirmed: confirm,
+      };
+      const resealed = await sealCredentials(
+        next,
+        requireSecret(c.env, "ENVELOPE_MASTER_KEY"),
+      );
+      await c.env.DB.prepare(
+        `UPDATE source_connections SET credential_envelope=?,updated_at=?
+         WHERE id=? AND workspace_id=?`,
+      )
+        .bind(JSON.stringify(resealed), nowISO(), connection.id, auth.workspaceId)
+        .run();
+    }
+  } catch {
+    // non-fatal
+  }
+  return c.json({
+    data: {
+      versionProperty,
+      buildProperty,
+      status: confirm ? "confirmed" : "unconfirmed",
+    },
+  });
+});
+
+app.post("/v1/growth-ci/incidents/:id/dismiss", requireAuth, async (c) => {
+  if (!isGrowthCiEnabled(c.env)) {
+    return errorResponse(c, "growth_ci_disabled", 404);
+  }
+  const auth = c.get("auth");
+  if (!["owner", "admin"].includes(auth.role)) {
+    return errorResponse(c, "admin_required", 403);
+  }
+  const input = await jsonBody(c.req.raw);
+  const appId = typeof input.appId === "string" ? input.appId.trim() : "";
+  const reason =
+    typeof input.reason === "string" ? input.reason.trim() : "dismissed_by_user";
+  if (!appId) return errorResponse(c, "app_id_required", 400);
+  const ok = await dismissGrowthIncident(
+    c.env.DB,
+    auth.workspaceId,
+    appId,
+    c.req.param("id"),
+    reason,
+  );
+  if (!ok) return errorResponse(c, "incident_not_open", 409);
+  return c.json({ data: { dismissed: true } });
+});
+
+app.post("/v1/agent-tokens", requireAuth, async (c) => {
+  if (!isAgentBridgeEnabled(c.env)) {
+    return errorResponse(c, "agent_bridge_disabled", 404);
+  }
+  const auth = c.get("auth");
+  if (!["owner", "admin"].includes(auth.role)) {
+    return errorResponse(c, "admin_required", 403);
+  }
+  const input = await jsonBody(c.req.raw);
+  const appId = typeof input.appId === "string" ? input.appId.trim() : "";
+  const name = typeof input.name === "string" ? input.name : "Agent token";
+  if (!appId) return errorResponse(c, "app_id_required", 400);
+  const created = await createAgentToken(c.env.DB, {
+    workspaceId: auth.workspaceId,
+    appId,
+    name,
+    createdByUserId: auth.userId,
+  });
+  // Raw token returned once only
+  return c.json({ data: created }, 201);
+});
+
+app.get("/v1/agent-tokens", requireAuth, async (c) => {
+  if (!isAgentBridgeEnabled(c.env)) {
+    return errorResponse(c, "agent_bridge_disabled", 404);
+  }
+  const auth = c.get("auth");
+  const appId = (c.req.query("appId") ?? "").trim() || undefined;
+  return c.json({
+    data: await listAgentTokens(c.env.DB, auth.workspaceId, appId),
+  });
+});
+
+app.delete("/v1/agent-tokens/:id", requireAuth, async (c) => {
+  if (!isAgentBridgeEnabled(c.env)) {
+    return errorResponse(c, "agent_bridge_disabled", 404);
+  }
+  const auth = c.get("auth");
+  if (!["owner", "admin"].includes(auth.role)) {
+    return errorResponse(c, "admin_required", 403);
+  }
+  const ok = await revokeAgentToken(
+    c.env.DB,
+    auth.workspaceId,
+    c.req.param("id"),
+    auth.userId,
+  );
+  if (!ok) return errorResponse(c, "not_found", 404);
+  return c.json({ data: { revoked: true } });
+});
+
+async function requireAgentAuth(
+  c: {
+    env: Cloudflare.Env;
+    req: { header: (name: string) => string | undefined };
+  },
+): Promise<
+  | { auth: NonNullable<Awaited<ReturnType<typeof authenticateAgentToken>>> }
+  | Response
+> {
+  if (!isAgentBridgeEnabled(c.env)) {
+    return errorResponse(
+      c as Parameters<Parameters<typeof app.onError>[0]>[1],
+      "agent_bridge_disabled",
+      404,
+    );
+  }
+  const auth = await authenticateAgentToken(
+    c.env.DB,
+    c.req.header("authorization"),
+  );
+  if (!auth) {
+    return errorResponse(
+      c as Parameters<Parameters<typeof app.onError>[0]>[1],
+      "unauthorized",
+      401,
+    );
+  }
+  return { auth };
+}
+
+app.get("/v1/agent/status", async (c) => {
+  const result = await requireAgentAuth(c);
+  if (result instanceof Response) return result;
+  if (!agentHasScope(result.auth, "verdicts:read") && !agentHasScope(result.auth, "tasks:read")) {
+    return errorResponse(c, "forbidden", 403);
+  }
+  const data = await getAgentStatus(c.env.DB, result.auth);
+  if (!data) return errorResponse(c, "app_not_found", 404);
+  return c.json({ data });
+});
+
+app.get("/v1/agent/tasks/next", async (c) => {
+  const result = await requireAgentAuth(c);
+  if (result instanceof Response) return result;
+  if (!agentHasScope(result.auth, "tasks:read")) {
+    return errorResponse(c, "forbidden", 403);
+  }
+  const task = await getNextAgentTask(c.env.DB, result.auth);
+  if (!task) return c.body(null, 204);
+  return c.json({ data: task });
+});
+
+app.post("/v1/agent/tasks/:id/claim", async (c) => {
+  const result = await requireAgentAuth(c);
+  if (result instanceof Response) return result;
+  if (!agentHasScope(result.auth, "tasks:write")) {
+    return errorResponse(c, "forbidden", 403);
+  }
+  const input = await jsonBody(c.req.raw, 8 * 1024);
+  const claimed = await claimAgentTask(
+    c.env.DB,
+    result.auth,
+    c.req.param("id"),
+    input as { agent?: string; agent_version?: string; workspace_hint?: string },
+  );
+  if (!claimed.ok) return errorResponse(c, claimed.code, 409);
+  return c.json({
+    data: {
+      task_id: claimed.task.id,
+      status: claimed.task.status,
+      claim_expires_at: claimed.task.claim_expires_at,
+      packet: JSON.parse(claimed.task.task_packet),
+    },
+  });
+});
+
+app.post("/v1/agent/tasks/:id/events", async (c) => {
+  const result = await requireAgentAuth(c);
+  if (result instanceof Response) return result;
+  if (!agentHasScope(result.auth, "tasks:write")) {
+    return errorResponse(c, "forbidden", 403);
+  }
+  const idempotencyKey = c.req.header("x-idempotency-key") ?? "";
+  const input = await jsonBody(c.req.raw, 16 * 1024);
+  const reported = await reportAgentTaskEvent(
+    c.env,
+    result.auth,
+    c.req.param("id"),
+    idempotencyKey,
+    input as {
+      event_type?: string;
+      payload?: unknown;
+      occurred_at?: string;
+    },
+  );
+  if (!reported.ok) return errorResponse(c, reported.code, reported.status as 400);
+  return c.json({ data: { accepted: true } });
+});
+
+app.post("/v1/agent/releases", async (c) => {
+  const result = await requireAgentAuth(c);
+  if (result instanceof Response) return result;
+  if (!agentHasScope(result.auth, "releases:write")) {
+    return errorResponse(c, "forbidden", 403);
+  }
+  const input = await jsonBody(c.req.raw, 8 * 1024);
+  const reported = await reportAgentRelease(
+    c.env,
+    result.auth,
+    input as {
+      version?: string;
+      build_number?: string;
+      reported_deployed_at?: string;
+      commit_sha?: string;
+      previous_commit_sha?: string;
+      pull_request_url?: string;
+      task_id?: string;
+    },
+  );
+  if (!reported.ok) return errorResponse(c, reported.code, reported.status as 400);
+  return c.json({ data: { release_id: reported.releaseId } }, 201);
+});
+
+app.get("/v1/agent/tasks/:id/verification", async (c) => {
+  const result = await requireAgentAuth(c);
+  if (result instanceof Response) return result;
+  if (!agentHasScope(result.auth, "verdicts:read") && !agentHasScope(result.auth, "tasks:read")) {
+    return errorResponse(c, "forbidden", 403);
+  }
+  const data = await getTaskVerification(
+    c.env.DB,
+    result.auth,
+    c.req.param("id"),
+  );
+  if (!data) return errorResponse(c, "not_found", 404);
+  return c.json({ data });
+});
+
 app.get("/v1/ai-visibility", requireAuth, async (c) => {
+  if (isGrowthCiEnabled(c.env) && !areLegacySurfacesEnabled(c.env)) {
+    return errorResponse(c, "legacy_surface_retired", 410);
+  }
   const appId = (c.req.query("appId") ?? "").trim();
   return c.json({
     data: await aiVisibilitySnapshot(c.env, c.get("auth"), appId),
@@ -1485,19 +1863,30 @@ import {
 } from "./diagnosis/queue";
 import type { QueueMessage as SourceQueueMessage } from "./sources";
 
-type AppQueueMessage = SourceQueueMessage | AiVisibilityMessage;
+type AppQueueMessage =
+  | SourceQueueMessage
+  | AiVisibilityMessage
+  | ReleaseCheckMessage
+  | import("./diagnosis/queue").DiagnosisMessage;
 
 const worker: ExportedHandler<Cloudflare.Env, AppQueueMessage> = {
   fetch: app.fetch,
   async queue(batch, env): Promise<void> {
     for (const message of batch.messages) {
       try {
-        const result =
-          message.body.type === "ai-visibility-scan"
-            ? await processAiVisibilityMessage(env, message.body)
-            : message.body.type === "diagnosis-run"
-              ? await processDiagnosisMessage(env, message.body)
-              : await processSyncMessage(env, message.body);
+        let result: { retry: boolean };
+        if (message.body.type === "ai-visibility-scan") {
+          result = await processAiVisibilityMessage(env, message.body);
+        } else if (message.body.type === "diagnosis-run") {
+          result = await processDiagnosisMessage(
+            env,
+            message.body as import("./diagnosis/queue").DiagnosisMessage,
+          );
+        } else if (message.body.type === "release-check") {
+          result = await processReleaseCheckMessage(env, message.body);
+        } else {
+          result = await processSyncMessage(env, message.body);
+        }
         if (result.retry) {
           message.retry({
             delaySeconds: Math.min(3600, 60 * 2 ** message.attempts),
@@ -1506,19 +1895,10 @@ const worker: ExportedHandler<Cloudflare.Env, AppQueueMessage> = {
           message.ack();
         }
       } catch (error) {
+        const body = message.body as { type?: string; jobId?: string; runId?: string; scanId?: string; checkId?: string };
         log("error", "queue_message_failed", {
-          jobId:
-            message.body.type === "source-sync"
-              ? message.body.jobId
-              : message.body.type === "diagnosis-run"
-                ? message.body.runId
-                : message.body.scanId,
-          provider:
-            message.body.type === "source-sync"
-              ? message.body.provider
-              : message.body.type === "diagnosis-run"
-                ? "diagnosis"
-                : "deepseek",
+          jobId: body.jobId ?? body.runId ?? body.scanId ?? body.checkId,
+          provider: body.type ?? "unknown",
           attempts: message.attempts,
           error: error instanceof Error ? error.message : "unknown",
         });
@@ -1535,31 +1915,43 @@ const worker: ExportedHandler<Cloudflare.Env, AppQueueMessage> = {
           return;
         }
         if (event.cron === "7 * * * *") {
-          // Background keyword rank refresh is retired: Apple blocks Workers
-          // IPs from itunes.apple.com and no free non-Cloudflare egress exists.
-          // Rank observation is now on-demand via the client.
+          // Background keyword rank refresh is retired.
           log("info", "keyword_ranks_cron_retired");
           return;
         }
         if (event.cron === "23 3 * * *") {
-          const aiVisibilityScans = await queueDueAiVisibilityScans(env);
-          log("info", "ai_visibility_scheduled_scans_queued", {
-            aiVisibilityScans,
-          });
+          // AI Visibility scheduled scans are retired from Growth CI product.
+          if (areLegacySurfacesEnabled(env)) {
+            const aiVisibilityScans = await queueDueAiVisibilityScans(env);
+            log("info", "ai_visibility_scheduled_scans_queued", {
+              aiVisibilityScans,
+            });
+          } else {
+            log("info", "ai_visibility_cron_retired");
+          }
           return;
         }
         const queued = await queueDueSyncs(env);
         log("info", "scheduled_syncs_queued", { queued });
 
-        // Diagnosis catch-up. A lost queue message, or a worker that died
-        // holding a claimed run, would otherwise leave the run outstanding
-        // forever and the one-run-per-app guard would block the app for good.
-        const recovered = await recoverStaleDiagnosisRuns(env);
-        const diagnosisQueued = await queueDueDiagnosisRuns(env);
-        log("info", "scheduled_diagnosis_runs_queued", {
-          recovered,
-          queued: diagnosisQueued,
-        });
+        if (isGrowthCiEnabled(env)) {
+          const recoveredChecks = await recoverStaleReleaseChecks(env);
+          const releaseChecksQueued = await queueDueReleaseChecks(env);
+          log("info", "scheduled_release_checks_queued", {
+            recovered: recoveredChecks,
+            queued: releaseChecksQueued,
+          });
+        }
+
+        // Diagnosis catch-up remains for legacy readiness until fully retired.
+        if (areLegacySurfacesEnabled(env) || !isGrowthCiEnabled(env)) {
+          const recovered = await recoverStaleDiagnosisRuns(env);
+          const diagnosisQueued = await queueDueDiagnosisRuns(env);
+          log("info", "scheduled_diagnosis_runs_queued", {
+            recovered,
+            queued: diagnosisQueued,
+          });
+        }
       })(),
     );
   },

@@ -357,6 +357,34 @@ export async function processSyncMessage(
       provider: job.provider,
       pointCount: points.length,
     });
+
+    // Growth CI: release discovery after successful PostHog sync must never
+    // fail the source sync itself.
+    if (job.provider === "posthog" && job.app_id) {
+      try {
+        const { isGrowthCiEnabled } = await import("./growth-ci/flags");
+        if (isGrowthCiEnabled(env)) {
+          const { discoverReleasesFromCohorts } = await import(
+            "./growth-ci/releases"
+          );
+          const discovered = await discoverReleasesFromCohorts(
+            env,
+            job.workspace_id,
+            job.app_id,
+          );
+          log("info", "release_discovery_after_sync", {
+            jobId: job.id,
+            discovered,
+          });
+        }
+      } catch (error) {
+        log("warn", "release_discovery_failed", {
+          jobId: job.id,
+          error: error instanceof Error ? error.message : "unknown",
+        });
+      }
+    }
+
     return { retry: false };
   } catch (error) {
     return { retry: await failSync(env, job, error) };
