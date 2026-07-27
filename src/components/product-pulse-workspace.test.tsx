@@ -198,9 +198,21 @@ describe("ProductPulseWorkspace", () => {
         expect(screen.getByText(/Web SaaS connected/i)).toBeInTheDocument();
       });
       expect(
-        screen.getByText(/Install on cardealertracker.app/i),
+        screen.getByText(/Install tracking on cardealertracker.app/i),
       ).toBeInTheDocument();
+      // Agent prompt is the default install method.
+      expect(
+        screen.getByRole("tab", { name: /AI Agent Prompt/i }),
+      ).toHaveAttribute("aria-selected", "true");
       expect(screen.getByText(/acwa1_test_token/i)).toBeInTheDocument();
+      expect(
+        screen.getByRole("button", { name: /Copy AI agent prompt/i }),
+      ).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("tab", { name: /HTML Snippet/i }));
+      expect(
+        screen.getByRole("button", { name: /Copy install snippet/i }),
+      ).toBeInTheDocument();
 
       fireEvent.click(
         screen.getByRole("button", { name: /Open Acquisition Atlas/i }),

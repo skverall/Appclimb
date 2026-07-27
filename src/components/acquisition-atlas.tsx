@@ -1429,7 +1429,8 @@ function TrackingSetup({
   collectorOrigin: string;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<"html" | "agent">("html");
+  // Agent prompt is first: most builders paste install work into coding agents.
+  const [tab, setTab] = useState<"agent" | "html">("agent");
   const [copiedHtml, setCopiedHtml] = useState(false);
   const [copiedPrompt, setCopiedPrompt] = useState(false);
 
@@ -1437,24 +1438,45 @@ function TrackingSetup({
     return [
       `# Add AppClimb Web Analytics to ${property.domain}`,
       ``,
-      `Please integrate AppClimb first-party web analytics into our website repository.`,
+      `Please integrate AppClimb first-party web analytics into our website repository for ${property.domain}.`,
       ``,
-      `## 1. Add Tracking Script`,
-      `Add this script tag before the closing </body> tag in the root layout or main index.html file:`,
-      `\`\`\`html`,
+      `## Goals`,
+      `- Track anonymous visitors, referrers, UTM campaigns, and landing pages`,
+      `- Keep AI crawler requests separate from human traffic`,
+      `- Prefer session-scoped storage (no IP storage; privacy-friendly defaults)`,
+      ``,
+      `## 1. Add the browser tracking script`,
+      `Add this script tag before the closing </body> tag in the root layout or main index.html:`,
+      ``,
+      "```html",
       snippet,
-      `\`\`\``,
+      "```",
       ``,
-      `## 2. (Optional) Custom Conversion Events`,
-      `When a key goal occurs (e.g., account registration, checkout start), record the conversion:`,
-      `\`\`\`javascript`,
+      `## 2. Optional conversion events`,
+      `When a key product goal happens (signup, checkout start, paid activation), fire:`,
+      ``,
+      "```javascript",
       `if (typeof window !== "undefined") {`,
       `  window.appclimbAnalytics?.track("conversion", { goal: "account_created" });`,
       `}`,
-      `\`\`\``,
+      "```",
       ``,
-      `## 3. (Optional for Next.js / Edge)`,
-      `Set APPCLIMB_TRACKING_TOKEN="${property.trackingToken}" in server environment variables to automatically forward AI crawler user agents to ${collectorOrigin}/api/track/crawler.`,
+      `Use clear goal names such as account_created, checkout_started, or subscription_started.`,
+      ``,
+      `## 3. Optional Next.js / edge crawler forwarding`,
+      `Set this server-side env var so recognized AI/search crawler user agents can be forwarded:`,
+      ``,
+      "```bash",
+      `APPCLIMB_TRACKING_TOKEN="${property.trackingToken}"`,
+      "```",
+      ``,
+      `Forward crawler hits to ${collectorOrigin}/api/track/crawler with the original User-Agent when possible.`,
+      ``,
+      `## Constraints`,
+      `- Do not invent a third-party analytics vendor for this install`,
+      `- Do not change the token value`,
+      `- Keep the script on ${property.domain} only`,
+      `- After install, open AppClimb → Acquisition Atlas and confirm traffic or crawlers appear`,
     ].join("\n");
   }, [property.domain, property.trackingToken, snippet, collectorOrigin]);
 
@@ -1486,38 +1508,38 @@ function TrackingSetup({
           <button
             type="button"
             role="tab"
-            aria-selected={tab === "html"}
-            className={tab === "html" ? "active" : ""}
-            onClick={() => setTab("html")}
-          >
-            <Code2 size={14} /> HTML Snippet
-          </button>
-          <button
-            type="button"
-            role="tab"
             aria-selected={tab === "agent"}
             className={tab === "agent" ? "active" : ""}
             onClick={() => setTab("agent")}
           >
             <Sparkles size={14} /> AI Agent Prompt
           </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={tab === "html"}
+            className={tab === "html" ? "active" : ""}
+            onClick={() => setTab("html")}
+          >
+            <Code2 size={14} /> HTML Snippet
+          </button>
         </div>
       </div>
 
-      {tab === "html" ? (
-        <div className="atlas-code-block">
-          <code>{snippet}</code>
-          <button type="button" onClick={() => void copyHtml()}>
-            {copiedHtml ? <Check size={15} /> : <Clipboard size={15} />}
-            {copiedHtml ? "Copied" : "Copy code"}
-          </button>
-        </div>
-      ) : (
+      {tab === "agent" ? (
         <div className="atlas-code-block atlas-agent-prompt-block">
           <code>{aiAgentPrompt}</code>
           <button type="button" onClick={() => void copyPrompt()}>
             {copiedPrompt ? <Check size={15} /> : <Clipboard size={15} />}
-            {copiedPrompt ? "Copied Prompt" : "Copy AI Prompt"}
+            {copiedPrompt ? "Prompt copied" : "Copy AI agent prompt"}
+          </button>
+        </div>
+      ) : (
+        <div className="atlas-code-block">
+          <code>{snippet}</code>
+          <button type="button" onClick={() => void copyHtml()}>
+            {copiedHtml ? <Check size={15} /> : <Clipboard size={15} />}
+            {copiedHtml ? "Copied" : "Copy install snippet"}
           </button>
         </div>
       )}

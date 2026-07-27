@@ -10,6 +10,8 @@ import {
   Check,
   ChevronDown,
   CircleAlert,
+  Clipboard,
+  Code2,
   ExternalLink,
   Globe,
   LoaderCircle,
@@ -468,7 +470,9 @@ function AddAppDialog({
   const [addingId, setAddingId] = useState("");
   const [webError, setWebError] = useState("");
   const [webSuccess, setWebSuccess] = useState<WebAddResult | null>(null);
+  const [installTab, setInstallTab] = useState<"agent" | "html">("agent");
   const [copiedSnippet, setCopiedSnippet] = useState(false);
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
 
   const parsedId = useMemo(() => {
     if (platform !== "app-store") return null;
@@ -630,9 +634,59 @@ function AddAppDialog({
     }
   };
 
+  const collectorOrigin =
+    typeof window === "undefined" ? "https://appclimb.app" : window.location.origin;
+
   const webSnippet = webSuccess?.trackingToken
-    ? `<script\n  src="${typeof window === "undefined" ? "https://appclimb.app" : window.location.origin}/appclimb-analytics.js"\n  data-token="${webSuccess.trackingToken}"\n  data-storage="session"\n  defer\n></script>`
+    ? `<script\n  src="${collectorOrigin}/appclimb-analytics.js"\n  data-token="${webSuccess.trackingToken}"\n  data-storage="session"\n  defer\n></script>`
     : "";
+
+  const webAgentPrompt = useMemo(() => {
+    if (!webSuccess?.trackingToken || !webSnippet) return "";
+    return [
+      `# Add AppClimb Web Analytics to ${webSuccess.domain}`,
+      ``,
+      `Please integrate AppClimb first-party web analytics into our website repository for ${webSuccess.name} (${webSuccess.domain}).`,
+      ``,
+      `## Goals`,
+      `- Track anonymous visitors, referrers, UTM campaigns, and landing pages`,
+      `- Keep AI crawler requests separate from human traffic`,
+      `- Prefer session-scoped storage (no IP storage; privacy-friendly defaults)`,
+      ``,
+      `## 1. Add the browser tracking script`,
+      `Add this script tag before the closing </body> tag in the root layout or main index.html:`,
+      ``,
+      "```html",
+      webSnippet,
+      "```",
+      ``,
+      `## 2. Optional conversion events`,
+      `When a key product goal happens (signup, checkout start, paid activation), fire:`,
+      ``,
+      "```javascript",
+      `if (typeof window !== "undefined") {`,
+      `  window.appclimbAnalytics?.track("conversion", { goal: "account_created" });`,
+      `}`,
+      "```",
+      ``,
+      `Use clear goal names such as account_created, checkout_started, or subscription_started.`,
+      ``,
+      `## 3. Optional Next.js / edge crawler forwarding`,
+      `Set this server-side env var so recognized AI/search crawler user agents can be forwarded:`,
+      ``,
+      "```bash",
+      `APPCLIMB_TRACKING_TOKEN="${webSuccess.trackingToken}"`,
+      "```",
+      ``,
+      `Forward crawler hits to ${collectorOrigin}/api/track/crawler with the original User-Agent when possible.`,
+      ``,
+      `## Constraints`,
+      `- Do not invent a third-party analytics vendor (no DataFast, GA, etc.) for this install`,
+      `- Do not change the token value`,
+      `- Keep the script on ${webSuccess.domain} only`,
+      `- After install, open AppClimb → Acquisition Atlas and confirm traffic or crawlers appear`,
+    ].join("\n");
+  }, [webSuccess, webSnippet, collectorOrigin]);
 
   return (
     <ModalDialog
@@ -757,45 +811,152 @@ function AddAppDialog({
                   </ul>
                 </div>
 
-                {webSnippet ? (
+                {webSnippet && webAgentPrompt ? (
                   <>
-                    <span style={{ fontSize: "12px", fontWeight: 600 }}>
-                      Install on {webSuccess.domain} (before {"</body>"})
-                    </span>
-                    <pre
-                      style={{
-                        margin: 0,
-                        padding: "10px 12px",
-                        borderRadius: "8px",
-                        background: "var(--surface-subtle)",
-                        border: "1px solid var(--border)",
-                        fontSize: "11px",
-                        overflowX: "auto",
-                        whiteSpace: "pre-wrap",
-                        wordBreak: "break-all",
-                      }}
+                    <div>
+                      <span style={{ fontSize: "12px", fontWeight: 600, display: "block" }}>
+                        Install tracking on {webSuccess.domain}
+                      </span>
+                      <p
+                        style={{
+                          margin: "4px 0 0",
+                          fontSize: "12px",
+                          color: "var(--foreground-muted)",
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        Most builders hand this to an AI coding agent. The HTML
+                        snippet is still available if you paste it yourself.
+                      </p>
+                    </div>
+
+                    <div
+                      className="atlas-setup-tabs"
+                      role="tablist"
+                      aria-label="Installation method"
+                      style={{ margin: 0 }}
                     >
-                      {webSnippet}
-                    </pre>
-                    <button
-                      type="button"
-                      className="secondary-action"
-                      style={{
-                        justifySelf: "start",
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "6px",
-                      }}
-                      onClick={() => {
-                        void navigator.clipboard.writeText(webSnippet).then(() => {
-                          setCopiedSnippet(true);
-                          window.setTimeout(() => setCopiedSnippet(false), 1600);
-                        });
-                      }}
-                    >
-                      {copiedSnippet ? <Check size={15} /> : <Plus size={15} />}
-                      {copiedSnippet ? "Copied" : "Copy install snippet"}
-                    </button>
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={installTab === "agent"}
+                        className={installTab === "agent" ? "active" : ""}
+                        onClick={() => setInstallTab("agent")}
+                      >
+                        <Sparkles size={14} /> AI Agent Prompt
+                      </button>
+                      <button
+                        type="button"
+                        role="tab"
+                        aria-selected={installTab === "html"}
+                        className={installTab === "html" ? "active" : ""}
+                        onClick={() => setInstallTab("html")}
+                      >
+                        <Code2 size={14} /> HTML Snippet
+                      </button>
+                    </div>
+
+                    {installTab === "agent" ? (
+                      <>
+                        <pre
+                          style={{
+                            margin: 0,
+                            padding: "10px 12px",
+                            borderRadius: "8px",
+                            background: "var(--surface-subtle)",
+                            border: "1px solid var(--border)",
+                            fontSize: "11px",
+                            overflowX: "auto",
+                            whiteSpace: "pre-wrap",
+                            wordBreak: "break-word",
+                            maxHeight: "220px",
+                          }}
+                        >
+                          {webAgentPrompt}
+                        </pre>
+                        <button
+                          type="button"
+                          className="primary-action"
+                          style={{
+                            justifySelf: "start",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            padding: "8px 14px",
+                            borderRadius: "8px",
+                          }}
+                          onClick={() => {
+                            void navigator.clipboard
+                              .writeText(webAgentPrompt)
+                              .then(() => {
+                                setCopiedPrompt(true);
+                                window.setTimeout(
+                                  () => setCopiedPrompt(false),
+                                  1600,
+                                );
+                              });
+                          }}
+                        >
+                          {copiedPrompt ? (
+                            <Check size={15} />
+                          ) : (
+                            <Clipboard size={15} />
+                          )}
+                          {copiedPrompt
+                            ? "Prompt copied"
+                            : "Copy AI agent prompt"}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <span style={{ fontSize: "12px", color: "var(--foreground-muted)" }}>
+                          Paste before {"</body>"} on {webSuccess.domain}
+                        </span>
+                        <pre
+                          style={{
+                            margin: 0,
+                            padding: "10px 12px",
+                            borderRadius: "8px",
+                            background: "var(--surface-subtle)",
+                            border: "1px solid var(--border)",
+                            fontSize: "11px",
+                            overflowX: "auto",
+                            whiteSpace: "pre-wrap",
+                            wordBreak: "break-all",
+                          }}
+                        >
+                          {webSnippet}
+                        </pre>
+                        <button
+                          type="button"
+                          className="secondary-action"
+                          style={{
+                            justifySelf: "start",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                          }}
+                          onClick={() => {
+                            void navigator.clipboard
+                              .writeText(webSnippet)
+                              .then(() => {
+                                setCopiedSnippet(true);
+                                window.setTimeout(
+                                  () => setCopiedSnippet(false),
+                                  1600,
+                                );
+                              });
+                          }}
+                        >
+                          {copiedSnippet ? (
+                            <Check size={15} />
+                          ) : (
+                            <Clipboard size={15} />
+                          )}
+                          {copiedSnippet ? "Copied" : "Copy install snippet"}
+                        </button>
+                      </>
+                    )}
                   </>
                 ) : (
                   <p style={{ margin: 0, fontSize: "13px", color: "var(--foreground-muted)" }}>
