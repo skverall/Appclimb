@@ -1,13 +1,13 @@
 export const SITE_URL = "https://appclimb.app";
 export const SITE_NAME = "AppClimb";
 export const SITE_DESCRIPTION =
-  "A visual growth diagnosis workspace for independent iOS subscription apps. See where growth stops, understand why, and know what to test next.";
-export const SITE_UPDATED = "2026-07-25";
+  "Growth CI for AI-built iOS subscription apps. Connect RevenueCat and PostHog, evaluate every release, and verify agent fixes with production data.";
+export const SITE_UPDATED = "2026-07-28";
 
 export const PUBLIC_PAGES = [
   {
     path: "/",
-    title: "AppClimb — Visual growth diagnosis for iOS subscription apps",
+    title: "AppClimb — Growth CI for iOS subscription apps",
     description:
       "Connect RevenueCat and PostHog. AppClimb evaluates every iOS release, sends one evidence-backed task to your coding agent, and verifies the fix with production data.",
     changeFrequency: "weekly" as const,
