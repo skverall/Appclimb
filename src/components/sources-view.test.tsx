@@ -136,17 +136,19 @@ describe("guided Sources experience", () => {
     fireEvent.click(postHogRow!);
     expect(screen.getByText(/auto-map the project again/i)).toBeInTheDocument();
     fireEvent.click(
-      screen.getByRole("button", { name: /review posthog pulse/i }),
+      screen.getByRole("button", { name: /review posthog mapping/i }),
     );
 
+    // Events exist but nothing has been confirmed, so the panel must present an
+    // unconfirmed auto-map and ask for confirmation — never imply a settled one.
     await waitFor(() => {
       expect(
-        screen.getByText(/product pulse is mapped automatically/i),
+        screen.getByRole("button", {
+          name: /confirm mapping and build activation baseline/i,
+        }),
       ).toBeInTheDocument();
     });
-    expect(
-      screen.queryByRole("option", { name: /onboarding_started/i }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByText(/2 events discovered/i)).toBeInTheDocument();
     expect(fetch).toHaveBeenCalledWith("/api/apps", { cache: "no-store" });
   });
 
@@ -241,7 +243,13 @@ describe("guided Sources experience", () => {
       screen.getByRole("heading", { name: "App Store Connect" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/Apple ASC API confirmed your Analytics Reports request is active/i),
+      screen.getByText(
+        /confirmed the Analytics Reports request through the App Store Connect API/i,
+      ),
+    ).toBeInTheDocument();
+    // Pending is a stage in a visible progression, never a bare "Connected".
+    expect(
+      screen.getByText(/Analytics Reports request found/i),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: /Check Apple reports now/i }),

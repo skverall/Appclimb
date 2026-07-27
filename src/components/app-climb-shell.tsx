@@ -52,15 +52,23 @@ import {
 } from "@/components/workspace-state";
 import type {
   DashboardSnapshot,
-  Experiment,
   Insight,
   SourceConnection,
 } from "@/lib/contracts";
 import type { BackendIdentity } from "@/lib/backend";
 import {
   createExperimentDraft,
+  experimentApi,
   experimentIdForInsight,
+  type InsightFeedbackAction,
+  type PersistedExperiment,
+  sendInsightFeedback,
 } from "@/lib/experiments";
+import {
+  configureProductEvents,
+  trackProductEvent,
+} from "@/lib/product-events";
+import "@/app/decision-lab.css";
 import {
   type WorkspaceSection,
   workspaceInsightFromValue,
@@ -86,6 +94,42 @@ const NAV_ITEMS: {
 function analyticsWindowDays(period: string): 7 | 30 | 90 {
   const days = Number(period.match(/\d+/)?.[0]);
   return days === 7 || days === 90 ? days : 30;
+}
+
+/**
+ * Local edits layered over a server-rendered value.
+ *
+ * The shell used to mirror `initialSnapshot` into state inside an effect, which
+ * both tripped `react-hooks/set-state-in-effect` and rendered one stale frame
+ * after a navigation. Instead the override carries the seed it was derived
+ * from: when the server sends a different snapshot the override stops matching
+ * and the fresh value wins during the same render, with no effect involved.
+ */
+function useSeededState<T>(
+  seed: unknown,
+  base: T,
+): [T, (next: T | ((current: T) => T)) => void] {
+  const [override, setOverride] = useState<{ seed: unknown; value: T } | null>(
+    null,
+  );
+  const value = override && override.seed === seed ? override.value : base;
+  const update = useCallback(
+    (next: T | ((current: T) => T)) => {
+      setOverride((current) => {
+        const currentValue =
+          current && current.seed === seed ? current.value : base;
+        return {
+          seed,
+          value:
+            typeof next === "function"
+              ? (next as (item: T) => T)(currentValue)
+              : next,
+        };
+      });
+    },
+    [seed, base],
+  );
+  return [value, update];
 }
 
 export function AppClimbShell({
@@ -129,20 +173,30 @@ export function AppClimbShell({
   const [avatarState, setAvatarState] = useState<
     "idle" | "saving" | "saved" | "error"
   >("idle");
-  const [experiments, setExperiments] = useState<Experiment[]>(
-    initialSnapshot.experiments,
-  );
-  const [sourceConnections, setSourceConnections] = useState<
-    SourceConnection[]
-  >(initialSnapshot.sources);
   const [latestCreatedExperimentId, setLatestCreatedExperimentId] =
     useState("");
   const [pulseProjection, setPulseProjection] = useState<
     "growth" | "acquisition"
   >(initialPulseProjection);
 
-  const [snapshot, setSnapshot] = useState(initialSnapshot);
-  const [activeAppIcon, setActiveAppIcon] = useState(initialSnapshot.app.iconUrl || "");
+  const [snapshot, setSnapshot] = useSeededState<DashboardSnapshot>(
+    initialSnapshot,
+    initialSnapshot,
+  );
+  const [sourceConnections, setSourceConnections] = useSeededState<
+    SourceConnection[]
+  >(snapshot, snapshot.sources);
+  // Seeded on the app id, not the snapshot: a background growth-map refresh for
+  // the same app must not wipe the experiments already loaded from
+  // `/api/experiments`, but switching apps must.
+  const [experiments, setExperiments] = useSeededState<PersistedExperiment[]>(
+    snapshot.app.id,
+    snapshot.experiments,
+  );
+  const [experimentBusy, setExperimentBusy] = useState(false);
+  const [experimentError, setExperimentError] = useState("");
+  const [feedbackState, setFeedbackState] = useState("");
+  const [feedbackError, setFeedbackError] = useState("");
 
   const resolveAppIcon = useCallback((app: DashboardSnapshot["app"]) => {
     const isWeb = app.platform === "Web";
@@ -160,30 +214,36 @@ export function AppClimbShell({
     return app.iconUrl || "";
   }, []);
 
+  const lookupAppStoreIconId =
+    snapshot.app.appStoreId ||
+    (snapshot.app as { apple_app_id?: string }).apple_app_id ||
+    "";
+  const derivedAppIcon = resolveAppIcon(snapshot.app);
+  const [fetchedAppIcon, setFetchedAppIcon] = useSeededState(
+    lookupAppStoreIconId,
+    "",
+  );
+  const activeAppIcon = derivedAppIcon || fetchedAppIcon;
+
   useEffect(() => {
-    setSnapshot(initialSnapshot);
-    const resolved = resolveAppIcon(initialSnapshot.app);
-    if (resolved) {
-      setActiveAppIcon(resolved);
+    if (
+      derivedAppIcon ||
+      !lookupAppStoreIconId ||
+      lookupAppStoreIconId.startsWith("web:") ||
+      !/^\d+$/u.test(lookupAppStoreIconId)
+    ) {
       return;
     }
-    const appStoreId =
-      initialSnapshot.app.appStoreId ||
-      (initialSnapshot.app as { apple_app_id?: string }).apple_app_id;
-    if (
-      appStoreId &&
-      !appStoreId.startsWith("web:") &&
-      /^\d+$/u.test(appStoreId)
-    ) {
-      lookupAppStoreIcon(appStoreId)
-        .then((icon) => {
-          if (icon) setActiveAppIcon(icon);
-        })
-        .catch(() => undefined);
-    } else {
-      setActiveAppIcon("");
-    }
-  }, [initialSnapshot, resolveAppIcon]);
+    let cancelled = false;
+    lookupAppStoreIcon(lookupAppStoreIconId)
+      .then((icon) => {
+        if (icon && !cancelled) setFetchedAppIcon(icon);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [derivedAppIcon, lookupAppStoreIconId, setFetchedAppIcon]);
 
   const refreshSnapshot = useCallback(async () => {
     if (snapshot.mode === "demo") return;
@@ -195,14 +255,11 @@ export function AppClimbShell({
       const data = (await res.json()) as { data?: DashboardSnapshot };
       if (data.data) {
         setSnapshot(data.data);
-        setSourceConnections(data.data.sources);
-        const resolved = resolveAppIcon(data.data.app);
-        if (resolved) setActiveAppIcon(resolved);
       }
     } catch {
       // Ignore background refresh failure
     }
-  }, [snapshot.mode, snapshot.app.id, resolveAppIcon]);
+  }, [snapshot.mode, snapshot.app.id, setSnapshot]);
 
   const selectedInsight = useMemo<Insight | undefined>(
     () =>
@@ -294,20 +351,161 @@ export function AppClimbShell({
       window.removeEventListener("popstate", restoreWorkspaceLocation);
   }, [insightIds]);
 
+  /**
+   * A workspace backed by a real session is the only place an experiment can be
+   * stored. The public demo and a signed-out visitor keep local drafts and the
+   * Lab says so, rather than implying a row reached D1.
+   */
+  const experimentsPersist =
+    Boolean(session) &&
+    (snapshot.mode === "live" || snapshot.mode === "empty") &&
+    Boolean(snapshot.app.id);
+
+  useEffect(() => {
+    configureProductEvents({ enabled: experimentsPersist });
+  }, [experimentsPersist]);
+
+  useEffect(() => {
+    if (!experimentsPersist) return;
+    let cancelled = false;
+    experimentApi
+      .list(snapshot.app.id)
+      .then((rows) => {
+        if (!cancelled) setExperiments(rows);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setExperimentError(
+            "Saved experiments could not be loaded. Reload to try again.",
+          );
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [experimentsPersist, snapshot.app.id, setExperiments]);
+
   const openInsight = (insightId: string) => {
+    trackProductEvent("insight_opened", { insightId });
     navigateTo("diagnose", insightId);
   };
-  const createDraftFromInsight = (insight?: Insight) => {
-    if (!insight) return;
-    const experimentId = experimentIdForInsight(insight.id);
-    setExperiments((current) =>
-      current.some((experiment) => experiment.id === experimentId)
-        ? current
-        : [createExperimentDraft(initialSnapshot, insight), ...current],
+
+  const createDraftFromInsight = async (insight?: Insight) => {
+    if (!insight || experimentBusy) return;
+    setExperimentError("");
+    const existing = experiments.find(
+      (experiment) =>
+        experiment.insightId === insight.id ||
+        experiment.id === experimentIdForInsight(insight.id),
     );
-    setLatestCreatedExperimentId(experimentId);
-    navigateTo("lab", insight.id);
+    if (existing) {
+      setLatestCreatedExperimentId(existing.id);
+      navigateTo("lab", insight.id);
+      return;
+    }
+
+    const draft = createExperimentDraft(snapshot, insight);
+    if (!experimentsPersist) {
+      setExperiments((current) => [draft, ...current]);
+      setLatestCreatedExperimentId(draft.id);
+      navigateTo("lab", insight.id);
+      return;
+    }
+
+    setExperimentBusy(true);
+    try {
+      const saved = await experimentApi.create(snapshot.app.id, draft);
+      setExperiments((current) => [
+        saved,
+        ...current.filter((item) => item.id !== saved.id),
+      ]);
+      setLatestCreatedExperimentId(saved.id);
+      trackProductEvent("experiment_created", {
+        insightId: insight.id,
+        stageId: insight.stageId,
+        experimentId: saved.id,
+      });
+      if (draft.actionProposalId) {
+        await sendInsightFeedback(
+          draft.actionProposalId,
+          "convert_to_experiment",
+          { experimentId: saved.id },
+        ).catch(() => undefined);
+      }
+      navigateTo("lab", insight.id);
+    } catch {
+      setExperimentError(
+        "The experiment could not be saved. Nothing was changed in a connected tool.",
+      );
+    } finally {
+      setExperimentBusy(false);
+    }
   };
+
+  const updateExperiment = async (
+    id: string,
+    patch: Record<string, unknown>,
+  ) => {
+    if (!experimentsPersist) return;
+    setExperimentBusy(true);
+    setExperimentError("");
+    try {
+      const saved = await experimentApi.update(id, patch);
+      setExperiments((current) =>
+        current.map((item) => (item.id === saved.id ? saved : item)),
+      );
+    } catch {
+      setExperimentError("The experiment could not be updated. Try again.");
+    } finally {
+      setExperimentBusy(false);
+    }
+  };
+
+  const removeExperiment = async (id: string) => {
+    if (!experimentsPersist) return;
+    setExperimentBusy(true);
+    setExperimentError("");
+    try {
+      await experimentApi.remove(id);
+      setExperiments((current) => current.filter((item) => item.id !== id));
+    } catch {
+      setExperimentError("The experiment could not be deleted. Try again.");
+    } finally {
+      setExperimentBusy(false);
+    }
+  };
+
+  const submitInsightFeedback = async (
+    action: InsightFeedbackAction,
+    reason: string,
+  ) => {
+    const proposal = snapshot.actionProposals.find(
+      (item) => item.insightId === selectedInsight?.id,
+    );
+    setFeedbackState("");
+    setFeedbackError("");
+    if (!proposal) return;
+    if (!experimentsPersist) {
+      setFeedbackError(
+        "Feedback is only recorded in a private workspace. Nothing was stored for this demo.",
+      );
+      return;
+    }
+    try {
+      await sendInsightFeedback(proposal.id, action, { reason });
+      trackProductEvent(
+        action === "accept" || action === "convert_to_experiment"
+          ? "recommendation_accepted"
+          : "recommendation_dismissed",
+        { proposalId: proposal.id, feedbackAction: action },
+      );
+      setFeedbackState("Recorded. This decision is stored with an audit event.");
+      void refreshSnapshot();
+    } catch {
+      setFeedbackError("Feedback could not be saved. Try again.");
+    }
+  };
+
   const trialDays = trialDaysRemaining ?? 12;
   const subscriptionStatus = session?.subscriptionStatus.toLowerCase();
   const accessRestricted = initialSnapshot.mode === "restricted";
@@ -837,7 +1035,19 @@ export function AppClimbShell({
               snapshot={snapshot}
               selectedInsight={selectedInsight}
               onSelectInsight={selectInsight}
-              onCreateExperiment={() => createDraftFromInsight(selectedInsight)}
+              onCreateExperiment={() => {
+                void createDraftFromInsight(selectedInsight);
+              }}
+              experiments={experiments}
+              savingExperiment={experimentBusy}
+              onSendFeedback={(action, reason) => {
+                void submitInsightFeedback(action, reason);
+              }}
+              onActionPlanOpened={(insightId) =>
+                trackProductEvent("action_plan_opened", { insightId })
+              }
+              feedbackState={feedbackState}
+              feedbackError={feedbackError}
             />
           ) : activeSection === "ai-visibility" ? (
             <AiVisibilityView
@@ -857,7 +1067,14 @@ export function AppClimbShell({
               selectedInsight={selectedInsight}
               experiments={experiments}
               latestCreatedExperimentId={latestCreatedExperimentId}
-              onCreateDraft={() => createDraftFromInsight(selectedInsight)}
+              onCreateDraft={() => {
+                void createDraftFromInsight(selectedInsight);
+              }}
+              persistence={experimentsPersist ? "saved" : "session"}
+              busy={experimentBusy}
+              errorMessage={experimentError}
+              onUpdateExperiment={updateExperiment}
+              onDeleteExperiment={removeExperiment}
             />
           ) : activeSection === "sources" ? (
             <SourcesView
@@ -865,7 +1082,7 @@ export function AppClimbShell({
               authenticated={Boolean(session)}
               entitled={snapshot.mode !== "restricted"}
               sources={sourceConnections}
-              onSourcesChange={(newSources) => {
+              onSourcesChange={(newSources: SourceConnection[]) => {
                 setSourceConnections(newSources);
                 void refreshSnapshot();
               }}

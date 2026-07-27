@@ -52,6 +52,14 @@ import {
   verifyPassword,
 } from "./crypto";
 import { ProviderError, isSupportedProvider, verifyProvider } from "./connectors";
+import {
+  createExperiment,
+  deleteExperiment,
+  listExperiments,
+  recordProposalFeedback,
+  updateExperiment,
+} from "./experiments";
+import { recordProductEvents } from "./product-events";
 import { growthMapSnapshot } from "./growth-map";
 import {
   connectSource,
@@ -61,7 +69,6 @@ import {
   queueDueSyncs,
   queueSourceSync,
   updatePostHogEvents,
-  type SyncMessage,
 } from "./sources";
 import { passwordResetEmail } from "./mail-templates";
 import {
@@ -77,7 +84,10 @@ import {
   deleteExpiredAnalytics,
   recordCrawlerEvent,
   recordWebEvent,
+  saveConversionGoal,
+  saveInstallStep,
   webAnalyticsSnapshot,
+  webInstallSnapshot,
 } from "./web-analytics";
 
 const app = new Hono<AppEnvironment>();
@@ -1051,6 +1061,118 @@ app.get("/v1/growth-map", requireAuth, async (c) => {
   return c.json(snapshot);
 });
 
+/**
+ * Persistent Lab experiments (plan task P0.29). Before these routes the Lab
+ * held drafts in React state only, so "create draft" was lost on reload.
+ */
+const EXPERIMENT_ERRORS: Record<string, ContentfulStatusCode> = {
+  app_not_found: 404,
+  experiment_not_found: 404,
+  action_proposal_not_found: 404,
+  experiment_limit_reached: 409,
+  invalid_experiment: 400,
+  invalid_experiment_stage: 400,
+  invalid_experiment_source: 400,
+  invalid_experiment_status: 400,
+  invalid_feedback_action: 400,
+  feedback_reason_required: 400,
+};
+
+function experimentError(
+  c: Parameters<Parameters<typeof app.onError>[0]>[1],
+  error: unknown,
+) {
+  const code = error instanceof Error ? error.message : "experiment_failed";
+  const status = EXPERIMENT_ERRORS[code];
+  if (!status) throw error;
+  return errorResponse(c, code, status);
+}
+
+app.get("/v1/experiments", requireAuth, async (c) => {
+  try {
+    const data = await listExperiments(
+      c.env.DB,
+      c.get("auth"),
+      (c.req.query("appId") ?? c.req.query("app") ?? "").trim(),
+    );
+    return c.json({ data, meta: { externalMutationsAllowed: false } });
+  } catch (error) {
+    return experimentError(c, error);
+  }
+});
+
+app.post("/v1/experiments", requireAuth, requireEntitlement, async (c) => {
+  const input = await jsonBody(c.req.raw);
+  try {
+    const data = await createExperiment(
+      c.env.DB,
+      c.get("auth"),
+      typeof input.appId === "string" ? input.appId.trim() : "",
+      input,
+    );
+    return c.json({ data, meta: { externalMutationsAllowed: false } }, 201);
+  } catch (error) {
+    return experimentError(c, error);
+  }
+});
+
+app.patch("/v1/experiments/:id", requireAuth, requireEntitlement, async (c) => {
+  const input = await jsonBody(c.req.raw);
+  try {
+    const data = await updateExperiment(
+      c.env.DB,
+      c.get("auth"),
+      c.req.param("id"),
+      input,
+    );
+    return c.json({ data, meta: { externalMutationsAllowed: false } });
+  } catch (error) {
+    return experimentError(c, error);
+  }
+});
+
+app.delete("/v1/experiments/:id", requireAuth, requireEntitlement, async (c) => {
+  try {
+    await deleteExperiment(c.env.DB, c.get("auth"), c.req.param("id"));
+    return c.body(null, 204);
+  } catch (error) {
+    return experimentError(c, error);
+  }
+});
+
+/**
+ * Insight feedback (plan task P0.30). Accept, dismiss, not relevant, mapping is
+ * wrong and converted-to-experiment all land here; each one stores a reason and
+ * writes an audit event so the accepted / dismissed / diagnosis-to-experiment
+ * rates are measurable.
+ */
+app.post(
+  "/v1/action-proposals/:id/feedback",
+  requireAuth,
+  requireEntitlement,
+  async (c) => {
+    const input = await jsonBody(c.req.raw);
+    try {
+      const data = await recordProposalFeedback(
+        c.env.DB,
+        c.get("auth"),
+        c.req.param("id"),
+        input,
+      );
+      return c.json({ data, meta: { externalMutationsAllowed: false } }, 201);
+    } catch (error) {
+      return experimentError(c, error);
+    }
+  },
+);
+
+/** AppClimb's own client-side product analytics (plan section 14). */
+app.post("/v1/product-events", requireAuth, async (c) => {
+  const input = await jsonBody(c.req.raw, 16 * 1024);
+  const data = await recordProductEvents(c.env.DB, c.get("auth"), input);
+  return c.json({ data }, 202);
+});
+
 app.get("/v1/web-analytics", requireAuth, requireEntitlement, async (c) => {
   const days = Number(c.req.query("days") ?? "7");
   if (![7, 30, 90].includes(days)) {
@@ -1104,6 +1226,61 @@ app.post("/v1/web-analytics/property", requireAuth, requireEntitlement, async (c
     const code = error instanceof Error ? error.message : "web_property_failed";
     if (code === "invalid_web_property") return errorResponse(c, code, 400);
     if (code === "web_property_exists") return errorResponse(c, code, 409);
+    throw error;
+  }
+});
+
+app.get("/v1/web-analytics/install", requireAuth, async (c) => {
+  const appId = (c.req.query("appId") ?? c.req.query("app") ?? "").trim();
+  const snapshot = await webInstallSnapshot(
+    c.env,
+    c.get("auth").workspaceId,
+    appId,
+  );
+  return c.json({ data: snapshot });
+});
+
+app.post("/v1/web-analytics/install/step", requireAuth, async (c) => {
+  const auth = c.get("auth");
+  if (!["owner", "admin"].includes(auth.role)) {
+    return errorResponse(c, "admin_required", 403);
+  }
+  const input = await jsonBody(c.req.raw, 2 * 1024);
+  try {
+    const result = await saveInstallStep(
+      c.env,
+      auth,
+      input.step,
+      typeof input.appId === "string" ? input.appId : "",
+    );
+    return c.json({ data: result });
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "install_step_failed";
+    if (code === "invalid_install_step") return errorResponse(c, code, 400);
+    if (code === "web_property_missing") return errorResponse(c, code, 404);
+    throw error;
+  }
+});
+
+app.post("/v1/web-analytics/conversion-goal", requireAuth, async (c) => {
+  const auth = c.get("auth");
+  if (!["owner", "admin"].includes(auth.role)) {
+    return errorResponse(c, "admin_required", 403);
+  }
+  const input = await jsonBody(c.req.raw, 2 * 1024);
+  try {
+    const result = await saveConversionGoal(
+      c.env,
+      auth,
+      input.goal,
+      typeof input.appId === "string" ? input.appId : "",
+    );
+    return c.json({ data: result });
+  } catch (error) {
+    const code =
+      error instanceof Error ? error.message : "conversion_goal_failed";
+    if (code === "invalid_conversion_goal") return errorResponse(c, code, 400);
+    if (code === "web_property_missing") return errorResponse(c, code, 404);
     throw error;
   }
 });
@@ -1301,7 +1478,11 @@ async function constantTimeStrings(left: string, right: string): Promise<boolean
   return difference === 0;
 }
 
-import { processDiagnosisMessage } from "./diagnosis/queue";
+import {
+  processDiagnosisMessage,
+  queueDueDiagnosisRuns,
+  recoverStaleDiagnosisRuns,
+} from "./diagnosis/queue";
 import type { QueueMessage as SourceQueueMessage } from "./sources";
 
 type AppQueueMessage = SourceQueueMessage | AiVisibilityMessage;
@@ -1330,7 +1511,7 @@ const worker: ExportedHandler<Cloudflare.Env, AppQueueMessage> = {
             message.body.type === "source-sync"
               ? message.body.jobId
               : message.body.type === "diagnosis-run"
-                ? `${message.body.workspaceId}:${message.body.appId}`
+                ? message.body.runId
                 : message.body.scanId,
           provider:
             message.body.type === "source-sync"
@@ -1369,6 +1550,16 @@ const worker: ExportedHandler<Cloudflare.Env, AppQueueMessage> = {
         }
         const queued = await queueDueSyncs(env);
         log("info", "scheduled_syncs_queued", { queued });
+
+        // Diagnosis catch-up. A lost queue message, or a worker that died
+        // holding a claimed run, would otherwise leave the run outstanding
+        // forever and the one-run-per-app guard would block the app for good.
+        const recovered = await recoverStaleDiagnosisRuns(env);
+        const diagnosisQueued = await queueDueDiagnosisRuns(env);
+        log("info", "scheduled_diagnosis_runs_queued", {
+          recovered,
+          queued: diagnosisQueued,
+        });
       })(),
     );
   },

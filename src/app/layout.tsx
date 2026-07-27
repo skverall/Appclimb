@@ -12,6 +12,7 @@ import {
 
 import "./globals.css";
 import "./ai-visibility.css";
+import "./web-tracking.css";
 
 const dmSans = DM_Sans({
   variable: "--font-body",

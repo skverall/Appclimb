@@ -25,14 +25,19 @@ import {
   X,
 } from "lucide-react";
 
+import { ActionPlanDetail } from "@/components/action-plan-detail";
 import { ModalDialog } from "@/components/modal-dialog";
 import { ProviderMark } from "@/components/provider-mark";
 import type {
   DashboardSnapshot,
-  Experiment,
   Insight,
   SourceConnection,
 } from "@/lib/contracts";
+import {
+  actionPlanFor,
+  type InsightFeedbackAction,
+  type PersistedExperiment,
+} from "@/lib/experiments";
 import {
   connectionFields,
   type ConnectableProvider,
@@ -90,12 +95,25 @@ export function DiagnoseView({
   selectedInsight,
   onSelectInsight,
   onCreateExperiment,
+  experiments = [],
+  savingExperiment = false,
+  onSendFeedback,
+  onActionPlanOpened,
+  feedbackState = "",
+  feedbackError = "",
 }: {
   snapshot: DashboardSnapshot;
   selectedInsight?: Insight;
   onSelectInsight: (id: string) => void;
   onCreateExperiment: () => void;
+  experiments?: PersistedExperiment[];
+  savingExperiment?: boolean;
+  onSendFeedback?: (action: InsightFeedbackAction, reason: string) => void;
+  onActionPlanOpened?: (insightId: string) => void;
+  feedbackState?: string;
+  feedbackError?: string;
 }) {
+  const [planOpen, setPlanOpen] = useState(false);
   const insight = selectedInsight ?? snapshot.insights[0];
   const evidenceItems = snapshot.evidence.filter((item) =>
     insight?.evidenceIds.includes(item.id),
@@ -254,11 +272,34 @@ export function DiagnoseView({
                 <button
                   className="primary-action"
                   type="button"
-                  onClick={onCreateExperiment}
+                  aria-expanded={planOpen}
+                  onClick={() => {
+                    const next = !planOpen;
+                    setPlanOpen(next);
+                    if (next) onActionPlanOpened?.(insight.id);
+                  }}
                 >
-                  Create local draft <ArrowRight size={17} />
+                  {planOpen ? "Hide action plan" : "Open action plan"}
+                  <ArrowRight size={17} />
                 </button>
               </div>
+            )}
+
+            {planOpen && (
+              <ActionPlanDetail
+                plan={actionPlanFor(snapshot, insight)}
+                insight={insight}
+                proposal={proposal}
+                evidence={snapshot.evidence}
+                experimentExists={experiments.some(
+                  (experiment) => experiment.insightId === insight.id,
+                )}
+                busy={savingExperiment}
+                onCreateExperiment={onCreateExperiment}
+                onFeedback={onSendFeedback}
+                feedbackState={feedbackState}
+                feedbackError={feedbackError}
+              />
             )}
 
             <div className="proof-strip">
@@ -284,19 +325,46 @@ export function DiagnoseView({
   );
 }
 
+const EXPERIMENT_STATUS_ORDER = [
+  "draft",
+  "ready",
+  "running",
+  "completed",
+] as const;
+
 export function LabView({
   selectedInsight,
   experiments,
   latestCreatedExperimentId,
   onCreateDraft,
+  persistence = "session",
+  busy = false,
+  errorMessage = "",
+  onUpdateExperiment,
+  onDeleteExperiment,
 }: {
   selectedInsight?: Insight;
-  experiments: Experiment[];
+  experiments: PersistedExperiment[];
   latestCreatedExperimentId: string;
   onCreateDraft: () => void;
+  /**
+   * `saved` means every card in this view round-trips through D1. `session`
+   * is only reachable in the public demo and in a signed-out workspace, and
+   * the UI says so instead of implying a draft was stored.
+   */
+  persistence?: "saved" | "session";
+  busy?: boolean;
+  errorMessage?: string;
+  onUpdateExperiment?: (
+    id: string,
+    patch: Record<string, unknown>,
+  ) => Promise<void> | void;
+  onDeleteExperiment?: (id: string) => Promise<void> | void;
 }) {
-  const [openedExperiment, setOpenedExperiment] =
-    useState<Experiment | null>(null);
+  const [openedExperimentId, setOpenedExperimentId] = useState("");
+  const openedExperiment =
+    experiments.find((experiment) => experiment.id === openedExperimentId) ??
+    null;
   const latestCreated = experiments.find(
     (experiment) => experiment.id === latestCreatedExperimentId,
   );
@@ -332,9 +400,26 @@ export function LabView({
       {latestCreated && (
         <div className="success-banner" role="status">
           <CheckCircle2 size={18} />
-          Session-only draft created from {latestCreated.stageId} evidence.
-          It disappears on reload, and nothing was launched in{" "}
-          {sourceLabel(latestCreated.source)} or another tool.
+          {persistence === "saved" ? (
+            <>
+              Experiment saved from {latestCreated.stageId} evidence. It stays
+              in this workspace after a reload, and nothing was launched in{" "}
+              {sourceLabel(latestCreated.source)} or another tool.
+            </>
+          ) : (
+            <>
+              Draft created from {latestCreated.stageId} evidence. Sign in to a
+              private workspace to keep it after a reload — this demo does not
+              store experiments.
+            </>
+          )}
+        </div>
+      )}
+
+      {errorMessage && (
+        <div className="lab-error-banner" role="alert">
+          <X size={16} aria-hidden="true" />
+          {errorMessage}
         </div>
       )}
 
@@ -360,13 +445,47 @@ export function LabView({
                 <strong>{experiment.guardrailMetric}</strong>
               </div>
             </div>
+            {persistence === "saved" && onUpdateExperiment && (
+              <div className="lab-experiment-controls">
+                <label htmlFor={`experiment-status-${experiment.id}`}>
+                  Status
+                </label>
+                <select
+                  id={`experiment-status-${experiment.id}`}
+                  value={experiment.status}
+                  disabled={busy}
+                  onChange={(event) =>
+                    void onUpdateExperiment(experiment.id, {
+                      status: event.target.value,
+                    })
+                  }
+                >
+                  {EXPERIMENT_STATUS_ORDER.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+                {onDeleteExperiment && (
+                  <button
+                    type="button"
+                    className="lab-delete-experiment"
+                    disabled={busy}
+                    aria-label={`Delete ${experiment.title}`}
+                    onClick={() => void onDeleteExperiment(experiment.id)}
+                  >
+                    <X size={14} aria-hidden="true" /> Delete
+                  </button>
+                )}
+              </div>
+            )}
             <div className="experiment-footer">
               <span>
                 <DatabaseZap size={15} /> {sourceLabel(experiment.source)}
               </span>
               <button
                 type="button"
-                onClick={() => setOpenedExperiment(experiment)}
+                onClick={() => setOpenedExperimentId(experiment.id)}
               >
                 Open <ChevronRight size={16} />
               </button>
@@ -393,44 +512,180 @@ export function LabView({
       </div>
 
       {openedExperiment && (
-        <ModalDialog
-          labelledBy="experiment-detail-title"
-          onClose={() => setOpenedExperiment(null)}
-          dialogClassName="settings-dialog experiment-dialog"
-          closeLabel="Close experiment"
-        >
-          <span className="eyebrow">Experiment · {openedExperiment.status}</span>
-          <h2 id="experiment-detail-title">{openedExperiment.title}</h2>
-          <p className="experiment-detail-hypothesis">
-            {openedExperiment.hypothesis}
-          </p>
-          <div className="experiment-detail-grid">
-            <div>
-              <small>Stage</small>
-              <strong>{openedExperiment.stageId}</strong>
-            </div>
-            <div>
-              <small>Evidence source</small>
-              <strong>{sourceLabel(openedExperiment.source)}</strong>
-            </div>
-            <div>
-              <small>Primary metric</small>
-              <strong>{openedExperiment.primaryMetric}</strong>
-            </div>
-            <div>
-              <small>Guardrail</small>
-              <strong>{openedExperiment.guardrailMetric}</strong>
-            </div>
-          </div>
-          <div className="settings-security-note">
-            <p>
-              This is a read-only experiment record. Launch and execution
-              remain in your product or paywall tool.
-            </p>
-          </div>
-        </ModalDialog>
+        <ExperimentDetailDialog
+          experiment={openedExperiment}
+          persistence={persistence}
+          busy={busy}
+          onClose={() => setOpenedExperimentId("")}
+          onUpdateExperiment={onUpdateExperiment}
+        />
       )}
     </section>
+  );
+}
+
+function ExperimentDetailDialog({
+  experiment,
+  persistence,
+  busy,
+  onClose,
+  onUpdateExperiment,
+}: {
+  experiment: PersistedExperiment;
+  persistence: "saved" | "session";
+  busy: boolean;
+  onClose: () => void;
+  onUpdateExperiment?: (
+    id: string,
+    patch: Record<string, unknown>,
+  ) => Promise<void> | void;
+}) {
+  const [result, setResult] = useState(experiment.result ?? "");
+  const [learnings, setLearnings] = useState(experiment.learnings ?? "");
+  const [saved, setSaved] = useState(false);
+  const editable = persistence === "saved" && Boolean(onUpdateExperiment);
+
+  return (
+    <ModalDialog
+      labelledBy="experiment-detail-title"
+      onClose={onClose}
+      dialogClassName="settings-dialog experiment-dialog"
+      closeLabel="Close experiment"
+    >
+      <span className="eyebrow">Experiment · {experiment.status}</span>
+      <h2 id="experiment-detail-title">{experiment.title}</h2>
+      <p className="experiment-detail-hypothesis">{experiment.hypothesis}</p>
+      <div className="experiment-detail-grid">
+        <div>
+          <small>Stage</small>
+          <strong>{experiment.stageId}</strong>
+        </div>
+        <div>
+          <small>Evidence source</small>
+          <strong>{sourceLabel(experiment.source)}</strong>
+        </div>
+        <div>
+          <small>Primary metric</small>
+          <strong>{experiment.primaryMetric}</strong>
+        </div>
+        <div>
+          <small>Guardrail</small>
+          <strong>{experiment.guardrailMetric}</strong>
+        </div>
+        <div>
+          <small>Segment</small>
+          <strong>{experiment.segment || "All users in the window"}</strong>
+        </div>
+        <div>
+          <small>Started / ended</small>
+          <strong>
+            {experiment.startedAt
+              ? formatUtcDate(experiment.startedAt)
+              : "Not started"}
+            {experiment.endedAt ? ` → ${formatUtcDate(experiment.endedAt)}` : ""}
+          </strong>
+        </div>
+      </div>
+
+      {experiment.steps && experiment.steps.length > 0 && (
+        <div className="experiment-detail-section">
+          <strong>Exact steps</strong>
+          <ol>
+            {experiment.steps.map((step) => (
+              <li key={`${step.order}-${step.title}`}>
+                <strong>{step.title}</strong>
+                <span>{step.instruction}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      {experiment.guardrails && experiment.guardrails.length > 0 && (
+        <div className="experiment-detail-section">
+          <strong>Guardrails</strong>
+          <ul>
+            {experiment.guardrails.map((guardrail) => (
+              <li key={guardrail.key}>{guardrail.label}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {experiment.evidenceIds && experiment.evidenceIds.length > 0 && (
+        <div className="experiment-detail-section">
+          <strong>Evidence</strong>
+          <code>{experiment.evidenceIds.join(" · ")}</code>
+        </div>
+      )}
+
+      {editable ? (
+        <form
+          className="experiment-notes-form"
+          onSubmit={async (event) => {
+            event.preventDefault();
+            setSaved(false);
+            await onUpdateExperiment?.(experiment.id, {
+              result: result.trim(),
+              learnings: learnings.trim(),
+            });
+            setSaved(true);
+          }}
+        >
+          <label htmlFor="experiment-result">Result</label>
+          <textarea
+            id="experiment-result"
+            rows={3}
+            value={result}
+            onChange={(event) => setResult(event.target.value)}
+            placeholder="What the primary metric did, measured in your own tool."
+          />
+          <label htmlFor="experiment-learnings">Learnings</label>
+          <textarea
+            id="experiment-learnings"
+            rows={3}
+            value={learnings}
+            onChange={(event) => setLearnings(event.target.value)}
+            placeholder="What you would keep, change or stop next cycle."
+          />
+          <div>
+            <button type="submit" className="primary-action" disabled={busy}>
+              {busy ? "Saving…" : "Save result and learnings"}
+            </button>
+            {saved && (
+              <span role="status" className="experiment-notes-saved">
+                Saved
+              </span>
+            )}
+          </div>
+        </form>
+      ) : (
+        (experiment.result || experiment.learnings) && (
+          <div className="experiment-detail-section">
+            {experiment.result && (
+              <>
+                <strong>Result</strong>
+                <p>{experiment.result}</p>
+              </>
+            )}
+            {experiment.learnings && (
+              <>
+                <strong>Learnings</strong>
+                <p>{experiment.learnings}</p>
+              </>
+            )}
+          </div>
+        )
+      )}
+
+      <div className="settings-security-note">
+        <p>
+          AppClimb records the experiment. Launch and execution remain in your
+          product, paywall or App Store tooling — nothing here changes a
+          connected system.
+        </p>
+      </div>
+    </ModalDialog>
   );
 }
 

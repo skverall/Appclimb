@@ -6,14 +6,11 @@ import {
   BarChart3,
   Bot,
   CalendarDays,
-  Check,
   ChevronDown,
   ChevronRight,
   CircleHelp,
-  Clipboard,
   CloudCog,
   Code2,
-  ExternalLink,
   Filter,
   Globe2,
   Info,
@@ -36,13 +33,16 @@ import {
 
 import { BrandIcon, SourceBrandIcon } from "@/components/brand-icon";
 import { TrackingVerificationGate } from "@/components/tracking-verification-gate";
+import { TrackingInstallWizard } from "@/components/web-tracking/tracking-install-wizard";
+import { TrackingStatusPill } from "@/components/web-tracking/tracking-status";
+import { buildTrackingSnippet } from "@/components/web-tracking/tracking-snippet";
+import { useWebInstallState } from "@/components/web-tracking/use-web-install-state";
 import type {
   AcquisitionBreakdownRow,
   AcquisitionChannel,
   AcquisitionEnvelope,
   AcquisitionSnapshot,
   CrawlerCategory,
-  WebProperty,
 } from "@/lib/acquisition";
 import { isAcquisitionEnvelope } from "@/lib/acquisition";
 import {
@@ -170,13 +170,20 @@ export function AcquisitionAtlas({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [verifyAttempted, setVerifyAttempted] = useState(false);
-  const [justVerified, setJustVerified] = useState(false);
-  /** After a successful verify, let the user stay on the confetti screen until Continue. */
-  const [dismissVerifiedGate, setDismissVerifiedGate] = useState(false);
+  /** Lets a user with a stale install skip past the reconnect card. */
+  const [dismissStaleGate, setDismissStaleGate] = useState(false);
   const collectorOrigin =
     typeof window === "undefined"
       ? "https://appclimb.app"
       : window.location.origin;
+  /**
+   * Task P0.27 — setup position is server-derived, so the Atlas never replaces
+   * an unfinished install with empty charts, and a reload resumes in place.
+   */
+  const install = useWebInstallState({
+    appId,
+    enabled: authenticated && !demo,
+  });
 
   const loadSnapshot = useCallback(async () => {
     if (!authenticated || demo) {
@@ -228,44 +235,35 @@ export function AcquisitionAtlas({
     return () => window.clearTimeout(timer);
   }, [loadSnapshot]);
 
-  // New app / empty property: reset the verification celebration gate.
-  useEffect(() => {
-    setDismissVerifiedGate(false);
-    setJustVerified(false);
-    setVerifyAttempted(false);
-  }, [appId, snapshot.property?.id]);
-
   const property = snapshot.property;
   const trackingSnippet = property?.trackingToken
-    ? `<script\n  src="${collectorOrigin}/appclimb-analytics.js"\n  data-token="${property.trackingToken}"\n  data-storage="session"\n  defer\n></script>`
+    ? buildTrackingSnippet({
+        domain: property.domain,
+        trackingToken: property.trackingToken,
+        collectorOrigin,
+      })
     : "";
 
-  const hasLiveSignal =
-    snapshot.mode === "live" ||
-    snapshot.totals.pageviews > 0 ||
-    snapshot.totals.visitors > 0 ||
-    snapshot.crawlers.requests > 0;
-
-  const needsInstallGate =
-    Boolean(authenticated && !demo && property?.trackingToken) &&
-    !dismissVerifiedGate &&
-    (justVerified || !hasLiveSignal);
+  const workspaceView = authenticated && !demo;
+  /**
+   * The wizard owns every pre-verification state. A saved domain is never
+   * replaced by empty charts, and `Tracking installed` requires a real event.
+   */
+  const setupIncomplete =
+    workspaceView && install.loaded && !install.state.trackingInstalled;
+  const showWizard = workspaceView && (setupOpen || setupIncomplete);
+  /** Previously verified, then the events stopped: reconnect, do not pretend. */
+  const showStaleGate =
+    workspaceView &&
+    !showWizard &&
+    install.state.status === "stale" &&
+    !dismissStaleGate;
 
   const verifyConnection = async () => {
     setVerifying(true);
     setVerifyAttempted(true);
-    setJustVerified(false);
     try {
-      const next = await loadSnapshot();
-      const connected =
-        next &&
-        (next.mode === "live" ||
-          next.totals.pageviews > 0 ||
-          next.totals.visitors > 0 ||
-          next.crawlers.requests > 0);
-      if (connected) {
-        setJustVerified(true);
-      }
+      await Promise.all([loadSnapshot(), install.refresh()]);
     } finally {
       setVerifying(false);
     }
@@ -353,13 +351,17 @@ export function AcquisitionAtlas({
               </div>
             )}
           </div>
+          {workspaceView && install.loaded && install.snapshot.property && (
+            <TrackingStatusPill state={install.state} />
+          )}
           {property?.trackingToken && (
             <button
               className="atlas-setup-button"
               type="button"
               onClick={() => setSetupOpen((current) => !current)}
             >
-              <Code2 size={15} /> Install
+              <Code2 size={15} />{" "}
+              {install.state.trackingInstalled ? "Install" : "Continue setup"}
             </button>
           )}
         </div>
@@ -375,38 +377,40 @@ export function AcquisitionAtlas({
         </div>
       )}
 
-      {setupOpen && property?.trackingToken && (
-        <TrackingSetup
-          property={property}
-          snippet={trackingSnippet}
+      {showWizard ? (
+        <TrackingInstallWizard
+          appId={appId}
           collectorOrigin={collectorOrigin}
-          onClose={() => setSetupOpen(false)}
-        />
-      )}
-
-      {!loading && authenticated && !demo && !property ? (
-        <ConnectWebsite
-          onConnected={(created) => {
-            setSnapshot((current) => ({ ...current, property: created }));
-            setSetupOpen(true);
-            setDismissVerifiedGate(false);
-            setJustVerified(false);
-            setVerifyAttempted(false);
+          finishLabel="Open live Acquisition Atlas"
+          onPropertyCreated={(created) => {
+            setSnapshot((current) => ({
+              ...current,
+              property: {
+                id: created.id,
+                name: created.name,
+                domain: created.domain,
+                trackingToken: created.trackingToken,
+                tokenVersion: created.tokenVersion ?? 1,
+                retentionDays: 90,
+                createdAt: created.createdAt ?? new Date().toISOString(),
+              },
+            }));
+          }}
+          onFinish={() => {
+            setSetupOpen(false);
+            void loadSnapshot();
           }}
         />
-      ) : needsInstallGate && property ? (
+      ) : showStaleGate && property ? (
         <TrackingVerificationGate
           property={property}
           snippet={trackingSnippet}
           collectorOrigin={collectorOrigin}
           checking={verifying || loading}
-          lastCheckFailed={verifyAttempted && !justVerified && !hasLiveSignal}
-          verified={justVerified || hasLiveSignal}
+          lastCheckFailed={verifyAttempted && !install.state.live}
+          verified={install.state.live}
           onCheck={() => void verifyConnection()}
-          onVerifiedContinue={() => {
-            setDismissVerifiedGate(true);
-            setJustVerified(false);
-          }}
+          onVerifiedContinue={() => setDismissStaleGate(true)}
         />
       ) : (
         <>
@@ -1375,256 +1379,6 @@ function shortDate(value: string) {
     day: "numeric",
     timeZone: "UTC",
   });
-}
-
-function ConnectWebsite({
-  onConnected,
-}: {
-  onConnected: (property: WebProperty) => void;
-}) {
-  const [name, setName] = useState("Marketing website");
-  const [domain, setDomain] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  const connect = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setSaving(true);
-    setError("");
-    try {
-      const response = await fetch("/api/acquisition", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ name, domain }),
-      });
-      const payload = (await response.json()) as {
-        data?: WebProperty;
-        error?: string;
-      };
-      if (!response.ok || !payload.data) {
-        throw new Error(payload.error ?? "connection_failed");
-      }
-      onConnected(payload.data);
-    } catch (connectError) {
-      setError(
-        connectError instanceof Error &&
-          connectError.message === "web_property_exists"
-          ? "This domain is already connected. Add a different Web SaaS domain, or open the existing property."
-          : "Use a valid hostname such as example.com.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <article className="atlas-connect-card">
-      <div className="atlas-connect-visual" aria-hidden="true">
-        <span className="atlas-orbit orbit-one" />
-        <span className="atlas-orbit orbit-two" />
-        <Globe2 size={38} />
-      </div>
-      <div>
-        <span className="eyebrow">First-party web analytics</span>
-        <h3>Connect your website</h3>
-        <p>
-          AppClimb will collect anonymous page views, referrers, UTM campaigns
-          and crawler requests. No DataFast account and no third-party analytics
-          SDK are involved.
-        </p>
-        <ul>
-          <li>
-            <Check size={15} /> Session-scoped visitor IDs by default
-          </li>
-          <li>
-            <Check size={15} /> No IP addresses stored
-          </li>
-          <li>
-            <Check size={15} /> Signed site token and workspace RLS
-          </li>
-        </ul>
-      </div>
-      <form onSubmit={connect}>
-        <label>
-          Property name
-          <input
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            maxLength={120}
-            required
-          />
-        </label>
-        <label>
-          Website domain
-          <input
-            value={domain}
-            onChange={(event) => setDomain(event.target.value)}
-            placeholder="example.com"
-            autoCapitalize="none"
-            spellCheck={false}
-            required
-          />
-        </label>
-        {error && <p role="alert">{error}</p>}
-        <button type="submit" disabled={saving}>
-          {saving ? (
-            <>
-              <LoaderCircle className="spin" size={16} /> Connecting…
-            </>
-          ) : (
-            <>
-              Create property <ExternalLink size={15} />
-            </>
-          )}
-        </button>
-      </form>
-    </article>
-  );
-}
-
-function TrackingSetup({
-  property,
-  snippet,
-  collectorOrigin,
-  onClose,
-}: {
-  property: WebProperty;
-  snippet: string;
-  collectorOrigin: string;
-  onClose: () => void;
-}) {
-  // Agent prompt is first: most builders paste install work into coding agents.
-  const [tab, setTab] = useState<"agent" | "html">("agent");
-  const [copiedHtml, setCopiedHtml] = useState(false);
-  const [copiedPrompt, setCopiedPrompt] = useState(false);
-
-  const aiAgentPrompt = useMemo(() => {
-    return [
-      `# Add AppClimb Web Analytics to ${property.domain}`,
-      ``,
-      `Please integrate AppClimb first-party web analytics into our website repository for ${property.domain}.`,
-      ``,
-      `## Goals`,
-      `- Track anonymous visitors, referrers, UTM campaigns, and landing pages`,
-      `- Keep AI crawler requests separate from human traffic`,
-      `- Prefer session-scoped storage (no IP storage; privacy-friendly defaults)`,
-      ``,
-      `## 1. Add the browser tracking script`,
-      `Add this script tag before the closing </body> tag in the root layout or main index.html:`,
-      ``,
-      "```html",
-      snippet,
-      "```",
-      ``,
-      `## 2. Optional conversion events`,
-      `When a key product goal happens (signup, checkout start, paid activation), fire:`,
-      ``,
-      "```javascript",
-      `if (typeof window !== "undefined") {`,
-      `  window.appclimbAnalytics?.track("conversion", { goal: "account_created" });`,
-      `}`,
-      "```",
-      ``,
-      `Use clear goal names such as account_created, checkout_started, or subscription_started.`,
-      ``,
-      `## 3. Optional Next.js / edge crawler forwarding`,
-      `Set this server-side env var so recognized AI/search crawler user agents can be forwarded:`,
-      ``,
-      "```bash",
-      `APPCLIMB_TRACKING_TOKEN="${property.trackingToken}"`,
-      "```",
-      ``,
-      `Forward crawler hits to ${collectorOrigin}/api/track/crawler with the original User-Agent when possible.`,
-      ``,
-      `## Constraints`,
-      `- Do not invent a third-party analytics vendor for this install`,
-      `- Do not change the token value`,
-      `- Keep the script on ${property.domain} only`,
-      `- After install, open AppClimb → Acquisition Atlas and confirm traffic or crawlers appear`,
-    ].join("\n");
-  }, [property.domain, property.trackingToken, snippet, collectorOrigin]);
-
-  const copyHtml = async () => {
-    await navigator.clipboard.writeText(snippet);
-    setCopiedHtml(true);
-    window.setTimeout(() => setCopiedHtml(false), 1800);
-  };
-
-  const copyPrompt = async () => {
-    await navigator.clipboard.writeText(aiAgentPrompt);
-    setCopiedPrompt(true);
-    window.setTimeout(() => setCopiedPrompt(false), 1800);
-  };
-
-  return (
-    <article className="atlas-setup-panel">
-      <div className="atlas-setup-header">
-        <div>
-          <span className="eyebrow">Website Analytics Integration</span>
-          <h3>Install tracking on {property.domain}</h3>
-          <p>
-            Add AppClimb first-party analytics snippet to your website to track
-            visitors, AI referrals (ChatGPT, Claude, Perplexity), UTM campaigns, and
-            server-side crawlers.
-          </p>
-        </div>
-        <div className="atlas-setup-tabs" role="tablist" aria-label="Installation method">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "agent"}
-            className={tab === "agent" ? "active" : ""}
-            onClick={() => setTab("agent")}
-          >
-            <Sparkles size={14} /> AI Agent Prompt
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={tab === "html"}
-            className={tab === "html" ? "active" : ""}
-            onClick={() => setTab("html")}
-          >
-            <Code2 size={14} /> HTML Snippet
-          </button>
-        </div>
-      </div>
-
-      {tab === "agent" ? (
-        <div className="atlas-code-block atlas-agent-prompt-block">
-          <code>{aiAgentPrompt}</code>
-          <button type="button" onClick={() => void copyPrompt()}>
-            {copiedPrompt ? <Check size={15} /> : <Clipboard size={15} />}
-            {copiedPrompt ? "Prompt copied" : "Copy AI agent prompt"}
-          </button>
-        </div>
-      ) : (
-        <div className="atlas-code-block">
-          <code>{snippet}</code>
-          <button type="button" onClick={() => void copyHtml()}>
-            {copiedHtml ? <Check size={15} /> : <Clipboard size={15} />}
-            {copiedHtml ? "Copied" : "Copy install snippet"}
-          </button>
-        </div>
-      )}
-
-      <div className="atlas-server-note">
-        <Bot size={19} />
-        <div>
-          <strong>Crawler tracking is server-side</strong>
-          <span>
-            This AppClimb project captures known crawlers in Next.js Proxy when
-            <code> APPCLIMB_TRACKING_TOKEN </code> is configured. Other stacks
-            can forward the original user agent to{" "}
-            <code>{collectorOrigin}/api/track/crawler</code>.
-          </span>
-        </div>
-      </div>
-      <button className="atlas-setup-close" type="button" onClick={onClose}>
-        Done
-      </button>
-    </article>
-  );
 }
 
 function ProviderGlyph({ name }: { name: string }) {

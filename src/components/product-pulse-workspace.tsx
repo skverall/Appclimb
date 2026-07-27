@@ -27,6 +27,8 @@ import type { CSSProperties } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ModalDialog } from "@/components/modal-dialog";
+import { buildTrackingAgentPrompt } from "@/components/web-tracking/tracking-agent-prompt";
+import { buildTrackingSnippet } from "@/components/web-tracking/tracking-snippet";
 import { WebSiteIcon } from "@/components/web-site-icon";
 import type { DashboardSnapshot, PostHogPulse } from "@/lib/contracts";
 import {
@@ -605,55 +607,24 @@ function AddAppDialog({
   const collectorOrigin =
     typeof window === "undefined" ? "https://appclimb.app" : window.location.origin;
 
+  // Canonical generators (Task P0.23). This dialog must not fork the install
+  // prompt or the script tag — src/components/web-tracking owns both.
   const webSnippet = webSuccess?.trackingToken
-    ? `<script\n  src="${collectorOrigin}/appclimb-analytics.js"\n  data-token="${webSuccess.trackingToken}"\n  data-storage="session"\n  defer\n></script>`
+    ? buildTrackingSnippet({
+        domain: webSuccess.domain,
+        trackingToken: webSuccess.trackingToken,
+        collectorOrigin,
+      })
     : "";
 
   const webAgentPrompt = useMemo(() => {
     if (!webSuccess?.trackingToken || !webSnippet) return "";
-    return [
-      `# Add AppClimb Web Analytics to ${webSuccess.domain}`,
-      ``,
-      `Please integrate AppClimb first-party web analytics into our website repository for ${webSuccess.name} (${webSuccess.domain}).`,
-      ``,
-      `## Goals`,
-      `- Track anonymous visitors, referrers, UTM campaigns, and landing pages`,
-      `- Keep AI crawler requests separate from human traffic`,
-      `- Prefer session-scoped storage (no IP storage; privacy-friendly defaults)`,
-      ``,
-      `## 1. Add the browser tracking script`,
-      `Add this script tag before the closing </body> tag in the root layout or main index.html:`,
-      ``,
-      "```html",
-      webSnippet,
-      "```",
-      ``,
-      `## 2. Optional conversion events`,
-      `When a key product goal happens (signup, checkout start, paid activation), fire:`,
-      ``,
-      "```javascript",
-      `if (typeof window !== "undefined") {`,
-      `  window.appclimbAnalytics?.track("conversion", { goal: "account_created" });`,
-      `}`,
-      "```",
-      ``,
-      `Use clear goal names such as account_created, checkout_started, or subscription_started.`,
-      ``,
-      `## 3. Optional Next.js / edge crawler forwarding`,
-      `Set this server-side env var so recognized AI/search crawler user agents can be forwarded:`,
-      ``,
-      "```bash",
-      `APPCLIMB_TRACKING_TOKEN="${webSuccess.trackingToken}"`,
-      "```",
-      ``,
-      `Forward crawler hits to ${collectorOrigin}/api/track/crawler with the original User-Agent when possible.`,
-      ``,
-      `## Constraints`,
-      `- Do not invent a third-party analytics vendor (no DataFast, GA, etc.) for this install`,
-      `- Do not change the token value`,
-      `- Keep the script on ${webSuccess.domain} only`,
-      `- After install, open AppClimb → Acquisition Atlas and confirm traffic or crawlers appear`,
-    ].join("\n");
+    return buildTrackingAgentPrompt({
+      domain: webSuccess.domain,
+      name: webSuccess.name,
+      trackingToken: webSuccess.trackingToken,
+      collectorOrigin,
+    });
   }, [webSuccess, webSnippet, collectorOrigin]);
 
   return (
@@ -744,10 +715,15 @@ function AddAppDialog({
                     {webSuccess.name}
                   </strong>
                   <small style={{ color: "var(--foreground-muted)", fontSize: "12px" }}>
-                    {webSuccess.domain} · Web SaaS connected
+                    {webSuccess.domain}
                   </small>
                 </div>
-                <BadgeCheck size={20} color="var(--accent, #0f766e)" />
+                <span
+                  className="wt-status-pill wt-status-domain_saved"
+                  title="A saved domain is not a connected source until AppClimb accepts a real browser event."
+                >
+                  Website saved
+                </span>
               </div>
 
               <div
@@ -777,6 +753,17 @@ function AddAppDialog({
                     <li>AI answer / search / training crawler visibility</li>
                     <li>PostHog product events once that source is connected</li>
                   </ul>
+                  <p
+                    style={{
+                      margin: "8px 0 0",
+                      fontSize: "12px",
+                      color: "var(--foreground-muted)",
+                      lineHeight: 1.45,
+                    }}
+                  >
+                    None of it starts until the tracking script is installed and
+                    AppClimb accepts a real browser event from this domain.
+                  </p>
                 </div>
 
                 {webSnippet && webAgentPrompt ? (
@@ -948,7 +935,7 @@ function AddAppDialog({
                   onClick={() => onAdded(webSuccess.id, { openAtlas: true })}
                 >
                   <Waypoints size={16} />
-                  Verify install in Acquisition Atlas
+                  Continue website setup
                 </button>
                 <button
                   type="button"

@@ -1,0 +1,709 @@
+/* ==========================================================================
+   Website tracking install wizard (Decision System V2, section 10)
+   Uses the design tokens declared in globals.css. This project has no Tailwind;
+   every class below is real CSS.
+   ========================================================================== */
+
+.web-tracking-wizard {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+}
+
+.wt-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.wt-head h3 {
+  margin-top: 4px;
+  font-family: var(--font-display), sans-serif;
+  font-size: var(--text-xl);
+  font-weight: var(--weight-display);
+  letter-spacing: var(--tracking-display);
+  line-height: var(--leading-tight);
+}
+
+.wt-head p {
+  max-width: 62ch;
+  margin-top: 6px;
+  color: var(--ink-secondary);
+  font-size: var(--text-xs);
+  line-height: var(--leading-relaxed);
+}
+
+.wt-eyebrow {
+  color: var(--n-600);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}
+
+/* --- Stepper ------------------------------------------------------------ */
+
+.wt-stepper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--canvas);
+  list-style: none;
+}
+
+.wt-step {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.wt-step button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  padding: 0 10px;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ink-secondary);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  text-align: left;
+  transition: background 0.16s ease, color 0.16s ease;
+}
+
+.wt-step button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.wt-step button:hover:not(:disabled) {
+  background: var(--n-100);
+}
+
+.wt-step.active button {
+  color: var(--ink);
+  background: var(--card);
+  box-shadow: var(--shadow-xs);
+}
+
+.wt-step-index {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-circle);
+  background: var(--n-150);
+  color: var(--ink-secondary);
+  font-size: var(--text-3xs);
+  font-weight: var(--weight-bold);
+}
+
+.wt-step.active .wt-step-index {
+  background: var(--teal);
+  color: var(--n-0);
+}
+
+.wt-step.done .wt-step-index {
+  background: var(--green-100);
+  color: var(--green-600);
+}
+
+.wt-step-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --- Panel -------------------------------------------------------------- */
+
+.wt-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.wt-form,
+.wt-install,
+.wt-deploy,
+.wt-verify,
+.wt-goal,
+.wt-baseline-step {
+  display: grid;
+  gap: 14px;
+}
+
+.wt-field {
+  display: grid;
+  gap: 6px;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+}
+
+.wt-field input {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--card);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.wt-field small {
+  color: var(--ink-muted);
+  font-size: var(--text-3xs);
+  font-weight: var(--weight-medium);
+}
+
+.wt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.wt-primary,
+.wt-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-display);
+}
+
+.wt-primary {
+  background: var(--teal);
+  color: var(--n-0);
+  box-shadow: var(--shadow-md);
+}
+
+.wt-primary:hover:not(:disabled) {
+  background: var(--teal-dark);
+}
+
+.wt-primary:disabled,
+.wt-secondary:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.wt-secondary {
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  color: var(--ink);
+}
+
+.wt-secondary:hover:not(:disabled) {
+  background: var(--n-100);
+}
+
+.wt-link {
+  padding: 0;
+  background: none;
+  color: var(--teal-dark);
+  font: inherit;
+  font-weight: var(--weight-semibold);
+  text-decoration: underline;
+}
+
+.wt-resume {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+  padding: 6px 10px;
+  border-radius: var(--radius-pill);
+  background: var(--teal-soft);
+  color: var(--teal-dark);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+}
+
+.wt-note,
+.wt-tab-summary {
+  color: var(--ink-secondary);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-relaxed);
+}
+
+.wt-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--coral-200);
+  border-radius: var(--radius-md);
+  background: var(--coral-50);
+  color: var(--coral-700);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+}
+
+.wt-not-detected {
+  padding: 10px 12px;
+  border: 1px solid var(--amber-200);
+  border-radius: var(--radius-md);
+  background: var(--amber-50);
+  color: var(--amber-800);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-relaxed);
+}
+
+.wt-blocked-note {
+  padding: 10px 12px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--canvas);
+  color: var(--ink-secondary);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-relaxed);
+}
+
+/* --- Install tabs ------------------------------------------------------- */
+
+.wt-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.wt-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--ink-secondary);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+}
+
+.wt-tabs button.active {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+  color: var(--teal-dark);
+}
+
+.wt-tabs button.advanced {
+  margin-left: auto;
+  border-style: dashed;
+}
+
+.wt-filename {
+  justify-self: start;
+  padding: 3px 8px;
+  border-radius: var(--radius-xs);
+  background: var(--n-100);
+  color: var(--ink-secondary);
+  font-size: var(--text-3xs);
+}
+
+.wt-code-block {
+  position: relative;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--canvas);
+}
+
+.wt-code-block pre {
+  max-height: 260px;
+  margin: 0;
+  overflow: auto;
+}
+
+.wt-code-block code,
+.wt-raw-snippet code {
+  display: block;
+  color: var(--ink);
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: var(--text-3xs);
+  line-height: var(--leading-normal);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.wt-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+}
+
+.wt-raw-snippet {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--canvas);
+  font-size: var(--text-2xs);
+}
+
+.wt-raw-snippet summary {
+  cursor: pointer;
+  font-weight: var(--weight-semibold);
+}
+
+.wt-raw-snippet pre {
+  margin-top: 8px;
+  overflow: auto;
+}
+
+.wt-checklist {
+  display: grid;
+  gap: 8px;
+  padding-left: 20px;
+  color: var(--ink-secondary);
+  font-size: var(--text-xs);
+  line-height: var(--leading-relaxed);
+}
+
+/* --- Status ------------------------------------------------------------- */
+
+.wt-status-group {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.wt-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--canvas);
+  color: var(--ink-secondary);
+  font-size: var(--text-3xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-wide);
+  white-space: nowrap;
+}
+
+.wt-status-domain_saved,
+.wt-status-awaiting_deploy {
+  border-color: var(--line-strong);
+  background: var(--n-100);
+  color: var(--ink-secondary);
+}
+
+.wt-status-listening {
+  border-color: var(--blue-200);
+  background: var(--blue-50);
+  color: var(--blue-700);
+}
+
+.wt-status-first_event_verified,
+.wt-status-collecting {
+  border-color: var(--teal-300);
+  background: var(--teal-100);
+  color: var(--teal-700);
+}
+
+.wt-status-ready {
+  border-color: var(--green-200);
+  background: var(--green-100);
+  color: var(--green-700);
+}
+
+.wt-status-stale {
+  border-color: var(--amber-200);
+  background: var(--amber-50);
+  color: var(--amber-800);
+}
+
+.wt-status-error {
+  border-color: var(--coral-200);
+  background: var(--coral-50);
+  color: var(--coral-700);
+}
+
+.wt-status-live {
+  border-color: var(--green-200);
+  background: var(--green-50);
+  color: var(--green-600);
+}
+
+.wt-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--radius-circle);
+  background: var(--green-400);
+  animation: wt-live-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes wt-live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.45;
+    transform: scale(0.78);
+  }
+}
+
+.wt-status-summary {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--canvas);
+}
+
+.wt-status-summary-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.wt-status-summary-head strong {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-display);
+}
+
+.wt-status-summary-head p {
+  max-width: 58ch;
+  margin-top: 4px;
+  color: var(--ink-secondary);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-relaxed);
+}
+
+.wt-event-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--card);
+}
+
+.wt-event-facts dt {
+  color: var(--ink-muted);
+  font-size: var(--text-3xs);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-caps);
+  text-transform: uppercase;
+}
+
+.wt-event-facts dd {
+  margin-top: 3px;
+  overflow-wrap: anywhere;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+}
+
+.wt-listening {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--blue-200);
+  border-radius: var(--radius-lg);
+  background: var(--blue-50);
+}
+
+.wt-listening strong {
+  display: block;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-display);
+}
+
+.wt-listening span {
+  color: var(--ink-secondary);
+  font-size: var(--text-2xs);
+}
+
+.wt-radar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-circle);
+  background: var(--card);
+  color: var(--blue-500);
+  animation: wt-live-pulse 1.8s ease-in-out infinite;
+}
+
+/* --- Baseline ----------------------------------------------------------- */
+
+.wt-baseline {
+  display: grid;
+  gap: 12px;
+}
+
+.wt-baseline-bar {
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--n-150);
+}
+
+.wt-baseline-bar span {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--teal);
+  transition: width 0.3s ease;
+}
+
+.wt-baseline-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  list-style: none;
+}
+
+.wt-baseline-facts li {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--canvas);
+}
+
+.wt-baseline-facts strong {
+  font-family: var(--font-display), sans-serif;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-display);
+}
+
+.wt-baseline-facts span {
+  color: var(--ink-muted);
+  font-size: var(--text-3xs);
+}
+
+/* --- Conversion goal ---------------------------------------------------- */
+
+.wt-goal-head {
+  display: flex;
+  gap: 10px;
+  color: var(--teal-dark);
+}
+
+.wt-goal-head strong {
+  color: var(--ink);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-display);
+}
+
+.wt-goal-head p {
+  max-width: 62ch;
+  margin-top: 4px;
+  color: var(--ink-secondary);
+  font-size: var(--text-2xs);
+  line-height: var(--leading-relaxed);
+}
+
+.wt-goal-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+
+.wt-goal-option {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--card);
+  text-align: left;
+}
+
+.wt-goal-option.active {
+  border-color: var(--teal);
+  background: var(--teal-soft);
+}
+
+.wt-goal-option strong {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-display);
+}
+
+.wt-goal-option span {
+  color: var(--ink-secondary);
+  font-size: var(--text-3xs);
+  line-height: var(--leading-snug);
+}
+
+.wt-goal-option code {
+  justify-self: start;
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  background: var(--n-100);
+  font-size: var(--text-3xs);
+}
+
+/* --- Compact resume banner (Pulse / app tab) ---------------------------- */
+
+.wt-resume-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+}
+
+.wt-resume-banner strong {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-display);
+}
+
+.wt-resume-banner p {
+  margin-top: 3px;
+  color: var(--ink-secondary);
+  font-size: var(--text-2xs);
+}
+
+@media (max-width: 720px) {
+  .web-tracking-wizard {
+    padding: 16px;
+  }
+
+  .wt-step {
+    flex-basis: 100%;
+  }
+
+  .wt-tabs button.advanced {
+    margin-left: 0;
+  }
+}

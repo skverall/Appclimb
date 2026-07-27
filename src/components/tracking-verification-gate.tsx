@@ -9,10 +9,11 @@ import {
   Sparkles,
   Wifi,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 
 import type { WebProperty } from "@/lib/acquisition";
 import { WebSiteIcon } from "@/components/web-site-icon";
+import { buildTrackingAgentPrompt } from "@/components/web-tracking/tracking-agent-prompt";
 
 type GateStatus = "listening" | "checking" | "not_found" | "verified";
 
@@ -38,7 +39,6 @@ export function TrackingVerificationGate({
   const [tab, setTab] = useState<"agent" | "html">("agent");
   const [copiedPrompt, setCopiedPrompt] = useState(false);
   const [copiedHtml, setCopiedHtml] = useState(false);
-  const [showConfetti, setShowConfetti] = useState(false);
 
   const status: GateStatus = verified
     ? "verified"
@@ -48,60 +48,22 @@ export function TrackingVerificationGate({
         ? "not_found"
         : "listening";
 
-  useEffect(() => {
-    if (!verified) return;
-    setShowConfetti(true);
-    const timer = window.setTimeout(() => setShowConfetti(false), 2800);
-    return () => window.clearTimeout(timer);
-  }, [verified]);
-
-  const aiAgentPrompt = useMemo(() => {
-    return [
-      `# Add AppClimb Web Analytics to ${property.domain}`,
-      ``,
-      `Please integrate AppClimb first-party web analytics into our website repository for ${property.domain}.`,
-      ``,
-      `## Goals`,
-      `- Track anonymous visitors, referrers, UTM campaigns, and landing pages`,
-      `- Keep AI crawler requests separate from human traffic`,
-      `- Prefer session-scoped storage (no IP storage; privacy-friendly defaults)`,
-      ``,
-      `## 1. Add the browser tracking script`,
-      `Add this script tag before the closing </body> tag in the root layout or main index.html:`,
-      ``,
-      "```html",
-      snippet,
-      "```",
-      ``,
-      `## 2. Optional conversion events`,
-      `When a key product goal happens (signup, checkout start, paid activation), fire:`,
-      ``,
-      "```javascript",
-      `if (typeof window !== "undefined") {`,
-      `  window.appclimbAnalytics?.track("conversion", { goal: "account_created" });`,
-      `}`,
-      "```",
-      ``,
-      `## 3. Optional Next.js / edge crawler forwarding`,
-      `Set this server-side env var so recognized AI/search crawler user agents can be forwarded:`,
-      ``,
-      "```bash",
-      `APPCLIMB_TRACKING_TOKEN="${property.trackingToken ?? ""}"`,
-      "```",
-      ``,
-      `Forward crawler hits to ${collectorOrigin}/api/track/crawler with the original User-Agent when possible.`,
-      ``,
-      `## Constraints`,
-      `- Do not invent a third-party analytics vendor for this install`,
-      `- Do not change the token value`,
-      `- Keep the script on ${property.domain} only`,
-      `- After install, open AppClimb → Acquisition Atlas and click Verify connection`,
-    ].join("\n");
-  }, [property, snippet, collectorOrigin]);
+  // Canonical generator (Task P0.23). This component must not fork the prompt.
+  const aiAgentPrompt = useMemo(
+    () =>
+      buildTrackingAgentPrompt({
+        domain: property.domain,
+        name: property.name,
+        trackingToken: property.trackingToken ?? "",
+        collectorOrigin,
+      }),
+    [property.domain, property.name, property.trackingToken, collectorOrigin],
+  );
 
   return (
     <article className="tracking-verify-gate" aria-live="polite">
-      {showConfetti && <ConfettiBurst />}
+      {/* The burst animation ends itself (opacity 0, fill-mode forwards). */}
+      {verified && <ConfettiBurst />}
 
       <div className="tracking-verify-hero">
         <div
@@ -124,7 +86,7 @@ export function TrackingVerificationGate({
 
         <div className="tracking-verify-copy">
           <span className="eyebrow">
-            {status === "verified" ? "Connected" : "Install required"}
+            {status === "verified" ? "Tracking installed" : "Install required"}
           </span>
           <h3>
             {status === "verified"

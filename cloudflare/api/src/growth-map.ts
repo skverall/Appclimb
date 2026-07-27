@@ -1,18 +1,41 @@
-import { deriveWorkspaceReadiness } from "./diagnosis/readiness";
+import { isFlagEnabled, rolloutFlagState } from "./diagnosis/flags";
+import { getCurrentDiagnosis, getLatestDiagnosisRun } from "./diagnosis/persist";
+import { deriveWorkspaceReadiness, type SourceStatusInfo } from "./diagnosis/readiness";
+import { STAGE_DEFINITIONS, WEB_STAGE_DEFINITIONS } from "./diagnosis/stage-definitions";
 import { isEntitled, workspaceFor } from "./db";
 import { listSources } from "./sources";
 import type { AuthContext } from "./types";
+import type {
+  ActionPlan,
+  ComparisonType,
+  DiagnosisSummary,
+  GrowthStage,
+  SourceProvider,
+  StageHealth,
+  StageId,
+  WebGrowthStage,
+  WebStageId,
+} from "@/lib/contracts";
 
-const stageDefinitions = [
-  { id: "discover", label: "Discover", metricKey: "impressions", source: "app-store-connect" },
-  { id: "store", label: "Store", metricKey: "product_page_views", source: "app-store-connect" },
-  { id: "install", label: "Install", metricKey: "downloads", source: "app-store-connect" },
-  { id: "activate", label: "Activate", metricKey: "activated_users", source: "posthog" },
-  { id: "paywall", label: "Paywall", metricKey: "paywall_views", source: "superwall" },
-  { id: "trial", label: "Trial", metricKey: "trials_new", source: "revenuecat" },
-  { id: "paid", label: "Paid", metricKey: "paid_new", source: "revenuecat" },
-  { id: "renew", label: "Renew", metricKey: "renewals", source: "revenuecat" },
-] as const;
+/**
+ * The iOS funnel shape shown before a diagnosis exists.
+ *
+ * Sourced from the engine's own stage definitions so the API cannot drift from
+ * what the engine actually classifies.
+ */
+const stageDefinitions = STAGE_DEFINITIONS.map((definition) => ({
+  id: definition.id as StageId,
+  label: definition.label,
+  metricKey: definition.metricKey,
+  source: definition.source as SourceProvider,
+}));
+
+const IOS_STAGE_IDS = new Set<string>(
+  STAGE_DEFINITIONS.map((definition) => definition.id),
+);
+const WEB_STAGE_IDS = new Set<string>(
+  WEB_STAGE_DEFINITIONS.map((definition) => definition.id),
+);
 
 function compactNumber(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
@@ -96,6 +119,30 @@ function parseJSON<T>(value: string | null, fallback: T): T {
   }
 }
 
+const SOURCE_STATUSES = new Set(["connected", "needs-attention", "not-connected"]);
+
+/**
+ * Narrows a `listSources` row to the readiness input shape.
+ *
+ * `listSources` returns loosely typed rows, so each field is checked rather
+ * than asserted: an unrecognised status is reported as not-connected instead of
+ * being cast into the union and treated as live.
+ */
+function toSourceStatusInfo(row: Record<string, unknown>): SourceStatusInfo {
+  const provider = String(row.provider ?? "") as SourceProvider;
+  const rawStatus = String(row.status ?? "");
+  return {
+    provider,
+    status: SOURCE_STATUSES.has(rawStatus)
+      ? (rawStatus as SourceStatusInfo["status"])
+      : "not-connected",
+    lastErrorCode:
+      typeof row.lastErrorCode === "string" ? row.lastErrorCode : null,
+    metricCount: typeof row.metricCount === "number" ? row.metricCount : 0,
+    lastMetricAt: typeof row.lastMetricAt === "string" ? row.lastMetricAt : null,
+  };
+}
+
 export async function growthMapSnapshot(
   env: Cloudflare.Env,
   auth: AuthContext,
@@ -110,7 +157,8 @@ export async function growthMapSnapshot(
     throw new Error("workspace_not_found");
   }
   const selectedApp = await env.DB.prepare(
-    `SELECT id,name,platform,bundle_id,apple_app_id,default_storefront,icon_url
+    `SELECT id,name,platform,bundle_id,apple_app_id,default_storefront,icon_url,
+            is_placeholder
      FROM apps
      WHERE workspace_id=? AND id=?
      LIMIT 1`,
@@ -124,6 +172,7 @@ export async function growthMapSnapshot(
       apple_app_id: string | null;
       default_storefront: string;
       icon_url: string | null;
+      is_placeholder: number | null;
     }>();
   if (!selectedApp) throw new Error("app_not_found");
   const sources = await listSources(env.DB, auth.workspaceId, selectedApp.id);
@@ -142,42 +191,119 @@ export async function growthMapSnapshot(
   const metrics = metricResult.results;
   const sums = stageValues(metrics);
   const top = Math.max(sums.get("impressions") ?? 0, 1);
-  const stages = stageDefinitions.map((definition, index) => {
-    const value = sums.get(definition.metricKey) ?? 0;
-    const previous =
-      index > 0 ? sums.get(stageDefinitions[index - 1].metricKey) ?? 0 : 0;
-    return {
-      id: definition.id,
-      label: definition.label,
-      value,
-      formattedValue: compactNumber(value),
-      conversionRate: index > 0 && previous > 0 ? value / previous : null,
-      health: "unknown",
-      source: definition.source,
-      evidenceIds: [] as string[],
-      flowWidth: Math.max(30, 155 * Math.sqrt(value / Math.max(top, value, 1))),
-    };
-  });
-  const latestRunRow = entitled
-    ? await env.DB.prepare(
-        `SELECT id,status,created_at,diagnosis_version,input_hash,primary_insight_id,
-                limitations,missing_requirements
-         FROM diagnosis_runs
-         WHERE workspace_id = ? AND app_id = ?
-         ORDER BY created_at DESC LIMIT 1`,
-      )
-        .bind(auth.workspaceId, selectedApp.id)
-        .first<{
-          id: string;
-          status: string;
-          created_at: string;
-          diagnosis_version: string | null;
-          input_hash: string | null;
-          primary_insight_id: string | null;
-          limitations: string | null;
-          missing_requirements: string | null;
-        }>()
-    : null;
+
+  const diagnosisV2 = isFlagEnabled(env, "DIAGNOSIS_V2_ENABLED");
+
+  const [latestRun, currentDiagnosis] = entitled
+    ? await Promise.all([
+        getLatestDiagnosisRun(env.DB, auth.workspaceId, selectedApp.id),
+        getCurrentDiagnosis(env.DB, auth.workspaceId, selectedApp.id),
+      ])
+    : [null, null];
+
+  /**
+   * Stage payload.
+   *
+   * When a diagnosis result exists and DIAGNOSIS_V2_ENABLED is on, the engine's
+   * persisted verdict is authoritative: health, evidence links, baseline,
+   * comparison type, sample size, confidence and readiness reason all come from
+   * the run that computed them. The metric-aggregation fallback below is only
+   * the pre-diagnosis shape of the funnel, and it says so — every stage it
+   * produces is explicitly `unknown` with a reason, never a silent verdict.
+   */
+  const persistedIosStages = currentDiagnosis?.stages.filter((stage) =>
+    IOS_STAGE_IDS.has(stage.stageId),
+  );
+
+  const stages: GrowthStage[] =
+    diagnosisV2 && persistedIosStages?.length
+      ? persistedIosStages.map((stage) => ({
+          id: stage.stageId as StageId,
+          label: stage.label,
+          value: stage.value,
+          formattedValue: stage.formattedValue,
+          conversionRate: stage.conversionRate,
+          health: stage.health,
+          source: stage.source as SourceProvider,
+          evidenceIds: stage.evidenceIds,
+          flowWidth: stage.flowWidth,
+          ...(stage.benchmark === null ? {} : { benchmark: stage.benchmark }),
+          comparisonType: stage.comparisonType,
+          ratioComparisonType: stage.ratioComparisonType,
+          ...(stage.readinessReason
+            ? { readinessReason: stage.readinessReason }
+            : {}),
+          ...(stage.sampleSize === null ? {} : { sampleSize: stage.sampleSize }),
+          valueState: stage.valueState,
+          baselineMethod: stage.baselineMethod,
+          baselineWindow: stage.baselineWindow,
+          confidence: stage.confidence,
+        }))
+      : stageDefinitions.map((definition, index) => {
+          const value = sums.get(definition.metricKey) ?? 0;
+          const previous =
+            index > 0 ? sums.get(stageDefinitions[index - 1].metricKey) ?? 0 : 0;
+          const measured = metrics.some(
+            (metric) =>
+              metric.metric_key === definition.metricKey &&
+              metric.provider === definition.source,
+          );
+          return {
+            id: definition.id,
+            label: definition.label,
+            value,
+            formattedValue: measured ? compactNumber(value) : "—",
+            conversionRate: index > 0 && previous > 0 ? value / previous : null,
+            health: "unknown" as StageHealth,
+            source: definition.source,
+            evidenceIds: [] as string[],
+            flowWidth: Math.max(30, 155 * Math.sqrt(value / Math.max(top, value, 1))),
+            comparisonType: "not_comparable" as ComparisonType,
+            ratioComparisonType: "not_comparable" as ComparisonType,
+            readinessReason: measured
+              ? "diagnosis_not_available"
+              : "metric_missing",
+            valueState: measured
+              ? value === 0
+                ? ("explicit_zero" as const)
+                : ("measured" as const)
+              : ("missing" as const),
+            baselineMethod: "none" as const,
+          };
+        });
+
+  /**
+   * Web funnel stages, when the selected product is a website and a diagnosis
+   * covered it. Delivered on a separate key because GrowthStage.id is keyed to
+   * the iOS StageId union that several UI lookup tables depend on.
+   */
+  const webStages: WebGrowthStage[] =
+    diagnosisV2 && currentDiagnosis
+      ? currentDiagnosis.stages
+          .filter((stage) => WEB_STAGE_IDS.has(stage.stageId))
+          .map((stage) => ({
+            id: stage.stageId as WebStageId,
+            label: stage.label,
+            value: stage.value,
+            formattedValue: stage.formattedValue,
+            conversionRate: stage.conversionRate,
+            health: stage.health,
+            source: "appclimb-web" as const,
+            evidenceIds: stage.evidenceIds,
+            flowWidth: stage.flowWidth,
+            ...(stage.benchmark === null ? {} : { benchmark: stage.benchmark }),
+            comparisonType: stage.comparisonType,
+            ratioComparisonType: stage.ratioComparisonType,
+            ...(stage.readinessReason
+              ? { readinessReason: stage.readinessReason }
+              : {}),
+            ...(stage.sampleSize === null ? {} : { sampleSize: stage.sampleSize }),
+            valueState: stage.valueState,
+            baselineMethod: stage.baselineMethod,
+            baselineWindow: stage.baselineWindow,
+            confidence: stage.confidence,
+          }))
+      : [];
 
   const webPropertyRow = selectedApp.platform === "Web"
     ? await env.DB.prepare(
@@ -337,11 +463,19 @@ export async function growthMapSnapshot(
   // Distinct dates in window to estimate complete days
   const distinctDays = new Set(metrics.map((m) => m.occurred_at.slice(0, 10))).size;
 
+  /**
+   * Derived from the persisted diagnosis outcome, not from "any insight
+   * exists". An insight can be an early warning; only a run whose recorded
+   * outcome is `ready` produced a confirmed constraint.
+   */
+  const hasConfirmedInsight = currentDiagnosis?.run.outcome === "ready";
+
   const readiness = deriveWorkspaceReadiness({
     app: {
       id: selectedApp.id,
       name: selectedApp.name,
-      platform: selectedApp.platform as "iOS" | "Web",
+      platform: selectedApp.platform === "Web" ? "Web" : "iOS",
+      isPlaceholder: Boolean(selectedApp.is_placeholder),
     },
     webProperty: webPropertyRow
       ? {
@@ -352,37 +486,43 @@ export async function growthMapSnapshot(
           primaryConversionGoal: webPropertyRow.primary_conversion_goal,
         }
       : null,
-    sources: sources.map((s) => ({
-      provider: s.provider as any,
-      status: s.status as any,
-      lastErrorCode: (s as any).lastErrorCode,
-      metricCount: (s as any).metricCount,
-      lastMetricAt: (s as any).lastMetricAt,
-    })),
+    sources: sources.map(toSourceStatusInfo),
     metricCount: metrics.length,
     completeDays: distinctDays,
-    hasDiagnosisRun: Boolean(latestRunRow),
-    hasConfirmedInsight: insightResult.results.some((i) => i.rank === 1),
-    isDiagnosisRunning: latestRunRow?.status === "running" || latestRunRow?.status === "queued",
+    hasDiagnosisRun: Boolean(latestRun),
+    hasConfirmedInsight,
+    isDiagnosisRunning:
+      latestRun?.status === "running" ||
+      latestRun?.status === "queued" ||
+      latestRun?.status === "retrying",
   });
 
-  const diagnosisSummary = latestRunRow
+  /**
+   * The contract only accepts DiagnosisStatus values. The queue lifecycle
+   * vocabulary ('succeeded', 'retrying') is mapped away in persist.ts, so the
+   * frontend can never receive a status that is not a member of the union.
+   */
+  const diagnosisSummary: DiagnosisSummary = latestRun
     ? {
-        status: (latestRunRow.status as any) || "not_ready",
-        generatedAt: latestRunRow.created_at,
-        version: latestRunRow.diagnosis_version,
-        primaryInsightId: latestRunRow.primary_insight_id,
-        limitations: parseJSON<string[]>(latestRunRow.limitations, []),
-        missingRequirements: parseJSON<string[]>(latestRunRow.missing_requirements, []),
+        status: latestRun.outcome,
+        generatedAt: latestRun.completedAt ?? latestRun.generatedAt,
+        version: latestRun.version,
+        primaryInsightId: latestRun.primaryInsightId,
+        limitations: latestRun.limitations,
+        missingRequirements: latestRun.missingRequirements,
+        errorCode: latestRun.errorCode,
       }
     : {
-        status: "not_ready" as const,
+        status: "not_ready",
         generatedAt: null,
         version: null,
       };
 
   const actionProposals = actionsResult.results.map((item) => {
-    const actionPlan = parseJSON<any>(item.structured_plan, undefined);
+    const actionPlan = parseJSON<ActionPlan | undefined>(
+      item.structured_plan,
+      undefined,
+    );
     return {
       id: item.id,
       insightId: item.insight_id,
@@ -424,6 +564,9 @@ export async function growthMapSnapshot(
         note: `${connectedCount} sources connected`,
       },
       stages,
+      // Additive: web funnel stages, empty for iOS products and whenever no
+      // web diagnosis has run yet.
+      webStages,
       events: eventResult.results.map((event) => ({
         id: event.id,
         occurredAt: event.occurred_at,
@@ -491,6 +634,9 @@ export async function growthMapSnapshot(
       ...(entitled ? {} : { entitlementError: "entitlement_required" }),
       externalMutationsAllowed: false,
       windowDays: 30,
+      // Which rollout flags produced this payload, so a shadow-mode run is
+      // distinguishable from a live one when comparing snapshots.
+      flags: rolloutFlagState(env),
     },
   };
 }

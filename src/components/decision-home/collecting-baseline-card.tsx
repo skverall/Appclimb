@@ -1,66 +1,153 @@
-"use me";
-import React from "react";
-import { RefreshCw, Database, Calendar } from "lucide-react";
+import { CalendarClock, Database, Eye, EyeOff } from "lucide-react";
 
 interface CollectingBaselineCardProps {
-  sampleSize: number;
-  completeDays: number;
+  /**
+   * Metric points already collected. Omit when the number is unknown — the card
+   * shows "Not reported yet" rather than inventing a sample.
+   */
+  sampleSize?: number;
+  /** Complete days collected so far. Omit when unknown. */
+  completeDays?: number;
+  /** Minimum complete days required before diagnosis runs. */
   minDaysRequired?: number;
+  /** Minimum sample the diagnosis engine requires, when the backend states it. */
+  minSampleRequired?: number;
+  /** Next automatic sync, ISO string, when the backend states it. */
+  nextCheckAt?: string;
+  /** What the user can already trust today. */
+  availableNow?: string[];
+  /** What cannot be claimed yet at this sample. */
+  notYetClaimable?: string[];
 }
 
 export function CollectingBaselineCard({
   sampleSize,
   completeDays,
-  minDaysRequired = 3,
+  minDaysRequired,
+  minSampleRequired,
+  nextCheckAt,
+  availableNow = [
+    "Raw metric values per day, exactly as each source reported them",
+    "Which sources are live and when they last delivered data",
+  ],
+  notYetClaimable = [
+    "Which stage is the bottleneck — that needs a full baseline",
+    "Whether a change helped, since there is no stable comparison period yet",
+  ],
 }: CollectingBaselineCardProps) {
-  const dayProgress = Math.min(100, Math.round((completeDays / minDaysRequired) * 100));
+  const hasDayProgress =
+    typeof completeDays === "number" && typeof minDaysRequired === "number";
+  const dayProgress = hasDayProgress
+    ? Math.min(100, Math.round((completeDays / Math.max(1, minDaysRequired)) * 100))
+    : 0;
 
   return (
-    <div className="rounded-xl border border-indigo-500/30 bg-slate-900/90 p-5 shadow-lg backdrop-blur-md">
-      <div className="flex items-center gap-3 border-b border-slate-800 pb-3">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
-          <RefreshCw className="h-4 w-4 animate-spin" />
-        </div>
+    <section className="baseline-card" aria-label="Baseline collection progress">
+      <div className="baseline-head">
+        <span className="baseline-mark" aria-hidden="true">
+          <Database size={17} />
+        </span>
         <div>
-          <h3 className="text-base font-bold text-slate-100">
-            Building Baseline Data
-          </h3>
-          <p className="text-xs text-slate-400">
-            Collecting complete daily data points to establish a trustworthy baseline.
+          <h3>Data is live; AppClimb is building a trustworthy baseline</h3>
+          <p>
+            A diagnosis is only honest once it can compare a stage against your
+            own history. Here is exactly how far along that is.
           </p>
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-2 gap-4">
-        <div className="rounded-lg bg-slate-950/60 p-3 border border-slate-800">
-          <div className="flex items-center gap-1.5 text-xs text-slate-400">
-            <Calendar className="h-3.5 w-3.5 text-indigo-400" />
-            <span>Complete Days</span>
-          </div>
-          <div className="mt-1 text-xl font-bold text-slate-100">
-            {completeDays} / {minDaysRequired}
-          </div>
-          <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-slate-800">
-            <div
-              className="h-full bg-indigo-500 transition-all duration-300"
-              style={{ width: `${dayProgress}%` }}
-            />
-          </div>
+      <div className="baseline-metrics">
+        <div className="baseline-metric">
+          <span>
+            <CalendarClock size={13} />
+            Complete days
+          </span>
+          <strong>
+            {typeof completeDays === "number" ? (
+              minDaysRequired ? `${completeDays} / ${minDaysRequired}` : completeDays
+            ) : (
+              <span className="fact-unreported">Not reported yet</span>
+            )}
+          </strong>
+          {hasDayProgress && (
+            <span
+              className="baseline-meter"
+              role="progressbar"
+              aria-valuenow={dayProgress}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label="Complete days collected"
+            >
+              <span style={{ width: `${Math.max(3, dayProgress)}%` }} />
+            </span>
+          )}
         </div>
 
-        <div className="rounded-lg bg-slate-950/60 p-3 border border-slate-800">
-          <div className="flex items-center gap-1.5 text-xs text-slate-400">
-            <Database className="h-3.5 w-3.5 text-teal-400" />
-            <span>Collected Metrics</span>
-          </div>
-          <div className="mt-1 text-xl font-bold text-teal-400">
-            {sampleSize.toLocaleString()}
-          </div>
-          <span className="mt-1 block text-[11px] text-slate-500">
-            Sample volume building up
+        <div className="baseline-metric">
+          <span>
+            <Database size={13} />
+            Metric points collected
           </span>
+          <strong>
+            {typeof sampleSize === "number" ? (
+              sampleSize.toLocaleString("en-US")
+            ) : (
+              <span className="fact-unreported">Not reported yet</span>
+            )}
+          </strong>
+          {typeof minSampleRequired === "number" && (
+            <small>Minimum required: {minSampleRequired.toLocaleString("en-US")}</small>
+          )}
+        </div>
+
+        {nextCheckAt && (
+          <div className="baseline-metric">
+            <span>
+              <CalendarClock size={13} />
+              Next automatic check
+            </span>
+            <strong>{formatMoment(nextCheckAt)}</strong>
+          </div>
+        )}
+      </div>
+
+      <div className="baseline-lists">
+        <div className="baseline-list">
+          <span>
+            <Eye size={13} />
+            You can already see
+          </span>
+          <ul>
+            {availableNow.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+        <div className="baseline-list is-muted">
+          <span>
+            <EyeOff size={13} />
+            Not claimable yet
+          </span>
+          <ul>
+            {notYetClaimable.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
         </div>
       </div>
-    </div>
+    </section>
   );
+}
+
+function formatMoment(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: "UTC",
+    timeZoneName: "short",
+  }).format(parsed);
 }

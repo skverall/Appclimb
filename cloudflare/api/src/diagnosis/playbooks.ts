@@ -1,21 +1,212 @@
-import type { ActionPlan, SourceProvider, StageId } from "./types";
+import type {
+  ActionPlan,
+  AnyStageId,
+  DiagnosisProvider,
+  SourceProvider,
+} from "./types";
 
 export interface PlaybookContext {
-  stageId: StageId;
+  stageId: AnyStageId;
   stageLabel: string;
-  sourceProvider: SourceProvider;
+  sourceProvider: DiagnosisProvider;
   observedRate?: number | null;
   benchmarkRate?: number;
   evidenceIds: string[];
+  minimumSample?: number;
+  minimumCompleteDays?: number;
 }
 
+/**
+ * Deterministic stage playbooks.
+ *
+ * Every branch returns a complete {@link ActionPlan}: what to change, where,
+ * why, how it is measured, and when to stop or roll back. No generic advice.
+ */
 export function buildActionPlan(context: PlaybookContext): ActionPlan {
+  const plan = buildStagePlan(context);
+  return {
+    ...plan,
+    targetStageId: isIosStageId(context.stageId) ? context.stageId : plan.targetStageId,
+    minimumSample: context.minimumSample ?? plan.minimumSample,
+    minimumCompleteDays: context.minimumCompleteDays ?? plan.minimumCompleteDays,
+  };
+}
+
+const IOS_STAGE_IDS = new Set([
+  "discover",
+  "store",
+  "install",
+  "activate",
+  "paywall",
+  "trial",
+  "paid",
+  "renew",
+]);
+
+function isIosStageId(
+  stageId: AnyStageId,
+): stageId is Exclude<AnyStageId, "web_visit" | "web_engaged" | "web_conversion"> {
+  return IOS_STAGE_IDS.has(stageId);
+}
+
+function buildStagePlan(context: PlaybookContext): ActionPlan {
   const { stageId, stageLabel, sourceProvider, observedRate, benchmarkRate, evidenceIds } = context;
 
   const currentPercent = observedRate !== undefined && observedRate !== null
     ? `${(observedRate * 100).toFixed(1)}%`
     : "low";
   const benchmarkPercent = benchmarkRate ? `${(benchmarkRate * 100).toFixed(0)}%` : "target baseline";
+
+  // ActionPlan.sourceProviders describes user-connectable sources only; the
+  // first-party web collector is not one of them.
+  const externalProviders: SourceProvider[] =
+    sourceProvider === "appclimb-web" ? [] : [sourceProvider];
+
+  switch (stageId) {
+    case "web_visit":
+      return {
+        problem: `Qualified visit volume is below this site's own recent baseline (${currentPercent} of baseline traffic).`,
+        desiredOutcome: `Recover qualified visit volume from the channels that historically converted.`,
+        whyThisAction: `Acquisition quality, not raw traffic, sets the ceiling for every later web stage. A drop concentrated in one channel or landing path is diagnosable and reversible.`,
+        steps: [
+          {
+            order: 1,
+            title: "Segment the drop by channel and landing path",
+            instruction:
+              "In Acquisition Atlas, compare the recent window against the previous one by channel and by landing path. Identify the one channel or path carrying most of the decline.",
+            effort: "small",
+          },
+          {
+            order: 2,
+            title: "Check campaign and UTM integrity for that channel",
+            instruction:
+              "Verify that campaign links still carry the expected utm_source/utm_medium/utm_campaign and that no redirect is stripping them. Mis-tagged traffic looks like a drop even when volume is intact.",
+            effort: "small",
+          },
+          {
+            order: 3,
+            title: "Restore or replace the affected channel intake",
+            instruction:
+              "Repair the broken link, republish the affected landing page, or reallocate spend to the channel that historically produced converting sessions. Change one channel at a time.",
+            effort: "medium",
+          },
+        ],
+        prerequisites: ["AppClimb tracking script verified on the live site"],
+        instrumentation: [
+          "web_visitors by channel",
+          "web_visitors by landing path",
+        ],
+        primaryMetric: {
+          key: "web_visitors",
+          label: "Qualified Visits",
+          targetDirection: "up",
+        },
+        guardrails: [
+          { key: "web_converted_visitors", label: "Conversions" },
+          { key: "web_engaged_visitors", label: "Engaged Visitors" },
+        ],
+        stopCondition:
+          "Run for 14 complete days after the change, or until the affected channel returns 30 qualified visits, whichever is later.",
+        rollbackCondition:
+          "Revert the change if conversion rate on the affected channel falls below its own prior baseline.",
+        evidenceIds,
+        sourceProviders: [],
+      };
+
+    case "web_engaged":
+      return {
+        problem: `Visit-to-engagement conversion (${currentPercent}) is below this site's own baseline (${benchmarkPercent}).`,
+        desiredOutcome: `Raise the share of visits that reach a genuine engagement signal on the landing page.`,
+        whyThisAction: `Visitors are arriving but leaving before the page delivers its promise. This is a landing-page and message-match problem, not a traffic problem.`,
+        steps: [
+          {
+            order: 1,
+            title: "Compare the ad or referrer promise against the landing headline",
+            instruction:
+              "Open the top declining landing path and read its headline next to the copy of the referring channel. Mismatched promises are the most common cause of an engagement drop.",
+            effort: "small",
+          },
+          {
+            order: 2,
+            title: "Remove the first friction element above the fold",
+            instruction:
+              "Delete or defer one blocking element on that page — an interstitial, a cookie wall covering content, or a form shown before any value.",
+            effort: "medium",
+          },
+          {
+            order: 3,
+            title: "Confirm the engagement event still fires",
+            instruction:
+              "Load the page and verify the AppClimb engagement event is recorded. An instrumentation regression looks identical to a behaviour regression.",
+            effort: "small",
+          },
+        ],
+        prerequisites: ["AppClimb tracking script verified on the affected landing path"],
+        instrumentation: [
+          "web_engaged_visitors / web_visitors ratio",
+          "engagement event delivery on the affected path",
+        ],
+        primaryMetric: {
+          key: "web_engagement_rate",
+          label: "Visit to Engagement Rate",
+          targetDirection: "up",
+        },
+        guardrails: [{ key: "web_converted_visitors", label: "Conversions" }],
+        stopCondition:
+          "Run for 14 complete days or until the landing path collects 30 visits, whichever is later.",
+        rollbackCondition:
+          "Restore the removed element if conversions per visit drop by 10% or more.",
+        evidenceIds,
+        sourceProviders: [],
+      };
+
+    case "web_conversion":
+      return {
+        problem: `Engagement-to-conversion rate (${currentPercent}) is below this site's own baseline (${benchmarkPercent}).`,
+        desiredOutcome: `Recover the conversion rate among sessions that already engaged with the page.`,
+        whyThisAction: `These visitors already showed intent. A drop here points at the conversion step itself — the CTA, the form, or the instrumentation behind the goal.`,
+        steps: [
+          {
+            order: 1,
+            title: "Verify the conversion goal is still recorded correctly",
+            instruction:
+              "Complete the conversion flow yourself and confirm the configured goal event reaches AppClimb. Rule out an instrumentation break before changing the page.",
+            effort: "small",
+          },
+          {
+            order: 2,
+            title: "Reduce the conversion step to its minimum",
+            instruction:
+              "Remove one required form field, or one step in the flow, so the shortest path to the goal is a single obvious action.",
+            effort: "medium",
+          },
+          {
+            order: 3,
+            title: "Make the primary CTA unambiguous",
+            instruction:
+              "Ensure exactly one primary call to action is visible on the converting page and that its label names the outcome, not the mechanism.",
+            effort: "small",
+          },
+        ],
+        prerequisites: ["Primary conversion goal configured for the web property"],
+        instrumentation: [
+          "web_converted_visitors / web_engaged_visitors ratio",
+          "conversion goal event delivery",
+        ],
+        primaryMetric: {
+          key: "web_conversion_rate",
+          label: "Engaged to Conversion Rate",
+          targetDirection: "up",
+        },
+        guardrails: [{ key: "web_engaged_visitors", label: "Engaged Visitors" }],
+        stopCondition:
+          "Run for 14 complete days or until 30 engaged sessions are collected on the affected path, whichever is later.",
+        rollbackCondition:
+          "Restore the removed field or step if lead quality declines or conversions do not recover within the window.",
+        evidenceIds,
+        sourceProviders: [],
+      };
+  }
 
   switch (stageId) {
     case "discover":
@@ -191,7 +382,7 @@ export function buildActionPlan(context: PlaybookContext): ActionPlan {
         stopCondition: "Run for 14 days or minimum 200 new activated users.",
         rollbackCondition: "Revert onboarding flow if 1-day retention drops by >= 15%.",
         evidenceIds,
-        sourceProviders: [sourceProvider, "posthog"],
+        sourceProviders: [...externalProviders, "posthog"],
       };
 
     case "paywall":
@@ -229,7 +420,7 @@ export function buildActionPlan(context: PlaybookContext): ActionPlan {
         stopCondition: "Observe for 14 days.",
         rollbackCondition: "Revert trigger if user session length drops by >= 20%.",
         evidenceIds,
-        sourceProviders: [sourceProvider],
+        sourceProviders: externalProviders,
       };
 
     case "trial":
@@ -274,7 +465,7 @@ export function buildActionPlan(context: PlaybookContext): ActionPlan {
         stopCondition: "Run for 14 days or minimum 100 paywall views.",
         rollbackCondition: "Revert paywall variant if conversion rate drops by >= 10%.",
         evidenceIds,
-        sourceProviders: [sourceProvider, "revenuecat"],
+        sourceProviders: [...externalProviders, "revenuecat"],
       };
 
     case "renew":
@@ -313,7 +504,7 @@ export function buildActionPlan(context: PlaybookContext): ActionPlan {
         stopCondition: "Observe renewal cohort over 30 days.",
         rollbackCondition: "Revert check-in if user opt-out rates increase.",
         evidenceIds,
-        sourceProviders: [sourceProvider, "revenuecat"],
+        sourceProviders: [...externalProviders, "revenuecat"],
       };
   }
 }

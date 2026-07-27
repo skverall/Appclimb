@@ -12,6 +12,7 @@ import {
   sealCredentials,
   type CredentialEnvelope,
 } from "./crypto";
+import { queueDiagnosisRun } from "./diagnosis/queue";
 import { log, nowISO, requireSecret } from "./runtime";
 import type { SyncMessage } from "./sources";
 import { autoMapPostHogEvents } from "../../../src/lib/posthog-events";
@@ -123,8 +124,6 @@ function retryDelaySeconds(attempt: number): number {
   return Math.min(30 * 60, 15 * 2 ** Math.max(0, Math.min(8, attempt)));
 }
 
-import { queueDiagnosisRun } from "./diagnosis/queue";
-
 async function completeSync(
   env: Cloudflare.Env,
   job: SyncJobRow,
@@ -167,10 +166,23 @@ async function completeSync(
     ),
   ]);
 
+  // A successful import is what makes a fresh diagnosis meaningful, so one is
+  // enqueued here. queueDiagnosisRun is idempotent per app: a second source
+  // finishing while a run is still outstanding joins that run instead of
+  // creating a duplicate.
   if (job.app_id) {
     try {
-      await queueDiagnosisRun(env, job.workspace_id, job.app_id);
+      const queued = await queueDiagnosisRun(env, job.workspace_id, job.app_id);
+      log("info", "diagnosis_queued_after_sync", {
+        jobId: job.id,
+        appId: job.app_id,
+        queued: queued.queued,
+        runId: queued.runId,
+        reason: queued.reason,
+      });
     } catch (error) {
+      // Never fail the sync because diagnosis could not be enqueued: the
+      // scheduled catch-up will pick the app up on the next pass.
       log("warn", "queue_diagnosis_after_sync_failed", {
         jobId: job.id,
         workspaceId: job.workspace_id,

@@ -34,6 +34,41 @@ export interface PostHogEventOption {
   lastSeenAt: string;
 }
 
+/**
+ * A real activation rate (Task P0.20).
+ *
+ * `activeUserDays` / `activationUserDays` are activity volumes: they sum daily
+ * unique-user counts, so the same person is counted once per day. Their ratio
+ * is NOT an activation rate and must never be used as one. This cohort answers
+ * a different question: of the distinct users whose first active-use event
+ * landed inside the cohort window, how many performed the activation event
+ * within `activationWindowDays` of that first event.
+ */
+export interface ActivationCohortSummary {
+  newUsers: number;
+  activatedUsers: number;
+  activationRate: number | null;
+  activationWindowDays: number;
+  sampleSize: number;
+  cohortStart: string | null;
+  cohortEnd: string | null;
+  sessionEvent: string;
+  activationEvent: string;
+}
+
+export const ACTIVATION_COHORT_NEW_USERS = "activation_cohort_new_users";
+export const ACTIVATION_COHORT_ACTIVATED_USERS =
+  "activation_cohort_activated_users";
+const DEFAULT_ACTIVATION_WINDOW_DAYS = 7;
+/** Length of the cohort itself, after the activation window is subtracted. */
+const COHORT_SPAN_DAYS = 30;
+/**
+ * Users seen inside this lookback are not "new". Without it, a 90-day sync
+ * window would treat every long-standing user as a fresh signup.
+ */
+const COHORT_NEW_USER_LOOKBACK_DAYS = 30;
+const dayMilliseconds = 24 * 60 * 60 * 1000;
+
 function required(
   credentials: Record<string, unknown>,
   key: string,
@@ -230,6 +265,239 @@ async function readRevenueCat(
   return result;
 }
 
+function clickhouseTime(value: Date) {
+  return value.toISOString().slice(0, 19).replace("T", " ");
+}
+
+function quoteEvent(value: string) {
+  return `'${value.replaceAll("'", "''")}'`;
+}
+
+function activationWindowDays(credentials: Record<string, unknown>) {
+  const raw = numeric(credentials.activationWindowDays);
+  if (raw === null) return DEFAULT_ACTIVATION_WINDOW_DAYS;
+  return Math.max(1, Math.min(30, Math.trunc(raw)));
+}
+
+/**
+ * Cohort activation, expressed as distinct users rather than user-days.
+ *
+ * The cohort deliberately stops `windowDays` before the end of the sync window
+ * so every member had a complete chance to activate. Returning `[]` means the
+ * cohort could not be measured; it never means "zero activation".
+ */
+async function readActivationCohort(
+  credentials: Record<string, unknown>,
+  host: string,
+  apiKey: string,
+  projectId: string,
+  sessionEvent: string,
+  activationEvent: string,
+  from: Date,
+  to: Date,
+): Promise<Aggregate[]> {
+  if (
+    !sessionEvent ||
+    !activationEvent ||
+    sessionEvent === activationEvent ||
+    !validEventName(sessionEvent) ||
+    !validEventName(activationEvent)
+  ) {
+    return [];
+  }
+  const windowDays = activationWindowDays(credentials);
+  const cohortEnd = new Date(to.getTime() - windowDays * dayMilliseconds);
+  const cohortStart = new Date(
+    Math.max(
+      from.getTime(),
+      cohortEnd.getTime() - COHORT_SPAN_DAYS * dayMilliseconds,
+    ),
+  );
+  if (!(cohortStart < cohortEnd)) return [];
+  const lookbackStart = new Date(
+    cohortStart.getTime() - COHORT_NEW_USER_LOOKBACK_DAYS * dayMilliseconds,
+  );
+
+  const query = `with cohort as (
+  select person_id as person, min(timestamp) as first_at
+  from events
+  where timestamp >= toDateTime('${clickhouseTime(lookbackStart)}','UTC')
+    and timestamp < toDateTime('${clickhouseTime(cohortEnd)}','UTC')
+    and event = ${quoteEvent(sessionEvent)}
+  group by person_id
+  having min(timestamp) >= toDateTime('${clickhouseTime(cohortStart)}','UTC')
+),
+activation as (
+  select person_id as person, min(timestamp) as activated_at
+  from events
+  where timestamp >= toDateTime('${clickhouseTime(cohortStart)}','UTC')
+    and timestamp < toDateTime('${clickhouseTime(to)}','UTC')
+    and event = ${quoteEvent(activationEvent)}
+  group by person_id
+)
+select count() as new_users, sum(ifNull(activated,0)) as activated_users
+from (
+  select
+    c.person as person,
+    if(
+      a.activated_at >= c.first_at
+      and a.activated_at <= c.first_at + interval ${windowDays} day,
+      1,
+      0
+    ) as activated
+  from cohort as c
+  left join activation as a on a.person = c.person
+) as cohort_activation`;
+
+  let payload: Record<string, unknown>;
+  try {
+    payload = await providerJSON(
+      `${host}/api/projects/${encodeURIComponent(projectId)}/query/`,
+      apiKey,
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ query: { kind: "HogQLQuery", query } }),
+      },
+    );
+  } catch {
+    // A cohort that cannot be measured must not fail the whole import, and it
+    // must not be reported as zero activation either.
+    return [];
+  }
+  const row = (Array.isArray(payload.results) ? payload.results : []).find(
+    (candidate) => Array.isArray(candidate) && candidate.length >= 2,
+  );
+  if (!Array.isArray(row)) return [];
+  const newUsers = numeric(row[0]);
+  const activatedUsers = numeric(row[1]);
+  if (newUsers === null || activatedUsers === null || newUsers <= 0) return [];
+
+  const dimensions: Record<string, string> = {
+    aggregation: "cohort",
+    cohortStart: cohortStart.toISOString(),
+    cohortEnd: cohortEnd.toISOString(),
+    activationWindowDays: String(windowDays),
+    sessionEvent,
+    activationEvent,
+    sampleSize: String(Math.trunc(newUsers)),
+  };
+  const occurredAt = new Date(cohortEnd.getTime() - 1).toISOString();
+  const sourceUpdatedAt = new Date().toISOString();
+  return [
+    {
+      metricKey: ACTIVATION_COHORT_NEW_USERS,
+      occurredAt,
+      value: Math.trunc(newUsers),
+      unit: "count",
+      dimensions,
+      sourceUpdatedAt,
+      completeness: 1,
+    },
+    {
+      metricKey: ACTIVATION_COHORT_ACTIVATED_USERS,
+      occurredAt,
+      value: Math.max(0, Math.min(Math.trunc(newUsers), Math.trunc(activatedUsers))),
+      unit: "count",
+      dimensions,
+      sourceUpdatedAt,
+      completeness: 1,
+    },
+  ];
+}
+
+function dimensionRecord(
+  value: string | Record<string, unknown> | null | undefined,
+): Record<string, string> {
+  if (!value) return {};
+  let parsed: unknown = value;
+  if (typeof value === "string") {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      return {};
+    }
+  }
+  const record = objectValue(parsed);
+  const result: Record<string, string> = {};
+  for (const [key, item] of Object.entries(record)) {
+    if (typeof item === "string") result[key] = item;
+    else if (typeof item === "number") result[key] = String(item);
+  }
+  return result;
+}
+
+export interface ActivationCohortRow {
+  metric_key?: string;
+  metricKey?: string;
+  value: number | string;
+  occurred_at?: string;
+  occurredAt?: string;
+  dimensions?: string | Record<string, unknown> | null;
+}
+
+/**
+ * Read the latest complete activation cohort out of stored metric points.
+ *
+ * Returns `null` when no cohort was measured. Callers must render that as
+ * "not available yet" — never as a zero activation rate, and never by falling
+ * back to the `activationUserDays / activeUserDays` ratio.
+ */
+export function deriveActivationCohort(
+  rows: ActivationCohortRow[],
+): ActivationCohortSummary | null {
+  const byOccurredAt = new Map<
+    string,
+    { newUsers: number | null; activatedUsers: number | null; dimensions: Record<string, string> }
+  >();
+  for (const row of rows) {
+    const metricKey = row.metric_key ?? row.metricKey ?? "";
+    if (
+      metricKey !== ACTIVATION_COHORT_NEW_USERS &&
+      metricKey !== ACTIVATION_COHORT_ACTIVATED_USERS
+    ) {
+      continue;
+    }
+    const occurredAt = row.occurred_at ?? row.occurredAt ?? "";
+    if (!occurredAt) continue;
+    const value = numeric(row.value);
+    if (value === null) continue;
+    const entry = byOccurredAt.get(occurredAt) ?? {
+      newUsers: null,
+      activatedUsers: null,
+      dimensions: {},
+    };
+    entry.dimensions = { ...dimensionRecord(row.dimensions), ...entry.dimensions };
+    if (metricKey === ACTIVATION_COHORT_NEW_USERS) entry.newUsers = value;
+    else entry.activatedUsers = value;
+    byOccurredAt.set(occurredAt, entry);
+  }
+  const latest = [...byOccurredAt.entries()]
+    .filter(([, entry]) => entry.newUsers !== null)
+    .sort(([left], [right]) => right.localeCompare(left))[0];
+  if (!latest) return null;
+  const [, entry] = latest;
+  const newUsers = Math.max(0, Math.trunc(entry.newUsers ?? 0));
+  const activatedUsers = Math.max(
+    0,
+    Math.min(newUsers, Math.trunc(entry.activatedUsers ?? 0)),
+  );
+  const windowDays = Number(entry.dimensions.activationWindowDays);
+  return {
+    newUsers,
+    activatedUsers,
+    activationRate: newUsers > 0 ? activatedUsers / newUsers : null,
+    activationWindowDays: Number.isFinite(windowDays) && windowDays > 0
+      ? Math.trunc(windowDays)
+      : DEFAULT_ACTIVATION_WINDOW_DAYS,
+    sampleSize: newUsers,
+    cohortStart: entry.dimensions.cohortStart || null,
+    cohortEnd: entry.dimensions.cohortEnd || null,
+    sessionEvent: entry.dimensions.sessionEvent ?? "",
+    activationEvent: entry.dimensions.activationEvent ?? "",
+  };
+}
+
 async function readPostHog(
   credentials: Record<string, unknown>,
   from: Date,
@@ -347,6 +615,18 @@ order by day,event`;
       }
     });
   }
+  result.push(
+    ...(await readActivationCohort(
+      credentials,
+      host,
+      apiKey,
+      projectId,
+      sessionEvent,
+      activationEvent,
+      from,
+      to,
+    )),
+  );
   return result;
 }
 

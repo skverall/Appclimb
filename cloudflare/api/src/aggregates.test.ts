@@ -3,6 +3,7 @@ import { generateKeyPairSync } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  deriveActivationCohort,
   discoverPostHogEvents,
   parseAppleTSV,
   readAggregates,
@@ -71,10 +72,12 @@ describe("Cloudflare source aggregates", () => {
   });
 
   it("runs a bounded PostHog query and maps configured events", async () => {
+    const queries: string[] = [];
     const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const query = JSON.parse(String(init?.body)) as {
         query: { query: string };
       };
+      queries.push(query.query.query);
       expect(query.query.query).toContain("first_value_reached");
       expect(query.query.query).toContain("mobile_session");
       return Response.json({
@@ -99,7 +102,10 @@ describe("Cloudflare source aggregates", () => {
       new Date("2026-07-26T00:00:00.000Z"),
     );
 
-    expect(fetchMock).toHaveBeenCalledOnce();
+    // One daily-reach query plus one cohort query. The cohort answer is not
+    // usable here, so no cohort rows are emitted and nothing is faked.
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(queries[1]).toContain("cohort");
     expect(rows.map(({ metricKey, value }) => ({ metricKey, value }))).toEqual([
       { metricKey: "activated_users", value: 12 },
       { metricKey: "active_users", value: 30 },
@@ -429,5 +435,182 @@ describe("Cloudflare source aggregates", () => {
       code: "apple_report_request_required",
       retryable: false,
     });
+  });
+});
+
+describe("PostHog activation cohort", () => {
+  const cohortCredentials = {
+    personalApiKey: "phx_key",
+    projectId: "project-1",
+    host: "https://us.posthog.com",
+    activationEvent: "first_value_reached",
+    sessionEvent: "mobile_session",
+  };
+  const from = new Date("2026-05-01T00:00:00.000Z");
+  const to = new Date("2026-07-26T00:00:00.000Z");
+
+  function stubCohort(cohortResults: unknown[]) {
+    let call = 0;
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      call += 1;
+      const body = JSON.parse(String(init?.body)) as {
+        query: { query: string };
+      };
+      if (call === 1) return Response.json({ results: [] });
+      expect(body.query.query).toContain("interval 7 day");
+      return Response.json({ results: cohortResults });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("emits a distinct-user cohort, not a ratio of summed user-days", async () => {
+    stubCohort([[240, 66]]);
+
+    const rows = await readAggregates("posthog", cohortCredentials, from, to);
+    const cohort = deriveActivationCohort(
+      rows.map((row) => ({
+        metric_key: row.metricKey,
+        value: row.value,
+        occurred_at: row.occurredAt,
+        dimensions: row.dimensions,
+      })),
+    );
+
+    expect(cohort).not.toBeNull();
+    expect(cohort?.newUsers).toBe(240);
+    expect(cohort?.activatedUsers).toBe(66);
+    expect(cohort?.activationRate).toBeCloseTo(66 / 240, 10);
+    expect(cohort?.sampleSize).toBe(240);
+    expect(cohort?.activationWindowDays).toBe(7);
+    expect(cohort?.sessionEvent).toBe("mobile_session");
+    expect(cohort?.activationEvent).toBe("first_value_reached");
+    // The cohort must close a full activation window before the sync window
+    // ends, so every member had a real chance to activate.
+    expect(cohort?.cohortEnd).toBe("2026-07-19T00:00:00.000Z");
+    expect(
+      new Date(cohort?.cohortStart ?? 0).getTime(),
+    ).toBeLessThan(new Date(cohort?.cohortEnd ?? 0).getTime());
+  });
+
+  it("excludes users seen before the cohort window from the new-user cohort", async () => {
+    const fetchMock = stubCohort([[10, 4]]);
+    await readAggregates("posthog", cohortCredentials, from, to);
+
+    const cohortQuery = JSON.parse(
+      String(fetchMock.mock.calls[1]?.[1]?.body),
+    ) as { query: { query: string } };
+    expect(cohortQuery.query.query).toContain(
+      "having min(timestamp) >= toDateTime('2026-06-19 00:00:00','UTC')",
+    );
+    // 30-day lookback before the cohort start, so returning users are not
+    // counted as new signups.
+    expect(cohortQuery.query.query).toContain(
+      "timestamp >= toDateTime('2026-05-20 00:00:00','UTC')",
+    );
+  });
+
+  it("never reports a zero activation rate when the cohort is unmeasurable", async () => {
+    stubCohort([[0, 0]]);
+
+    const rows = await readAggregates("posthog", cohortCredentials, from, to);
+    expect(
+      rows.filter((row) => row.metricKey.startsWith("activation_cohort")),
+    ).toHaveLength(0);
+    expect(deriveActivationCohort([])).toBeNull();
+  });
+
+  it("keeps the import alive when the cohort query is rejected", async () => {
+    let call = 0;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        call += 1;
+        if (call === 1) {
+          return Response.json({
+            results: [["2026-07-10", "mobile_session", 30]],
+          });
+        }
+        return new Response("nope", { status: 400 });
+      }),
+    );
+
+    const rows = await readAggregates("posthog", cohortCredentials, from, to);
+    expect(rows.map((row) => row.metricKey)).toEqual(["active_users"]);
+  });
+
+  it("skips the cohort when session and activation are the same event", async () => {
+    const fetchMock = vi.fn(async () => Response.json({ results: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await readAggregates(
+      "posthog",
+      { ...cohortCredentials, activationEvent: "mobile_session" },
+      from,
+      to,
+    );
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("reads the most recent cohort and clamps activated users to the cohort", () => {
+    const cohort = deriveActivationCohort([
+      {
+        metric_key: "activation_cohort_new_users",
+        value: 100,
+        occurred_at: "2026-06-01T00:00:00.000Z",
+        dimensions: JSON.stringify({
+          cohortStart: "2026-05-01T00:00:00.000Z",
+          cohortEnd: "2026-06-01T00:00:00.000Z",
+          activationWindowDays: "7",
+        }),
+      },
+      {
+        metric_key: "activation_cohort_activated_users",
+        value: 10,
+        occurred_at: "2026-06-01T00:00:00.000Z",
+        dimensions: JSON.stringify({ activationWindowDays: "7" }),
+      },
+      {
+        metric_key: "activation_cohort_new_users",
+        value: 50,
+        occurred_at: "2026-07-01T00:00:00.000Z",
+        dimensions: JSON.stringify({
+          cohortStart: "2026-06-01T00:00:00.000Z",
+          cohortEnd: "2026-07-01T00:00:00.000Z",
+          activationWindowDays: "14",
+        }),
+      },
+      {
+        metric_key: "activation_cohort_activated_users",
+        value: 900,
+        occurred_at: "2026-07-01T00:00:00.000Z",
+        dimensions: JSON.stringify({ activationWindowDays: "14" }),
+      },
+    ]);
+
+    expect(cohort?.newUsers).toBe(50);
+    expect(cohort?.activatedUsers).toBe(50);
+    expect(cohort?.activationRate).toBe(1);
+    expect(cohort?.activationWindowDays).toBe(14);
+    expect(cohort?.cohortEnd).toBe("2026-07-01T00:00:00.000Z");
+  });
+
+  it("ignores activity metrics that are not the cohort", () => {
+    expect(
+      deriveActivationCohort([
+        {
+          metric_key: "active_users",
+          value: 900,
+          occurred_at: "2026-07-01T00:00:00.000Z",
+          dimensions: "{}",
+        },
+        {
+          metric_key: "activated_users",
+          value: 120,
+          occurred_at: "2026-07-01T00:00:00.000Z",
+          dimensions: "{}",
+        },
+      ]),
+    ).toBeNull();
   });
 });

@@ -195,8 +195,10 @@ describe("ProductPulseWorkspace", () => {
       fireEvent.click(screen.getByRole("button", { name: /Add Web SaaS/i }));
 
       await waitFor(() => {
-        expect(screen.getByText(/Web SaaS connected/i)).toBeInTheDocument();
+        // Task P0.24: a saved domain is never reported as a connected source.
+        expect(screen.getByText(/Website saved/i)).toBeInTheDocument();
       });
+      expect(screen.queryByText(/Web SaaS connected/i)).toBeNull();
       expect(
         screen.getByText(/Install tracking on cardealertracker.app/i),
       ).toBeInTheDocument();
@@ -216,7 +218,7 @@ describe("ProductPulseWorkspace", () => {
 
       fireEvent.click(
         screen.getByRole("button", {
-          name: /Verify install in Acquisition Atlas/i,
+          name: /Continue website setup/i,
         }),
       );
       expect(assign).toHaveBeenCalled();

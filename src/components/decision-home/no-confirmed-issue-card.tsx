@@ -1,78 +1,173 @@
-"use me";
-import React from "react";
-import { CheckCircle2, ShieldCheck, HelpCircle } from "lucide-react";
-import type { DashboardSnapshot } from "@/lib/contracts";
+import { ArrowRight, CheckCircle2, Eye, HelpCircle } from "lucide-react";
+
+import type { DashboardSnapshot, GrowthStage, StageId } from "@/lib/contracts";
+
+import { providerLabel } from "./readiness-copy";
 
 interface NoConfirmedIssueCardProps {
   snapshot: DashboardSnapshot;
+  /** Next useful step. Without it the card still explains coverage, never a blank screen. */
+  onNextStep?: () => void;
+  nextStepLabel?: string;
 }
 
-export function NoConfirmedIssueCard({ snapshot }: NoConfirmedIssueCardProps) {
-  const healthyStages = snapshot.stages.filter((s) => s.health === "healthy");
-  const watchStages = snapshot.stages.filter((s) => s.health === "watch");
+const STAGE_ORDER: StageId[] = [
+  "discover",
+  "store",
+  "install",
+  "activate",
+  "paywall",
+  "trial",
+  "paid",
+  "renew",
+];
+
+/**
+ * Readiness state F. The plan forbids an empty screen here: the card has to say
+ * what was actually covered, what is still unknown, the strongest watch signal,
+ * and one useful next step.
+ */
+export function NoConfirmedIssueCard({
+  snapshot,
+  onNextStep,
+  nextStepLabel,
+}: NoConfirmedIssueCardProps) {
+  const stages = [...snapshot.stages].sort(
+    (a, b) => STAGE_ORDER.indexOf(a.id) - STAGE_ORDER.indexOf(b.id),
+  );
+
+  const covered = stages.filter(
+    (stage) => stage.health === "healthy" || stage.health === "watch",
+  );
+  const unknown = stages.filter((stage) => stage.health === "unknown");
+  const watch = stages.filter((stage) => stage.health === "watch");
+  const strongestWatch = pickStrongestWatch(watch);
+
+  const missingCapabilities = Object.entries(
+    snapshot.readiness?.capabilities ?? {},
+  )
+    .filter(([, capability]) => capability.status !== "ready")
+    .map(([name]) => name);
+
+  const fallbackLabel = unknown.length
+    ? "Close the coverage gaps"
+    : "Review stage detail";
 
   return (
-    <div className="rounded-xl border border-teal-500/20 bg-slate-900/90 p-6 shadow-lg backdrop-blur-md">
-      <div className="flex items-start gap-3 border-b border-slate-800 pb-4">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-500/10 text-teal-400 border border-teal-500/20">
-          <CheckCircle2 className="h-5 w-5" />
-        </div>
+    <section className="no-issue-card" aria-label="No confirmed bottleneck">
+      <div className="no-issue-head">
+        <span className="no-issue-mark" aria-hidden="true">
+          <CheckCircle2 size={17} />
+        </span>
         <div>
-          <span className="text-xs font-semibold uppercase tracking-wider text-teal-400">
-            Diagnosis Complete
-          </span>
-          <h3 className="mt-0.5 text-lg font-bold text-slate-100">
-            No confirmed bottleneck in the current window
-          </h3>
-          <p className="mt-1 text-sm text-slate-400 leading-relaxed">
-            AppClimb evaluated all covered growth stages against your baseline. No stage shows critical deterioration.
+          <h3>No confirmed bottleneck in the current window</h3>
+          <p>
+            {covered.length > 0
+              ? `AppClimb compared ${covered.length} covered ${covered.length === 1 ? "stage" : "stages"} against your own baseline and none of them broke a threshold. That is a result about the stages below — not about every stage.`
+              : "AppClimb could not confirm a bottleneck because no stage has comparable data in this window yet."}
           </p>
         </div>
       </div>
 
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <div className="rounded-lg bg-slate-950/50 p-4 border border-slate-800">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-teal-400">
-            <ShieldCheck className="h-4 w-4" />
-            <span>Healthy Stages ({healthyStages.length})</span>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {healthyStages.length > 0 ? (
-              healthyStages.map((s) => (
-                <span
-                  key={s.id}
-                  className="rounded-md bg-teal-500/10 px-2 py-1 text-xs font-medium text-teal-300 border border-teal-500/20"
-                >
-                  {s.label} ({s.formattedValue})
-                </span>
-              ))
-            ) : (
-              <span className="text-xs text-slate-500">Stages operating normally</span>
-            )}
-          </div>
+      <div className="no-issue-columns">
+        <div className="no-issue-group is-covered">
+          <span>
+            <CheckCircle2 size={13} />
+            Covered stages ({covered.length})
+          </span>
+          {covered.length > 0 ? (
+            <ul>
+              {covered.map((stage) => (
+                <li key={stage.id}>
+                  <strong>{stage.label}</strong>
+                  <span>{stage.formattedValue}</span>
+                  <small>{providerLabel(stage.source)}</small>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="no-issue-empty">
+              No stage has enough comparable data to be scored yet.
+            </p>
+          )}
         </div>
 
-        <div className="rounded-lg bg-slate-950/50 p-4 border border-slate-800">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-amber-400">
-            <HelpCircle className="h-4 w-4" />
-            <span>Watch Signals ({watchStages.length})</span>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {watchStages.length > 0 ? (
-              watchStages.map((s) => (
-                <span
-                  key={s.id}
-                  className="rounded-md bg-amber-500/10 px-2 py-1 text-xs font-medium text-amber-300 border border-amber-500/20"
-                >
-                  {s.label} (Watch)
-                </span>
-              ))
-            ) : (
-              <span className="text-xs text-slate-500">No watch stage alerts</span>
-            )}
-          </div>
+        <div className="no-issue-group is-unknown">
+          <span>
+            <HelpCircle size={13} />
+            Still unknown ({unknown.length})
+          </span>
+          {unknown.length > 0 ? (
+            <ul>
+              {unknown.map((stage) => (
+                <li key={stage.id}>
+                  <strong>{stage.label}</strong>
+                  <small>
+                    {stage.readinessReason ||
+                      "No source is reporting this stage yet."}
+                  </small>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="no-issue-empty">
+              Every stage in the journey is covered by a live source.
+            </p>
+          )}
         </div>
       </div>
-    </div>
+
+      <div className="no-issue-watch">
+        <span>
+          <Eye size={13} />
+          Strongest watch signal
+        </span>
+        {strongestWatch ? (
+          <p>
+            <strong>{strongestWatch.label}</strong> is inside its threshold but
+            closest to breaking it
+            {typeof strongestWatch.conversionRate === "number"
+              ? ` at ${formatRate(strongestWatch.conversionRate)} conversion`
+              : ""}
+            . Nothing is confirmed here — it is the stage to re-check first next
+            window.
+          </p>
+        ) : (
+          <p>
+            No stage is trending toward a threshold in this window. AppClimb is
+            not flagging one just to fill the space.
+          </p>
+        )}
+      </div>
+
+      {missingCapabilities.length > 0 && (
+        <p className="no-issue-note">
+          Not every capability is connected:{" "}
+          {missingCapabilities.join(", ")}. A bottleneck may exist in a part of
+          the journey AppClimb cannot see yet.
+        </p>
+      )}
+
+      {onNextStep && (
+        <button type="button" className="readiness-cta" onClick={onNextStep}>
+          <span>{nextStepLabel ?? fallbackLabel}</span>
+          <ArrowRight size={16} />
+        </button>
+      )}
+    </section>
   );
+}
+
+function pickStrongestWatch(watch: GrowthStage[]): GrowthStage | undefined {
+  if (watch.length === 0) return undefined;
+  const rated = watch.filter((stage) => typeof stage.conversionRate === "number");
+  if (rated.length === 0) return watch[0];
+  return rated.reduce((worst, stage) =>
+    (stage.conversionRate ?? 1) < (worst.conversionRate ?? 1) ? stage : worst,
+  );
+}
+
+function formatRate(rate: number): string {
+  const percent = rate <= 1 ? rate * 100 : rate;
+  return `${percent.toFixed(percent < 10 ? 1 : 0)}%`;
 }

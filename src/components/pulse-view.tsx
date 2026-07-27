@@ -14,9 +14,23 @@ import { InsightPanel } from "@/components/insight-panel";
 import { ProductPulseWorkspace } from "@/components/product-pulse-workspace";
 import { RetentionHeatmap } from "@/components/retention-heatmap";
 import { VoiceClusters } from "@/components/voice-clusters";
+import { EvidenceModal } from "@/components/decision-home/evidence-modal";
 import { IOSDecisionWorkspace } from "@/components/decision-home/ios-decision-workspace";
 import { WebDecisionWorkspace } from "@/components/decision-home/web-decision-workspace";
-import type { DashboardSnapshot, SourceConnection } from "@/lib/contracts";
+import {
+  evidenceForInsight,
+  selectPrimaryInsight,
+} from "@/components/decision-home/primary-selection";
+import type {
+  DashboardSnapshot,
+  SourceConnection,
+  SourceProvider,
+  WorkspaceReadiness,
+} from "@/lib/contracts";
+
+type ActionKind = WorkspaceReadiness["primaryAction"]["kind"];
+
+const WEB_INSTALL_ANCHOR = "decision-web-install";
 
 export function PulseView({
   snapshot,
@@ -38,39 +52,72 @@ export function PulseView({
   onOpenSources: () => void;
 }) {
   const isWeb = snapshot.app.platform === "Web";
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
 
-  const handleActionClick = (kind: string, provider?: string) => {
-    if (kind === "connect_source" || kind === "retry_source") {
-      onOpenSources();
-    } else if (kind === "open_action_plan" || kind === "open_diagnosis") {
-      const firstInsight = snapshot.insights[0];
-      if (firstInsight) {
-        onOpenInsight(firstInsight.id);
-      }
+  const primaryInsight = selectPrimaryInsight(snapshot);
+  const primaryEvidence = evidenceForInsight(snapshot, primaryInsight)[0];
+  const primaryStage = snapshot.stages.find(
+    (stage) => stage.id === primaryInsight?.stageId,
+  );
+
+  const openPrimaryInsight = () => {
+    if (primaryInsight) onOpenInsight(primaryInsight.id);
+    else onOpenSources();
+  };
+
+  /**
+   * Every readiness action kind has to land somewhere real — the plan forbids a
+   * primary CTA that does nothing. `wait` is the only kind with no destination,
+   * and the readiness card renders it as a status line, not a button.
+   */
+  const handleActionClick = (kind: ActionKind, provider?: SourceProvider) => {
+    switch (kind) {
+      case "add_product":
+        if (!focusElement('[aria-label="Add app"]')) onOpenSources();
+        return;
+
+      case "install_web_tracking":
+        if (!focusElement(`#${WEB_INSTALL_ANCHOR}`)) onOpenSources();
+        return;
+
+      case "connect_source":
+      case "retry_source":
+      case "confirm_posthog_mapping":
+        // Source setup, mapping confirmation and retries all live in Sources,
+        // which deep-links to the provider panel.
+        void provider;
+        onOpenSources();
+        return;
+
+      case "open_action_plan":
+      case "open_diagnosis":
+        openPrimaryInsight();
+        return;
+
+      case "wait":
+      default:
+        return;
     }
   };
 
   const renderSupportingAnalytics = () => (
-    <div className="space-y-6">
-      <ProductPulseWorkspace
-        snapshot={snapshot}
-        onOpenSources={onOpenSources}
-      />
+    <div className="decision-supporting-stack">
+      <ProductPulseWorkspace snapshot={snapshot} onOpenSources={onOpenSources} />
       <div className="supporting-grid">
-        <RetentionHeatmap
-          rows={snapshot.retention}
-          mode={snapshot.mode}
-        />
-        <VoiceClusters
-          clusters={snapshot.customerClusters}
-          mode={snapshot.mode}
-        />
+        <RetentionHeatmap rows={snapshot.retention} mode={snapshot.mode} />
+        <VoiceClusters clusters={snapshot.customerClusters} mode={snapshot.mode} />
       </div>
     </div>
   );
 
+  const renderWebJourney = () => (
+    <div id={WEB_INSTALL_ANCHOR} tabIndex={-1}>
+      {renderSupportingAnalytics()}
+    </div>
+  );
+
   const renderGrowthRiverComponent = () => (
-    <div className="space-y-4">
+    <div className="river-column">
       <GrowthRiver
         stages={snapshot.stages}
         insights={snapshot.insights}
@@ -91,8 +138,7 @@ export function PulseView({
   );
 
   return (
-    <section className="pulse-view space-y-6">
-      {/* Top Filter Strip */}
+    <section className="pulse-view">
       <div className="filter-row">
         <div
           className="filter-control"
@@ -134,52 +180,60 @@ export function PulseView({
         </div>
       </div>
 
-      {/* Decision Home Primary Workspace */}
       {isWeb ? (
         <WebDecisionWorkspace
           snapshot={snapshot}
           onActionClick={handleActionClick}
-          onOpenActionPlan={() => {
-            const firstInsight = snapshot.insights[0];
-            if (firstInsight) onOpenInsight(firstInsight.id);
-          }}
-          onOpenEvidence={() => {
-            const firstInsight = snapshot.insights[0];
-            if (firstInsight) onOpenInsight(firstInsight.id);
-          }}
-          renderAcquisitionAtlas={renderSupportingAnalytics}
+          onOpenActionPlan={openPrimaryInsight}
+          onOpenEvidence={
+            primaryEvidence ? () => setEvidenceOpen(true) : openPrimaryInsight
+          }
+          renderAcquisitionAtlas={renderWebJourney}
         />
       ) : (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-6">
-            <IOSDecisionWorkspace
-              snapshot={snapshot}
-              onActionClick={handleActionClick}
-              onOpenActionPlan={() => {
-                const firstInsight = snapshot.insights[0];
-                if (firstInsight) onOpenInsight(firstInsight.id);
-              }}
-              onOpenEvidence={() => {
-                const firstInsight = snapshot.insights[0];
-                if (firstInsight) onOpenInsight(firstInsight.id);
-              }}
-              renderGrowthRiver={renderGrowthRiverComponent}
-              renderSupportingAnalytics={renderSupportingAnalytics}
-            />
-          </div>
+        <div className="pulse-grid">
+          <IOSDecisionWorkspace
+            snapshot={snapshot}
+            onActionClick={handleActionClick}
+            onOpenActionPlan={openPrimaryInsight}
+            onOpenEvidence={
+              primaryEvidence ? () => setEvidenceOpen(true) : openPrimaryInsight
+            }
+            renderGrowthRiver={renderGrowthRiverComponent}
+            renderSupportingAnalytics={renderSupportingAnalytics}
+          />
 
-          <div className="lg:col-span-1">
-            <InsightPanel
-              insights={snapshot.insights}
-              evidence={snapshot.evidence}
-              actionProposals={snapshot.actionProposals}
-              selectedInsightId={selectedInsightId}
-              onSelectInsight={onSelectInsight}
-              onOpenInsight={onOpenInsight}
-            />
-          </div>
+          <InsightPanel
+            insights={snapshot.insights}
+            evidence={snapshot.evidence}
+            actionProposals={snapshot.actionProposals}
+            selectedInsightId={selectedInsightId}
+            onSelectInsight={onSelectInsight}
+            onOpenInsight={onOpenInsight}
+          />
         </div>
+      )}
+
+      {evidenceOpen && primaryEvidence && (
+        <EvidenceModal
+          evidence={primaryEvidence}
+          comparisonType={primaryStage?.comparisonType}
+          sampleSize={primaryStage?.sampleSize}
+          onClose={() => setEvidenceOpen(false)}
+          onOpenActionPlan={openPrimaryInsight}
+        />
       )}
     </section>
   );
+}
+
+/** Scrolls an on-page target into view and activates it. Returns false when absent. */
+function focusElement(selector: string): boolean {
+  if (typeof document === "undefined") return false;
+  const target = document.querySelector<HTMLElement>(selector);
+  if (!target) return false;
+  target.scrollIntoView({ behavior: "smooth", block: "center" });
+  if (target instanceof HTMLButtonElement) target.click();
+  else target.focus({ preventScroll: true });
+  return true;
 }

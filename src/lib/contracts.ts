@@ -65,6 +65,40 @@ export type ComparisonType =
   | "aggregate_directional"
   | "not_comparable";
 
+/**
+ * Web funnel stage identifiers.
+ *
+ * Deliberately a separate union from {@link StageId}: several UI modules build
+ * `satisfies Record<StageId, …>` lookup tables, so widening `StageId` itself
+ * would be a breaking change. Web stages travel through the additive
+ * {@link WebGrowthStage} channel until those tables cover them.
+ */
+export type WebStageId = "web_visit" | "web_engaged" | "web_conversion";
+
+/** Any stage the diagnosis engine can classify, across platforms. */
+export type AnyStageId = StageId | WebStageId;
+
+/**
+ * Whether a stage value was actually measured.
+ *
+ * A missing metric point is NOT zero. `missing` means the provider returned
+ * nothing for the window; `explicit_zero` means the provider covered the
+ * window and reported no volume.
+ */
+export type StageValueState = "measured" | "explicit_zero" | "missing";
+
+/**
+ * Where the comparison baseline for a stage came from.
+ *
+ * AppClimb never ships unsourced industry benchmarks: every baseline is either
+ * the product's own history or a target the user set explicitly.
+ */
+export type BaselineMethod =
+  | "previous_window"
+  | "historical_average"
+  | "explicit_target"
+  | "none";
+
 export interface CapabilityReadiness {
   status: "unsupported" | "blocked" | "collecting" | "ready";
   reasonCode?: string;
@@ -189,9 +223,37 @@ export interface GrowthStage {
   evidenceIds: string[];
   flowWidth: number;
   benchmark?: number;
+  /** How the stage's health was decided. */
   comparisonType?: ComparisonType;
+  /**
+   * How honest the DISPLAYED `conversionRate` is.
+   *
+   * `aggregate_directional` means the ratio divides one provider's aggregate by
+   * another's: it may be drawn to show direction, but it never decides health
+   * and must not be presented as a measured conversion rate.
+   */
+  ratioComparisonType?: ComparisonType;
   readinessReason?: string;
   sampleSize?: number;
+  /**
+   * Distinguishes a measured zero from an absent metric. When this is
+   * `"missing"`, `value` is a rendering placeholder and must not be read as a
+   * real observation — `formattedValue` carries the em dash instead.
+   */
+  valueState?: StageValueState;
+  baselineMethod?: BaselineMethod;
+  /** Baseline window the classification compared the recent window against. */
+  baselineWindow?: { from: string; to: string } | null;
+  confidence?: ConfidenceLevel;
+}
+
+/**
+ * A stage of the web funnel. Structurally mirrors {@link GrowthStage} but keyed
+ * by {@link WebStageId} so it can be adopted independently by the UI.
+ */
+export interface WebGrowthStage extends Omit<GrowthStage, "id" | "source"> {
+  id: WebStageId;
+  source: "appclimb-web";
 }
 
 export type ChangeEventType =

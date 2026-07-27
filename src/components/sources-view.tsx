@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   ArrowRight,
   BadgeCheck,
@@ -31,10 +31,16 @@ import type {
   SourceProvider,
 } from "@/lib/contracts";
 import {
+  milestoneRoleLabel,
+  type PostHogMapping,
+} from "@/lib/posthog-events";
+import {
   connectionFields,
   SOURCE_SETUP,
   type ConnectableProvider,
 } from "@/lib/source-setup";
+
+import "./sources-view.css";
 
 type DataHealth =
   | "live"
@@ -57,6 +63,169 @@ interface PostHogEventOption {
   eventCount: number;
   uniqueUsers: number;
   lastSeenAt: string;
+}
+
+/**
+ * Fields the API returns that `SourceConnection` in `src/lib/contracts.ts` does
+ * not carry yet. Agent A owns the contract; this view reads them defensively so
+ * it keeps working before and after the contract catches up.
+ */
+type SourceConnectionView = SourceConnection & {
+  lastVerifiedAt?: string | null;
+  nextCheckAt?: string | null;
+  firstDataAt?: string | null;
+  mapping?: PostHogMapping;
+};
+
+interface PostHogMappingPayload {
+  events: PostHogEventOption[];
+  activationEvent: string;
+  sessionEvent: string;
+  windowDays: number;
+  // Absent when the backend has not built a mapping yet. Treated as "nothing
+  // mapped", never as a confirmed mapping.
+  mapping?: PostHogMapping;
+  project: { id: string; label: string };
+  boundApp: { id: string; name: string } | null;
+  activationWindowDays: number;
+  accessVerified: boolean;
+}
+
+function sourceView(source: SourceConnection): SourceConnectionView {
+  return source as SourceConnectionView;
+}
+
+function formatMoment(value?: string | null) {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isFinite(parsed.getTime()) ? parsed.toLocaleString() : null;
+}
+
+function confidenceLevel(confidence: number) {
+  if (confidence >= 0.75) return "high" as const;
+  if (confidence >= 0.5) return "medium" as const;
+  if (confidence > 0) return "low" as const;
+  return "none" as const;
+}
+
+function confidenceCopy(mapping: PostHogMapping) {
+  const level = confidenceLevel(mapping.confidence);
+  const percent = `${Math.round(mapping.confidence * 100)}%`;
+  switch (level) {
+    case "high":
+      return `${percent} · High confidence`;
+    case "medium":
+      return `${percent} · Medium confidence — review before trusting it`;
+    case "low":
+      return `${percent} · Low confidence — check both events`;
+    default:
+      return "Not scored — AppClimb could not match a reliable pair";
+  }
+}
+
+/**
+ * Six explicit App Store Connect stages (Task P0.14). A source is never shown
+ * as simply `Connected`: access and report readiness are separate facts.
+ */
+type AppleStageState = "complete" | "current" | "blocked" | "pending";
+
+interface AppleStage {
+  id: string;
+  label: string;
+  detail: string;
+  state: AppleStageState;
+}
+
+function appleStages(
+  source: SourceConnectionView,
+  appleAppId: string,
+): AppleStage[] {
+  const connected = source.status !== "not-connected";
+  const accessStatus = source.accessStatus ?? (connected ? "verified" : "not_connected");
+  const dataStatus = source.dataStatus ?? "none";
+  const errorCode = source.lastErrorCode ?? "";
+  const hasReports = (source.metricCount ?? 0) > 0 || Boolean(source.firstDataAt);
+  const requestMissing = errorCode === "apple_report_request_required";
+  const preparing = errorCode === "apple_reports_pending";
+  const accessVerified = accessStatus === "verified";
+
+  const stage = (
+    id: string,
+    label: string,
+    detail: string,
+    state: AppleStageState,
+  ): AppleStage => ({ id, label, detail, state });
+
+  return [
+    stage(
+      "app",
+      "App selected",
+      appleAppId
+        ? `Apple app ID ${appleAppId}`
+        : "Add the Apple app ID for this product.",
+      appleAppId ? "complete" : "current",
+    ),
+    stage(
+      "access",
+      "API access verified",
+      accessStatus === "error"
+        ? "Apple rejected this key. A Sales and Reports team key is required."
+        : accessVerified
+          ? `Verified ${formatMoment(source.lastVerifiedAt) ?? "on connect"}`
+          : connected
+            ? "Verifying the App Store Connect key."
+            : "Not connected yet.",
+      accessStatus === "error"
+        ? "blocked"
+        : accessVerified
+          ? "complete"
+          : connected
+            ? "current"
+            : "pending",
+    ),
+    stage(
+      "request",
+      "Analytics Reports request found",
+      requestMissing
+        ? "No active request exists. An Admin initializes ONGOING data once."
+        : accessVerified
+          ? "An active Analytics Reports request is attached to this app."
+          : "Checked after access is verified.",
+      requestMissing ? "blocked" : accessVerified ? "complete" : "pending",
+    ),
+    stage(
+      "preparing",
+      "Apple preparing files",
+      hasReports
+        ? "Apple has published downloadable report instances."
+        : preparing
+          ? "Apple accepted the request and is compiling the first daily files."
+          : "Starts once the request is active.",
+      hasReports ? "complete" : preparing ? "current" : "pending",
+    ),
+    stage(
+      "imported",
+      "First report imported",
+      hasReports
+        ? `${source.metricCount ?? 0} metric points imported${
+            formatMoment(source.firstDataAt)
+              ? ` · first data ${formatMoment(source.firstDataAt)}`
+              : ""
+          }`
+        : "No Apple metric has arrived yet. Empty is not zero.",
+      hasReports ? "complete" : "pending",
+    ),
+    stage(
+      "diagnosis",
+      "Diagnosis eligible",
+      dataStatus === "ready"
+        ? "Enough recent Apple data to support a store diagnosis."
+        : dataStatus === "stale"
+          ? "Imported data is older than 48 hours; a fresh import is needed."
+          : "Needs imported Apple reports before a diagnosis can run.",
+      dataStatus === "ready" ? "complete" : "pending",
+    ),
+  ];
 }
 
 const JOURNEY: JourneyDefinition[] = [
@@ -520,12 +689,16 @@ export function SourcesView({
         throw new Error(payload?.error || "oauth_connect_failed");
       }
       await refreshSources();
-      setConnectionState("success");
-      setSetupOpen(false);
+      // The flow must not close silently (Task P0.18): keep the setup open so
+      // the connection result and its mapping can be reviewed and confirmed.
+      // No import runs until the mapping is confirmed.
+      setConnectionState("idle");
+      setConnectionMessage("");
+      setSetupOpen(true);
+      setAdvancedOpen(false);
       setOauthState("idle");
       setOauthProjects([]);
       onRefreshSnapshot?.();
-      void triggerSync("posthog");
     } catch (error) {
       setConnectionState("error");
       setConnectionMessage(
@@ -538,12 +711,31 @@ export function SourcesView({
     }
   };
 
-  const completePostHogEventSetup = async () => {
+  /**
+   * A confirmed mapping immediately re-imports the PostHog window so metrics
+   * collected under the previous mapping are replaced rather than mixed in,
+   * and the resulting snapshot carries a fresh evidence version.
+   */
+  const completePostHogMapping = async (mapping: PostHogMapping) => {
     await refreshSources();
     setConnectionState("success");
-    setConnectionMessage("Events saved. A fresh PostHog import is starting.");
-    setSetupOpen(false);
+    setConnectionMessage(
+      mapping.mode === "manual"
+        ? "Mapping saved. A fresh PostHog import is replacing the previous window."
+        : "Mapping confirmed. AppClimb is building the activation baseline.",
+    );
     await triggerSync("posthog");
+    onRefreshSnapshot?.();
+  };
+
+  const openPostHogSetup = () => {
+    const postHog = sources.find((item) => item.provider === "posthog");
+    if (!postHog) return;
+    setSelectedProvider("posthog");
+    setSetupOpen(true);
+    setAdvancedOpen(false);
+    setConnectionState("idle");
+    setConnectionMessage("");
   };
 
   const revokeSource = async () => {
@@ -808,6 +1000,7 @@ export function SourcesView({
             ) : setupOpen && selectedConnectable ? (
               <ConnectionSetup
                 source={selectedConnectable}
+                snapshot={snapshot}
                 oauthState={oauthState}
                 oauthProjects={oauthProjects}
                 apps={workspaceApps}
@@ -817,7 +1010,7 @@ export function SourcesView({
                 onAdvancedChange={setAdvancedOpen}
                 onConnect={connectSource}
                 onConnectPostHogOAuth={connectPostHogOAuth}
-                onPostHogEventsSaved={completePostHogEventSetup}
+                onPostHogMappingConfirmed={completePostHogMapping}
                 onRevoke={revokeSource}
               />
             ) : selectedConnectable ? (
@@ -829,6 +1022,11 @@ export function SourcesView({
                 onOpenGrowthRiver={onOpenGrowthRiver}
                 onManage={() => setSetupOpen(true)}
                 onConnect={() => setSetupOpen(true)}
+                onConnectPostHog={
+                  selectedConnectable.provider === "app-store-connect"
+                    ? openPostHogSetup
+                    : undefined
+                }
               />
             ) : null}
 
@@ -919,6 +1117,239 @@ function SourceJourneyCard({
   );
 }
 
+/** Six-stage App Store Connect progress (Task P0.14). */
+function AppleStageList({
+  source,
+  appleAppId,
+}: {
+  source: SourceConnectionView;
+  appleAppId: string;
+}) {
+  const stages = appleStages(source, appleAppId);
+  return (
+    <ol className="source-stage-list" aria-label="App Store Connect readiness">
+      {stages.map((stage, index) => (
+        <li className="source-stage" key={stage.id} data-state={stage.state}>
+          <span className="source-stage-marker" aria-hidden="true">
+            {stage.state === "complete" ? (
+              <Check size={12} />
+            ) : stage.state === "current" ? (
+              <Clock3 size={12} />
+            ) : stage.state === "blocked" ? (
+              <CircleAlert size={12} />
+            ) : (
+              index + 1
+            )}
+          </span>
+          <span className="source-stage-copy">
+            <strong>
+              {stage.label}
+              <span className="sr-only">
+                {stage.state === "complete"
+                  ? " — done"
+                  : stage.state === "current"
+                    ? " — in progress"
+                    : stage.state === "blocked"
+                      ? " — blocked"
+                      : " — not started"}
+              </span>
+            </strong>
+            <small>{stage.detail}</small>
+          </span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/**
+ * Apple pending timeline (Task P0.15). Every value here is observed: a missing
+ * check time is shown as unknown rather than guessed.
+ */
+function ApplePendingTimeline({
+  source,
+  onConnectPostHog,
+  onCheckNow,
+  syncing,
+}: {
+  source: SourceConnectionView;
+  onConnectPostHog?: () => void;
+  onCheckNow: () => void;
+  syncing: boolean;
+}) {
+  const requestUnconfirmed =
+    source.lastErrorCode === "apple_report_request_required";
+  const lastCheckedAt = formatMoment(source.lastSyncAt);
+  const nextCheckAt = formatMoment(source.nextCheckAt ?? source.nextSyncAt);
+  const retryState =
+    source.syncStatus === "retrying"
+      ? `Retrying · attempt ${source.syncAttempt ?? 0} of ${source.syncMaxAttempts ?? 0}`
+      : source.syncStatus === "running"
+        ? "Checking Apple now"
+        : source.syncStatus === "queued"
+          ? "Check queued"
+          : source.syncStatus === "failed"
+            ? "Last check failed; the schedule continues"
+            : "Scheduled background check";
+
+  return (
+    <div className="source-pending-note" role="status">
+      <Clock3 size={18} />
+      <div style={{ width: "100%" }}>
+        <strong>
+          {requestUnconfirmed
+            ? "Apple has no active Analytics Reports request"
+            : "Apple is preparing your first reports"}
+        </strong>
+        <p
+          style={{
+            margin: "0.3rem 0 0.5rem 0",
+            fontSize: "0.85rem",
+            lineHeight: 1.45,
+          }}
+        >
+          {requestUnconfirmed
+            ? "An App Store Connect Admin must initialize ONGOING Analytics Reports once for this app. AppClimb cannot create it for you and never changes anything in your Apple account."
+            : "AppClimb confirmed the Analytics Reports request through the App Store Connect API. Apple compiles the first daily files itself; nothing else is required from you."}
+        </p>
+        <dl className="source-fact-grid">
+          <div>
+            <dt>Request accepted</dt>
+            <dd>{requestUnconfirmed ? "Not confirmed" : "Yes"}</dd>
+          </div>
+          <div>
+            <dt>Last checked at</dt>
+            <dd>{lastCheckedAt ?? "Not checked yet"}</dd>
+          </div>
+          <div>
+            <dt>Next automatic check at</dt>
+            <dd>{nextCheckAt ?? "Scheduling"}</dd>
+          </div>
+          <div>
+            <dt>Expected provider delay</dt>
+            <dd>24–48 hours</dd>
+          </div>
+          <div>
+            <dt>Background retry state</dt>
+            <dd>{retryState}</dd>
+          </div>
+          {requestUnconfirmed && (
+            <div>
+              <dt>Required role</dt>
+              <dd>Admin initializes reports; key needs Sales and Reports</dd>
+            </div>
+          )}
+        </dl>
+        <div className="source-health-actions" style={{ marginTop: "0.75rem" }}>
+          {onConnectPostHog && (
+            <button
+              className="primary-action"
+              type="button"
+              onClick={onConnectPostHog}
+            >
+              <Waypoints size={17} /> Connect PostHog while Apple prepares
+            </button>
+          )}
+          <button
+            className="secondary-action"
+            type="button"
+            onClick={onCheckNow}
+            disabled={syncing}
+          >
+            <RefreshCw className={syncing ? "spin" : undefined} size={15} />
+            {syncing ? "Checking Apple…" : "Check Apple reports now"}
+          </button>
+        </div>
+        <a
+          href="https://appstoreconnect.apple.com/apps/analytics"
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.3rem",
+            marginTop: "0.6rem",
+            fontSize: "0.85rem",
+            textDecoration: "underline",
+          }}
+        >
+          Open App Store Connect Analytics <ExternalLink size={13} />
+        </a>
+      </div>
+    </div>
+  );
+}
+
+function subscribeToStorage(onStoreChange: () => void) {
+  window.addEventListener("storage", onStoreChange);
+  return () => window.removeEventListener("storage", onStoreChange);
+}
+
+/**
+ * Persistent first-data confirmation (Task P0.17).
+ *
+ * The banner survives reloads until it is dismissed. Dismissal is keyed by the
+ * exact first-data timestamp, so a later source delivering its own first data
+ * gets its own banner.
+ */
+function FirstDataBanner({
+  source,
+  onOpenGrowthRiver,
+}: {
+  source: SourceConnectionView;
+  onOpenGrowthRiver: () => void;
+}) {
+  const storageKey = `appclimb.first-data.${source.provider}.${source.firstDataAt ?? ""}`;
+  const stored = useSyncExternalStore(
+    subscribeToStorage,
+    () => {
+      try {
+        return window.localStorage.getItem(storageKey) ?? "";
+      } catch {
+        return "";
+      }
+    },
+    () => "1",
+  );
+  const [dismissedNow, setDismissedNow] = useState(false);
+  const dismissed = dismissedNow || stored === "1";
+
+  if (!source.firstDataAt || dismissed) return null;
+  return (
+    <div className="source-first-data-banner" role="status">
+      <CheckCircle2 size={18} />
+      <div>
+        <strong>First {source.label} data received</strong>
+        <span>
+          The first real metric arrived{" "}
+          {formatMoment(source.firstDataAt) ?? "recently"}. This source now
+          contributes evidence instead of an empty stage.
+        </span>
+        <button
+          type="button"
+          onClick={onOpenGrowthRiver}
+          style={{ marginTop: "0.45rem" }}
+        >
+          Open Growth River
+        </button>
+      </div>
+      <button
+        type="button"
+        onClick={() => {
+          setDismissedNow(true);
+          try {
+            window.localStorage.setItem(storageKey, "1");
+          } catch {
+            // A blocked storage write only means the banner returns later.
+          }
+        }}
+      >
+        Dismiss
+      </button>
+    </div>
+  );
+}
+
 function SourceHealthView({
   source,
   snapshot,
@@ -927,6 +1358,7 @@ function SourceHealthView({
   onOpenGrowthRiver,
   onManage,
   onConnect,
+  onConnectPostHog,
 }: {
   source: SourceConnection & { provider: ConnectableProvider };
   snapshot?: DashboardSnapshot;
@@ -935,11 +1367,16 @@ function SourceHealthView({
   onOpenGrowthRiver: () => void;
   onManage: () => void;
   onConnect: () => void;
+  onConnectPostHog?: () => void;
 }) {
   const health = dataHealth(source);
-  const lastCheckTime = source.lastSyncAt
-    ? new Date(source.lastSyncAt).toLocaleString()
-    : null;
+  const view = sourceView(source);
+  const isApple = source.provider === "app-store-connect";
+  const appleAppId = snapshot?.app?.appStoreId ?? "";
+  const applePendingTimelineShown =
+    isApple &&
+    (health === "pending" ||
+      source.lastErrorCode === "apple_report_request_required");
 
   if (source.status === "not-connected") {
     return (
@@ -959,31 +1396,40 @@ function SourceHealthView({
   }
   return (
     <div className="source-health-view">
-      <div className="source-health-track" aria-label="Connection and data status">
-        <div className="complete">
-          <span>
-            <Check size={16} />
-          </span>
-          <strong>Access</strong>
-          <small>Saved securely</small>
-        </div>
-        <i />
-        <div className={health === "live" ? "complete" : `health-${health}`}>
-          <span>
-            {health === "live" ? (
+      <FirstDataBanner source={view} onOpenGrowthRiver={onOpenGrowthRiver} />
+
+      {isApple ? (
+        <AppleStageList source={view} appleAppId={appleAppId} />
+      ) : (
+        <div
+          className="source-health-track"
+          aria-label="Connection and data status"
+        >
+          <div className="complete">
+            <span>
               <Check size={16} />
-            ) : health === "syncing" ? (
-              <RefreshCw className="spin" size={16} />
-            ) : health === "pending" ? (
-              <Clock3 size={16} />
-            ) : (
-              "2"
-            )}
-          </span>
-          <strong>Data</strong>
-          <small>{dataHealthLabel(source)}</small>
+            </span>
+            <strong>Access</strong>
+            <small>Saved securely</small>
+          </div>
+          <i />
+          <div className={health === "live" ? "complete" : `health-${health}`}>
+            <span>
+              {health === "live" ? (
+                <Check size={16} />
+              ) : health === "syncing" ? (
+                <RefreshCw className="spin" size={16} />
+              ) : health === "pending" ? (
+                <Clock3 size={16} />
+              ) : (
+                "2"
+              )}
+            </span>
+            <strong>Data</strong>
+            <small>{dataHealthLabel(source)}</small>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="source-destination-card">
         <Gauge size={23} />
@@ -1008,30 +1454,16 @@ function SourceHealthView({
         </div>
       )}
 
-      {health === "pending" && (
-        <div className="source-pending-note" role="status">
-          <Clock3 size={18} />
-          <div style={{ width: "100%" }}>
-            <strong>Apple is preparing reports (1–2 days)</strong>
-            <p style={{ margin: "0.3rem 0 0.5rem 0", fontSize: "0.85rem", lineHeight: 1.45 }}>
-              Apple ASC API confirmed your Analytics Reports request is active. Initial daily report TSVs take Apple 24–48 hours to compile after request creation. AppClimb checks Apple automatically.
-            </p>
-            {lastCheckTime && (
-              <div style={{ fontSize: "0.8rem", opacity: 0.85, marginBottom: "0.5rem" }}>
-                <strong>Last checked:</strong> {lastCheckTime}
-              </div>
-            )}
-            <a
-              href="https://appstoreconnect.apple.com/apps/analytics"
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{ display: "inline-flex", alignItems: "center", gap: "0.3rem", fontSize: "0.85rem", textDecoration: "underline" }}
-            >
-              Open App Store Connect Analytics <ExternalLink size={13} />
-            </a>
-          </div>
-        </div>
-      )}
+      {isApple &&
+        (health === "pending" ||
+          source.lastErrorCode === "apple_report_request_required") && (
+          <ApplePendingTimeline
+            source={view}
+            onConnectPostHog={onConnectPostHog}
+            onCheckNow={onSync}
+            syncing={syncing}
+          />
+        )}
 
       {health === "attention" && (
         <div className="source-attention-note" role="status">
@@ -1053,41 +1485,46 @@ function SourceHealthView({
         </div>
       )}
 
+      {/*
+        While Apple is pending, the timeline above already carries the primary
+        CTA. Repeating it here would put two competing primary actions on one
+        screen, which section 4.3 of the plan forbids.
+      */}
       <div className="source-health-actions">
-        <button
-          className="primary-action"
-          type="button"
-          onClick={
-            source.provider === "posthog" &&
-            source.lastErrorCode === "no_data_in_window"
-              ? onManage
-              : onSync
-          }
-          disabled={syncing}
-        >
-          {source.provider === "posthog" &&
-          source.lastErrorCode === "no_data_in_window" ? (
-            <Waypoints size={17} />
-          ) : (
-            <RefreshCw className={syncing ? "spin" : undefined} size={17} />
-          )}
-          {syncing
-            ? "Checking import…"
-            : source.provider === "posthog" &&
-                source.lastErrorCode === "no_data_in_window"
-              ? "Review PostHog pulse"
-            : health === "pending"
-              ? "Check Apple reports now"
-              : health === "attention"
-                ? "Retry import"
-                : health === "syncing"
-                  ? source.syncStatus === "retrying"
-                    ? "Retry import now"
-                    : "Refresh import status"
-                : health === "live"
-                  ? "Sync now"
-                  : "Start first import"}
-        </button>
+        {!applePendingTimelineShown && (
+          <button
+            className="primary-action"
+            type="button"
+            onClick={
+              source.provider === "posthog" &&
+              source.lastErrorCode === "no_data_in_window"
+                ? onManage
+                : onSync
+            }
+            disabled={syncing}
+          >
+            {source.provider === "posthog" &&
+            source.lastErrorCode === "no_data_in_window" ? (
+              <Waypoints size={17} />
+            ) : (
+              <RefreshCw className={syncing ? "spin" : undefined} size={17} />
+            )}
+            {syncing
+              ? "Checking import…"
+              : source.provider === "posthog" &&
+                  source.lastErrorCode === "no_data_in_window"
+                ? "Review PostHog mapping"
+                : health === "attention"
+                  ? "Retry import"
+                  : health === "syncing"
+                    ? source.syncStatus === "retrying"
+                      ? "Retry import now"
+                      : "Refresh import status"
+                    : health === "live"
+                      ? "Sync now"
+                      : "Start first import"}
+          </button>
+        )}
         <button className="secondary-action" type="button" onClick={onOpenGrowthRiver}>
           Open Growth River
         </button>
@@ -1107,6 +1544,11 @@ function formatEventVolume(value: number) {
   }).format(value);
 }
 
+function formatLastSeen(value?: string) {
+  const moment = formatMoment(value);
+  return moment ? `last seen ${moment}` : "last seen unknown";
+}
+
 function EventSelect({
   name,
   label,
@@ -1124,6 +1566,7 @@ function EventSelect({
   disabled?: boolean;
   onChange: (value: string) => void;
 }) {
+  const selected = events.find((event) => event.name === value);
   return (
     <label>
       {label}
@@ -1144,8 +1587,83 @@ function EventSelect({
           </option>
         ))}
       </select>
-      <span className="field-help">{help}</span>
+      <span className="field-help">
+        {help}
+        {selected ? ` · ${formatLastSeen(selected.lastSeenAt)}` : ""}
+      </span>
     </label>
+  );
+}
+
+/** One mapped role with the volume and recency behind it. */
+function MappedRole({
+  role,
+  event,
+  option,
+}: {
+  role: string;
+  event?: string;
+  option?: PostHogEventOption;
+}) {
+  return (
+    <div className="posthog-mapping-role" data-missing={event ? undefined : "true"}>
+      <div>
+        <small>{role}</small>
+        <strong>{event || "Not mapped"}</strong>
+      </div>
+      <span>
+        {option
+          ? `${formatEventVolume(option.uniqueUsers)} users · ${formatEventVolume(
+              option.eventCount,
+            )} events · ${formatLastSeen(option.lastSeenAt)}`
+          : "No volume observed"}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * Milestone reach (Task P0.21).
+ *
+ * Each row is the unique reach of one event. Rows are not nested cohorts, so
+ * the difference between two rows is NOT a drop-off. A real ordered funnel
+ * needs a sequence query, which is tracked as a separate follow-up.
+ */
+function MilestoneReach({
+  milestones,
+  events,
+}: {
+  milestones: PostHogMapping["milestoneEvents"];
+  events: PostHogEventOption[];
+}) {
+  if (!milestones.length) return null;
+  return (
+    <section className="posthog-milestone-reach">
+      <header>
+        <strong>Milestone reach</strong>
+        <small>
+          Unique reach per event — not an ordered funnel. Differences between
+          rows are not conversion rates.
+        </small>
+      </header>
+      <ul>
+        {milestones.map((milestone) => {
+          const option = events.find((event) => event.name === milestone.event);
+          return (
+            <li key={milestone.event}>
+              <span style={{ color: "var(--ink)" }}>
+                {milestone.label} · {milestoneRoleLabel(milestone.role)}
+              </span>
+              <span>
+                {option
+                  ? `${formatEventVolume(option.uniqueUsers)} users`
+                  : "no volume observed"}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }
 
@@ -1283,20 +1801,33 @@ function PostHogOAuthProjectForm({
   );
 }
 
-function ExistingPostHogEventSetup({
-  onSaved,
+/**
+ * PostHog connection result and mapping review (Tasks P0.18, P0.19, P0.22).
+ *
+ * One panel covers three moments that used to be silent: the screen right
+ * after OAuth and project selection, the review screen for an existing
+ * connection, and the honest "this project has no events yet" state. Access is
+ * never reported as failed just because a project is empty.
+ */
+function PostHogMappingPanel({
+  source,
+  fallbackAppName,
+  onConfirmed,
   onChangeAuthorization,
 }: {
-  onSaved: () => Promise<void>;
+  source: SourceConnection;
+  fallbackAppName?: string;
+  onConfirmed: (mapping: PostHogMapping) => Promise<void>;
   onChangeAuthorization: () => void;
 }) {
-  const [events, setEvents] = useState<PostHogEventOption[]>([]);
-  const [activationEvent, setActivationEvent] = useState("");
-  const [sessionEvent, setSessionEvent] = useState("");
+  const [payload, setPayload] = useState<PostHogMappingPayload | null>(null);
   const [state, setState] = useState<
     "loading" | "ready" | "saving" | "error"
   >("loading");
   const [message, setMessage] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [activationEvent, setActivationEvent] = useState("");
+  const [sessionEvent, setSessionEvent] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -1304,46 +1835,40 @@ function ExistingPostHogEventSetup({
     fetch("/api/connections/posthog/events", { cache: "no-store" })
       .then(async (response) => {
         if (!response.ok) throw new Error("posthog_events_failed");
-        return (await response.json()) as {
-          data?: {
-            events?: PostHogEventOption[];
-            activationEvent?: string;
-            sessionEvent?: string;
-          };
-        };
+        return (await response.json()) as { data?: PostHogMappingPayload };
       })
-      .then((payload) => {
+      .then((body) => {
         if (!active) return;
-        const available = payload.data?.events ?? [];
-        const names = new Set(available.map((event) => event.name));
-        setEvents(available);
+        const data = body.data;
+        if (!data) throw new Error("posthog_events_empty");
+        setPayload(data);
+        const names = new Set((data.events ?? []).map((event) => event.name));
         setActivationEvent(
-          names.has(payload.data?.activationEvent ?? "")
-            ? payload.data?.activationEvent ?? ""
-            : "",
+          names.has(data.activationEvent) ? data.activationEvent : "",
         );
-        setSessionEvent(
-          names.has(payload.data?.sessionEvent ?? "")
-            ? payload.data?.sessionEvent ?? ""
-            : "",
-        );
+        setSessionEvent(names.has(data.sessionEvent) ? data.sessionEvent : "");
+        setEditing(data.mapping?.status === "invalid");
         setState("ready");
       })
       .catch(() => {
         if (!active) return;
         setState("error");
-        setMessage("PostHog events could not be read. Retry or reauthorize.");
+        setMessage(
+          "PostHog events could not be read right now. Your saved access was not changed.",
+        );
       });
     return () => {
       active = false;
     };
   }, [reloadKey]);
 
-  const saveEvents = async (formData: FormData) => {
-    const nextActivationEvent = String(
-      formData.get("activationEvent") ?? "",
-    ).trim();
-    const nextSessionEvent = String(formData.get("sessionEvent") ?? "").trim();
+  const refresh = () => {
+    setMessage("");
+    setState("loading");
+    setReloadKey((value) => value + 1);
+  };
+
+  const saveMapping = async (nextActivation: string, nextSession: string) => {
     setState("saving");
     setMessage("");
     try {
@@ -1351,96 +1876,307 @@ function ExistingPostHogEventSetup({
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          activationEvent: nextActivationEvent,
-          sessionEvent: nextSessionEvent,
+          activationEvent: nextActivation,
+          sessionEvent: nextSession,
         }),
       });
       if (!response.ok) throw new Error("posthog_events_save_failed");
-      await onSaved();
+      const body = (await response.json()) as {
+        data?: { mapping?: PostHogMapping };
+      };
+      await onConfirmed(
+        body.data?.mapping ?? {
+          mode: "manual",
+          status: "confirmed",
+          confidence: 0,
+          milestoneEvents: [],
+          detectedEventCount: payload?.mapping?.detectedEventCount ?? 0,
+        },
+      );
     } catch {
-      setState("error");
+      setState("ready");
       setMessage(
         "Those events could not be saved. Refresh the list and choose events seen in the last 30 days.",
       );
     }
   };
 
+  if (state === "loading") {
+    return (
+      <div className="posthog-event-state" role="status">
+        <LoaderCircle className="spin" size={18} />
+        <span>Reading this PostHog project…</span>
+      </div>
+    );
+  }
+
+  if (state === "error" || !payload) {
+    return (
+      <div className="existing-posthog-setup">
+        <div className="posthog-event-state is-error" role="alert">
+          <CircleAlert size={18} />
+          <span>{message || "PostHog events could not be read."}</span>
+        </div>
+        <div className="posthog-mapping-actions">
+          <button className="secondary-action" type="button" onClick={refresh}>
+            <RefreshCw size={15} /> Refresh events
+          </button>
+          <button
+            className="source-advanced-toggle"
+            type="button"
+            onClick={onChangeAuthorization}
+          >
+            Choose another project <ChevronDown size={16} />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const mapping = payload.mapping;
+  const events = payload.events ?? [];
+  const projectLabel = payload.project?.label || payload.project?.id || "";
+  const boundAppName = payload.boundApp?.name || fallbackAppName || "this product";
+  const busy = state === "saving";
+  const noEvents = events.length === 0 || mapping?.status === "insufficient_events";
+
+  if (noEvents) {
+    return (
+      <div className="existing-posthog-setup">
+        <div className="posthog-no-events" role="status">
+          <strong>No events in {projectLabel} during the last 30 days</strong>
+          <p>
+            Access is verified: AppClimb can read <strong>{projectLabel}</strong>{" "}
+            and it is bound to <strong>{boundAppName}</strong>. This project has
+            simply not received a product event yet, so there is nothing to map.
+            The connection is kept, not failed, and no metric is treated as zero.
+          </p>
+          <a
+            className="secondary-action"
+            href={`https://posthog.com/docs/getting-started/send-events`}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ justifyContent: "center" }}
+          >
+            Send or open one real product event <ExternalLink size={14} />
+          </a>
+        </div>
+        <div className="posthog-mapping-actions">
+          <button
+            className="secondary-action"
+            type="button"
+            onClick={refresh}
+            disabled={busy}
+          >
+            <RefreshCw size={15} /> Refresh events
+          </button>
+          <button
+            className="source-advanced-toggle"
+            type="button"
+            onClick={onChangeAuthorization}
+          >
+            Choose another project <ChevronDown size={16} />
+          </button>
+        </div>
+        {message && (
+          <p className="connection-message" role="status">
+            {message}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  // Events exist but the backend sent no mapping record: the auto-map has been
+  // proposed and never confirmed. Represent that literally — unconfirmed, with
+  // no confidence claimed — rather than inventing a settled mapping.
+  const resolvedMapping: PostHogMapping = mapping ?? {
+    mode: "automatic",
+    status: "automatic_unconfirmed",
+    confidence: 0,
+    sessionEvent: payload.sessionEvent,
+    activationEvent: payload.activationEvent,
+    milestoneEvents: [],
+    detectedEventCount: events.length,
+  };
+
+  const sessionOption = events.find(
+    (event) => event.name === resolvedMapping.sessionEvent,
+  );
+  const activationOption = events.find(
+    (event) => event.name === resolvedMapping.activationEvent,
+  );
+  const confirmed = resolvedMapping.status === "confirmed";
+  const level = confidenceLevel(resolvedMapping.confidence);
+
   return (
     <div className="existing-posthog-setup">
-      <div className="posthog-event-picker-intro">
+      <div className="posthog-auto-map-note">
         <Waypoints size={18} />
         <div>
-          <strong>Map your real PostHog events</strong>
+          <strong>
+            {confirmed
+              ? `Mapping confirmed for ${projectLabel}`
+              : `Review the automatic map for ${projectLabel}`}
+          </strong>
           <span>
-            Access is already saved. Changing these events does not require
-            authorization again.
+            {resolvedMapping.detectedEventCount} events discovered in the last{" "}
+            {payload.windowDays} days. Bound to {boundAppName}.{" "}
+            {confirmed
+              ? resolvedMapping.mode === "manual"
+                ? "You chose these events."
+                : "You confirmed AppClimb's suggestion."
+              : "Nothing is trusted for a diagnosis until you confirm it."}
           </span>
         </div>
       </div>
-      {state === "loading" ? (
-        <div className="posthog-event-state" role="status">
-          <LoaderCircle className="spin" size={18} />
-          <span>Reading the last 30 days of event names…</span>
-        </div>
-      ) : state === "error" ? (
-        <div className="posthog-event-state is-error" role="alert">
-          <CircleAlert size={18} />
-          <span>{message}</span>
-        </div>
-      ) : events.length === 0 ? (
-        <div className="posthog-event-state" role="status">
-          <Clock3 size={18} />
+
+      <p style={{ margin: "0 0 0.75rem" }}>
+        <span className="posthog-confidence" data-level={level}>
+          <Gauge size={13} /> {confidenceCopy(resolvedMapping)}
+        </span>
+      </p>
+
+      {resolvedMapping.status === "invalid" && (
+        <div className="source-attention-note" role="alert">
+          <strong>A mapped event is missing from this project</strong>
           <span>
-            No events were seen in this project during the last 30 days. Send a
-            test event, then refresh this list.
+            One of the chosen events no longer appears in the last{" "}
+            {payload.windowDays} days. Replace it below; AppClimb will not
+            report the missing event as zero.
           </span>
         </div>
-      ) : (
-        <form className="connection-form posthog-event-picker" action={saveEvents}>
+      )}
+
+      {editing ? (
+        <form
+          className="connection-form posthog-event-picker"
+          action={(formData: FormData) =>
+            saveMapping(
+              String(formData.get("activationEvent") ?? "").trim(),
+              String(formData.get("sessionEvent") ?? "").trim(),
+            )
+          }
+        >
           <EventSelect
             name="activationEvent"
             label="First value event"
-            help="Choose the first event that proves a new user reached value."
+            help="The first event that proves a new user reached value."
             value={activationEvent}
             events={events}
-            disabled={state === "saving"}
+            disabled={busy}
             onChange={setActivationEvent}
           />
           <EventSelect
             name="sessionEvent"
             label="Active use event"
-            help="Choose a recurring event that represents real product use."
+            help="A recurring event that represents real product use."
             value={sessionEvent}
             events={events}
-            disabled={state === "saving"}
+            disabled={busy}
             onChange={setSessionEvent}
           />
           <button
             className="primary-action"
             type="submit"
             disabled={
-              state === "saving" || !activationEvent || !sessionEvent
+              busy ||
+              !activationEvent ||
+              !sessionEvent ||
+              activationEvent === sessionEvent
             }
           >
-            {state === "saving" ? (
+            {busy ? (
               <LoaderCircle className="spin" size={17} />
             ) : (
               <CheckCircle2 size={17} />
             )}
-            Save events and import
+            Save mapping and re-import
           </button>
         </form>
+      ) : (
+        <>
+          <div className="posthog-result-summary">
+            <MappedRole
+              role="Active use event"
+              event={resolvedMapping.sessionEvent}
+              option={sessionOption}
+            />
+            <MappedRole
+              role="First value event"
+              event={resolvedMapping.activationEvent}
+              option={activationOption}
+            />
+          </div>
+
+          <MilestoneReach
+            milestones={resolvedMapping.milestoneEvents}
+            events={events}
+          />
+
+          <ul className="posthog-outcome-list">
+            <li>
+              <Check size={14} />
+              <span>
+                <strong>Activation baseline</strong> — distinct new users who
+                reach first value within {payload.activationWindowDays} days,
+                over the distinct new-user cohort.
+              </span>
+            </li>
+            <li>
+              <Check size={14} />
+              <span>
+                <strong>Active user trend</strong> — daily unique users of the
+                active-use event, kept separate from the activation rate.
+              </span>
+            </li>
+            <li>
+              <Check size={14} />
+              <span>
+                <strong>Milestone reach</strong> — unique reach per milestone,
+                explicitly not an ordered funnel.
+              </span>
+            </li>
+          </ul>
+
+          <button
+            className="primary-action"
+            type="button"
+            disabled={busy || !resolvedMapping.sessionEvent || !resolvedMapping.activationEvent}
+            onClick={() =>
+              void saveMapping(
+                resolvedMapping.activationEvent ?? "",
+                resolvedMapping.sessionEvent ?? "",
+              )
+            }
+          >
+            {busy ? (
+              <LoaderCircle className="spin" size={17} />
+            ) : (
+              <ShieldCheck size={17} />
+            )}
+            {confirmed
+              ? "Re-confirm mapping and re-import"
+              : "Confirm mapping and build activation baseline"}
+          </button>
+        </>
       )}
-      <div className="posthog-event-secondary-actions">
+
+      <div className="posthog-mapping-actions">
         <button
           className="secondary-action"
           type="button"
-          onClick={() => {
-            setState("loading");
-            setMessage("");
-            setReloadKey((value) => value + 1);
-          }}
-          disabled={state === "loading" || state === "saving"}
+          onClick={() => setEditing((value) => !value)}
+          disabled={busy}
+        >
+          <SlidersHorizontal size={15} />
+          {editing ? "Back to mapping summary" : "Replace an event"}
+        </button>
+        <button
+          className="secondary-action"
+          type="button"
+          onClick={refresh}
+          disabled={busy}
         >
           <RefreshCw size={15} /> Refresh events
         </button>
@@ -1449,64 +2185,88 @@ function ExistingPostHogEventSetup({
           type="button"
           onClick={onChangeAuthorization}
         >
-          Change project or authorization <ChevronDown size={16} />
+          Choose another project <ChevronDown size={16} />
         </button>
       </div>
+
+      {message && (
+        <p className="connection-message error" role="alert">
+          {message}
+        </p>
+      )}
+      {source.lastErrorCode === "no_data_in_window" && !message && (
+        <p className="connection-message" role="status">
+          The last import returned no rows for the mapped events. That is an
+          empty window, not zero activation.
+        </p>
+      )}
     </div>
   );
 }
 
-function AutomaticPostHogSetup({
-  source,
-  onReviewMapping,
-  onChangeAuthorization,
+/**
+ * Apple app ID reuse (Task P0.16).
+ *
+ * When the iOS product was added from the App Store the numeric ID is already
+ * known, so the field is locked to it and the connection binds to that product.
+ * Overriding is possible but never silent: a different value is called out as a
+ * mismatch before it is saved.
+ */
+function AppleAppIdField({
+  appleAppId,
+  appName,
 }: {
-  source: SourceConnection;
-  onReviewMapping: () => void;
-  onChangeAuthorization: () => void;
+  appleAppId: string;
+  appName?: string;
 }) {
-  const hasMetrics = (source.metricCount ?? 0) > 0;
-  const isPreparing =
-    source.syncStatus === "queued" ||
-    source.syncStatus === "running" ||
-    source.syncStatus === "retrying";
+  const [unlocked, setUnlocked] = useState(false);
+  const [value, setValue] = useState(appleAppId);
+  const mismatch = unlocked && value.trim() !== appleAppId;
+
+  if (!unlocked) {
+    return (
+      <div className="source-locked-field">
+        <small>Apple app ID · taken from your added product</small>
+        <strong>
+          {appleAppId}
+          {appName ? ` · ${appName}` : ""}
+        </strong>
+        <input type="hidden" name="appId" value={appleAppId} />
+        <button type="button" onClick={() => setUnlocked(true)}>
+          Use a different Apple app ID
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="existing-posthog-setup posthog-automatic-setup">
-      <div className="posthog-auto-map-note">
-        <Waypoints size={18} />
-        <div>
-          <strong>Product Pulse is mapped automatically</strong>
-          <span>
-            {hasMetrics
-              ? `${source.metricCount} daily metric points are live. AppClimb refreshes them with one bounded aggregate query.`
-              : isPreparing
-                ? "The first bounded import is running. You can close this window; Pulse will fill in automatically."
-                : "The connection is ready. If this project has no recent events yet, Pulse will begin after the first event arrives."}
-          </span>
-        </div>
-      </div>
-      <div className="posthog-automatic-actions">
-        <button
-          className="secondary-action"
-          type="button"
-          onClick={onReviewMapping}
-        >
-          <SlidersHorizontal size={15} /> Review mapping
-        </button>
-        <button
-          className="source-advanced-toggle"
-          type="button"
-          onClick={onChangeAuthorization}
-        >
-          Change project or authorization <ChevronDown size={16} />
-        </button>
-      </div>
+    <div className="source-locked-field">
+      <small>Apple app ID</small>
+      <input
+        name="appId"
+        type="text"
+        value={value}
+        required
+        spellCheck={false}
+        onChange={(event) => setValue(event.target.value)}
+      />
+      {mismatch && (
+        <span role="alert" style={{ color: "var(--coral-800)" }}>
+          This does not match {appleAppId}, the ID of{" "}
+          {appName ?? "the product in this workspace"}. Apple reports imported
+          with a different ID will not line up with that product.
+        </span>
+      )}
+      <button type="button" onClick={() => { setUnlocked(false); setValue(appleAppId); }}>
+        Use {appleAppId} instead
+      </button>
     </div>
   );
 }
 
 function ConnectionSetup({
   source,
+  snapshot,
   oauthState,
   oauthProjects,
   apps = [],
@@ -1516,10 +2276,11 @@ function ConnectionSetup({
   onAdvancedChange,
   onConnect,
   onConnectPostHogOAuth,
-  onPostHogEventsSaved,
+  onPostHogMappingConfirmed,
   onRevoke,
 }: {
   source: SourceConnection & { provider: ConnectableProvider };
+  snapshot?: DashboardSnapshot;
   oauthState: "idle" | "loading" | "ready" | "error";
   oauthProjects: Array<{ id: string; name: string; organizationName: string }>;
   apps?: Array<{ id: string; name: string; storefront: string; iconUrl?: string }>;
@@ -1529,11 +2290,15 @@ function ConnectionSetup({
   onAdvancedChange: (open: boolean) => void;
   onConnect: (formData: FormData) => Promise<void>;
   onConnectPostHogOAuth: (formData: FormData) => Promise<void>;
-  onPostHogEventsSaved: () => Promise<void>;
+  onPostHogMappingConfirmed: (mapping: PostHogMapping) => Promise<void>;
   onRevoke: () => Promise<void>;
 }) {
   const setup = SOURCE_SETUP[source.provider];
   const alreadyConfigured = source.status !== "not-connected";
+  const knownAppleAppId =
+    source.provider === "app-store-connect"
+      ? (snapshot?.app?.appStoreId ?? "")
+      : "";
   return (
     <div className="connection-setup modern-connection-setup">
       <div className="setup-value-map">
@@ -1565,21 +2330,16 @@ function ConnectionSetup({
       ) : source.provider === "posthog" &&
         alreadyConfigured &&
         !advancedOpen ? (
-        <AutomaticPostHogSetup
+        <PostHogMappingPanel
           source={source}
-          onReviewMapping={() => onAdvancedChange(true)}
+          fallbackAppName={snapshot?.app?.name}
+          onConfirmed={onPostHogMappingConfirmed}
           onChangeAuthorization={() => onAdvancedChange(true)}
         />
       ) : (
         <>
           {source.provider === "posthog" && (
             <>
-              {alreadyConfigured && advancedOpen && (
-                <ExistingPostHogEventSetup
-                  onSaved={onPostHogEventsSaved}
-                  onChangeAuthorization={() => onAdvancedChange(false)}
-                />
-              )}
               <a className="oauth-connect-button" href="/api/oauth/posthog/start">
                 <ProviderMark provider="posthog" />
                 <span>
@@ -1594,7 +2354,9 @@ function ConnectionSetup({
                 aria-expanded={advancedOpen}
                 onClick={() => onAdvancedChange(!advancedOpen)}
               >
-                Connect manually with an API key
+                {alreadyConfigured && advancedOpen
+                  ? "Back to mapping review"
+                  : "Connect manually with an API key"}
                 <ChevronDown size={16} />
               </button>
             </>
@@ -1620,8 +2382,21 @@ function ConnectionSetup({
                 ))}
               </ol>
               <form className="connection-form compact-connection-form" action={onConnect}>
+                {knownAppleAppId && (
+                  <AppleAppIdField
+                    appleAppId={knownAppleAppId}
+                    appName={snapshot?.app?.name}
+                  />
+                )}
                 <div className="connection-field-grid">
-                  {connectionFields(source.provider).map((field) => (
+                  {connectionFields(source.provider)
+                    .filter(
+                      (field) =>
+                        // The Apple app ID is already known from the added iOS
+                        // product; asking again invites a silent mismatch.
+                        !(field.name === "appId" && knownAppleAppId),
+                    )
+                    .map((field) => (
                     <label
                       key={field.name}
                       className={field.multiline ? "connection-field-wide" : ""}

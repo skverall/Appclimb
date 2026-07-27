@@ -1,4 +1,9 @@
 import { classifyCrawlerUserAgent } from "../../../src/lib/crawler-classifier";
+import {
+  TRACKING_INSTALL_VERSION,
+  WEB_INSTALL_STEPS,
+  type WebInstallStep,
+} from "../../../src/components/web-tracking/web-install-state";
 import { audit } from "./db";
 import {
   issueTrackingToken,
@@ -7,6 +12,17 @@ import {
 } from "./crypto";
 import { requireSecret } from "./runtime";
 import type { AuthContext } from "./types";
+
+/**
+ * Verification metadata is refreshed at most once per property per minute.
+ * The first accepted event always writes (last_event_at is NULL), so
+ * `Tracking installed` is never delayed; steady-state traffic then costs one
+ * primary-key UPDATE per minute instead of one per page view.
+ */
+const VERIFICATION_REFRESH_MS = 60 * 1000;
+
+/** Baseline window used for the wizard's collection progress. */
+const BASELINE_WINDOW_DAYS = 7;
 
 const campaignMedium =
   /^(cpc|ppc|paid|paid_social|display|affiliate|email|newsletter|sms)$/iu;
@@ -490,6 +506,7 @@ export async function recordWebEvent(
         new Date().toISOString(),
       )
       .run();
+    await markPropertyVerified(env.DB, property.id, hostname);
     return "accepted";
   } catch (error) {
     if (error instanceof Error && error.message.includes("UNIQUE constraint")) {
@@ -497,6 +514,50 @@ export async function recordWebEvent(
     }
     throw error;
   }
+}
+
+/**
+ * Task P0.26 — persist verification metadata from the accepted-event path.
+ *
+ * Only real browser events reach this function: a saved domain and a
+ * server-side crawler hit never mark a property as installed. The statement is
+ * a single primary-key UPDATE, so there is no full-table scan, and the
+ * throttle predicate keeps steady-state traffic from rewriting the row on
+ * every page view.
+ */
+export async function markPropertyVerified(
+  db: D1Database,
+  propertyId: string,
+  hostname: string,
+  now: Date = new Date(),
+): Promise<void> {
+  const nowIso = now.toISOString();
+  const throttleBefore = new Date(
+    now.getTime() - VERIFICATION_REFRESH_MS,
+  ).toISOString();
+  await db
+    .prepare(
+      `UPDATE web_properties
+       SET first_event_at = COALESCE(first_event_at, ?),
+           verified_at = COALESCE(verified_at, ?),
+           verified_hostname = COALESCE(verified_hostname, ?),
+           installation_version = ?,
+           last_event_at = ?,
+           updated_at = ?
+       WHERE id = ?
+         AND (last_event_at IS NULL OR last_event_at < ?)`,
+    )
+    .bind(
+      nowIso,
+      nowIso,
+      hostname,
+      TRACKING_INSTALL_VERSION,
+      nowIso,
+      nowIso,
+      propertyId,
+      throttleBefore,
+    )
+    .run();
 }
 
 export async function recordCrawlerEvent(
@@ -942,6 +1003,260 @@ export async function webAnalyticsSnapshot(
         : "User-agent detected",
     },
   };
+}
+
+interface InstallPropertyRow extends PropertyRow {
+  first_event_at: string | null;
+  last_event_at: string | null;
+  verified_at: string | null;
+  verified_hostname: string | null;
+  installation_version: number | null;
+  primary_conversion_goal: string | null;
+  setup_step: string | null;
+  setup_completed_at: string | null;
+}
+
+const INSTALL_COLUMNS =
+  "id,name,domain,token_version,retention_days,created_at," +
+  "first_event_at,last_event_at,verified_at,verified_hostname," +
+  "installation_version,primary_conversion_goal,setup_step,setup_completed_at";
+
+function isInstallStep(value: string): value is WebInstallStep {
+  return (WEB_INSTALL_STEPS as readonly string[]).includes(value);
+}
+
+async function resolveInstallProperty(
+  db: D1Database,
+  workspaceId: string,
+  appId = "",
+): Promise<InstallPropertyRow | null> {
+  if (appId) {
+    const byApp = await db
+      .prepare(
+        `SELECT ${INSTALL_COLUMNS} FROM web_properties
+         WHERE workspace_id = ? AND app_id = ?
+         ORDER BY created_at LIMIT 1`,
+      )
+      .bind(workspaceId, appId)
+      .first<InstallPropertyRow>();
+    if (byApp) return byApp;
+
+    const webApp = await db
+      .prepare(
+        `SELECT bundle_id FROM apps
+         WHERE workspace_id = ? AND id = ? AND platform = 'Web'
+         LIMIT 1`,
+      )
+      .bind(workspaceId, appId)
+      .first<{ bundle_id: string | null }>();
+    if (webApp?.bundle_id) {
+      const byDomain = await db
+        .prepare(
+          `SELECT ${INSTALL_COLUMNS} FROM web_properties
+           WHERE workspace_id = ? AND domain = ? COLLATE NOCASE
+           LIMIT 1`,
+        )
+        .bind(workspaceId, webApp.bundle_id)
+        .first<InstallPropertyRow>();
+      if (byDomain) return byDomain;
+    }
+  }
+  return db
+    .prepare(
+      `SELECT ${INSTALL_COLUMNS} FROM web_properties
+       WHERE workspace_id = ?
+       ORDER BY created_at LIMIT 1`,
+    )
+    .bind(workspaceId)
+    .first<InstallPropertyRow>();
+}
+
+/**
+ * Server-derived website setup state (Tasks P0.24 and P0.27).
+ *
+ * Returns only observed facts. A missing sample stays `null` so the client can
+ * distinguish "not measured" from zero, and no field here claims a connection
+ * that the collector has not seen.
+ */
+export async function webInstallSnapshot(
+  env: Cloudflare.Env,
+  workspaceId: string,
+  appId = "",
+): Promise<Record<string, unknown>> {
+  const property = await resolveInstallProperty(env.DB, workspaceId, appId);
+  if (!property) {
+    return {
+      property: null,
+      install: { propertyId: null, reachedStep: "domain" },
+      firstEvent: null,
+    };
+  }
+
+  const verified = Boolean(property.first_event_at);
+  const firstEventRow = verified
+    ? await env.DB.prepare(
+        `SELECT occurred_at,created_at,hostname,path,kind
+         FROM web_events
+         WHERE property_id = ?
+         ORDER BY occurred_at
+         LIMIT 1`,
+      )
+        .bind(property.id)
+        .first<{
+          occurred_at: string;
+          created_at: string;
+          hostname: string;
+          path: string;
+          kind: string;
+        }>()
+    : null;
+
+  const from = new Date(
+    Date.now() - BASELINE_WINDOW_DAYS * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  const baseline = verified
+    ? await env.DB.prepare(
+        `SELECT COUNT(DISTINCT session_id) AS sessions,
+                COUNT(DISTINCT substr(occurred_at,1,10)) AS days
+         FROM web_events
+         WHERE property_id = ? AND occurred_at >= ?`,
+      )
+        .bind(property.id, from)
+        .first<{ sessions: number; days: number }>()
+    : null;
+
+  const trackingToken = await issueTrackingToken(
+    requireSecret(env, "JWT_SECRET"),
+    { w: workspaceId, p: property.id, v: property.token_version },
+  );
+
+  return {
+    property: {
+      id: property.id,
+      name: property.name,
+      domain: property.domain,
+      trackingToken,
+      tokenVersion: property.token_version,
+      createdAt: property.created_at,
+    },
+    install: {
+      propertyId: property.id,
+      domain: property.domain,
+      firstEventAt: property.first_event_at,
+      lastEventAt: property.last_event_at,
+      verifiedAt: property.verified_at,
+      verifiedHostname: property.verified_hostname,
+      installationVersion: property.installation_version,
+      primaryConversionGoal: property.primary_conversion_goal,
+      baselineSessions: baseline ? Number(baseline.sessions) : null,
+      baselineDays: baseline ? Number(baseline.days) : null,
+      reachedStep:
+        property.setup_step && isInstallStep(property.setup_step)
+          ? property.setup_step
+          : verified
+            ? "verify"
+            : "install",
+    },
+    firstEvent: firstEventRow
+      ? {
+          acceptedAt: firstEventRow.created_at || firstEventRow.occurred_at,
+          hostname: firstEventRow.hostname,
+          path: firstEventRow.path,
+          kind: firstEventRow.kind,
+          source: "browser",
+          collectorStatus: "accepted",
+        }
+      : null,
+  };
+}
+
+/** Persists the furthest wizard step so a reload resumes in the right place. */
+export async function saveInstallStep(
+  env: Cloudflare.Env,
+  auth: AuthContext,
+  stepValue: unknown,
+  appId = "",
+): Promise<{ reachedStep: WebInstallStep }> {
+  const step = safeText(stepValue, 24);
+  if (!isInstallStep(step)) {
+    throw new Error("invalid_install_step");
+  }
+  const property = await resolveInstallProperty(
+    env.DB,
+    auth.workspaceId,
+    appId,
+  );
+  if (!property) {
+    throw new Error("web_property_missing");
+  }
+  const current =
+    property.setup_step && isInstallStep(property.setup_step)
+      ? WEB_INSTALL_STEPS.indexOf(property.setup_step)
+      : -1;
+  const next = WEB_INSTALL_STEPS.indexOf(step);
+  // Only ever move forward: a user revisiting step 2 must not lose step 5.
+  const resolved = next > current ? step : (property.setup_step as WebInstallStep);
+  const completedAt =
+    resolved === "baseline" && property.first_event_at
+      ? new Date().toISOString()
+      : null;
+  await env.DB.prepare(
+    `UPDATE web_properties
+     SET setup_step = ?,
+         setup_completed_at = COALESCE(setup_completed_at, ?),
+         updated_at = ?
+     WHERE id = ? AND workspace_id = ?`,
+  )
+    .bind(
+      resolved,
+      completedAt,
+      new Date().toISOString(),
+      property.id,
+      auth.workspaceId,
+    )
+    .run();
+  return { reachedStep: resolved };
+}
+
+/** Step 5 — the goal that unblocks conversion diagnosis. */
+export async function saveConversionGoal(
+  env: Cloudflare.Env,
+  auth: AuthContext,
+  goalValue: unknown,
+  appId = "",
+): Promise<{ primaryConversionGoal: string }> {
+  const goal = safeText(goalValue, 120)
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/gu, "_")
+    .replace(/^_+|_+$/gu, "");
+  if (!goal) {
+    throw new Error("invalid_conversion_goal");
+  }
+  const property = await resolveInstallProperty(
+    env.DB,
+    auth.workspaceId,
+    appId,
+  );
+  if (!property) {
+    throw new Error("web_property_missing");
+  }
+  await env.DB.prepare(
+    `UPDATE web_properties
+     SET primary_conversion_goal = ?, updated_at = ?
+     WHERE id = ? AND workspace_id = ?`,
+  )
+    .bind(goal, new Date().toISOString(), property.id, auth.workspaceId)
+    .run();
+  await audit(
+    env.DB,
+    auth.workspaceId,
+    auth.userId,
+    "web_property.conversion_goal_set",
+    "web_property",
+    property.id,
+    { goal },
+  );
+  return { primaryConversionGoal: goal };
 }
 
 export async function deleteExpiredAnalytics(env: Cloudflare.Env): Promise<number> {

@@ -1,5 +1,12 @@
-import type { StageDefinition } from "./types";
+import type { Platform, StageDefinition } from "./types";
 
+/**
+ * iOS subscription funnel.
+ *
+ * `relationship` records how honest each denominator is. Only
+ * `same_source_funnel` and `cohort` ratios may ever confirm a constraint;
+ * `aggregate_directional` mixes two providers' aggregates and is display-only.
+ */
 export const STAGE_DEFINITIONS: StageDefinition[] = [
   {
     id: "discover",
@@ -85,3 +92,44 @@ export const STAGE_DEFINITIONS: StageDefinition[] = [
     },
   },
 ];
+
+/**
+ * Web SaaS funnel, derived from AppClimb's own first-party collector.
+ *
+ * Every stage comes from one source, so each ratio is a genuine same-source
+ * funnel rather than a cross-provider aggregate.
+ */
+export const WEB_STAGE_DEFINITIONS: StageDefinition[] = [
+  {
+    id: "web_visit",
+    label: "Visits",
+    metricKey: "web_visitors",
+    source: "appclimb-web",
+  },
+  {
+    id: "web_engaged",
+    label: "Engaged",
+    metricKey: "web_engaged_visitors",
+    source: "appclimb-web",
+    validDenominator: {
+      metricKey: "web_visitors",
+      source: "appclimb-web",
+      relationship: "same_source_funnel",
+    },
+  },
+  {
+    id: "web_conversion",
+    label: "Conversions",
+    metricKey: "web_converted_visitors",
+    source: "appclimb-web",
+    validDenominator: {
+      metricKey: "web_engaged_visitors",
+      source: "appclimb-web",
+      relationship: "same_source_funnel",
+    },
+  },
+];
+
+export function stageDefinitionsFor(platform: Platform): StageDefinition[] {
+  return platform === "Web" ? WEB_STAGE_DEFINITIONS : STAGE_DEFINITIONS;
+}

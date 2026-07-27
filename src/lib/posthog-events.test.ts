@@ -27,11 +27,15 @@ describe("autoMapPostHogEvents", () => {
   });
 
   it("returns a truthful empty map before the first event exists", () => {
+    // An empty project yields no mapping and, importantly, zero confidence —
+    // an unconfirmed auto-map must never present itself as a settled one.
     expect(autoMapPostHogEvents([])).toEqual({
       sessionEvent: "",
       activationEvent: "",
       eventFlow: [],
+      milestoneEvents: [],
       detectedEventCount: 0,
+      confidence: 0,
     });
   });
 
