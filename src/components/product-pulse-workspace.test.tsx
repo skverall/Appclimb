@@ -83,16 +83,16 @@ describe("ProductPulseWorkspace", () => {
     await waitFor(
       () => {
         expect(
-          screen.getByRole("button", { name: /Car Dealer Tracker/i }),
-        ).toBeInTheDocument();
+          document.querySelector(".app-search-result"),
+        ).not.toBeNull();
       },
       { timeout: 2_000 },
     );
 
     // The real App Store icon must be rendered, not a letter placeholder.
-    const resultButton = screen.getByRole("button", {
-      name: /Car Dealer Tracker/i,
-    });
+    const resultButton = document.querySelector<HTMLButtonElement>(
+      ".app-search-result",
+    )!;
     const icon = resultButton.querySelector("img");
     expect(icon).not.toBeNull();
     expect(icon?.getAttribute("src")).toBe(

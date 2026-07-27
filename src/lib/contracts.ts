@@ -175,6 +175,7 @@ export interface DashboardSnapshot {
     platform: "iOS";
     appStoreId?: string;
     storefront: string;
+    iconUrl?: string;
     period: string;
   };
   confidence: {

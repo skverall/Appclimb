@@ -19,6 +19,7 @@ interface AppRow {
   bundle_id: string | null;
   apple_app_id: string | null;
   default_storefront: string;
+  icon_url?: string | null;
   created_at: string;
 }
 
@@ -93,7 +94,7 @@ export async function listWorkspaceApps(
 ) {
   const rows = await db
     .prepare(
-      `SELECT id,name,platform,bundle_id,apple_app_id,default_storefront,created_at
+      `SELECT id,name,platform,bundle_id,apple_app_id,default_storefront,icon_url,created_at
        FROM apps WHERE workspace_id=? ORDER BY created_at,id`,
     )
     .bind(workspaceId)
@@ -105,6 +106,7 @@ export async function listWorkspaceApps(
     bundleId: row.bundle_id ?? "",
     appStoreId: row.apple_app_id ?? "",
     storefront: row.default_storefront,
+    iconUrl: row.icon_url ?? "",
     configured: Boolean(row.apple_app_id),
   }));
 }
@@ -151,7 +153,7 @@ export async function addAppStoreApp(
   if (canReplacePlaceholder) {
     await env.DB.prepare(
       `UPDATE apps SET name=?,bundle_id=?,apple_app_id=?,
-       default_storefront=?,updated_at=?
+       default_storefront=?,icon_url=?,updated_at=?
        WHERE id=? AND workspace_id=?`,
     )
       .bind(
@@ -159,6 +161,7 @@ export async function addAppStoreApp(
         metadata.bundleId || null,
         metadata.appStoreId,
         storefront,
+        metadata.iconUrl || null,
         now,
         id,
         auth.workspaceId,
@@ -168,8 +171,8 @@ export async function addAppStoreApp(
     await env.DB.prepare(
       `INSERT INTO apps(
         id,workspace_id,name,platform,bundle_id,apple_app_id,
-        default_storefront,shared_app_user_id_confirmed,created_at,updated_at
-      ) VALUES(?,?,?,'iOS',?,?,?,0,?,?)`,
+        default_storefront,icon_url,shared_app_user_id_confirmed,created_at,updated_at
+      ) VALUES(?,?,?,'iOS',?,?,?,?,0,?,?)`,
     )
       .bind(
         id,
@@ -178,11 +181,13 @@ export async function addAppStoreApp(
         metadata.bundleId || null,
         metadata.appStoreId,
         storefront,
+        metadata.iconUrl || null,
         now,
         now,
       )
       .run();
   }
+
   await audit(
     env.DB,
     auth.workspaceId,
@@ -443,4 +448,45 @@ export async function updateWorkspaceApp(
     { name: trimmedName, storefront: validStorefront },
   );
   return { id: app.id, name: trimmedName, storefront: validStorefront };
+}
+
+export async function deleteWorkspaceApp(
+  env: Cloudflare.Env,
+  auth: AuthContext,
+  appId: string,
+) {
+  const app = await env.DB.prepare(
+    "SELECT id, name FROM apps WHERE id = ? AND workspace_id = ?",
+  )
+    .bind(appId, auth.workspaceId)
+    .first<{ id: string; name: string }>();
+  if (!app) {
+    throw new ProviderError("app_not_found", 404);
+  }
+
+  const countRow = await env.DB.prepare(
+    "SELECT COUNT(*) AS total FROM apps WHERE workspace_id = ?",
+  )
+    .bind(auth.workspaceId)
+    .first<{ total: number }>();
+
+  if ((countRow?.total ?? 0) <= 1) {
+    throw new ProviderError("cannot_delete_only_app", 400);
+  }
+
+  await env.DB.prepare("DELETE FROM apps WHERE id = ? AND workspace_id = ?")
+    .bind(appId, auth.workspaceId)
+    .run();
+
+  await audit(
+    env.DB,
+    auth.workspaceId,
+    auth.userId,
+    "app.deleted",
+    "app",
+    appId,
+    { name: app.name },
+  );
+
+  return { id: appId, deleted: true };
 }

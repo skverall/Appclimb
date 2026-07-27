@@ -435,8 +435,13 @@ export function AppClimbShell({
             onClick={() => setAppModalOpen(true)}
             aria-label={`Manage ${displayedAppName}`}
           >
-            <div className="app-avatar" aria-hidden="true">
-              <span>{appInitials}</span>
+            <div className="app-avatar" aria-hidden="true" style={{ overflow: "hidden", display: "grid", placeItems: "center" }}>
+              {initialSnapshot.app.iconUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={initialSnapshot.app.iconUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <span>{appInitials}</span>
+              )}
             </div>
             <div>
               <strong>{displayedAppName}</strong>

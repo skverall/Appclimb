@@ -14,6 +14,7 @@ import { autoMapPostHogEvents } from "@/lib/posthog-events";
 
 const inputSchema = z.object({
   projectId: z.string().trim().min(1).max(120),
+  appId: z.string().trim().min(1).max(120).optional(),
 });
 
 export async function POST(request: Request) {
@@ -54,6 +55,7 @@ export async function POST(request: Request) {
         oauthClientId: POSTHOG_CLIENT_ID,
         authMethod: "oauth",
         projectId: parsed.data.projectId,
+        targetAppId: parsed.data.appId || undefined,
         host: pending.host,
         activationEvent: autoMap.activationEvent,
         sessionEvent: autoMap.sessionEvent,

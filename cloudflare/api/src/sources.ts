@@ -206,11 +206,26 @@ export async function connectSource(
     credentials,
     requireSecret(env, "ENVELOPE_MASTER_KEY"),
   );
-  const app = await env.DB.prepare(
-    "SELECT id FROM apps WHERE workspace_id = ? ORDER BY created_at LIMIT 1",
-  )
-    .bind(auth.workspaceId)
-    .first<{ id: string }>();
+  const targetAppId =
+    typeof credentials.targetAppId === "string"
+      ? credentials.targetAppId.trim()
+      : typeof credentials.appId === "string" && provider === "posthog"
+        ? credentials.appId.trim()
+        : "";
+  let app = targetAppId
+    ? await env.DB.prepare(
+        "SELECT id FROM apps WHERE id = ? AND workspace_id = ?",
+      )
+        .bind(targetAppId, auth.workspaceId)
+        .first<{ id: string }>()
+    : null;
+  if (!app) {
+    app = await env.DB.prepare(
+      "SELECT id FROM apps WHERE workspace_id = ? ORDER BY created_at LIMIT 1",
+    )
+      .bind(auth.workspaceId)
+      .first<{ id: string }>();
+  }
   if (!app) {
     throw new Error("app_not_found");
   }

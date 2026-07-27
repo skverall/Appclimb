@@ -7,6 +7,7 @@ import {
   BadgeCheck,
   BarChart3,
   CalendarClock,
+  Check,
   ChevronDown,
   CircleAlert,
   ExternalLink,
@@ -16,6 +17,7 @@ import {
   Search,
   Sparkles,
   Store,
+  Trash2,
   Waypoints,
 } from "lucide-react";
 import type { CSSProperties } from "react";
@@ -38,6 +40,7 @@ interface WorkspaceApp {
   bundleId: string;
   appStoreId: string;
   storefront: string;
+  iconUrl?: string;
   configured: boolean;
 }
 
@@ -560,8 +563,11 @@ export function AppSelector({
 }) {
   const [apps, setApps] = useState<WorkspaceApp[]>([]);
   const [addOpen, setAddOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [deletingApp, setDeletingApp] = useState<WorkspaceApp | null>(null);
+  const [deletingState, setDeletingState] = useState<"idle" | "loading" | "error">("idle");
 
-  useEffect(() => {
+  const loadApps = useCallback(() => {
     if (snapshot.mode === "demo") return;
     fetch("/api/apps", { cache: "no-store" })
       .then(async (response) => {
@@ -572,6 +578,10 @@ export function AppSelector({
       .catch(() => setApps([]));
   }, [snapshot.mode]);
 
+  useEffect(() => {
+    loadApps();
+  }, [loadApps]);
+
   const selectApp = (appId: string) => {
     const url = new URL(window.location.href);
     url.searchParams.set("app", appId);
@@ -579,36 +589,165 @@ export function AppSelector({
     window.location.assign(url);
   };
 
+  const deleteApp = async (appId: string) => {
+    setDeletingState("loading");
+    try {
+      const response = await fetch(`/api/apps/${encodeURIComponent(appId)}`, {
+        method: "DELETE",
+      });
+      if (!response.ok) throw new Error("delete_failed");
+      setDeletingApp(null);
+      setDeletingState("idle");
+      // If deleted active app, switch to another remaining app
+      const remaining = apps.filter((item) => item.id !== appId);
+      if (snapshot.app.id === appId && remaining.length > 0) {
+        selectApp(remaining[0].id);
+      } else {
+        loadApps();
+      }
+    } catch {
+      setDeletingState("error");
+    }
+  };
+
+  const currentAppIcon = snapshot.app.iconUrl || apps.find((item) => item.id === snapshot.app.id)?.iconUrl;
+
+  const getInitials = (name: string) =>
+    name
+      .split(/\s+/u)
+      .slice(0, 2)
+      .map((word) => word[0])
+      .join("")
+      .toUpperCase();
+
   return (
     <>
-      <div className="pulse-app-selector">
-        <span className="mini-app-icon">
-          {snapshot.app.name
-            .split(/\s+/u)
-            .slice(0, 2)
-            .map((word) => word[0])
-            .join("")
-            .toUpperCase()}
-        </span>
-        <select
-          aria-label="Select app"
-          value={snapshot.app.id}
-          disabled={!apps.length}
-          onChange={(event) => selectApp(event.target.value)}
+      <div className="pulse-app-selector-container" style={{ position: "relative" }}>
+        <button
+          className="pulse-app-selector-trigger"
+          type="button"
+          aria-expanded={menuOpen}
+          onClick={() => setMenuOpen(!menuOpen)}
         >
-          {!apps.length && (
-            <option value={snapshot.app.id}>{snapshot.app.name}</option>
-          )}
-          {apps.map((app) => (
-            <option key={app.id} value={app.id}>
-              {app.name}
-            </option>
-          ))}
-        </select>
-        <span className="platform-badge">iOS</span>
-        <span className="storefront-badge">{snapshot.app.storefront}</span>
-        <ChevronDown size={15} />
+          <span className="mini-app-icon">
+            {currentAppIcon ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={currentAppIcon}
+                alt=""
+                onError={(event) => {
+                  event.currentTarget.style.display = "none";
+                  event.currentTarget.parentElement?.setAttribute(
+                    "data-initials",
+                    getInitials(snapshot.app.name),
+                  );
+                }}
+              />
+            ) : (
+              getInitials(snapshot.app.name)
+            )}
+          </span>
+          <span className="app-name-label">{snapshot.app.name}</span>
+          <span className="platform-badge">iOS</span>
+          <span className="storefront-badge">{snapshot.app.storefront}</span>
+          <ChevronDown
+            size={15}
+            style={{
+              transform: menuOpen ? "rotate(180deg)" : "rotate(0deg)",
+              transition: "transform 0.15s ease",
+            }}
+          />
+        </button>
+
+        {menuOpen && (
+          <>
+            <div
+              className="pulse-app-dropdown-backdrop"
+              style={{ position: "fixed", inset: 0, zIndex: 40 }}
+              onClick={() => setMenuOpen(false)}
+            />
+            <div className="pulse-app-dropdown-menu">
+              <div className="dropdown-header">Workspace Apps</div>
+              <div className="dropdown-app-list">
+                {apps.length === 0 ? (
+                  <div className="dropdown-app-item active">
+                    <span className="mini-app-icon">{getInitials(snapshot.app.name)}</span>
+                    <span className="dropdown-app-title">{snapshot.app.name}</span>
+                    <Check size={16} className="active-check" />
+                  </div>
+                ) : (
+                  apps.map((app) => {
+                    const isActive = app.id === snapshot.app.id;
+                    return (
+                      <div
+                        key={app.id}
+                        className={`dropdown-app-item ${isActive ? "active" : ""}`}
+                        onClick={() => {
+                          setMenuOpen(false);
+                          if (!isActive) selectApp(app.id);
+                        }}
+                      >
+                        <span className="mini-app-icon">
+                          {app.iconUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={app.iconUrl}
+                              alt=""
+                              onError={(event) => {
+                                event.currentTarget.style.display = "none";
+                                event.currentTarget.parentElement?.setAttribute(
+                                  "data-initials",
+                                  getInitials(app.name),
+                                );
+                              }}
+                            />
+                          ) : (
+                            getInitials(app.name)
+                          )}
+                        </span>
+                        <div className="dropdown-app-meta">
+                          <span className="dropdown-app-title">{app.name}</span>
+                          <small className="dropdown-app-sub">
+                            {app.storefront} · {app.configured ? "App Store Connected" : "Custom App"}
+                          </small>
+                        </div>
+                        {isActive && <Check size={16} className="active-check" />}
+                        {apps.length > 1 && (
+                          <button
+                            className="delete-app-icon-btn"
+                            type="button"
+                            title="Delete app"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setMenuOpen(false);
+                              setDeletingApp(app);
+                            }}
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+              {snapshot.mode !== "demo" && (
+                <button
+                  className="dropdown-add-app-btn"
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setAddOpen(true);
+                  }}
+                >
+                  <Plus size={15} /> Add another app
+                </button>
+              )}
+            </div>
+          </>
+        )}
       </div>
+
       {snapshot.mode !== "demo" && (
         <button
           className="add-app-button"
@@ -618,6 +757,54 @@ export function AppSelector({
           <Plus size={16} /> Add app
         </button>
       )}
+
+      {deletingApp && (
+        <ModalDialog
+          labelledBy="delete-app-modal-title"
+          onClose={() => setDeletingApp(null)}
+        >
+          <div className="delete-app-dialog-content">
+            <h3 id="delete-app-modal-title">Delete App</h3>
+            <p>
+              Are you sure you want to delete <strong>{deletingApp.name}</strong>?
+              This will remove the app, its keyword tracking data, and associated source links from this workspace.
+            </p>
+            {deletingState === "error" && (
+              <p className="error-text" style={{ color: "#ef4444", fontSize: "0.875rem" }}>
+                Failed to delete app. Workspaces must have at least one app.
+              </p>
+            )}
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="secondary-action"
+                disabled={deletingState === "loading"}
+                onClick={() => setDeletingApp(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="danger-action"
+                style={{
+                  background: "#dc2626",
+                  color: "#ffffff",
+                  border: "none",
+                  padding: "0.5rem 1rem",
+                  borderRadius: "0.5rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+                disabled={deletingState === "loading"}
+                onClick={() => void deleteApp(deletingApp.id)}
+              >
+                {deletingState === "loading" ? "Deleting..." : "Delete App"}
+              </button>
+            </div>
+          </div>
+        </ModalDialog>
+      )}
+
       {addOpen && (
         <AddAppDialog
           onClose={() => setAddOpen(false)}

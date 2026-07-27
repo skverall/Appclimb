@@ -147,7 +147,7 @@ describe("guided Sources experience", () => {
     expect(
       screen.queryByRole("option", { name: /onboarding_started/i }),
     ).not.toBeInTheDocument();
-    expect(fetch).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledWith("/api/apps", { cache: "no-store" });
   });
 
   it("separates saved access from imported data and names the destination", () => {

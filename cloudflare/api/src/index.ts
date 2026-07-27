@@ -5,6 +5,7 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import {
   addAppStoreApp,
   addKeywordTrack,
+  deleteWorkspaceApp,
   listKeywordTracks,
   listWorkspaceApps,
   recordKeywordObservations,
@@ -817,6 +818,16 @@ app.patch("/v1/apps", requireAuth, async (c) => {
   const name = typeof input.name === "string" ? input.name : "";
   const storefront = typeof input.storefront === "string" ? input.storefront : undefined;
   const data = await updateWorkspaceApp(c.env, auth, name, storefront);
+  return c.json({ data });
+});
+
+app.delete("/v1/apps/:id", requireAuth, async (c) => {
+  const auth = c.get("auth");
+  if (!["owner", "admin"].includes(auth.role)) {
+    return errorResponse(c, "admin_required", 403);
+  }
+  const appId = c.req.param("id");
+  const data = await deleteWorkspaceApp(c.env, auth, appId);
   return c.json({ data });
 });
 

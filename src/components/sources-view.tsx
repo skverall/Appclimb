@@ -254,6 +254,22 @@ export function SourcesView({
   const [oauthState, setOauthState] = useState<
     "idle" | "loading" | "ready" | "error"
   >("idle");
+  const [workspaceApps, setWorkspaceApps] = useState<
+    Array<{ id: string; name: string; storefront: string; iconUrl?: string }>
+  >([]);
+
+  useEffect(() => {
+    if (isDemo || !setupOpen) return;
+    fetch("/api/apps", { cache: "no-store" })
+      .then(async (res) => {
+        if (!res.ok) return;
+        const data = (await res.json()) as {
+          data?: Array<{ id: string; name: string; storefront: string; iconUrl?: string }>;
+        };
+        setWorkspaceApps(data.data ?? []);
+      })
+      .catch(() => setWorkspaceApps([]));
+  }, [isDemo, setupOpen]);
 
   const selected = useMemo(
     () => sources.find((source) => source.provider === selectedProvider),
@@ -456,6 +472,7 @@ export function SourcesView({
 
   const connectPostHogOAuth = async (formData: FormData) => {
     const projectId = String(formData.get("projectId") ?? "").trim();
+    const appId = String(formData.get("appId") ?? "").trim();
     if (!projectId) {
       setConnectionState("error");
       setConnectionMessage("Choose a PostHog project.");
@@ -467,7 +484,7 @@ export function SourcesView({
       const response = await fetch("/api/oauth/posthog/connect", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ projectId }),
+        body: JSON.stringify({ projectId, appId: appId || undefined }),
       });
       if (!response.ok) {
         const payload = (await response.json().catch(() => null)) as
@@ -764,6 +781,8 @@ export function SourcesView({
                 source={selectedConnectable}
                 oauthState={oauthState}
                 oauthProjects={oauthProjects}
+                apps={workspaceApps}
+                currentAppId={snapshot?.app?.id}
                 connectionState={connectionState}
                 advancedOpen={advancedOpen}
                 onAdvancedChange={setAdvancedOpen}
@@ -1103,35 +1122,111 @@ function EventSelect({
 
 function PostHogOAuthProjectForm({
   projects,
+  apps = [],
+  currentAppId = "",
   connectionState,
   onConnect,
 }: {
   projects: Array<{ id: string; name: string; organizationName: string }>;
+  apps?: Array<{ id: string; name: string; storefront: string; iconUrl?: string }>;
+  currentAppId?: string;
   connectionState: "idle" | "saving" | "success" | "error";
   onConnect: (formData: FormData) => Promise<void>;
 }) {
-  const [projectId, setProjectId] = useState("");
+  const [projectId, setProjectId] = useState(projects[0]?.id ?? "");
+  const [selectedAppId, setSelectedAppId] = useState(currentAppId || apps[0]?.id || "");
 
   return (
     <form className="connection-form oauth-project-form" action={onConnect}>
-      <label>
-        Project
-        <select
-          name="projectId"
-          required
-          value={projectId}
-          onChange={(event) => setProjectId(event.target.value)}
-        >
-          <option value="" disabled>
-            Choose a PostHog project
-          </option>
-          {projects.map((project) => (
-            <option key={project.id} value={project.id}>
-              {project.organizationName} · {project.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <input type="hidden" name="projectId" value={projectId} />
+      <input type="hidden" name="appId" value={selectedAppId} />
+
+      {/* Target App Picker */}
+      <div className="custom-picker-section" style={{ marginBottom: "1.25rem" }}>
+        <label className="picker-label" style={{ fontWeight: 600, fontSize: "0.875rem", display: "block", marginBottom: "0.4rem" }}>
+          Target App / Workspace Property
+        </label>
+        {apps.length === 0 ? (
+          <div className="source-attention-note" style={{ marginBottom: 0 }}>
+            <CircleAlert size={16} />
+            <span>PostHog will be connected to your active workspace app.</span>
+          </div>
+        ) : (
+          <div className="custom-app-cards" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "0.5rem" }}>
+            {apps.map((app) => {
+              const isSelected = app.id === selectedAppId;
+              const initials = app.name.split(/\s+/u).slice(0, 2).map((w) => w[0]).join("").toUpperCase();
+              return (
+                <div
+                  key={app.id}
+                  className={`custom-picker-card ${isSelected ? "selected" : ""}`}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.6rem",
+                    padding: "0.6rem 0.75rem",
+                    borderRadius: "8px",
+                    border: isSelected ? "2px solid var(--teal-dark, #0d9488)" : "1px solid var(--line)",
+                    background: isSelected ? "var(--teal-25, rgba(20, 184, 166, 0.06))" : "var(--card)",
+                    cursor: "pointer",
+                    transition: "all 0.15s ease",
+                  }}
+                  onClick={() => setSelectedAppId(app.id)}
+                >
+                  <span className="mini-app-icon" style={{ width: "26px", height: "26px", flexShrink: 0, borderRadius: "5px", overflow: "hidden", display: "grid", placeItems: "center", background: "var(--teal-100)", fontSize: "0.75rem" }}>
+                    {app.iconUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={app.iconUrl} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    ) : (
+                      initials
+                    )}
+                  </span>
+                  <span style={{ fontSize: "0.85rem", fontWeight: 600, flex: 1, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {app.name}
+                  </span>
+                  {isSelected && <Check size={14} style={{ color: "var(--teal-dark, #0d9488)", flexShrink: 0 }} />}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* PostHog Project Picker */}
+      <div className="custom-picker-section" style={{ marginBottom: "1.25rem" }}>
+        <label className="picker-label" style={{ fontWeight: 600, fontSize: "0.875rem", display: "block", marginBottom: "0.4rem" }}>
+          PostHog Project
+        </label>
+        <div className="custom-project-cards" style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+          {projects.map((project) => {
+            const isSelected = project.id === projectId;
+            return (
+              <div
+                key={project.id}
+                className={`custom-picker-card ${isSelected ? "selected" : ""}`}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  padding: "0.65rem 0.85rem",
+                  borderRadius: "8px",
+                  border: isSelected ? "2px solid var(--teal-dark, #0d9488)" : "1px solid var(--line)",
+                  background: isSelected ? "var(--teal-25, rgba(20, 184, 166, 0.06))" : "var(--card)",
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                }}
+                onClick={() => setProjectId(project.id)}
+              >
+                <div>
+                  <strong style={{ display: "block", fontSize: "0.875rem", color: "var(--ink)" }}>{project.name}</strong>
+                  <small style={{ color: "var(--ink-muted)", fontSize: "0.75rem" }}>{project.organizationName}</small>
+                </div>
+                {isSelected && <Check size={16} style={{ color: "var(--teal-dark, #0d9488)", flexShrink: 0 }} />}
+              </div>
+            );
+          })}
+        </div>
+      </div>
 
       <div className="posthog-auto-map-note">
         <Waypoints size={18} />
@@ -1385,6 +1480,8 @@ function ConnectionSetup({
   source,
   oauthState,
   oauthProjects,
+  apps = [],
+  currentAppId = "",
   connectionState,
   advancedOpen,
   onAdvancedChange,
@@ -1396,6 +1493,8 @@ function ConnectionSetup({
   source: SourceConnection & { provider: ConnectableProvider };
   oauthState: "idle" | "loading" | "ready" | "error";
   oauthProjects: Array<{ id: string; name: string; organizationName: string }>;
+  apps?: Array<{ id: string; name: string; storefront: string; iconUrl?: string }>;
+  currentAppId?: string;
   connectionState: "idle" | "saving" | "success" | "error";
   advancedOpen: boolean;
   onAdvancedChange: (open: boolean) => void;
@@ -1429,6 +1528,8 @@ function ConnectionSetup({
       ) : source.provider === "posthog" && oauthState === "ready" ? (
         <PostHogOAuthProjectForm
           projects={oauthProjects}
+          apps={apps}
+          currentAppId={currentAppId}
           connectionState={connectionState}
           onConnect={onConnectPostHogOAuth}
         />
