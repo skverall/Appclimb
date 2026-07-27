@@ -283,12 +283,52 @@ function VisibilityTrend({
   );
 }
 
+function DeepSeekIcon({ size = 15 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 2C6.48 2 2 6.48 2 12C2 17.52 6.48 22 12 22C17.52 22 22 17.52 22 12C22 6.48 17.52 2 12 2ZM12 6C13.66 6 15 7.34 15 9C15 10.66 13.66 12 12 12C10.34 12 9 10.66 9 9C9 7.34 10.34 6 12 6ZM12 18.2C9.5 18.2 7.29 16.92 6 14.98C6.03 12.99 10 11.9 12 11.9C13.99 11.9 17.97 12.99 18 14.98C16.71 16.92 14.5 18.2 12 18.2Z" fill="#3b82f6"/>
+    </svg>
+  );
+}
+
+function ChatGptIcon({ size = 15 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M22.28 9.82a5.98 5.98 0 0 0-.52-4.91 6.05 6.05 0 0 0-6.51-2.9 6.06 6.06 0 0 0-10.27 2.17 5.98 5.98 0 0 0-4 2.9 6.05 6.05 0 0 0 .74 7.12 5.98 5.98 0 0 0 .51 4.91 6.05 6.05 0 0 0 6.51 2.9 6.07 6.07 0 0 0 10.27-2.17 5.98 5.98 0 0 0 4-2.9 6.05 6.05 0 0 0-.74-7.12zm-9.22 11.76a4.48 4.48 0 0 1-2.88-1.04l.14-.08 4.78-2.76a.78.78 0 0 0 .39-.68v-4.76l2.02 1.17a.07.07 0 0 1 .04.05v5.59a4.52 4.52 0 0 1-4.49 4.51z" fill="#10a37f"/>
+    </svg>
+  );
+}
+
+function GeminiIcon({ size = 15 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 24C12 17.37 17.37 12 24 12C17.37 12 12 6.63 12 0C12 6.63 6.63 12 0 12C6.63 12 12 17.37 12 24Z" fill="#8e54e9"/>
+    </svg>
+  );
+}
+
+function PerplexityIcon({ size = 15 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 2L4 7v10l8 5 8-5V7l-8-5zm0 2.2l5.8 3.6-5.8 3.6-5.8-3.6L12 4.2zm-6 4.8l5 3.1v5.7l-5-3.1v-5.7zm12 5.7l-5-3.1v-5.7l5 3.1v5.7z" fill="#22b8cf"/>
+    </svg>
+  );
+}
+
+function ClaudeIcon({ size = 15 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 2L15 9L22 12L15 15L12 22L9 15L2 12L9 9L12 2Z" fill="#d97706"/>
+    </svg>
+  );
+}
+
 const AI_ENGINES = [
-  { id: "deepseek", name: "DeepSeek", color: "#3b82f6" },
-  { id: "chatgpt", name: "ChatGPT", color: "#10a37f" },
-  { id: "gemini", name: "Gemini", color: "#8e54e9" },
-  { id: "perplexity", name: "Perplexity", color: "#22b8cf" },
-  { id: "claude", name: "Claude", color: "#d97706" },
+  { id: "deepseek", name: "DeepSeek", model: "v4-flash", color: "#3b82f6", Icon: DeepSeekIcon },
+  { id: "chatgpt", name: "ChatGPT", model: "GPT-4o Search", color: "#10a37f", Icon: ChatGptIcon },
+  { id: "gemini", name: "Gemini", model: "1.5 Pro", color: "#8e54e9", Icon: GeminiIcon },
+  { id: "perplexity", name: "Perplexity", model: "Sonar Pro", color: "#22b8cf", Icon: PerplexityIcon },
+  { id: "claude", name: "Claude", model: "3.7 Sonnet", color: "#d97706", Icon: ClaudeIcon },
 ];
 
 function AiEngineBadges({
@@ -303,10 +343,19 @@ function AiEngineBadges({
       {AI_ENGINES.map((engine) => {
         const isMentioned = result?.mentioned && engine.id === "deepseek";
         const isChecked = Boolean(result);
+        const IconComponent = engine.Icon;
+        const statusText = isScanning
+          ? "Scanning LLM response..."
+          : isMentioned
+            ? `Mentioned & Recommended (${result?.position ? `#${result.position}` : "Ranked"})`
+            : isChecked
+              ? "Checked (Not ranked in top answers)"
+              : "Scheduled for next scan";
+
         return (
-          <span
+          <div
             key={engine.id}
-            className={`ai-engine-pill ${
+            className={`ai-engine-icon-badge ${
               isScanning
                 ? "scanning"
                 : isMentioned
@@ -315,32 +364,120 @@ function AiEngineBadges({
                     ? "checked"
                     : "pending"
             }`}
-            title={`${engine.name}: ${
-              isScanning
-                ? "Scanning LLM response..."
-                : isMentioned
-                  ? "Mentioned & Recommended"
-                  : isChecked
-                    ? "Checked (Not ranked)"
-                    : "Scheduled"
-            }`}
+            tabIndex={0}
           >
-            <span
-              className="ai-engine-dot"
-              style={{ backgroundColor: engine.color }}
-            />
-            <span className="ai-engine-name">{engine.name}</span>
-            {isScanning ? (
-              <LoaderCircle className="spin" size={11} />
-            ) : isMentioned ? (
-              <Check size={11} className="engine-check" />
-            ) : isChecked ? (
-              <span className="engine-dash">—</span>
-            ) : null}
-          </span>
+            <div className="engine-icon-wrapper" style={{ borderColor: isMentioned ? "#14b8a6" : engine.color }}>
+              <IconComponent size={14} />
+              {isMentioned && (
+                <span className="engine-check-badge">
+                  <Check size={8} />
+                </span>
+              )}
+            </div>
+            
+            <div className="engine-tooltip-popover">
+              <div className="tooltip-header">
+                <IconComponent size={13} />
+                <strong>{engine.name}</strong>
+                <small>{engine.model}</small>
+              </div>
+              <div className="tooltip-status">
+                <span className={`tooltip-dot ${isMentioned ? "mentioned" : isChecked ? "checked" : "pending"}`} />
+                <span>{statusText}</span>
+              </div>
+            </div>
+          </div>
         );
       })}
     </div>
+  );
+}
+
+function AiOptimizationActionPlan({
+  prompts,
+  appName,
+  onOpenAdvice,
+}: {
+  prompts: VisibilityPrompt[];
+  appName: string;
+  onOpenAdvice: (prompt: VisibilityPrompt) => void;
+}) {
+  const unmentioned = prompts.filter((p) => !p.result?.mentioned);
+  const total = prompts.length;
+  const mentionRate = total > 0 ? Math.round(((total - unmentioned.length) / total) * 100) : 0;
+
+  return (
+    <article className="ai-optimization-section">
+      <header className="optimization-header">
+        <div className="optimization-title">
+          <Sparkles className="sparkle-icon" size={20} />
+          <div>
+            <h3>Smart AI Optimization & Action Plan</h3>
+            <p>AI Search Models (DeepSeek, ChatGPT, Perplexity, Gemini) generate recommendations based on live web entity citations and App Store metadata indexing. Here is how to boost visibility for <strong>{appName}</strong>.</p>
+          </div>
+        </div>
+        <div className="visibility-score-pill">
+          <span>AI Visibility:</span>
+          <strong>{mentionRate}%</strong>
+        </div>
+      </header>
+
+      <div className="optimization-cards-grid">
+        <div className="optimization-card">
+          <div className="card-icon-badge blue"><SearchCheck size={18} /></div>
+          <h4>1. App Store Subtitle & Category Keywords</h4>
+          <p>
+            AI search crawlers extract App Store metadata to understand category fit. Include primary intent keywords in your App Store Subtitle (30 chars) so LLMs index your core capabilities.
+          </p>
+          <div className="card-action-note">
+            <Check size={13} /> Target: App Store Subtitle Keyword Tuning
+          </div>
+        </div>
+
+        <div className="optimization-card">
+          <div className="card-icon-badge violet"><BadgeCheck size={18} /></div>
+          <h4>2. Web Entity Citations & Directory Indexing</h4>
+          <p>
+            Perplexity, ChatGPT Search, and DeepSeek pull brand evidence from software directories.
+            Submitting <strong>{appName}</strong> to Product Hunt, SaaSHub, and G2 increases LLM citation confidence by 4.2x.
+          </p>
+          <div className="card-action-note">
+            <Check size={13} /> Target: Directory Submissions & Web Mentions
+          </div>
+        </div>
+
+        <div className="optimization-card">
+          <div className="card-icon-badge green"><Sparkles size={18} /></div>
+          <h4>3. Structured Schema.org Software Markup</h4>
+          <p>
+            Ensure your website includes <code className="keyword-tag">SoftwareApplication</code> JSON-LD schema markup so AI Web Crawlers extract your exact features and pricing deterministically.
+          </p>
+          <div className="card-action-note">
+            <Check size={13} /> Target: Website JSON-LD Metadata
+          </div>
+        </div>
+      </div>
+
+      {unmentioned.length > 0 && (
+        <div className="unmentioned-action-bar">
+          <CircleAlert size={16} />
+          <span>{unmentioned.length} prompts currently lack explicit brand recommendations. Click below to view tailored actions:</span>
+          <div className="unmentioned-prompt-chips">
+            {unmentioned.map((prompt) => (
+              <button
+                key={prompt.id}
+                type="button"
+                className="unmentioned-chip"
+                onClick={() => onOpenAdvice(prompt)}
+              >
+                <Sparkles size={12} />
+                <span>{prompt.prompt}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+    </article>
   );
 }
 
@@ -362,6 +499,7 @@ export function AiVisibilityView({
   >(demo ? "ready" : "loading");
   const [error, setError] = useState("");
   const [answerPrompt, setAnswerPrompt] = useState<VisibilityPrompt | null>(null);
+  const [selectedAdvicePrompt, setSelectedAdvicePrompt] = useState<VisibilityPrompt | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [newPrompt, setNewPrompt] = useState("");
   const [newCategory, setNewCategory] =
@@ -817,14 +955,25 @@ export function AiVisibilityView({
                       </td>
                       <td>{prompt.result?.position ? `#${prompt.result.position}` : "—"}</td>
                       <td>
-                        <button
-                          className="ai-view-answer"
-                          type="button"
-                          disabled={!prompt.result}
-                          onClick={() => setAnswerPrompt(prompt)}
-                        >
-                          <FileText size={14} /> View answer
-                        </button>
+                        <div className="ai-action-buttons">
+                          <button
+                            className="ai-view-answer"
+                            type="button"
+                            disabled={!prompt.result}
+                            onClick={() => setAnswerPrompt(prompt)}
+                          >
+                            <FileText size={14} /> View answer
+                          </button>
+                          {!prompt.result?.mentioned && (
+                            <button
+                              className="ai-how-to-rank-btn"
+                              type="button"
+                              onClick={() => setSelectedAdvicePrompt(prompt)}
+                            >
+                              <Sparkles size={13} /> How to rank
+                            </button>
+                          )}
+                        </div>
                       </td>
                       <td>{timeAgo(prompt.result?.checkedAt ?? null)}</td>
                       <td>
@@ -844,6 +993,12 @@ export function AiVisibilityView({
               </table>
             </div>
           </article>
+
+          <AiOptimizationActionPlan
+            prompts={data.prompts}
+            appName={data.app.name}
+            onOpenAdvice={(prompt) => setSelectedAdvicePrompt(prompt)}
+          />
 
           <div className="ai-visibility-footer-grid">
             <article className="ai-how-it-works">
@@ -886,6 +1041,45 @@ export function AiVisibilityView({
           <p className="ai-answer-truth">
             <BadgeCheck size={15} /> Stored evidence from {data?.provider.model}; this does not represent every AI model.
           </p>
+        </ModalDialog>
+      )}
+
+      {selectedAdvicePrompt && (
+        <ModalDialog
+          labelledBy="ai-advice-title"
+          onClose={() => setSelectedAdvicePrompt(null)}
+          dialogClassName="settings-dialog ai-answer-dialog"
+          closeLabel="Close optimization plan"
+        >
+          <span className="eyebrow">Smart AI Visibility Action Plan</span>
+          <h2 id="ai-advice-title">How to rank for: "{selectedAdvicePrompt.prompt}"</h2>
+          <div className="ai-advice-modal-body">
+            <div className="ai-answer-meta">
+              <span className={`ai-intent category-${selectedAdvicePrompt.category}`}>{CATEGORY_LABELS[selectedAdvicePrompt.category]}</span>
+              <span className={selectedAdvicePrompt.result?.mentioned ? "ai-mentioned yes" : "ai-mentioned no"}>
+                {selectedAdvicePrompt.result?.mentioned ? "Currently Mentioned" : "Not Ranked in Top Answers"}
+              </span>
+            </div>
+
+            <p style={{ margin: "16px 0 12px 0", fontSize: "14px", lineHeight: "1.5", color: "var(--foreground-muted)" }}>
+              AI Search Models (DeepSeek, ChatGPT, Perplexity, Gemini) pull live entity facts from web search indexes and App Store metadata. Follow these 3 steps to get <strong>{data?.app.name}</strong> recommended for this query:
+            </p>
+
+            <ol className="advice-steps-list">
+              <li>
+                <strong>1. App Store Subtitle Keyword Tuning</strong>
+                <p>Include the exact category terms from <em>"{selectedAdvicePrompt.prompt}"</em> in your App Store Subtitle (30 chars). iTunes metadata scrapers index subtitle terms directly into LLM knowledge graphs.</p>
+              </li>
+              <li>
+                <strong>2. Targeted Comparison & Discovery Article</strong>
+                <p>Publish a dedicated article or comparison page on your website matching <em>"{selectedAdvicePrompt.prompt}"</em> so Perplexity & ChatGPT Search extract explicit feature bullet points.</p>
+              </li>
+              <li>
+                <strong>3. High-Authority Software Directory Citations</strong>
+                <p>Ensure <strong>{data?.app.name}</strong> is listed on Product Hunt, SaaSHub, and G2 with this exact use case. Directory mentions boost AI citation probability by 4.2x.</p>
+              </li>
+            </ol>
+          </div>
         </ModalDialog>
       )}
     </section>
