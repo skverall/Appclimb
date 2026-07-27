@@ -308,7 +308,7 @@ export async function growthMapSnapshot(
         iconUrl:
           selectedApp.icon_url ||
           (selectedApp.platform === "Web" && selectedApp.bundle_id
-            ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(selectedApp.bundle_id)}&sz=128`
+            ? `https://icons.duckduckgo.com/ip3/${encodeURIComponent(selectedApp.bundle_id)}.ico`
             : ""),
         period: "Last 30 days",
       },

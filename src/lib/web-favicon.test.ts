@@ -14,27 +14,27 @@ describe("web-favicon", () => {
     );
   });
 
-  it("builds a multi-source candidate list with google first after preferred", () => {
+  it("builds a multi-source candidate list with duckduckgo first after preferred", () => {
     const candidates = webFaviconCandidates(
       "appclimb.app",
       "https://example.com/custom.png",
     );
     expect(candidates[0]).toBe("https://example.com/custom.png");
-    expect(candidates[1]).toContain("google.com/s2/favicons");
-    expect(candidates.some((url) => url.includes("duckduckgo.com"))).toBe(
+    expect(candidates[1]).toContain("duckduckgo.com");
+    expect(candidates.some((url) => url.includes("icon.horse"))).toBe(
       true,
     );
   });
 
   it("detects web domains vs store ids", () => {
     expect(looksLikeWebDomain("appclimb.app")).toBe(true);
-    expect(looksLikeWebDomain("web:appclimb.app")).toBe(false);
+    expect(looksLikeWebDomain("web:appclimb.app")).toBe(true);
     expect(looksLikeWebDomain("6756513314")).toBe(false);
   });
 
-  it("returns a google default icon url", () => {
+  it("returns a duckduckgo default icon url", () => {
     expect(preferredWebFaviconUrl("cardealertracker.app")).toBe(
-      "https://www.google.com/s2/favicons?domain=cardealertracker.app&sz=128",
+      "https://icons.duckduckgo.com/ip3/cardealertracker.app.ico",
     );
   });
 });

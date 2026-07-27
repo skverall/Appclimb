@@ -145,7 +145,6 @@ export function AppClimbShell({
   const [activeAppIcon, setActiveAppIcon] = useState(initialSnapshot.app.iconUrl || "");
 
   const resolveAppIcon = useCallback((app: DashboardSnapshot["app"]) => {
-    if (app.iconUrl) return app.iconUrl;
     const isWeb = app.platform === "Web";
     const domain =
       app.bundleId ||
@@ -153,10 +152,13 @@ export function AppClimbShell({
       (app.appStoreId?.startsWith("web:")
         ? app.appStoreId.slice(4)
         : "");
-    if (isWeb && looksLikeWebDomain(domain)) {
+    if (isWeb && domain) {
+      if (app.iconUrl && !app.iconUrl.includes("google.com/s2/favicons")) {
+        return app.iconUrl;
+      }
       return preferredWebFaviconUrl(domain);
     }
-    return "";
+    return app.iconUrl || "";
   }, []);
 
   useEffect(() => {
@@ -503,17 +505,9 @@ export function AppClimbShell({
             onClick={() => setAppModalOpen(true)}
             aria-label={`Manage ${displayedAppName}`}
           >
-            <div
-              className="app-avatar"
-              aria-hidden="true"
-              style={{
-                overflow: "hidden",
-                display: "grid",
-                placeItems: "center",
-              }}
-            >
               {snapshot.app.platform === "Web" ? (
                 <WebSiteIcon
+                  className="app-avatar"
                   domain={
                     snapshot.app.bundleId ||
                     (snapshot.app.appStoreId?.startsWith("web:")
@@ -527,21 +521,32 @@ export function AppClimbShell({
                   rounded={10}
                   fallback="letter"
                 />
-              ) : activeAppIcon ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={activeAppIcon}
-                  alt=""
-                  style={{
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                  }}
-                />
               ) : (
-                <span>{appInitials}</span>
+                <div
+                  className="app-avatar"
+                  aria-hidden="true"
+                  style={{
+                    overflow: "hidden",
+                    display: "grid",
+                    placeItems: "center",
+                  }}
+                >
+                  {activeAppIcon ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={activeAppIcon}
+                      alt=""
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                      }}
+                    />
+                  ) : (
+                    <span>{appInitials}</span>
+                  )}
+                </div>
               )}
-            </div>
             <div>
               <strong>{displayedAppName}</strong>
               <span>Current app · {initialSnapshot.app.platform}</span>

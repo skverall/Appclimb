@@ -121,7 +121,7 @@ export function sanitizeWebAppMetadata(
   const iconUrl =
     typeof raw.iconUrl === "string" && raw.iconUrl.trim()
       ? raw.iconUrl.slice(0, 1024)
-      : `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`;
+      : `https://icons.duckduckgo.com/ip3/${encodeURIComponent(domain)}.ico`;
 
   return { domain, name, iconUrl };
 }
@@ -228,7 +228,7 @@ export async function listWorkspaceApps(
     const iconUrl =
       row.icon_url ||
       (isWeb && bundleId
-        ? `https://www.google.com/s2/favicons?domain=${encodeURIComponent(bundleId)}&sz=128`
+        ? `https://icons.duckduckgo.com/ip3/${encodeURIComponent(bundleId)}.ico`
         : "");
     return {
       id: row.id,

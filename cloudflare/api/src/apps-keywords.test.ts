@@ -69,7 +69,7 @@ describe("sanitizeWebAppMetadata", () => {
       domain: "cardealertracker.app",
       name: "Car Dealer Tracker",
       iconUrl:
-        "https://www.google.com/s2/favicons?domain=cardealertracker.app&sz=128",
+        "https://icons.duckduckgo.com/ip3/cardealertracker.app.ico",
     });
   });
 
