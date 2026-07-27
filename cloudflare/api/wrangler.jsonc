@@ -23,7 +23,10 @@
     "ALLOWED_ORIGINS": "https://appclimb.app,https://www.appclimb.app",
     "EXTERNAL_MUTATIONS_ENABLED": "false",
     "HISTORY_RETENTION_DAYS": "90",
-    "SYNC_INTERVAL_HOURS": "6"
+    "SYNC_INTERVAL_HOURS": "6",
+    "GROWTH_CI_ENABLED": "false",
+    "AGENT_BRIDGE_ENABLED": "false",
+    "LEGACY_SURFACES_ENABLED": "false"
   },
   "d1_databases": [
     {
@@ -101,7 +104,10 @@
         "ALLOWED_ORIGINS": "https://appclimb-web-staging.aydmaxx.workers.dev,http://localhost:3000",
         "EXTERNAL_MUTATIONS_ENABLED": "false",
         "HISTORY_RETENTION_DAYS": "90",
-        "SYNC_INTERVAL_HOURS": "6"
+        "SYNC_INTERVAL_HOURS": "6",
+        "GROWTH_CI_ENABLED": "true",
+        "AGENT_BRIDGE_ENABLED": "true",
+        "LEGACY_SURFACES_ENABLED": "false"
       },
       "limits": {
         "cpu_ms": 60000
