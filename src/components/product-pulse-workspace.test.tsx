@@ -73,11 +73,11 @@ describe("ProductPulseWorkspace", () => {
     );
     fireEvent.click(screen.getByRole("button", { name: "Add app" }));
     expect(
-      screen.getByRole("heading", { name: "Add an app" }),
+      screen.getByRole("heading", { name: /Add an app/i }),
     ).toBeInTheDocument();
 
     fireEvent.change(
-      screen.getByPlaceholderText("Type your App Store app name"),
+      screen.getByPlaceholderText(/type app name/i),
       { target: { value: "Car Dealer Tracker" } },
     );
     await waitFor(

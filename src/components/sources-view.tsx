@@ -273,6 +273,29 @@ export function SourcesView({
       .catch(() => setWorkspaceApps([]));
   }, [isDemo, setupOpen]);
 
+  useEffect(() => {
+    if (isDemo || !setupOpen || selectedProvider !== "posthog" || oauthState !== "idle") return;
+    fetch("/api/oauth/posthog/projects")
+      .then(async (response) => {
+        if (!response.ok) return;
+        const payload = (await response.json()) as {
+          data?: {
+            projects?: Array<{
+              id: string;
+              name: string;
+              organizationName: string;
+            }>;
+          };
+        };
+        const projects = payload.data?.projects ?? [];
+        if (projects.length > 0) {
+          setOauthProjects(projects);
+          setOauthState("ready");
+        }
+      })
+      .catch(() => undefined);
+  }, [isDemo, setupOpen, selectedProvider, oauthState]);
+
   const selected = useMemo(
     () => sources.find((source) => source.provider === selectedProvider),
     [selectedProvider, sources],

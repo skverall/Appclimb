@@ -5,11 +5,13 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import {
   addAppStoreApp,
   addKeywordTrack,
+  addWebApp,
   deleteWorkspaceApp,
   listKeywordTracks,
   listWorkspaceApps,
   recordKeywordObservations,
   sanitizeClientAppMetadata,
+  sanitizeWebAppMetadata,
   updateWorkspaceApp,
 } from "./apps-keywords";
 import {
@@ -779,6 +781,21 @@ app.post("/v1/apps", requireAuth, async (c) => {
     return errorResponse(c, "admin_required", 403);
   }
   const input = await jsonBody(c.req.raw);
+
+  if (input.platform === "web") {
+    const metadata = sanitizeWebAppMetadata(
+      input.metadata && typeof input.metadata === "object"
+        ? (input.metadata as Record<string, unknown>)
+        : (input as Record<string, unknown>),
+    );
+    return c.json(
+      {
+        data: await addWebApp(c.env, auth, metadata),
+      },
+      201,
+    );
+  }
+
   if (input.platform !== "app-store") {
     return errorResponse(
       c,

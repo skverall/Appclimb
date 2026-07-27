@@ -11,6 +11,7 @@ import {
   ChevronDown,
   CircleAlert,
   ExternalLink,
+  Globe,
   LoaderCircle,
   Plus,
   RefreshCw,
@@ -26,6 +27,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ModalDialog } from "@/components/modal-dialog";
 import type { DashboardSnapshot, PostHogPulse } from "@/lib/contracts";
 import {
+  cleanSearchResult,
   deriveKeywordSuggestions,
   keywordRankPosition,
   lookupAppStoreApp,
@@ -37,7 +39,7 @@ import {
 interface WorkspaceApp {
   id: string;
   name: string;
-  platform: "iOS";
+  platform: "iOS" | "Web";
   bundleId: string;
   appStoreId: string;
   storefront: string;
@@ -352,24 +354,54 @@ function AddAppDialog({
   onClose: () => void;
   onAdded: (appId: string) => void;
 }) {
-  const [platform, setPlatform] = useState<"app-store" | "google-play">(
+  const [platform, setPlatform] = useState<"app-store" | "web" | "google-play">(
     "app-store",
   );
   const [query, setQuery] = useState("");
+  const [webUrl, setWebUrl] = useState("");
+  const [webName, setWebName] = useState("");
   const [results, setResults] = useState<CatalogApp[]>([]);
   const [state, setState] = useState<"idle" | "loading" | "ready" | "error">(
     "idle",
   );
   const [addingId, setAddingId] = useState("");
+
+  const parsedId = useMemo(() => {
+    if (platform !== "app-store") return null;
+    const match = query.match(/id(\d{5,15})/i) || query.trim().match(/^(\d{5,15})$/);
+    return match ? match[1] : null;
+  }, [query, platform]);
+
   const searchActive = platform === "app-store" && query.trim().length >= 2;
 
   useEffect(() => {
-    if (!searchActive) return;
+    if (!searchActive) {
+      setResults([]);
+      return;
+    }
+
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
       setState("loading");
-      // Apple blocks Cloudflare Workers IPs from itunes.apple.com, so the
-      // catalog search runs in the browser, which iTunes allows via CORS *.
+
+      if (parsedId) {
+        lookupAppStoreApp(parsedId, "US", { signal: controller.signal })
+          .then((raw) => {
+            const app = raw ? cleanSearchResult(raw) : null;
+            if (app) {
+              setResults([app]);
+            } else {
+              setResults([]);
+            }
+            setState("ready");
+          })
+          .catch(() => {
+            setResults([]);
+            setState("error");
+          });
+        return;
+      }
+
       searchAppStoreCatalog(query, "US", { signal: controller.signal })
         .then((catalog) => {
           setResults(catalog);
@@ -380,19 +412,22 @@ function AddAppDialog({
           setState("error");
         });
     }, 350);
+
     return () => {
       window.clearTimeout(timer);
       controller.abort();
     };
-  }, [query, searchActive]);
+  }, [query, searchActive, parsedId]);
+
+  const cleanWebDomain = useMemo(() => {
+    if (!webUrl.trim()) return "";
+    return webUrl.trim().toLowerCase().replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
+  }, [webUrl]);
 
   const add = async (app: CatalogApp) => {
     setAddingId(app.appStoreId);
     setState("loading");
     try {
-      // The client already holds the cleaned catalog metadata from the search,
-      // so the server stores it directly instead of re-querying iTunes (which
-      // Apple blocks from Workers).
       const response = await fetch("/api/apps", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -421,6 +456,34 @@ function AddAppDialog({
     }
   };
 
+  const addWebSaaS = async () => {
+    if (!cleanWebDomain || !cleanWebDomain.includes(".")) return;
+    setAddingId(cleanWebDomain);
+    setState("loading");
+    try {
+      const response = await fetch("/api/apps", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          platform: "web",
+          metadata: {
+            domain: cleanWebDomain,
+            name: webName.trim() || cleanWebDomain,
+            iconUrl: `https://www.google.com/s2/favicons?domain=${encodeURIComponent(cleanWebDomain)}&sz=128`,
+          },
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | { data?: { id?: string } }
+        | null;
+      if (!response.ok || !payload?.data?.id) throw new Error("web_add_failed");
+      onAdded(payload.data.id);
+    } catch {
+      setAddingId("");
+      setState("error");
+    }
+  };
+
   return (
     <ModalDialog
       labelledBy="add-app-title"
@@ -435,8 +498,8 @@ function AddAppDialog({
         </span>
         <div>
           <span className="eyebrow">Pulse setup</span>
-          <h2 id="add-app-title">Add an app</h2>
-          <p>Find the public listing first; connect private analytics separately.</p>
+          <h2 id="add-app-title">Add an app or Web SaaS</h2>
+          <p>Paste a direct App Store URL, search by name, or enter a web domain.</p>
         </div>
       </div>
       <div className="app-platform-tabs" role="tablist" aria-label="App platform">
@@ -451,12 +514,21 @@ function AddAppDialog({
         <button
           type="button"
           role="tab"
+          aria-selected={platform === "web"}
+          onClick={() => setPlatform("web")}
+        >
+          <Globe size={16} /> Web SaaS
+        </button>
+        <button
+          type="button"
+          role="tab"
           aria-selected={platform === "google-play"}
           onClick={() => setPlatform("google-play")}
         >
           <Store size={16} /> Google Play
         </button>
       </div>
+
       {platform === "google-play" ? (
         <div className="google-play-boundary">
           <CircleAlert size={20} />
@@ -470,6 +542,55 @@ function AddAppDialog({
             <span>Connector is the next platform expansion.</span>
           </div>
         </div>
+      ) : platform === "web" ? (
+        <div className="web-saas-add-container">
+          <label className="app-catalog-search">
+            <Globe size={18} />
+            <input
+              value={webUrl}
+              onChange={(event) => setWebUrl(event.target.value)}
+              placeholder="Paste site URL or domain (e.g. appclimb.app)"
+              autoComplete="off"
+            />
+          </label>
+
+          <label className="web-name-input" style={{ marginTop: "12px", display: "block" }}>
+            <span style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>Web SaaS Name (Optional)</span>
+            <input
+              value={webName}
+              onChange={(event) => setWebName(event.target.value)}
+              placeholder={cleanWebDomain ? cleanWebDomain : "e.g. AppClimb Web Analytics"}
+              style={{ width: "100%", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--border)" }}
+            />
+          </label>
+
+          {cleanWebDomain && cleanWebDomain.includes(".") ? (
+            <div className="web-preview-card" style={{ marginTop: "16px", padding: "14px", border: "1px solid var(--border)", borderRadius: "10px", display: "flex", alignItems: "center", gap: "12px", background: "var(--surface-subtle)" }}>
+              <span className="catalog-app-icon" style={{ width: "40px", height: "40px", borderRadius: "8px", overflow: "hidden", display: "grid", placeItems: "center" }}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={`https://www.google.com/s2/favicons?domain=${encodeURIComponent(cleanWebDomain)}&sz=128`} alt="" width={32} height={32} />
+              </span>
+              <div style={{ flex: 1 }}>
+                <strong style={{ display: "block", fontSize: "14px" }}>{webName.trim() || cleanWebDomain}</strong>
+                <small style={{ color: "var(--foreground-muted)", fontSize: "12px" }}>{cleanWebDomain} · Web SaaS</small>
+              </div>
+              <button
+                type="button"
+                className="primary-action"
+                style={{ padding: "8px 16px", borderRadius: "8px", display: "flex", alignItems: "center", gap: "6px", cursor: "pointer" }}
+                disabled={Boolean(addingId)}
+                onClick={() => void addWebSaaS()}
+              >
+                {addingId === cleanWebDomain ? <LoaderCircle className="spin" size={16} /> : <Plus size={16} />}
+                Add Web SaaS
+              </button>
+            </div>
+          ) : (
+            <div className="app-search-empty" style={{ marginTop: "16px" }}>
+              Enter your Web SaaS product domain to track web metrics, crawlers, and PostHog analytics.
+            </div>
+          )}
+        </div>
       ) : (
         <>
           <label className="app-catalog-search">
@@ -477,7 +598,7 @@ function AddAppDialog({
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Type your App Store app name"
+              placeholder="Paste App Store URL or type app name"
               autoComplete="off"
             />
             {state === "loading" && <LoaderCircle className="spin" size={17} />}
@@ -485,13 +606,12 @@ function AddAppDialog({
           <div className="app-search-results" aria-live="polite">
             {!searchActive && (
               <div className="app-search-empty">
-                Search uses Apple&apos;s public catalog and is limited to eight
-                relevant results.
+                Search by app name or paste a direct App Store URL e.g. <code>https://apps.apple.com/us/app/.../id6741490278</code>
               </div>
             )}
             {searchActive && state === "ready" && results.length === 0 && (
               <div className="app-search-empty">
-                No App Store apps matched this name in the US storefront.
+                No App Store apps matched this query or URL.
               </div>
             )}
             {state === "error" && (
@@ -522,8 +642,6 @@ function AddAppDialog({
                         alt=""
                         loading="lazy"
                         onError={(event) => {
-                          // Degrade to the initials placeholder if the icon
-                          // fails to load (CSP, network, or a removed asset).
                           const target = event.currentTarget;
                           target.style.display = "none";
                           target.parentElement?.setAttribute(
@@ -651,143 +769,91 @@ export function AppSelector({
       .join("")
       .toUpperCase();
 
+  const displayApps: WorkspaceApp[] = apps.length > 0 ? apps : [
+    {
+      id: snapshot.app.id,
+      name: snapshot.app.name,
+      platform: ((snapshot.app as { platform?: string }).platform === "Web" ? "Web" : "iOS") as "iOS" | "Web",
+      bundleId: (snapshot.app as { bundleId?: string }).bundleId || "",
+      appStoreId: (snapshot.app as { appStoreId?: string; apple_app_id?: string }).appStoreId || (snapshot.app as { apple_app_id?: string }).apple_app_id || "",
+      storefront: snapshot.app.storefront || "US",
+      iconUrl: snapshot.app.iconUrl,
+      configured: true,
+    },
+  ];
+
   return (
     <>
-      <div className="pulse-app-selector-container" style={{ position: "relative" }}>
-        <button
-          className="pulse-app-selector-trigger"
-          type="button"
-          aria-expanded={menuOpen}
-          onClick={() => setMenuOpen(!menuOpen)}
-        >
-          <span className="mini-app-icon">
-            {currentAppIcon ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={currentAppIcon}
-                alt=""
-                onError={(event) => {
-                  event.currentTarget.style.display = "none";
-                  event.currentTarget.parentElement?.setAttribute(
-                    "data-initials",
-                    getInitials(snapshot.app.name),
-                  );
-                }}
-              />
-            ) : (
-              getInitials(snapshot.app.name)
-            )}
-          </span>
-          <span className="app-name-label">{snapshot.app.name}</span>
-          <span className="platform-badge">iOS</span>
-          <span className="storefront-badge">{snapshot.app.storefront}</span>
-          <ChevronDown
-            size={15}
-            style={{
-              transform: menuOpen ? "rotate(180deg)" : "rotate(0deg)",
-              transition: "transform 0.15s ease",
-            }}
-          />
-        </button>
+      <div className="pulse-app-tabs-container">
+        <div className="pulse-app-tabs-row" role="tablist" aria-label="Workspace apps and websites">
+          {displayApps.map((app) => {
+            const isActive = app.id === snapshot.app.id;
+            const isWeb = app.platform === "Web" || (app.bundleId && app.bundleId.includes(".") && !app.appStoreId);
+            const iconUrl = app.iconUrl || fetchedIcons[app.id] || (isActive ? currentAppIcon : undefined);
 
-        {menuOpen && (
-          <>
-            <div
-              className="pulse-app-dropdown-backdrop"
-              style={{ position: "fixed", inset: 0, zIndex: 40 }}
-              onClick={() => setMenuOpen(false)}
-            />
-            <div className="pulse-app-dropdown-menu">
-              <div className="dropdown-header">Workspace Apps</div>
-              <div className="dropdown-app-list">
-                {apps.length === 0 ? (
-                  <div className="dropdown-app-item active">
-                    <span className="mini-app-icon">{getInitials(snapshot.app.name)}</span>
-                    <span className="dropdown-app-title">{snapshot.app.name}</span>
-                    <Check size={16} className="active-check" />
-                  </div>
-                ) : (
-                  apps.map((app) => {
-                    const isActive = app.id === snapshot.app.id;
-                    return (
-                      <div
-                        key={app.id}
-                        className={`dropdown-app-item ${isActive ? "active" : ""}`}
-                        onClick={() => {
-                          setMenuOpen(false);
-                          if (!isActive) selectApp(app.id);
-                        }}
-                      >
-                        <span className="mini-app-icon">
-                          {app.iconUrl || fetchedIcons[app.id] ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={app.iconUrl || fetchedIcons[app.id]}
-                              alt=""
-                              onError={(event) => {
-                                event.currentTarget.style.display = "none";
-                                event.currentTarget.parentElement?.setAttribute(
-                                  "data-initials",
-                                  getInitials(app.name),
-                                );
-                              }}
-                            />
-                          ) : (
-                            getInitials(app.name)
-                          )}
-                        </span>
-                        <div className="dropdown-app-meta">
-                          <span className="dropdown-app-title">{app.name}</span>
-                          <small className="dropdown-app-sub">
-                            {app.storefront} · {app.configured ? "App Store Connected" : "Custom App"}
-                          </small>
-                        </div>
-                        {isActive && <Check size={16} className="active-check" />}
-                        {apps.length > 1 && (
-                          <button
-                            className="delete-app-icon-btn"
-                            type="button"
-                            title="Delete app"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              setMenuOpen(false);
-                              setDeletingApp(app);
-                            }}
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })
+            return (
+              <div
+                key={app.id}
+                className={`workspace-app-tab ${isActive ? "active" : ""}`}
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => {
+                  if (!isActive) selectApp(app.id);
+                }}
+              >
+                <span className="mini-app-icon">
+                  {iconUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={iconUrl}
+                      alt=""
+                      onError={(event) => {
+                        event.currentTarget.style.display = "none";
+                        event.currentTarget.parentElement?.setAttribute(
+                          "data-initials",
+                          getInitials(app.name),
+                        );
+                      }}
+                    />
+                  ) : (
+                    getInitials(app.name)
+                  )}
+                </span>
+                <span className="tab-app-name">{app.name}</span>
+                <span className={`platform-badge ${isWeb ? "web" : "ios"}`}>
+                  {isWeb ? "Web" : "iOS"}
+                </span>
+                <span className="storefront-badge">{app.storefront || "US"}</span>
+                {displayApps.length > 1 && (
+                  <button
+                    className="tab-delete-btn"
+                    type="button"
+                    title={`Remove ${app.name}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeletingApp(app);
+                    }}
+                  >
+                    <Trash2 size={13} />
+                  </button>
                 )}
               </div>
-              {snapshot.mode !== "demo" && (
-                <button
-                  className="dropdown-add-app-btn"
-                  type="button"
-                  onClick={() => {
-                    setMenuOpen(false);
-                    setAddOpen(true);
-                  }}
-                >
-                  <Plus size={15} /> Add another app
-                </button>
-              )}
-            </div>
-          </>
-        )}
-      </div>
+            );
+          })}
 
-      {snapshot.mode !== "demo" && (
-        <button
-          className="add-app-button"
-          type="button"
-          onClick={() => setAddOpen(true)}
-        >
-          <Plus size={16} /> Add app
-        </button>
-      )}
+          {snapshot.mode !== "demo" && (
+            <button
+              className="add-app-tab-btn"
+              type="button"
+              aria-label="Add app"
+              onClick={() => setAddOpen(true)}
+            >
+              <Plus size={15} />
+              <span>Add app or website</span>
+            </button>
+          )}
+        </div>
+      </div>
 
       {deletingApp && (
         <ModalDialog

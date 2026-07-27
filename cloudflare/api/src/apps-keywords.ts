@@ -88,6 +88,83 @@ export function sanitizeClientAppMetadata(
   };
 }
 
+export interface WebAppMetadata {
+  domain: string;
+  name: string;
+  iconUrl?: string;
+}
+
+export function sanitizeWebAppMetadata(
+  raw: Record<string, unknown>,
+): WebAppMetadata {
+  const rawDomain = typeof raw.domain === "string" ? raw.domain.trim().toLowerCase() : "";
+  const domain = rawDomain.replace(/^https?:\/\//u, "").replace(/\/.*$/u, "");
+  if (!domain || !domain.includes(".")) {
+    throw new ProviderError("invalid_domain", 400);
+  }
+  const name =
+    typeof raw.name === "string" && raw.name.trim()
+      ? raw.name.trim().slice(0, 120)
+      : domain;
+  const iconUrl =
+    typeof raw.iconUrl === "string" && raw.iconUrl.trim()
+      ? raw.iconUrl.slice(0, 1024)
+      : `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=128`;
+
+  return { domain, name, iconUrl };
+}
+
+export async function addWebApp(
+  env: Cloudflare.Env,
+  auth: AuthContext,
+  metadata: WebAppMetadata,
+) {
+  const appId = `web:${metadata.domain}`;
+  const existing = await env.DB.prepare(
+    `SELECT id FROM apps WHERE workspace_id=? AND (apple_app_id=? OR bundle_id=?) LIMIT 1`,
+  )
+    .bind(auth.workspaceId, appId, metadata.domain)
+    .first<{ id: string }>();
+
+  if (existing) {
+    return { id: existing.id, ...metadata, storefront: "US", created: false };
+  }
+
+  const id = crypto.randomUUID();
+  const now = nowISO();
+
+  await env.DB.prepare(
+    `INSERT INTO apps(
+      id, workspace_id, name, platform, bundle_id, apple_app_id,
+      default_storefront, icon_url, shared_app_user_id_confirmed, created_at, updated_at
+    ) VALUES(?,?,?,'Web',?,?,?,?,0,?,?)`,
+  )
+    .bind(
+      id,
+      auth.workspaceId,
+      metadata.name,
+      metadata.domain,
+      appId,
+      "US",
+      metadata.iconUrl || null,
+      now,
+      now,
+    )
+    .run();
+
+  await audit(
+    env.DB,
+    auth.workspaceId,
+    auth.userId,
+    "app.add",
+    "apps",
+    id,
+    { platform: "web", domain: metadata.domain, name: metadata.name },
+  );
+
+  return { id, name: metadata.name, platform: "Web", bundleId: metadata.domain, appStoreId: appId, storefront: "US", iconUrl: metadata.iconUrl, created: true };
+}
+
 export async function listWorkspaceApps(
   db: D1Database,
   workspaceId: string,

@@ -12749,3 +12749,111 @@ a {
   margin: 0;
 }
 
+/* Horizontal Workspace App Tabs */
+.pulse-app-tabs-container {
+  width: 100%;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.pulse-app-tabs-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: min-content;
+}
+
+.workspace-app-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  background: var(--card, #ffffff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: var(--radius-lg, 12px);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--foreground, #0f172a);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+
+.workspace-app-tab:hover {
+  background: var(--surface-subtle, #f8fafc);
+  border-color: var(--border-hover, #cbd5e1);
+}
+
+.workspace-app-tab.active {
+  background: rgba(20, 184, 166, 0.08);
+  border-color: var(--teal-medium, #14b8a6);
+  color: #0f766e;
+  font-weight: 600;
+  box-shadow: 0 1px 3px rgba(20, 184, 166, 0.1);
+}
+
+.workspace-app-tab .tab-app-name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.platform-badge.web {
+  background: rgba(59, 130, 246, 0.1);
+  color: #2563eb;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+}
+
+.platform-badge.ios {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--foreground-muted, #64748b);
+}
+
+.tab-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px;
+  border-radius: 4px;
+  color: var(--foreground-muted, #64748b);
+  opacity: 0;
+  transition: opacity 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  margin-left: 2px;
+}
+
+.workspace-app-tab:hover .tab-delete-btn {
+  opacity: 1;
+}
+
+.tab-delete-btn:hover {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.add-app-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  background: transparent;
+  border: 1px dashed var(--border, #cbd5e1);
+  border-radius: var(--radius-lg, 12px);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--foreground-muted, #64748b);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.add-app-tab-btn:hover {
+  background: var(--surface-subtle, #f8fafc);
+  border-color: var(--teal-medium, #14b8a6);
+  color: #0f766e;
+}
+
