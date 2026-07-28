@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Bot,
   CheckCircle2,
@@ -24,6 +24,16 @@ type VersionCandidate = {
   presentOnSessionEvent: boolean;
 };
 
+type EventOption = {
+  name: string;
+  eventCount: number;
+  uniqueUsers: number;
+  lastSeenAt?: string;
+};
+
+/**
+ * Self-contained Growth CI setup. Founder should not need Pulse/Sources detours.
+ */
 export function GrowthCiSettings(props: {
   appId: string;
   snapshot: GrowthCiSnapshot | null;
@@ -31,17 +41,23 @@ export function GrowthCiSettings(props: {
   onOpenLegacySources?: () => void;
 }) {
   const { appId, snapshot, onRefresh } = props;
+  const [localSnapshot, setLocalSnapshot] = useState(snapshot);
   const [candidates, setCandidates] = useState<VersionCandidate[]>([]);
+  const [events, setEvents] = useState<EventOption[]>([]);
+  const [sessionEvent, setSessionEvent] = useState("");
+  const [activationEvent, setActivationEvent] = useState("");
+  const [selectedVersion, setSelectedVersion] = useState("");
+  const [buildProperty, setBuildProperty] = useState("");
   const [discovering, setDiscovering] = useState(false);
-  const [confirming, setConfirming] = useState(false);
-  const [selectedVersion, setSelectedVersion] = useState(
-    snapshot?.mapping?.versionProperty ?? "",
-  );
-  const [buildProperty, setBuildProperty] = useState(
-    snapshot?.mapping?.buildProperty ?? "",
-  );
+  const [loadingEvents, setLoadingEvents] = useState(false);
+  const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [rcApiKey, setRcApiKey] = useState("");
+  const [rcProjectId, setRcProjectId] = useState("");
+  const [phKey, setPhKey] = useState("");
+  const [phProjectId, setPhProjectId] = useState("");
+  const [phHost, setPhHost] = useState("https://us.posthog.com");
   const [tokens, setTokens] = useState<
     Array<{
       id: string;
@@ -52,10 +68,30 @@ export function GrowthCiSettings(props: {
     }>
   >([]);
   const [newToken, setNewToken] = useState<string | null>(null);
-  const [tokenBusy, setTokenBusy] = useState(false);
 
-  const access = snapshot?.access;
-  const readiness = snapshot?.readiness;
+  const data = localSnapshot ?? snapshot;
+  const access = data?.access;
+  const readiness = data?.readiness;
+  const sources = data?.sources ?? [];
+  const rc = sources.find((s) => s.provider === "revenuecat");
+  const ph = sources.find((s) => s.provider === "posthog");
+
+  const refreshAll = useCallback(async () => {
+    if (!appId) return;
+    try {
+      const response = await fetch(
+        `/api/growth-ci?appId=${encodeURIComponent(appId)}`,
+        { cache: "no-store" },
+      );
+      const payload = (await response.json()) as { data?: GrowthCiSnapshot };
+      if (payload.data) {
+        setLocalSnapshot(payload.data);
+      }
+    } catch {
+      // ignore
+    }
+    onRefresh();
+  }, [appId, onRefresh]);
 
   const loadTokens = useCallback(async () => {
     if (!appId) return;
@@ -79,32 +115,182 @@ export function GrowthCiSettings(props: {
     }
   }, [appId]);
 
+  const loadEvents = useCallback(async () => {
+    if (!ph) return;
+    setLoadingEvents(true);
+    setError("");
+    try {
+      const response = await fetch("/api/connections/posthog/events", {
+        cache: "no-store",
+      });
+      const payload = (await response.json()) as {
+        data?: {
+          events?: EventOption[];
+          sessionEvent?: string;
+          activationEvent?: string;
+          mapping?: { sessionEvent?: string; activationEvent?: string };
+        };
+        error?: string;
+      };
+      if (!response.ok) {
+        setError(payload.error ?? "Could not load PostHog events");
+        return;
+      }
+      const list = payload.data?.events ?? [];
+      setEvents(list);
+      const nextSession =
+        payload.data?.sessionEvent ||
+        payload.data?.mapping?.sessionEvent ||
+        data?.mapping?.sessionEvent ||
+        "";
+      const nextActivation =
+        payload.data?.activationEvent ||
+        payload.data?.mapping?.activationEvent ||
+        data?.mapping?.activationEvent ||
+        "";
+      setSessionEvent(nextSession);
+      setActivationEvent(nextActivation);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "events_failed");
+    } finally {
+      setLoadingEvents(false);
+    }
+  }, [ph, data?.mapping?.sessionEvent, data?.mapping?.activationEvent]);
+
+  useEffect(() => {
+    setLocalSnapshot(snapshot);
+  }, [snapshot]);
+
   useEffect(() => {
     void loadTokens();
   }, [loadTokens]);
 
   useEffect(() => {
-    setSelectedVersion(snapshot?.mapping?.versionProperty ?? "");
-    setBuildProperty(snapshot?.mapping?.buildProperty ?? "");
-    const cached = snapshot?.mapping?.versionCandidates;
+    setSelectedVersion(data?.mapping?.versionProperty ?? "");
+    setBuildProperty(data?.mapping?.buildProperty ?? "");
+    setSessionEvent(data?.mapping?.sessionEvent ?? "");
+    setActivationEvent(data?.mapping?.activationEvent ?? "");
+    const cached = data?.mapping?.versionCandidates;
     if (Array.isArray(cached) && cached.length) {
       setCandidates(cached as VersionCandidate[]);
     }
-  }, [snapshot]);
+  }, [data]);
 
-  // If Settings is opened before Growth home loaded a snapshot, fetch once.
   useEffect(() => {
-    if (snapshot || !appId) return;
-    void fetch(`/api/growth-ci?appId=${encodeURIComponent(appId)}`, {
-      cache: "no-store",
-    })
-      .then((response) => response.json())
-      .then((payload: unknown) => {
-        const data = (payload as { data?: GrowthCiSnapshot })?.data;
-        if (data) onRefresh();
-      })
-      .catch(() => undefined);
-  }, [appId, snapshot, onRefresh]);
+    if (!snapshot && appId) void refreshAll();
+  }, [appId, snapshot, refreshAll]);
+
+  useEffect(() => {
+    if (ph) void loadEvents();
+  }, [ph, loadEvents]);
+
+  const sortedEvents = useMemo(
+    () =>
+      [...events].sort(
+        (a, b) => b.uniqueUsers - a.uniqueUsers || b.eventCount - a.eventCount,
+      ),
+    [events],
+  );
+
+  async function connectRevenueCat() {
+    setBusy("rc");
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/connections/revenuecat", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          provider: "revenuecat",
+          credentials: {
+            apiKey: rcApiKey.trim(),
+            projectId: rcProjectId.trim(),
+          },
+        }),
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        setError(payload.error ?? "revenuecat_connect_failed");
+        return;
+      }
+      setMessage("RevenueCat connected. Importing charts…");
+      setRcApiKey("");
+      await fetch("/api/connections/revenuecat/sync", { method: "POST" });
+      await refreshAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "revenuecat_connect_failed");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function connectPostHogKey() {
+    setBusy("ph");
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/connections/posthog", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          provider: "posthog",
+          credentials: {
+            personalApiKey: phKey.trim(),
+            projectId: phProjectId.trim(),
+            host: phHost.trim() || "https://us.posthog.com",
+          },
+        }),
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        setError(payload.error ?? "posthog_connect_failed");
+        return;
+      }
+      setMessage("PostHog connected. Loading events…");
+      setPhKey("");
+      await refreshAll();
+      await loadEvents();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "posthog_connect_failed");
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function confirmEvents() {
+    if (!sessionEvent || !activationEvent) {
+      setError("Pick both session and activation events.");
+      return;
+    }
+    if (sessionEvent === activationEvent) {
+      setError("Session and activation must be different events.");
+      return;
+    }
+    setBusy("events");
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch("/api/connections/posthog/events", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sessionEvent, activationEvent }),
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        setError(payload.error ?? "event_confirm_failed");
+        return;
+      }
+      setMessage(
+        "Session + activation confirmed. Syncing PostHog aggregates…",
+      );
+      await fetch("/api/connections/posthog/sync", { method: "POST" });
+      await refreshAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "event_confirm_failed");
+    } finally {
+      setBusy("");
+    }
+  }
 
   async function discoverVersions() {
     setDiscovering(true);
@@ -119,6 +305,7 @@ export function GrowthCiSettings(props: {
         data?: {
           candidates?: VersionCandidate[];
           suggestion?: VersionCandidate | null;
+          sessionEvent?: string;
         };
         error?: string;
       };
@@ -133,8 +320,8 @@ export function GrowthCiSettings(props: {
       }
       setMessage(
         list.length
-          ? `Found ${list.length} candidate properties.`
-          : "No version-like properties found on the session event yet.",
+          ? `Found ${list.length} version property candidates on session events.`
+          : "No version-like properties found yet. Instrument $app_version (or similar) on your session event, then rediscover.",
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "discovery_failed");
@@ -148,7 +335,7 @@ export function GrowthCiSettings(props: {
       setError("Select or enter a version property first.");
       return;
     }
-    setConfirming(true);
+    setBusy("version");
     setError("");
     setMessage("");
     try {
@@ -169,29 +356,53 @@ export function GrowthCiSettings(props: {
       }
       setMessage(
         confirm
-          ? "Version property confirmed. Sync PostHog to evaluate releases."
-          : "Version property saved as unconfirmed.",
+          ? "Version property confirmed. Syncing PostHog for release cohorts…"
+          : "Version property saved unconfirmed.",
       );
-      onRefresh();
+      if (confirm) {
+        await fetch("/api/connections/posthog/sync", { method: "POST" });
+      }
+      await refreshAll();
     } catch (err) {
       setError(err instanceof Error ? err.message : "confirm_failed");
     } finally {
-      setConfirming(false);
+      setBusy("");
+    }
+  }
+
+  async function syncProvider(provider: "revenuecat" | "posthog") {
+    setBusy(`sync-${provider}`);
+    setError("");
+    setMessage("");
+    try {
+      const response = await fetch(`/api/connections/${provider}/sync`, {
+        method: "POST",
+      });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        setError(payload.error ?? "sync_failed");
+        return;
+      }
+      setMessage(
+        `${provider === "revenuecat" ? "RevenueCat" : "PostHog"} import queued. Refresh in a minute.`,
+      );
+      await refreshAll();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "sync_failed");
+    } finally {
+      setBusy("");
     }
   }
 
   async function createToken() {
-    setTokenBusy(true);
+    setBusy("token");
     setError("");
     setNewToken(null);
     try {
       const response = await fetch("/api/agent-tokens", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          appId,
-          name: "Coding agent",
-        }),
+        body: JSON.stringify({ appId, name: "Coding agent" }),
       });
       const payload = (await response.json()) as {
         data?: { token?: string };
@@ -200,7 +411,7 @@ export function GrowthCiSettings(props: {
       if (!response.ok) {
         setError(
           payload.error === "agent_bridge_requires_pro"
-            ? "Agent Bridge requires Pro (or an active trial)."
+            ? "Agent Bridge needs Pro (or active trial)."
             : (payload.error ?? "token_create_failed"),
         );
         return;
@@ -210,39 +421,47 @@ export function GrowthCiSettings(props: {
     } catch (err) {
       setError(err instanceof Error ? err.message : "token_create_failed");
     } finally {
-      setTokenBusy(false);
+      setBusy("");
     }
   }
 
   async function revokeToken(id: string) {
-    setTokenBusy(true);
+    setBusy("token");
     try {
       await fetch(`/api/agent-tokens/${encodeURIComponent(id)}`, {
         method: "DELETE",
       });
       await loadTokens();
     } finally {
-      setTokenBusy(false);
+      setBusy("");
     }
   }
 
-  const sources = snapshot?.sources ?? [];
-  const rc = sources.find((s) => s.provider === "revenuecat");
-  const ph = sources.find((s) => s.provider === "posthog");
+  const step = !rc
+    ? 1
+    : !ph
+      ? 2
+      : data?.mapping?.status !== "confirmed" &&
+          data?.mapping?.status !== "manual"
+        ? 3
+        : data?.mapping?.versionPropertyStatus !== "confirmed"
+          ? 4
+          : 5;
 
   return (
     <div className="growth-ci-workspace growth-ci-settings">
       <header className="growth-ci-header">
         <div>
-          <h1>Settings</h1>
+          <h1>Get to your first release verdict</h1>
           <p className="growth-ci-subtle">
-            RevenueCat + PostHog, measurement contract, and Agent Bridge.
+            Step {Math.min(step, 4)} of 4 — connect money + behavior, confirm
+            events and version, import data.
           </p>
         </div>
         <button
           type="button"
           className="growth-ci-icon-btn"
-          onClick={onRefresh}
+          onClick={() => void refreshAll()}
           aria-label="Refresh"
         >
           <RefreshCw size={16} />
@@ -260,38 +479,11 @@ export function GrowthCiSettings(props: {
         </div>
       ) : null}
 
-      {access ? (
+      {readiness ? (
         <section className="growth-ci-card">
           <h3>
-            <ShieldCheck size={16} /> Plan access
+            <PlugZap size={16} /> Readiness
           </h3>
-          <p>
-            {access.reason === "paid"
-              ? "Pro access — automatic release checks and Agent Bridge enabled."
-              : access.reason === "trial"
-                ? "Trial access — full Growth CI automation while the trial is active."
-                : access.reason === "free_first_verdict"
-                  ? "Free plan — first complete release verdict is free. Agent Bridge requires Pro."
-                  : "Free first verdict used — upgrade to Pro for ongoing monitoring and Agent Bridge."}
-          </p>
-          <ul className="growth-ci-subtle">
-            <li>
-              Release checks:{" "}
-              {access.canRunReleaseChecks ? "allowed" : "blocked"}
-            </li>
-            <li>
-              Agent Bridge:{" "}
-              {access.canUseAgentBridge ? "allowed" : "Pro required"}
-            </li>
-          </ul>
-        </section>
-      ) : null}
-
-      <section className="growth-ci-card">
-        <h3>
-          <PlugZap size={16} /> Measurement readiness
-        </h3>
-        {readiness ? (
           <ul className="growth-ci-readiness-list">
             {[readiness.money, readiness.activation, readiness.version].map(
               (item) => (
@@ -303,210 +495,365 @@ export function GrowthCiSettings(props: {
               ),
             )}
           </ul>
-        ) : (
-          <p className="growth-ci-subtle">Loading readiness…</p>
-        )}
-        {readiness ? (
           <p>
             <strong>Next:</strong> {readiness.nextAction}
           </p>
-        ) : null}
+        </section>
+      ) : null}
+
+      {/* Step 1 — RevenueCat */}
+      <section className="growth-ci-card" data-step="1">
+        <h3>
+          <Link2 size={16} /> 1. RevenueCat (money)
+        </h3>
+        {rc ? (
+          <>
+            <p>
+              Connected · <strong>{rc.status}</strong>
+              {rc.lastSuccessAt
+                ? ` · last sync ${new Date(rc.lastSuccessAt).toLocaleString()}`
+                : ""}
+            </p>
+            <button
+              type="button"
+              className="growth-ci-btn"
+              disabled={busy === "sync-revenuecat"}
+              onClick={() => void syncProvider("revenuecat")}
+            >
+              {busy === "sync-revenuecat" ? "Queueing…" : "Import RevenueCat now"}
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="growth-ci-subtle">
+              Create a v2 secret key with Charts read access. Paste API key +
+              Project ID.
+            </p>
+            <label className="growth-ci-add-label">
+              V2 secret API key
+              <input
+                type="password"
+                value={rcApiKey}
+                onChange={(e) => setRcApiKey(e.target.value)}
+                placeholder="sk_…"
+                autoComplete="off"
+              />
+            </label>
+            <label className="growth-ci-add-label">
+              Project ID
+              <input
+                value={rcProjectId}
+                onChange={(e) => setRcProjectId(e.target.value)}
+                placeholder="proj…"
+              />
+            </label>
+            <button
+              type="button"
+              className="growth-ci-btn"
+              disabled={busy === "rc" || !rcApiKey || !rcProjectId}
+              onClick={() => void connectRevenueCat()}
+            >
+              {busy === "rc" ? (
+                <>
+                  <LoaderCircle size={16} className="spin" /> Connecting…
+                </>
+              ) : (
+                "Connect RevenueCat"
+              )}
+            </button>
+          </>
+        )}
       </section>
 
-      <section className="growth-ci-grid">
-        <article className="growth-ci-card">
-          <h3>
-            <Link2 size={16} /> RevenueCat
-          </h3>
-          <p>
-            Status: <strong>{rc?.status ?? "not connected"}</strong>
-          </p>
-          {rc?.lastSuccessAt ? (
-            <p className="growth-ci-subtle">
-              Last sync {new Date(rc.lastSuccessAt).toLocaleString()}
+      {/* Step 2 — PostHog */}
+      <section className="growth-ci-card" data-step="2">
+        <h3>
+          <Link2 size={16} /> 2. PostHog (behavior)
+        </h3>
+        {ph ? (
+          <>
+            <p>
+              Connected · <strong>{ph.status}</strong>
+              {ph.lastSuccessAt
+                ? ` · last sync ${new Date(ph.lastSuccessAt).toLocaleString()}`
+                : ""}
             </p>
-          ) : null}
-          <p className="growth-ci-subtle">
-            Money ledger for trials, paid, renewals, and revenue (read-only).
-          </p>
-          {props.onOpenLegacySources ? (
+            <div className="growth-ci-actions">
+              <button
+                type="button"
+                className="growth-ci-btn"
+                disabled={busy === "sync-posthog"}
+                onClick={() => void syncProvider("posthog")}
+              >
+                {busy === "sync-posthog" ? "Queueing…" : "Import PostHog now"}
+              </button>
+              <button
+                type="button"
+                className="growth-ci-btn growth-ci-btn--ghost"
+                disabled={loadingEvents}
+                onClick={() => void loadEvents()}
+              >
+                {loadingEvents ? "Loading events…" : "Reload events"}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="growth-ci-subtle">
+              Prefer OAuth (recommended). Or paste a personal API key with project
+              + query read access.
+            </p>
+            <a className="growth-ci-btn" href="/api/oauth/posthog/start">
+              Continue with PostHog OAuth
+            </a>
+            <p className="growth-ci-subtle" style={{ marginTop: "1rem" }}>
+              Or connect with a personal API key:
+            </p>
+            <label className="growth-ci-add-label">
+              Personal API key
+              <input
+                type="password"
+                value={phKey}
+                onChange={(e) => setPhKey(e.target.value)}
+                placeholder="phx_…"
+                autoComplete="off"
+              />
+            </label>
+            <label className="growth-ci-add-label">
+              Project ID
+              <input
+                value={phProjectId}
+                onChange={(e) => setPhProjectId(e.target.value)}
+                placeholder="12345"
+              />
+            </label>
+            <label className="growth-ci-add-label">
+              Host
+              <select
+                value={phHost}
+                onChange={(e) => setPhHost(e.target.value)}
+              >
+                <option value="https://us.posthog.com">US (us.posthog.com)</option>
+                <option value="https://eu.posthog.com">EU (eu.posthog.com)</option>
+              </select>
+            </label>
             <button
               type="button"
               className="growth-ci-btn"
-              onClick={props.onOpenLegacySources}
+              disabled={busy === "ph" || !phKey || !phProjectId}
+              onClick={() => void connectPostHogKey()}
             >
-              {rc ? "Manage connection" : "Connect RevenueCat"}
+              {busy === "ph" ? "Connecting…" : "Connect with API key"}
             </button>
-          ) : null}
-        </article>
+          </>
+        )}
+      </section>
 
-        <article className="growth-ci-card">
-          <h3>
-            <Link2 size={16} /> PostHog
-          </h3>
-          <p>
-            Status: <strong>{ph?.status ?? "not connected"}</strong>
-          </p>
-          {snapshot?.mapping ? (
-            <dl className="growth-ci-dl">
-              <div>
-                <dt>Session</dt>
-                <dd>{snapshot.mapping.sessionEvent || "—"}</dd>
-              </div>
-              <div>
-                <dt>Activation</dt>
-                <dd>{snapshot.mapping.activationEvent || "—"}</dd>
-              </div>
-              <div>
-                <dt>Mapping</dt>
-                <dd>{snapshot.mapping.status || "—"}</dd>
-              </div>
-              <div>
-                <dt>Version</dt>
-                <dd>
-                  {snapshot.mapping.versionProperty || "—"} (
-                  {snapshot.mapping.versionPropertyStatus || "unconfirmed"})
-                </dd>
-              </div>
-            </dl>
-          ) : null}
-          {props.onOpenLegacySources ? (
+      {/* Step 3 — events */}
+      <section className="growth-ci-card" data-step="3">
+        <h3>
+          <CheckCircle2 size={16} /> 3. Session + activation events
+        </h3>
+        {!ph ? (
+          <p className="growth-ci-subtle">Connect PostHog first.</p>
+        ) : (
+          <>
+            <p className="growth-ci-subtle">
+              Confirm which events mean “session / active use” and “first value”.
+              Unconfirmed maps cannot produce a regression verdict.
+            </p>
+            <label className="growth-ci-add-label">
+              Session event
+              <select
+                value={sessionEvent}
+                onChange={(e) => setSessionEvent(e.target.value)}
+              >
+                <option value="">Select…</option>
+                {sortedEvents.map((event) => (
+                  <option key={event.name} value={event.name}>
+                    {event.name} · {event.uniqueUsers} users
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="growth-ci-add-label">
+              Activation event
+              <select
+                value={activationEvent}
+                onChange={(e) => setActivationEvent(e.target.value)}
+              >
+                <option value="">Select…</option>
+                {sortedEvents.map((event) => (
+                  <option key={`a-${event.name}`} value={event.name}>
+                    {event.name} · {event.uniqueUsers} users
+                  </option>
+                ))}
+              </select>
+            </label>
+            {sessionEvent && activationEvent && sessionEvent === activationEvent ? (
+              <p className="growth-ci-banner growth-ci-banner--error">
+                Session and activation must be different events.
+              </p>
+            ) : null}
             <button
               type="button"
               className="growth-ci-btn"
-              onClick={props.onOpenLegacySources}
+              disabled={
+                busy === "events" ||
+                !sessionEvent ||
+                !activationEvent ||
+                sessionEvent === activationEvent
+              }
+              onClick={() => void confirmEvents()}
             >
-              {ph ? "Manage PostHog / events" : "Connect PostHog"}
+              {busy === "events"
+                ? "Saving…"
+                : "Confirm events and import"}
             </button>
-          ) : null}
-        </article>
+            <p className="growth-ci-subtle">
+              Mapping status: {data?.mapping?.status || "unknown"}
+            </p>
+          </>
+        )}
+      </section>
+
+      {/* Step 4 — version */}
+      <section className="growth-ci-card" data-step="4">
+        <h3>
+          <CheckCircle2 size={16} /> 4. Version property
+        </h3>
+        {!ph ? (
+          <p className="growth-ci-subtle">Connect PostHog first.</p>
+        ) : (
+          <>
+            <p className="growth-ci-subtle">
+              Which property on the session event is the app version? Prefer{" "}
+              <code>$app_version</code> or <code>app_version</code>.
+            </p>
+            <div className="growth-ci-actions">
+              <button
+                type="button"
+                className="growth-ci-btn"
+                disabled={discovering}
+                onClick={() => void discoverVersions()}
+              >
+                {discovering ? (
+                  <>
+                    <LoaderCircle size={16} className="spin" /> Discovering…
+                  </>
+                ) : (
+                  "Discover from PostHog"
+                )}
+              </button>
+            </div>
+            {candidates.length > 0 ? (
+              <ul className="growth-ci-add-results">
+                {candidates.map((candidate) => (
+                  <li key={candidate.key}>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedVersion(candidate.key)}
+                      aria-pressed={selectedVersion === candidate.key}
+                    >
+                      <span />
+                      <span>
+                        <strong>{candidate.key}</strong>
+                        <small>
+                          score {candidate.score} ·{" "}
+                          {candidate.sampleValues.slice(0, 4).join(", ") || "—"}
+                        </small>
+                      </span>
+                      <span className="growth-ci-add-action">
+                        {selectedVersion === candidate.key
+                          ? "Selected"
+                          : "Select"}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            <label className="growth-ci-add-label">
+              Version property key
+              <input
+                value={selectedVersion}
+                onChange={(e) => setSelectedVersion(e.target.value)}
+                placeholder="$app_version"
+              />
+            </label>
+            <label className="growth-ci-add-label">
+              Build property (optional)
+              <input
+                value={buildProperty}
+                onChange={(e) => setBuildProperty(e.target.value)}
+                placeholder="build_number"
+              />
+            </label>
+            <button
+              type="button"
+              className="growth-ci-btn"
+              disabled={busy === "version" || !selectedVersion}
+              onClick={() => void confirmVersion(true)}
+            >
+              {busy === "version"
+                ? "Saving…"
+                : "Confirm version and import cohorts"}
+            </button>
+            <p className="growth-ci-subtle">
+              Version status:{" "}
+              {data?.mapping?.versionPropertyStatus || "unconfirmed"}
+              {data?.mapping?.versionProperty
+                ? ` (${data.mapping.versionProperty})`
+                : ""}
+            </p>
+          </>
+        )}
       </section>
 
       <section className="growth-ci-card">
         <h3>
-          <CheckCircle2 size={16} /> Version property
+          <ShieldCheck size={16} /> Access
         </h3>
-        <p className="growth-ci-subtle">
-          AppClimb never trusts a guessed property for confirmed regressions.
-          Discover candidates, then confirm explicitly.
+        <p>
+          {access?.reason === "paid"
+            ? "Pro — continuous monitoring + Agent Bridge."
+            : access?.reason === "trial"
+              ? "Trial — full Growth CI while the trial is active."
+              : access?.reason === "free_first_verdict"
+                ? "Free — first complete release verdict is free. Agent Bridge needs Pro."
+                : "Free first verdict used — upgrade for ongoing monitoring."}
         </p>
-        <div className="growth-ci-actions">
-          <button
-            type="button"
-            className="growth-ci-btn"
-            disabled={discovering || !ph}
-            onClick={() => void discoverVersions()}
-          >
-            {discovering ? (
-              <>
-                <LoaderCircle size={16} className="spin" /> Discovering…
-              </>
-            ) : (
-              "Discover from PostHog"
-            )}
-          </button>
-        </div>
-
-        {candidates.length > 0 ? (
-          <ul className="growth-ci-add-results">
-            {candidates.map((candidate) => (
-              <li key={candidate.key}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedVersion(candidate.key)}
-                  aria-pressed={selectedVersion === candidate.key}
-                >
-                  <span />
-                  <span>
-                    <strong>{candidate.key}</strong>
-                    <small>
-                      score {candidate.score} · samples:{" "}
-                      {candidate.sampleValues.slice(0, 4).join(", ") || "—"}
-                    </small>
-                  </span>
-                  <span className="growth-ci-add-action">
-                    {selectedVersion === candidate.key ? "Selected" : "Select"}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-
-        <label className="growth-ci-add-label">
-          Version property key
-          <input
-            value={selectedVersion}
-            onChange={(event) => setSelectedVersion(event.target.value)}
-            placeholder="$app_version"
-          />
-        </label>
-        <label className="growth-ci-add-label">
-          Build property (optional)
-          <input
-            value={buildProperty}
-            onChange={(event) => setBuildProperty(event.target.value)}
-            placeholder="build_number"
-          />
-        </label>
-        <div className="growth-ci-actions">
-          <button
-            type="button"
-            className="growth-ci-btn"
-            disabled={confirming || !selectedVersion}
-            onClick={() => void confirmVersion(true)}
-          >
-            {confirming ? "Saving…" : "Confirm version property"}
-          </button>
-          <button
-            type="button"
-            className="growth-ci-btn growth-ci-btn--ghost"
-            disabled={confirming || !selectedVersion}
-            onClick={() => void confirmVersion(false)}
-          >
-            Save without confirm
-          </button>
-        </div>
       </section>
 
       <section className="growth-ci-card">
         <h3>Growth Contract</h3>
-        <p className="growth-ci-subtle">
-          Server-owned defaults (visible, not a wall of onboarding knobs).
-        </p>
-        {snapshot?.contract?.thresholds ? (
+        {data?.contract?.thresholds ? (
           <dl className="growth-ci-dl">
             <div>
               <dt>Min new users</dt>
-              <dd>{snapshot.contract.thresholds.minimumNewUsers}</dd>
+              <dd>{data.contract.thresholds.minimumNewUsers}</dd>
             </div>
             <div>
               <dt>Activation window</dt>
-              <dd>{snapshot.contract.thresholds.activationWindowDays}d</dd>
+              <dd>{data.contract.thresholds.activationWindowDays}d</dd>
             </div>
             <div>
               <dt>Max collection</dt>
-              <dd>{snapshot.contract.thresholds.maximumCollectionDays}d</dd>
-            </div>
-            <div>
-              <dt>Contract</dt>
-              <dd>v{snapshot.contract.version}</dd>
+              <dd>{data.contract.thresholds.maximumCollectionDays}d</dd>
             </div>
           </dl>
         ) : null}
-        {snapshot?.contract?.yaml ? (
-          <div className="growth-ci-actions">
-            <button
-              type="button"
-              className="growth-ci-btn growth-ci-btn--ghost"
-              onClick={() => {
-                void navigator.clipboard.writeText(snapshot.contract.yaml);
-                setMessage("appclimb.yml copied.");
-              }}
-            >
-              <Copy size={14} /> Copy appclimb.yml
-            </button>
-          </div>
+        {data?.contract?.yaml ? (
+          <button
+            type="button"
+            className="growth-ci-btn growth-ci-btn--ghost"
+            onClick={() => {
+              void navigator.clipboard.writeText(data.contract.yaml);
+              setMessage("appclimb.yml copied.");
+            }}
+          >
+            <Copy size={14} /> Copy appclimb.yml
+          </button>
         ) : null}
       </section>
 
@@ -515,38 +862,32 @@ export function GrowthCiSettings(props: {
           <Bot size={16} /> Agent Bridge
         </h3>
         <p className="growth-ci-subtle">
-          Create a scoped token for Hermes / Codex / Grok / Claude. Raw token is
-          shown once. Set <code>APPCLIMB_AGENT_TOKEN</code>.
+          After a confirmed regression, your coding agent claims one task via
+          token. Shown once only.
         </p>
         {newToken ? (
           <div className="growth-ci-banner growth-ci-banner--ok">
             <p>
-              <strong>Copy now — this is the only time it is shown:</strong>
+              <strong>Copy now:</strong>
             </p>
             <code style={{ wordBreak: "break-all" }}>{newToken}</code>
-            <div className="growth-ci-actions">
-              <button
-                type="button"
-                className="growth-ci-btn"
-                onClick={() => {
-                  void navigator.clipboard.writeText(newToken);
-                }}
-              >
-                <Copy size={14} /> Copy token
-              </button>
-            </div>
+            <button
+              type="button"
+              className="growth-ci-btn"
+              onClick={() => void navigator.clipboard.writeText(newToken)}
+            >
+              <Copy size={14} /> Copy token
+            </button>
           </div>
         ) : null}
-        <div className="growth-ci-actions">
-          <button
-            type="button"
-            className="growth-ci-btn"
-            disabled={tokenBusy || access?.canUseAgentBridge === false}
-            onClick={() => void createToken()}
-          >
-            <KeyRound size={14} /> Create agent token
-          </button>
-        </div>
+        <button
+          type="button"
+          className="growth-ci-btn"
+          disabled={busy === "token" || access?.canUseAgentBridge === false}
+          onClick={() => void createToken()}
+        >
+          <KeyRound size={14} /> Create agent token
+        </button>
         {tokens.length ? (
           <ul className="growth-ci-token-list">
             {tokens.map((token) => (
@@ -559,7 +900,7 @@ export function GrowthCiSettings(props: {
                   <button
                     type="button"
                     className="growth-ci-btn growth-ci-btn--ghost"
-                    disabled={tokenBusy}
+                    disabled={busy === "token"}
                     onClick={() => void revokeToken(token.id)}
                   >
                     Revoke
@@ -568,17 +909,12 @@ export function GrowthCiSettings(props: {
               </li>
             ))}
           </ul>
-        ) : (
-          <p className="growth-ci-subtle">No tokens yet.</p>
-        )}
-        <p className="growth-ci-subtle">
-          Skill docs: <code>docs/agent-skill/appclimb-growth-ci.md</code>
-        </p>
+        ) : null}
       </section>
 
       {props.onOpenLegacySources ? (
         <p className="growth-ci-subtle">
-          Need to revoke App Store Connect or Superwall leftovers?{" "}
+          Need revoke for App Store Connect / Superwall leftovers?{" "}
           <button
             type="button"
             className="growth-ci-btn growth-ci-btn--ghost"

@@ -252,7 +252,8 @@
   border-bottom: 1px solid color-mix(in oklab, CanvasText 8%, Canvas);
 }
 
-.growth-ci-settings input {
+.growth-ci-settings input,
+.growth-ci-settings select {
   border: 1px solid color-mix(in oklab, CanvasText 14%, Canvas);
   border-radius: 10px;
   padding: 0.55rem 0.7rem;
@@ -260,6 +261,28 @@
   width: 100%;
   background: Canvas;
   color: CanvasText;
+}
+
+.growth-ci-settings a.growth-ci-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  text-decoration: none;
+  width: fit-content;
+}
+
+.growth-ci-card[data-step] {
+  scroll-margin-top: 1rem;
+}
+
+.spin {
+  animation: growth-ci-spin 0.8s linear infinite;
+}
+
+@keyframes growth-ci-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .growth-ci-add-label {

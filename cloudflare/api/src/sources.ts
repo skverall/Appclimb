@@ -1046,8 +1046,31 @@ export async function queueSourceSync(
     throw new Error("unsupported_provider");
   }
   const workspace = await workspaceFor(env.DB, auth.userId, auth.workspaceId);
-  if (!workspace || !isEntitled(workspace)) {
+  if (!workspace) {
     throw new Error("entitlement_required");
+  }
+  // Growth CI free first-verdict users must still be able to import RC/PostHog.
+  if (!isEntitled(workspace)) {
+    const { ensureGrowthContract } = await import("./growth-ci/contracts");
+    const { assessGrowthCiAccess } = await import("./growth-ci/entitlement");
+    const appId =
+      (
+        await env.DB.prepare(
+          `SELECT id FROM apps WHERE workspace_id=? ORDER BY created_at LIMIT 1`,
+        )
+          .bind(auth.workspaceId)
+          .first<{ id: string }>()
+      )?.id ?? "";
+    const contract = appId
+      ? await ensureGrowthContract(env.DB, auth.workspaceId, appId)
+      : null;
+    const access = assessGrowthCiAccess(
+      workspace,
+      contract?.free_verdict_consumed_at ?? null,
+    );
+    if (!access.canConnectSources && !access.canRunReleaseChecks) {
+      throw new Error("entitlement_required");
+    }
   }
   const connection = await env.DB.prepare(
     `SELECT id FROM source_connections

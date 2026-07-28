@@ -216,31 +216,62 @@ export function GrowthCiWorkspace(props: {
       {snapshot ? (
         <>
           {snapshot.readiness && snapshot.readiness.overall !== "ready" ? (
-            <section className="growth-ci-card">
-              <h3>Setup checklist</h3>
-              <ul className="growth-ci-readiness-list">
-                {[
-                  snapshot.readiness.money,
-                  snapshot.readiness.activation,
-                  snapshot.readiness.version,
-                ].map((item) => (
-                  <li key={item.label} data-status={item.status}>
-                    <strong>{item.label}</strong>
-                    <span className="growth-ci-pill">{item.status}</span>
-                    <p className="growth-ci-subtle">{item.detail}</p>
-                  </li>
-                ))}
-              </ul>
-              <p>
-                <strong>Next:</strong> {snapshot.readiness.nextAction}{" "}
-                <button
-                  type="button"
-                  className="growth-ci-btn growth-ci-btn--ghost"
-                  onClick={props.onOpenSettings}
-                >
-                  Open Settings
-                </button>
-              </p>
+            <section className="growth-ci-verdict growth-ci-verdict--config">
+              <div>
+                <h2 id="growth-ci-verdict-title">Finish setup to evaluate releases</h2>
+                <p>{snapshot.readiness.nextAction}</p>
+                <ul className="growth-ci-readiness-list" style={{ marginTop: "0.75rem" }}>
+                  {[
+                    snapshot.readiness.money,
+                    snapshot.readiness.activation,
+                    snapshot.readiness.version,
+                  ].map((item) => (
+                    <li key={item.label} data-status={item.status}>
+                      <strong>{item.label}</strong>
+                      <span className="growth-ci-pill">{item.status}</span>
+                      <p className="growth-ci-subtle">{item.detail}</p>
+                    </li>
+                  ))}
+                </ul>
+                <div className="growth-ci-actions">
+                  <button
+                    type="button"
+                    className="growth-ci-btn"
+                    onClick={props.onOpenSettings}
+                  >
+                    Continue setup in Settings
+                  </button>
+                </div>
+              </div>
+            </section>
+          ) : null}
+
+          {snapshot.readiness?.overall === "ready" && !release ? (
+            <section className="growth-ci-verdict growth-ci-verdict--wait">
+              <div>
+                <h2>Measurement is ready — waiting for release cohorts</h2>
+                <p>
+                  Import PostHog again after users ship with the confirmed version
+                  property. AppClimb will open a verdict when a mature new-user
+                  cohort is available (default: 30 users, activation window).
+                </p>
+                <div className="growth-ci-actions">
+                  <button
+                    type="button"
+                    className="growth-ci-btn"
+                    onClick={props.onOpenSettings}
+                  >
+                    Import / check connections
+                  </button>
+                  <button
+                    type="button"
+                    className="growth-ci-btn growth-ci-btn--ghost"
+                    onClick={props.onRefresh}
+                  >
+                    Refresh verdicts
+                  </button>
+                </div>
+              </div>
             </section>
           ) : null}
 

@@ -78,7 +78,7 @@ const NAV_ITEMS: {
   icon: typeof Gauge;
 }[] = [
   { id: "growth", label: "Growth CI", icon: Gauge },
-  { id: "sources", label: "Settings", icon: PlugZap },
+  { id: "sources", label: "Setup", icon: PlugZap },
 ];
 
 /**
