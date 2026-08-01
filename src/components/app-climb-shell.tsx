@@ -969,6 +969,13 @@ export function AppClimbShell({
               onAddApp={() => setAddAppOpen(true)}
               onSnapshot={setGrowthSnapshot}
               onUpgrade={() => setBillingOpen(true)}
+              onRunCheck={() => {
+                void fetch("/api/growth-ci/checks/queue", {
+                  method: "POST",
+                  headers: { "content-type": "application/json" },
+                  body: JSON.stringify({ appId: snapshot.app.id }),
+                }).then(() => refreshSnapshot());
+              }}
             />
           ) : activeSection === "sources" ? (
             legacySourcesOpen ? (
@@ -1421,6 +1428,7 @@ function GrowthCiHome(props: {
   onAddApp: () => void;
   onSnapshot?: (snapshot: GrowthCiSnapshot | null) => void;
   onUpgrade?: () => void;
+  onRunCheck?: () => void;
 }) {
   const [snapshot, setSnapshot] = useState<GrowthCiSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1573,6 +1581,7 @@ function GrowthCiHome(props: {
         })();
       }}
       onUpgrade={props.onUpgrade}
+      onRunCheck={props.onRunCheck}
     />
   );
 }

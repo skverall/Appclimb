@@ -101,6 +101,11 @@ import {
   recoverStaleReleaseChecks,
 } from "./growth-ci/checks";
 import {
+  listAppReleases,
+  queueReleaseCheck,
+  releaseInputHash,
+} from "./growth-ci/releases";
+import {
   authenticateAgentToken,
   agentHasScope,
   createAgentToken,
@@ -1097,6 +1102,54 @@ app.post("/v1/growth-ci/incidents/:id/dismiss", requireAuth, async (c) => {
   );
   if (!ok) return errorResponse(c, "incident_not_open", 409);
   return c.json({ data: { dismissed: true } });
+});
+
+app.post("/v1/growth-ci/checks/queue", requireAuth, async (c) => {
+  if (!isGrowthCiEnabled(c.env)) {
+    return errorResponse(c, "growth_ci_disabled", 404);
+  }
+  const auth = c.get("auth");
+  const input = await jsonBody(c.req.raw);
+  const appId = typeof input.appId === "string" ? input.appId.trim() : "";
+  if (!appId) return errorResponse(c, "app_id_required", 400);
+
+  const workspaceRow = await c.env.DB.prepare(
+    `SELECT subscription_status, trial_ends_at, entitlement_ends_at
+     FROM workspaces WHERE id=? LIMIT 1`,
+  )
+    .bind(auth.workspaceId)
+    .first<{
+      subscription_status: string;
+      trial_ends_at: string | null;
+      entitlement_ends_at: string | null;
+    }>();
+  const contractRow = await c.env.DB.prepare(
+    `SELECT free_verdict_consumed_at FROM growth_contracts
+     WHERE workspace_id=? AND app_id=? LIMIT 1`,
+  )
+    .bind(auth.workspaceId, appId)
+    .first<{ free_verdict_consumed_at: string | null }>();
+  const access = assessGrowthCiAccess(
+    {
+      subscriptionStatus: workspaceRow?.subscription_status ?? "none",
+      trialEndsAt: workspaceRow?.trial_ends_at ?? "",
+      entitlementEndsAt: workspaceRow?.entitlement_ends_at ?? undefined,
+    },
+    contractRow?.free_verdict_consumed_at,
+  );
+  if (!access.canRunReleaseChecks) {
+    return errorResponse(c, "release_checks_require_pro", 402);
+  }
+
+  const releases = await listAppReleases(c.env.DB, auth.workspaceId, appId, 1);
+  const release = releases[0];
+  if (!release) return errorResponse(c, "no_release_found", 404);
+
+  const hash = await releaseInputHash(release, null);
+  const checkId = await queueReleaseCheck(c.env, release, hash, nowISO());
+  if (!checkId) return errorResponse(c, "check_already_active", 409);
+
+  return c.json({ data: { checkId, releaseId: release.id } });
 });
 
 app.post("/v1/agent-tokens", requireAuth, async (c) => {

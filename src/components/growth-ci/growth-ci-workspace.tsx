@@ -143,6 +143,7 @@ export function GrowthCiWorkspace(props: {
   onDismissIncident?: (incidentId: string) => void;
   onCopyTask?: () => void;
   onUpgrade?: () => void;
+  onRunCheck?: () => void;
 }) {
   const { snapshot, loading, error } = props;
   const release = snapshot?.latestRelease;
@@ -346,6 +347,19 @@ export function GrowthCiWorkspace(props: {
                   Next check after the activation window matures (
                   {new Date(release.nextCheckAt).toLocaleString()}).
                 </p>
+              ) : null}
+              {props.onRunCheck &&
+              snapshot?.access?.canRunReleaseChecks &&
+              release ? (
+                <div className="growth-ci-actions" style={{ marginTop: "0.5rem" }}>
+                  <button
+                    type="button"
+                    className="growth-ci-btn growth-ci-btn--ghost"
+                    onClick={props.onRunCheck}
+                  >
+                    Run check now
+                  </button>
+                </div>
               ) : null}
             </div>
           </section>
