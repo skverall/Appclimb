@@ -142,6 +142,7 @@ export function GrowthCiWorkspace(props: {
   onAddApp?: () => void;
   onDismissIncident?: (incidentId: string) => void;
   onCopyTask?: () => void;
+  onUpgrade?: () => void;
 }) {
   const { snapshot, loading, error } = props;
   const release = snapshot?.latestRelease;
@@ -279,6 +280,16 @@ export function GrowthCiWorkspace(props: {
             <div className="growth-ci-banner growth-ci-banner--error">
               Free first verdict used. Upgrade to Pro for ongoing release
               monitoring and Agent Bridge.
+              {props.onUpgrade ? (
+                <button
+                  type="button"
+                  className="growth-ci-btn"
+                  style={{ marginLeft: "0.75rem" }}
+                  onClick={props.onUpgrade}
+                >
+                  Upgrade to Pro
+                </button>
+              ) : null}
             </div>
           ) : snapshot.access?.reason === "free_first_verdict" ? (
             <div className="growth-ci-banner growth-ci-banner--ok">

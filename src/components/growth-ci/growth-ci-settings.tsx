@@ -39,6 +39,7 @@ export function GrowthCiSettings(props: {
   snapshot: GrowthCiSnapshot | null;
   onRefresh: () => void;
   onOpenLegacySources?: () => void;
+  onUpgrade?: () => void;
 }) {
   const { appId, snapshot, onRefresh } = props;
   const [localSnapshot, setLocalSnapshot] = useState(snapshot);
@@ -823,6 +824,17 @@ export function GrowthCiSettings(props: {
                 ? "Free — first complete release verdict is free. Agent Bridge needs Pro."
                 : "Free first verdict used — upgrade for ongoing monitoring."}
         </p>
+        {props.onUpgrade &&
+        (access?.reason === "free_exhausted" ||
+          access?.reason === "free_first_verdict") ? (
+          <button
+            type="button"
+            className="growth-ci-btn"
+            onClick={props.onUpgrade}
+          >
+            Upgrade to Pro
+          </button>
+        ) : null}
       </section>
 
       <section className="growth-ci-card">

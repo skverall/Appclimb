@@ -968,6 +968,7 @@ export function AppClimbShell({
               }}
               onAddApp={() => setAddAppOpen(true)}
               onSnapshot={setGrowthSnapshot}
+              onUpgrade={() => setBillingOpen(true)}
             />
           ) : activeSection === "sources" ? (
             legacySourcesOpen ? (
@@ -1022,6 +1023,7 @@ export function AppClimbShell({
                   }
                 }}
                 onOpenLegacySources={() => setLegacySourcesOpen(true)}
+                onUpgrade={() => setBillingOpen(true)}
               />
             )
           ) : null}
@@ -1418,6 +1420,7 @@ function GrowthCiHome(props: {
   onOpenSettings: () => void;
   onAddApp: () => void;
   onSnapshot?: (snapshot: GrowthCiSnapshot | null) => void;
+  onUpgrade?: () => void;
 }) {
   const [snapshot, setSnapshot] = useState<GrowthCiSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
@@ -1569,6 +1572,7 @@ function GrowthCiHome(props: {
           await refresh();
         })();
       }}
+      onUpgrade={props.onUpgrade}
     />
   );
 }
