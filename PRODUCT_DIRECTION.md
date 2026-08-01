@@ -191,7 +191,10 @@ navigation, marketing, or scheduled customer work:
 - Web SaaS platform selection and customer-facing first-party web analytics UI;
 - Acquisition Atlas as a product surface;
 - AI Visibility and provider scans;
-- keyword rank tracking, Rank Terrain, ASO, competitor intelligence;
+- broad ASO/keyword intelligence and competitor intelligence. A bounded Store
+  Scout utility for public App Store result positions is now active by founder
+  request; it does not claim Apple Ads popularity, private App Store data, or
+  replace the Growth CI release-verdict loop;
 - Voice of Customer and Retention Heatmap as standalone surfaces;
 - generic Growth Replay as a separate section;
 - multi-app portfolio UI;

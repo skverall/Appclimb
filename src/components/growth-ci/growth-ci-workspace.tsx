@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Settings2,
   Shield,
+  Store,
 } from "lucide-react";
 
 import { ModalDialog } from "@/components/modal-dialog";
@@ -164,6 +165,7 @@ export function GrowthCiWorkspace(props: {
   error?: string | null;
   onRefresh?: () => void;
   onOpenSettings?: () => void;
+  onOpenStoreScout?: () => void;
   onAddApp?: () => void;
   onDismissIncident?: (incidentId: string) => void;
   onCopyTask?: () => void;
@@ -325,6 +327,15 @@ export function GrowthCiWorkspace(props: {
                   >
                     Continue setup in Settings
                   </button>
+                  {props.onOpenStoreScout ? (
+                    <button
+                      type="button"
+                      className="growth-ci-btn growth-ci-btn--ghost"
+                      onClick={props.onOpenStoreScout}
+                    >
+                      <Store size={15} /> Open Store Scout
+                    </button>
+                  ) : null}
                 </div>
               </div>
             </section>

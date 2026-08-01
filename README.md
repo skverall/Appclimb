@@ -25,6 +25,9 @@ direction or expanding the feature set.
   evidence check without creating an Agent Bridge token.
 - **Verification** — task closes from production cohort evidence, not agent
   claims, green tests, or PR merge alone.
+- **Store Scout** — a bounded App Store utility for tracking public search
+  positions, rank history, trends, and metadata-based keyword suggestions.
+  Search popularity remains explicitly unavailable without Apple Ads data.
 - **Settings** — app identity, RevenueCat, PostHog, measurement mapping,
   Growth Contract summary, Agent Bridge tokens, billing/account.
 - **Billing** — founding Pro price `$12.99/month` or `$129/year` via Paddle;

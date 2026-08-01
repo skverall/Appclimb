@@ -8,7 +8,8 @@ export const demoSnapshot: DashboardSnapshot = {
     id: "car-dealer-tracker",
     name: "Car Dealer Tracker",
     platform: "iOS",
-    storefront: "United States",
+    appStoreId: "6756513314",
+    storefront: "US",
     period: "Last 30 days",
   },
   confidence: {

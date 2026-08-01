@@ -15,6 +15,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  Store,
   Trash2,
 } from "lucide-react";
 import Link from "next/link";
@@ -46,6 +47,7 @@ import {
   GrowthCiWorkspace,
   type GrowthCiSnapshot,
 } from "@/components/growth-ci/growth-ci-workspace";
+import { StoreScoutView } from "@/components/store-scout-view";
 import type {
   DashboardSnapshot,
   Insight,
@@ -78,6 +80,7 @@ const NAV_ITEMS: {
   icon: typeof Gauge;
 }[] = [
   { id: "growth", label: "Growth CI", icon: Gauge },
+  { id: "store", label: "Store Scout", icon: Store },
   { id: "sources", label: "Setup", icon: PlugZap },
 ];
 
@@ -966,6 +969,7 @@ export function AppClimbShell({
                 setLegacySourcesOpen(false);
                 navigateTo("sources");
               }}
+              onOpenStoreScout={() => navigateTo("store")}
               onAddApp={() => setAddAppOpen(true)}
               onSnapshot={setGrowthSnapshot}
               onUpgrade={() => setBillingOpen(true)}
@@ -975,6 +979,14 @@ export function AppClimbShell({
                   headers: { "content-type": "application/json" },
                   body: JSON.stringify({ appId: snapshot.app.id }),
                 }).then(() => refreshSnapshot());
+              }}
+            />
+          ) : activeSection === "store" ? (
+            <StoreScoutView
+              snapshot={snapshot}
+              onOpenSettings={() => {
+                setLegacySourcesOpen(false);
+                navigateTo("sources");
               }}
             />
           ) : activeSection === "sources" ? (
@@ -1425,6 +1437,7 @@ function GrowthCiHome(props: {
   appIconUrl: string | null;
   demo: boolean;
   onOpenSettings: () => void;
+  onOpenStoreScout: () => void;
   onAddApp: () => void;
   onSnapshot?: (snapshot: GrowthCiSnapshot | null) => void;
   onUpgrade?: () => void;
@@ -1560,6 +1573,7 @@ function GrowthCiHome(props: {
       error={error}
       onRefresh={() => void refresh()}
       onOpenSettings={props.onOpenSettings}
+      onOpenStoreScout={props.onOpenStoreScout}
       onAddApp={props.onAddApp}
       onCopyTask={() => {
         if (!snapshot?.task?.packet) return;

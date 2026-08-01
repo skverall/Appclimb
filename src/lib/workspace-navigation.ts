@@ -7,6 +7,7 @@
 
 export const WORKSPACE_SECTIONS = [
   "growth",
+  "store",
   "sources",
   // Legacy aliases (resolved in workspaceSectionFromValue)
   "pulse",
@@ -19,6 +20,7 @@ export type WorkspaceSection = (typeof WORKSPACE_SECTIONS)[number];
 
 const LEGACY_TO_ACTIVE: Record<string, WorkspaceSection> = {
   growth: "growth",
+  store: "store",
   sources: "sources",
   pulse: "growth",
   diagnose: "growth",
