@@ -1,15 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
 import {
   CheckCircle2,
   Clock3,
   AlertTriangle,
   Bot,
+  LoaderCircle,
+  PackageCheck,
   RefreshCw,
   Settings2,
   Shield,
 } from "lucide-react";
+
+import { ModalDialog } from "@/components/modal-dialog";
 
 export interface GrowthCiSnapshot {
   product: "growth_ci";
@@ -65,8 +69,11 @@ export interface GrowthCiSnapshot {
     id: string;
     version: string;
     buildNumber: string;
+    source: "agent" | "posthog" | "manual";
     firstSeenAt: string;
     firstObservedLabel: string;
+    reportedDeployedAt?: string | null;
+    reportedDeployedLabel?: string | null;
     verdict: string | null;
     confidenceScore: number | null;
     confidenceLevel: string | null;
@@ -85,6 +92,7 @@ export interface GrowthCiSnapshot {
     id: string;
     version: string;
     buildNumber: string;
+    source: "agent" | "posthog" | "manual";
     firstSeenAt: string;
     verdict: string | null;
     confidenceScore: number | null;
@@ -107,6 +115,12 @@ export interface GrowthCiSnapshot {
     commitSha: string | null;
     pullRequestUrl: string | null;
   } | null;
+}
+
+export interface ManualReleaseReportInput {
+  version: string;
+  buildNumber?: string;
+  taskId?: string;
 }
 
 function pct(value: number | null | undefined): string {
@@ -133,6 +147,17 @@ function verdictTone(verdict: string | null | undefined): string {
   }
 }
 
+function releaseSourceLabel(source: "agent" | "posthog" | "manual"): string {
+  switch (source) {
+    case "manual":
+      return "Reported by you";
+    case "agent":
+      return "Agent reported";
+    default:
+      return "PostHog observed";
+  }
+}
+
 export function GrowthCiWorkspace(props: {
   snapshot: GrowthCiSnapshot | null;
   loading?: boolean;
@@ -144,11 +169,49 @@ export function GrowthCiWorkspace(props: {
   onCopyTask?: () => void;
   onUpgrade?: () => void;
   onRunCheck?: () => void;
+  onReportRelease?: (input: ManualReleaseReportInput) => Promise<void>;
 }) {
   const { snapshot, loading, error } = props;
   const release = snapshot?.latestRelease;
   const task = snapshot?.task;
   const incident = snapshot?.incident;
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportVersion, setReportVersion] = useState("");
+  const [reportBuild, setReportBuild] = useState("");
+  const [linkTask, setLinkTask] = useState(false);
+  const [reporting, setReporting] = useState(false);
+  const [reportError, setReportError] = useState("");
+  const [reportMessage, setReportMessage] = useState("");
+  const taskCanBeLinked = Boolean(
+    task && ["available", "claimed", "submitted", "deployed"].includes(task.status),
+  );
+
+  async function submitReleaseReport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!props.onReportRelease || !reportVersion.trim()) return;
+    setReporting(true);
+    setReportError("");
+    try {
+      await props.onReportRelease({
+        version: reportVersion.trim(),
+        buildNumber: reportBuild.trim() || undefined,
+        taskId: linkTask && taskCanBeLinked ? task?.id : undefined,
+      });
+      setReportOpen(false);
+      setReportVersion("");
+      setReportBuild("");
+      setLinkTask(false);
+      setReportMessage(
+        `Release ${reportVersion.trim()} reported. The production cohort check is queued.`,
+      );
+    } catch (caught) {
+      setReportError(
+        caught instanceof Error ? caught.message : "release_report_failed",
+      );
+    } finally {
+      setReporting(false);
+    }
+  }
 
   return (
     <div className="growth-ci-workspace">
@@ -170,12 +233,26 @@ export function GrowthCiWorkspace(props: {
             <h1>{snapshot?.app.name ?? "Your iOS app"}</h1>
             <p className="growth-ci-subtle">
               {release
-                ? `${release.version}${release.buildNumber ? ` (${release.buildNumber})` : ""} · ${release.firstObservedLabel}`
+                ? `${release.version}${release.buildNumber ? ` (${release.buildNumber})` : ""} · ${release.reportedDeployedLabel ?? release.firstObservedLabel} · ${releaseSourceLabel(release.source)}`
                 : "Connect RevenueCat + PostHog in Settings to evaluate releases"}
             </p>
           </div>
         </div>
         <div className="growth-ci-header-actions">
+          {props.onReportRelease && snapshot ? (
+            <button
+              type="button"
+              className="growth-ci-btn"
+              disabled={snapshot.access?.canRunReleaseChecks === false}
+              onClick={() => {
+                setReportError("");
+                setReportMessage("");
+                setReportOpen(true);
+              }}
+            >
+              <PackageCheck size={16} /> Report release
+            </button>
+          ) : null}
           {props.onAddApp ? (
             <button
               type="button"
@@ -208,6 +285,11 @@ export function GrowthCiWorkspace(props: {
       {error ? (
         <div className="growth-ci-banner growth-ci-banner--error" role="alert">
           {error}
+        </div>
+      ) : null}
+      {reportMessage ? (
+        <div className="growth-ci-banner growth-ci-banner--ok" role="status">
+          {reportMessage}
         </div>
       ) : null}
 
@@ -514,6 +596,7 @@ export function GrowthCiWorkspace(props: {
                 <thead>
                   <tr>
                     <th>Version</th>
+                    <th>Source</th>
                     <th>Verdict</th>
                     <th>Confidence</th>
                     <th>First observed</th>
@@ -526,6 +609,7 @@ export function GrowthCiWorkspace(props: {
                         {row.version}
                         {row.buildNumber ? ` (${row.buildNumber})` : ""}
                       </td>
+                      <td>{releaseSourceLabel(row.source)}</td>
                       <td>{row.verdict ?? "—"}</td>
                       <td>{row.confidenceScore ?? "—"}</td>
                       <td>{new Date(row.firstSeenAt).toLocaleDateString()}</td>
@@ -560,6 +644,97 @@ export function GrowthCiWorkspace(props: {
             </p>
           </section>
         </>
+      ) : null}
+
+      {reportOpen && props.onReportRelease ? (
+        <ModalDialog
+          labelledBy="growth-ci-report-release-title"
+          onClose={() => {
+            if (!reporting) setReportOpen(false);
+          }}
+          dialogClassName="settings-dialog growth-ci-report-dialog"
+          closeLabel="Close report release"
+        >
+          <div className="growth-ci-report-heading">
+            <span className="growth-ci-report-icon">
+              <PackageCheck size={20} />
+            </span>
+            <div>
+              <span className="eyebrow">Production evidence</span>
+              <h2 id="growth-ci-report-release-title">Report a release</h2>
+              <p>
+                Tell AppClimb which version is live. This is your release
+                assertion; the verdict still waits for real PostHog cohort data.
+              </p>
+            </div>
+          </div>
+
+          <form className="growth-ci-report-form" onSubmit={submitReleaseReport}>
+            <label className="growth-ci-add-label">
+              Version
+              <input
+                required
+                value={reportVersion}
+                onChange={(event) => setReportVersion(event.target.value)}
+                placeholder="2.4.2"
+                autoFocus
+              />
+            </label>
+            <label className="growth-ci-add-label">
+              Build number <span>(optional)</span>
+              <input
+                value={reportBuild}
+                onChange={(event) => setReportBuild(event.target.value)}
+                placeholder="42"
+              />
+            </label>
+            {taskCanBeLinked ? (
+              <label className="growth-ci-report-checkbox">
+                <input
+                  type="checkbox"
+                  checked={linkTask}
+                  onChange={(event) => setLinkTask(event.target.checked)}
+                />
+                <span>
+                  This release is the fix for the current task
+                  <small>
+                    {(
+                      task?.packet.incident as { title?: string } | undefined
+                    )?.title || incident?.title || "Open Growth Task"}
+                  </small>
+                </span>
+              </label>
+            ) : null}
+            {reportError ? (
+              <p className="growth-ci-banner growth-ci-banner--error" role="alert">
+                {reportError}
+              </p>
+            ) : null}
+            <div className="growth-ci-actions">
+              <button
+                type="submit"
+                className="growth-ci-btn"
+                disabled={reporting || !reportVersion.trim()}
+              >
+                {reporting ? (
+                  <>
+                    <LoaderCircle size={16} className="spin" /> Queueing…
+                  </>
+                ) : (
+                  "Report and evaluate"
+                )}
+              </button>
+              <button
+                type="button"
+                className="growth-ci-btn growth-ci-btn--ghost"
+                disabled={reporting}
+                onClick={() => setReportOpen(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </ModalDialog>
       ) : null}
     </div>
   );

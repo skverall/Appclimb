@@ -82,6 +82,14 @@ Authenticated with `Authorization: Bearer acagt_...` (hashed at rest).
 | POST | `/v1/agent/releases` | Report deployed release |
 | GET | `/v1/agent/tasks/:id/verification` | Collecting or final outcome |
 
+Owners and admins can also report a release from the web workspace with
+`POST /v1/growth-ci/releases`. The payload requires `appId` and `version`, and
+accepts an optional `buildNumber` and `taskId`. AppClimb records this as a
+`user_assertion`, queues the normal release check, and moves the linked task to
+`awaiting_verification`. The report is not App Store confirmation; a verdict
+still requires the real PostHog cohort to mature and pass the deterministic
+check.
+
 Token management (user JWT, owner/admin):
 
 - `POST/GET /v1/agent-tokens`

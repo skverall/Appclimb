@@ -1,4 +1,5 @@
 import { nowISO, log } from "../runtime";
+import { audit } from "../db";
 import {
   RELEASE_COHORT_ACTIVATED_USERS,
   RELEASE_COHORT_NEW_USERS,
@@ -141,6 +142,132 @@ export async function upsertAppRelease(
     .prepare(`SELECT * FROM app_releases WHERE id=?`)
     .bind(id)
     .first<AppReleaseRow>())!;
+}
+
+export type ManualReleaseReportInput = {
+  workspaceId: string;
+  userId: string;
+  appId: string;
+  version: string;
+  buildNumber?: string;
+  reportedDeployedAt?: string | null;
+  commitSha?: string | null;
+  pullRequestUrl?: string | null;
+  taskId?: string | null;
+};
+
+export type ManualReleaseReportResult =
+  | { ok: true; releaseId: string; checkId: string; taskLinked: boolean }
+  | {
+      ok: false;
+      code: "app_not_found" | "task_not_found" | "task_not_active";
+    };
+
+/**
+ * Lets an owner/admin report a production release without an Agent Bridge
+ * token. The release remains a user assertion; the verdict still comes only
+ * from the normal PostHog cohort check.
+ */
+export async function reportManualRelease(
+  env: Cloudflare.Env,
+  input: ManualReleaseReportInput,
+): Promise<ManualReleaseReportResult> {
+  const app = await env.DB.prepare(
+    `SELECT id FROM apps WHERE id=? AND workspace_id=? AND platform='iOS' LIMIT 1`,
+  )
+    .bind(input.appId, input.workspaceId)
+    .first<{ id: string }>();
+  if (!app) return { ok: false, code: "app_not_found" };
+
+  const taskId = input.taskId?.trim() || null;
+  let task: { id: string; incident_id: string; status: string } | null = null;
+  if (taskId) {
+    task = await env.DB.prepare(
+      `SELECT id,incident_id,status FROM agent_tasks
+       WHERE id=? AND workspace_id=? AND app_id=? LIMIT 1`,
+    )
+      .bind(taskId, input.workspaceId, input.appId)
+      .first<{ id: string; incident_id: string; status: string }>();
+    if (!task) return { ok: false, code: "task_not_found" };
+    if (["closed", "canceled"].includes(task.status)) {
+      return { ok: false, code: "task_not_active" };
+    }
+  }
+
+  const reportedAt =
+    input.reportedDeployedAt && Number.isFinite(Date.parse(input.reportedDeployedAt))
+      ? new Date(input.reportedDeployedAt).toISOString()
+      : nowISO();
+  const release = await upsertAppRelease(env.DB, {
+    workspaceId: input.workspaceId,
+    appId: input.appId,
+    version: input.version,
+    buildNumber: input.buildNumber,
+    source: "manual",
+    sourceTrust: "user_assertion",
+    firstSeenAt: reportedAt,
+    reportedDeployedAt: reportedAt,
+    commitSha: input.commitSha ?? null,
+    pullRequestUrl: input.pullRequestUrl ?? null,
+  });
+
+  if (task) {
+    await env.DB.batch([
+      env.DB.prepare(
+        `UPDATE agent_tasks SET status='deployed',fix_release_id=?,deployed_at=?,
+         commit_sha=COALESCE(?,commit_sha),pull_request_url=COALESCE(?,pull_request_url),
+         updated_at=?
+         WHERE id=? AND workspace_id=? AND app_id=?
+           AND status IN ('available','claimed','submitted','deployed')`,
+      ).bind(
+        release.id,
+        reportedAt,
+        input.commitSha ?? null,
+        input.pullRequestUrl ?? null,
+        reportedAt,
+        task.id,
+        input.workspaceId,
+        input.appId,
+      ),
+      env.DB.prepare(
+        `UPDATE growth_incidents SET status='awaiting_verification',fix_release_id=?,updated_at=?
+         WHERE id=? AND workspace_id=? AND app_id=?
+           AND status IN ('open','in_progress','awaiting_verification')`,
+      ).bind(
+        release.id,
+        reportedAt,
+        task.incident_id,
+        input.workspaceId,
+        input.appId,
+      ),
+    ]);
+  }
+
+  const checkId = await queueReleaseCheck(
+    env,
+    release,
+    await releaseInputHash(release, null),
+  );
+  if (!checkId) {
+    throw new Error("release_check_not_queued");
+  }
+
+  await audit(
+    env.DB,
+    input.workspaceId,
+    input.userId,
+    "manual_release.reported",
+    "app_release",
+    release.id,
+    { appId: input.appId, taskId, version: release.version },
+  );
+
+  return {
+    ok: true,
+    releaseId: release.id,
+    checkId,
+    taskLinked: Boolean(task),
+  };
 }
 
 export async function queueReleaseCheck(

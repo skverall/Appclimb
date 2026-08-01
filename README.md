@@ -20,6 +20,9 @@ direction or expanding the feature set.
   incident per app.
 - **One Agent Task** — portable, machine-readable packet for Hermes / Codex /
   Grok / Claude (or any HTTP client).
+- **Manual release report** — an owner/admin can report a production version from
+  the workspace, optionally link it to the current task, and queue the same
+  evidence check without creating an Agent Bridge token.
 - **Verification** — task closes from production cohort evidence, not agent
   claims, green tests, or PR merge alone.
 - **Settings** — app identity, RevenueCat, PostHog, measurement mapping,

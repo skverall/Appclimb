@@ -103,6 +103,7 @@ import {
 import {
   listAppReleases,
   queueReleaseCheck,
+  reportManualRelease,
   releaseInputHash,
 } from "./growth-ci/releases";
 import {
@@ -1150,6 +1151,92 @@ app.post("/v1/growth-ci/checks/queue", requireAuth, async (c) => {
   if (!checkId) return errorResponse(c, "check_already_active", 409);
 
   return c.json({ data: { checkId, releaseId: release.id } });
+});
+
+app.post("/v1/growth-ci/releases", requireAuth, async (c) => {
+  if (!isGrowthCiEnabled(c.env)) {
+    return errorResponse(c, "growth_ci_disabled", 404);
+  }
+  const auth = c.get("auth");
+  if (!["owner", "admin"].includes(auth.role)) {
+    return errorResponse(c, "admin_required", 403);
+  }
+  const input = await jsonBody(c.req.raw, 16 * 1024);
+  const appId = typeof input.appId === "string" ? input.appId.trim() : "";
+  const version = typeof input.version === "string" ? input.version.trim() : "";
+  const buildNumber =
+    typeof input.buildNumber === "string" ? input.buildNumber.trim() : "";
+  const taskId = typeof input.taskId === "string" ? input.taskId.trim() : null;
+  const commitSha =
+    typeof input.commitSha === "string" &&
+    /^[0-9a-f]{7,40}$/iu.test(input.commitSha.trim())
+      ? input.commitSha.trim().toLowerCase()
+      : null;
+  const pullRequestUrl =
+    typeof input.pullRequestUrl === "string" &&
+    /^https:\/\//u.test(input.pullRequestUrl.trim())
+      ? input.pullRequestUrl.trim().slice(0, 500)
+      : null;
+  const reportedDeployedAt =
+    typeof input.reportedDeployedAt === "string"
+      ? input.reportedDeployedAt.trim()
+      : null;
+
+  if (!appId) return errorResponse(c, "app_id_required", 400);
+  if (!version || version.length > 64) {
+    return errorResponse(c, "invalid_version", 400);
+  }
+  if (buildNumber.length > 64) {
+    return errorResponse(c, "invalid_build_number", 400);
+  }
+  if (reportedDeployedAt && !Number.isFinite(Date.parse(reportedDeployedAt))) {
+    return errorResponse(c, "invalid_deployed_at", 400);
+  }
+
+  const workspaceRow = await c.env.DB.prepare(
+    `SELECT subscription_status,trial_ends_at,entitlement_ends_at
+     FROM workspaces WHERE id=? LIMIT 1`,
+  )
+    .bind(auth.workspaceId)
+    .first<{
+      subscription_status: string;
+      trial_ends_at: string | null;
+      entitlement_ends_at: string | null;
+    }>();
+  const contractRow = await c.env.DB.prepare(
+    `SELECT free_verdict_consumed_at FROM growth_contracts
+     WHERE workspace_id=? AND app_id=? LIMIT 1`,
+  )
+    .bind(auth.workspaceId, appId)
+    .first<{ free_verdict_consumed_at: string | null }>();
+  const access = assessGrowthCiAccess(
+    {
+      subscriptionStatus: workspaceRow?.subscription_status ?? "none",
+      trialEndsAt: workspaceRow?.trial_ends_at ?? "",
+      entitlementEndsAt: workspaceRow?.entitlement_ends_at ?? undefined,
+    },
+    contractRow?.free_verdict_consumed_at,
+  );
+  if (!access.canRunReleaseChecks) {
+    return errorResponse(c, "release_checks_require_pro", 402);
+  }
+
+  const result = await reportManualRelease(c.env, {
+    workspaceId: auth.workspaceId,
+    userId: auth.userId,
+    appId,
+    version,
+    buildNumber,
+    reportedDeployedAt,
+    commitSha,
+    pullRequestUrl,
+    taskId,
+  });
+  if (!result.ok) {
+    const status = result.code === "app_not_found" || result.code === "task_not_found" ? 404 : 409;
+    return errorResponse(c, result.code, status);
+  }
+  return c.json({ data: result }, 201);
 });
 
 app.post("/v1/agent-tokens", requireAuth, async (c) => {

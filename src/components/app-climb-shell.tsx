@@ -1582,7 +1582,36 @@ function GrowthCiHome(props: {
       }}
       onUpgrade={props.onUpgrade}
       onRunCheck={props.onRunCheck}
+      onReportRelease={async (input) => {
+        const response = await fetch("/api/growth-ci/releases", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            appId: props.appId,
+            version: input.version,
+            buildNumber: input.buildNumber,
+            taskId: input.taskId,
+          }),
+        });
+        const payload = (await response.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        if (!response.ok) {
+          const messages: Record<string, string> = {
+            release_checks_require_pro:
+              "Ongoing release checks require Pro. Your first verdict remains available on the free path.",
+            task_not_active: "That Growth Task is already closed.",
+            task_not_found: "The selected Growth Task could not be found.",
+            app_not_found: "This iOS app is no longer in the workspace.",
+          };
+          throw new Error(
+            messages[payload.error ?? ""] ??
+              payload.error ??
+              `Could not report release (${response.status}).`,
+          );
+        }
+        await refresh();
+      }}
     />
   );
 }
-
