@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Compass,
+  Loader2,
   Menu,
   Plus,
   Trash2,
@@ -60,7 +61,17 @@ export function AppWorkspace() {
     }>;
   } | null>(null);
   const [bootstrapping, setBootstrapping] = useState(false);
+  const [bootstrapLabel, setBootstrapLabel] = useState("Loading…");
+  const [analyzeProgress, setAnalyzeProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
+  const storeRef = useRef(store);
+
+  useEffect(() => {
+    storeRef.current = store;
+  }, [store]);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,6 +91,7 @@ export function AppWorkspace() {
   }, []);
 
   const persist = useCallback((next: TrackerStore) => {
+    storeRef.current = next;
     setStore(next);
     saveTrackerStore(window.localStorage, next);
   }, []);
@@ -104,7 +116,7 @@ export function AppWorkspace() {
   };
 
   const selectApp = (app: TrackedApp) => {
-    persist(setActiveApp(store, app.appStoreId, app.country));
+    persist(setActiveApp(storeRef.current, app.appStoreId, app.country));
     setView("app");
     setSidebarOpen(false);
   };
@@ -117,7 +129,7 @@ export function AppWorkspace() {
     ) {
       return;
     }
-    const next = removeTrackedApp(store, app.appStoreId, app.country);
+    const next = removeTrackedApp(storeRef.current, app.appStoreId, app.country);
     persist(next);
     if (next.apps.length === 0) setView("explorer");
   };
@@ -125,6 +137,7 @@ export function AppWorkspace() {
   const handleSelectCatalogApp = async (catalog: CatalogApp, country: string) => {
     setAddAppOpen(false);
     setBootstrapping(true);
+    setBootstrapLabel("Loading app metadata from the App Store…");
     setBanner(null);
     try {
       let description: string | undefined;
@@ -142,7 +155,7 @@ export function AppWorkspace() {
         // Metadata enrichment is best-effort; catalog fields are enough to add.
       }
 
-      const { store: withApp, app, added } = addTrackedApp(store, {
+      const { store: withApp, app, added } = addTrackedApp(storeRef.current, {
         appStoreId: enriched.appStoreId,
         name: enriched.name,
         bundleId: enriched.bundleId,
@@ -179,6 +192,7 @@ export function AppWorkspace() {
       setBanner(humanizeItunesError(err));
     } finally {
       setBootstrapping(false);
+      setBootstrapLabel("Loading…");
     }
   };
 
@@ -186,8 +200,11 @@ export function AppWorkspace() {
     if (!pendingSuggestions) return;
     const { app } = pendingSuggestions;
     setPendingSuggestions(null);
+    setBanner(null);
+
+    // Always read the latest store so we don't drop the newly added app.
     const { store: withKeys, added } = addKeywordsToStore(
-      store,
+      storeRef.current,
       app.appStoreId,
       app.country,
       keywords,
@@ -195,10 +212,17 @@ export function AppWorkspace() {
     persist(withKeys);
     if (added.length === 0) return;
 
+    // Immediately analyze every selected keyword so the table fills in without
+    // requiring a manual "Refresh All".
     setBootstrapping(true);
-    setBanner(null);
+    setBootstrapLabel(
+      `Checking ${added.length} keyword${added.length === 1 ? "" : "s"} against the App Store…`,
+    );
+    setAnalyzeProgress({ done: 0, total: added.length });
     try {
       let working = withKeys;
+      let done = 0;
+      let failures = 0;
       const outcomes = await mapWithConcurrency(
         added.map((row) => row.keyword),
         REFRESH_CONCURRENCY,
@@ -206,8 +230,14 @@ export function AppWorkspace() {
           analyzeWithRetry(keyword, app.country, app.appStoreId),
         { gapMs: REFRESH_GAP_MS },
       );
-      let failures = 0;
+      // Merge onto latest store (notes / other tabs may have changed).
+      working = storeRef.current;
       for (const outcome of outcomes) {
+        done += 1;
+        setAnalyzeProgress({ done, total: added.length });
+        setBootstrapLabel(
+          `Checking keywords… ${done}/${added.length}`,
+        );
         if (outcome.result) {
           working = applyAnalysisToStore(
             working,
@@ -216,6 +246,8 @@ export function AppWorkspace() {
             outcome.item,
             outcome.result,
           );
+          // Persist incrementally so the table lights up as rows finish.
+          persist(working);
         } else {
           failures += 1;
           working = markKeywordUnavailable(
@@ -224,18 +256,25 @@ export function AppWorkspace() {
             app.country,
             outcome.item,
           );
+          persist(working);
         }
       }
-      persist(working);
       if (failures > 0) {
         setBanner(
-          `Added keywords; ${failures} could not be checked yet. Existing rows stay available — try Refresh All shortly.`,
+          failures === added.length
+            ? humanizeItunesError(
+                outcomes.find((item) => item.error)?.error ??
+                  new Error("app_store_catalog_unavailable:429"),
+              )
+            : `Checked ${added.length - failures} of ${added.length} keywords. Some requests failed — existing data is kept; try Refresh All shortly.`,
         );
       }
     } catch (err) {
       setBanner(humanizeItunesError(err));
     } finally {
       setBootstrapping(false);
+      setAnalyzeProgress(null);
+      setBootstrapLabel("Loading…");
     }
   };
 
@@ -393,7 +432,22 @@ export function AppWorkspace() {
 
         {bootstrapping && (
           <div className="tracker-bootstrap" role="status" aria-live="polite">
-            Loading app metadata…
+            <Loader2 className="spin" size={15} aria-hidden="true" />
+            <span>
+              {bootstrapLabel}
+              {analyzeProgress
+                ? ` (${analyzeProgress.done}/${analyzeProgress.total})`
+                : ""}
+            </span>
+            {analyzeProgress && analyzeProgress.total > 0 && (
+              <i className="tracker-bootstrap-bar" aria-hidden="true">
+                <b
+                  style={{
+                    width: `${(analyzeProgress.done / analyzeProgress.total) * 100}%`,
+                  }}
+                />
+              </i>
+            )}
           </div>
         )}
 
@@ -404,6 +458,7 @@ export function AppWorkspace() {
             app={activeApp}
             store={store}
             onStoreChange={persist}
+            suspendAutoRefresh={bootstrapping}
           />
         )}
       </div>

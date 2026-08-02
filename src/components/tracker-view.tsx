@@ -103,10 +103,13 @@ export function TrackerView({
   app,
   store,
   onStoreChange,
+  suspendAutoRefresh = false,
 }: {
   app: TrackedApp;
   store: TrackerStore;
   onStoreChange: (next: TrackerStore) => void;
+  /** Parent is already analyzing (e.g. post-add suggestions) — don't double-fetch. */
+  suspendAutoRefresh?: boolean;
 }) {
   const [filter, setFilter] = useState("");
   const [historyDays, setHistoryDays] = useState<7 | 30>(30);
@@ -227,31 +230,53 @@ export function TrackerView({
     [app.appStoreId, app.country, onStoreChange],
   );
 
-  // Auto-refresh stale keywords when switching to an app (once per app session).
+  // Auto-check keywords that have never been measured (or are stale).
+  // Re-runs when new unchecked keywords appear (e.g. after Add Keywords),
+  // so the table fills without requiring a manual Refresh All.
   useEffect(() => {
-    const sessionKey = `${app.appStoreId}:${app.country}`;
-    if (autoRefreshDone.current === sessionKey) return;
-    autoRefreshDone.current = sessionKey;
+    if (suspendAutoRefresh) return;
     let cancelled = false;
-    void (async () => {
-      await Promise.resolve();
-      if (cancelled) return;
-      const rows = listKeywordsForApp(
-        storeRef.current,
-        app.appStoreId,
-        app.country,
-      );
-      const stale = rows
-        .filter((row) => isKeywordStale(row))
-        .map((row) => row.keyword);
-      if (stale.length > 0) {
-        await refreshKeywords(stale);
-      }
-    })();
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        if (cancelled || busyKeys.size > 0) return;
+        const rows = listKeywordsForApp(
+          storeRef.current,
+          app.appStoreId,
+          app.country,
+        );
+        const needsCheck = rows
+          .filter((row) => {
+            // Never checked → auto-run. Failed/unavailable rows wait for manual refresh.
+            if (!row.currentMetrics) return true;
+            if (row.currentMetrics.unavailable) return false;
+            return isKeywordStale(row);
+          })
+          .map((row) => row.keyword);
+        if (needsCheck.length === 0) return;
+
+        // Deduplicate concurrent auto-runs for the same set.
+        const fingerprint = `${app.appStoreId}:${app.country}:${needsCheck
+          .map((k) => normalizeKeyword(k))
+          .sort()
+          .join("|")}`;
+        if (autoRefreshDone.current === fingerprint) return;
+        autoRefreshDone.current = fingerprint;
+
+        await refreshKeywords(needsCheck);
+      })();
+    }, 180);
     return () => {
       cancelled = true;
+      window.clearTimeout(timer);
     };
-  }, [app.appStoreId, app.country, refreshKeywords]);
+  }, [
+    app.appStoreId,
+    app.country,
+    keywords,
+    refreshKeywords,
+    busyKeys.size,
+    suspendAutoRefresh,
+  ]);
 
   useEffect(() => {
     return () => {

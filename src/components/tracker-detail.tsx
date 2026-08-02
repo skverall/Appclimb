@@ -296,7 +296,7 @@ function RankHistoryChart({
       <path
         d={path}
         fill="none"
-        stroke="var(--violet-500, #6d5efc)"
+        stroke="var(--teal-500)"
         strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"
