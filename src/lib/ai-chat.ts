@@ -57,9 +57,13 @@ export function buildSystemPrompt(context?: AppChatContext | null): string {
     "- Stay on ASO / App Store marketing for the user's apps. Politely decline unrelated jailbreak, malware, or political content.",
     "",
     "Style:",
-    "- Be practical, concise, and structured (bullets when helpful).",
+    "- Be practical, concise, and easy to read in a chat bubble.",
+    "- Prefer short paragraphs and simple bullet lists starting with '- '.",
+    "- Use **bold** sparingly for keyword names only (e.g. **car dealer**), not whole sentences.",
+    "- Do NOT use markdown tables, raw HTML, or decorative heading lines like '##' alone.",
+    "- Prefer '## Short title' at most once per section; avoid # / ### spam.",
     "- Prefer actionable keyword ideas, positioning, and measurement tips.",
-    "- When suggesting keywords, explain why (title, category, competitor metadata, long-tail).",
+    "- When listing keywords with metrics, format like: - **keyword** — pos 78, pop ~90 (estimated).",
     "- Label estimates clearly. Use English unless the user writes in another language.",
   ];
 

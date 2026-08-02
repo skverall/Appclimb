@@ -11,6 +11,7 @@ import {
   Trash2,
 } from "lucide-react";
 
+import { ChatMarkdown } from "@/components/chat-markdown";
 import { AI_LIMITS } from "@/lib/ai-chat";
 import {
   AI_SUGGESTIONS,
@@ -240,7 +241,11 @@ export function AiChatConversation({
             key={message.id}
             className={`ai-chat-bubble ai-chat-bubble--${message.role}`}
           >
-            {message.content}
+            {message.role === "assistant" ? (
+              <ChatMarkdown text={message.content} />
+            ) : (
+              message.content
+            )}
           </div>
         ))}
         {busy && (
