@@ -5,6 +5,7 @@ import { AiChatPanel } from "@/components/ai-chat-panel";
 import { BrandMark } from "@/components/brand-mark";
 
 const navigation = [
+  { href: "/assistant", label: "ASO Assistant" },
   { href: "/app-store-keywords", label: "Keyword research" },
   { href: "/guides/keyword-research", label: "ASO guide" },
   { href: "/blog", label: "Field notes" },
@@ -50,6 +51,7 @@ export function MarketingFooter() {
         <div>
           <strong>Explore</strong>
           <Link href="/">Keyword explorer</Link>
+          <Link href="/assistant">ASO Assistant</Link>
           <Link href="/app-store-keywords">Keyword research</Link>
           <Link href="/guides/keyword-research">ASO guide</Link>
           <Link href="/blog">Field notes</Link>
@@ -84,15 +86,18 @@ export function MarketingFooter() {
 
 export function MarketingShell({
   children,
+  hideAiFab = false,
 }: {
   children: React.ReactNode;
+  /** Hide the floating popup on the full-page assistant route. */
+  hideAiFab?: boolean;
 }) {
   return (
     <div className="marketing-site">
       <MarketingHeader />
       {children}
       <MarketingFooter />
-      <AiChatPanel />
+      {!hideAiFab && <AiChatPanel />}
     </div>
   );
 }

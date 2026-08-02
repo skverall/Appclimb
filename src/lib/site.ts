@@ -15,6 +15,15 @@ export const PUBLIC_PAGES = [
     lastModified: SITE_UPDATED,
   },
   {
+    path: "/assistant",
+    title: "ASO Assistant — free App Store keyword chat",
+    description:
+      "Chat with AppClimb’s ASO assistant for keyword ideas, estimated score guidance, and listing tips — free, local context only.",
+    changeFrequency: "weekly" as const,
+    priority: 0.92,
+    lastModified: SITE_UPDATED,
+  },
+  {
     path: "/app-store-keywords",
     title: "App Store Keyword Research: Popularity and Difficulty Estimates",
     description:
