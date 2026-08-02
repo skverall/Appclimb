@@ -58,7 +58,19 @@ npm install
 npm run dev
 ```
 
-No environment variables are required. No accounts, keys, or databases.
+No environment variables are required for Keyword Explorer / My Apps.
+
+Optional **ASO Assistant** (DeepSeek V4 Flash) needs a **server-only** key:
+
+```bash
+# local
+echo 'DEEPSEEK_API_KEY=sk-...' >> .env.local
+
+# production Worker secret (never commit the key)
+npx wrangler secret put DEEPSEEK_API_KEY
+```
+
+The key is used only by `POST /api/chat`. It is never shipped to the browser.
 
 ## Verification
 

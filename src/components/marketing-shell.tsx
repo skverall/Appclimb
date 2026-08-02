@@ -1,6 +1,7 @@
 import { ArrowRight, Code2 } from "lucide-react";
 import Link from "next/link";
 
+import { AiChatPanel } from "@/components/ai-chat-panel";
 import { BrandMark } from "@/components/brand-mark";
 
 const navigation = [
@@ -91,6 +92,7 @@ export function MarketingShell({
       <MarketingHeader />
       {children}
       <MarketingFooter />
+      <AiChatPanel />
     </div>
   );
 }
