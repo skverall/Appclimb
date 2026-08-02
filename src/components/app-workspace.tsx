@@ -356,37 +356,46 @@ export function AppWorkspace() {
                   app.country,
                 ).length;
                 return (
-                  <li key={key}>
+                  <li
+                    key={key}
+                    className={
+                      active
+                        ? "tracker-app-row is-active"
+                        : "tracker-app-row"
+                    }
+                  >
                     <button
                       type="button"
-                      className={
-                        active
-                          ? "tracker-app-card is-active"
-                          : "tracker-app-card"
-                      }
+                      className="tracker-app-card"
                       onClick={() => selectApp(app)}
+                      aria-current={active ? "true" : undefined}
                     >
                       {app.iconUrl ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img
                           src={app.iconUrl}
                           alt=""
-                          width={32}
-                          height={32}
+                          width={36}
+                          height={36}
                           loading="lazy"
                         />
                       ) : (
                         <span
-                          className="tracker-app-icon-fallback tracker-app-icon-fallback--sm"
+                          className="tracker-app-icon-fallback"
                           aria-hidden="true"
                         >
                           {app.name.charAt(0)}
                         </span>
                       )}
                       <span className="tracker-app-card-meta">
-                        <strong>{app.name}</strong>
+                        <strong title={app.name}>{app.name}</strong>
                         <small>
-                          {app.country} · {count} kw
+                          <span className="tracker-app-store-badge">
+                            {app.country}
+                          </span>
+                          <span>
+                            {count} keyword{count === 1 ? "" : "s"}
+                          </span>
                         </small>
                       </span>
                     </button>
@@ -394,6 +403,7 @@ export function AppWorkspace() {
                       type="button"
                       className="tracker-app-delete"
                       aria-label={`Remove ${app.name}`}
+                      title={`Remove ${app.name}`}
                       onClick={() => handleDeleteApp(app)}
                     >
                       <Trash2 size={14} aria-hidden="true" />
