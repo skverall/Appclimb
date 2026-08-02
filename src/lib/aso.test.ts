@@ -6,11 +6,13 @@ import {
   addKeywordToList,
   backfillHistory,
   deleteRecord,
+  estimateKeyword,
   estimateMetrics,
   fetchKeywordResults,
   keywordJitter,
   loadKeywordList,
   loadRecord,
+  recentHistory,
   recordSnapshot,
   relatedKeywords,
   removeKeywordFromList,
@@ -316,5 +318,58 @@ describe("related keywords", () => {
 describe("toLocalDate", () => {
   it("formats as YYYY-MM-DD", () => {
     expect(toLocalDate(new Date(2026, 7, 2, 10, 30))).toBe("2026-08-02");
+  });
+});
+
+describe("estimateKeyword and list corruption", () => {
+  it("fetch+estimate combines into KeywordMetrics", async () => {
+    const metrics = await estimateKeyword("habit", "US", {
+      fetchImpl: (async () =>
+        new Response(
+          JSON.stringify({
+            results: [
+              {
+                trackId: 1,
+                trackName: "Habit",
+                userRatingCount: 10,
+                averageUserRating: 4,
+              },
+            ],
+          }),
+          { status: 200 },
+        )) as typeof fetch,
+    });
+    expect(metrics.keyword).toBe("habit");
+    expect(metrics.results).toBe(1);
+  });
+
+  it("loadKeywordList returns empty for corrupt JSON", () => {
+    const storage = makeStorage({ "appclimb:kw:v1:list:US": "{bad" });
+    expect(loadKeywordList(storage, "US")).toEqual([]);
+    const storage2 = makeStorage({
+      "appclimb:kw:v1:list:US": JSON.stringify([1, "ok", null]),
+    });
+    expect(loadKeywordList(storage2, "US")).toEqual(["ok"]);
+  });
+
+  it("recentHistory trims to the trailing window", () => {
+    const record = {
+      keyword: "x",
+      country: "US",
+      firstSeen: "2026-01-01",
+      backfilled: false,
+      history: Array.from({ length: 40 }, (_, index) => ({
+        date: `2026-07-${String((index % 28) + 1).padStart(2, "0")}`,
+        popularity: index,
+        difficulty: index,
+      })),
+    };
+    expect(recentHistory(record, 10)).toHaveLength(10);
+  });
+
+  it("rejects invalid keyword lengths before fetch", async () => {
+    await expect(
+      fetchKeywordResults("x", "US", { fetchImpl: (async () => new Response()) as typeof fetch }),
+    ).rejects.toThrow(/invalid_keyword_search/);
   });
 });

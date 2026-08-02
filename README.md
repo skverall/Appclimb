@@ -16,13 +16,19 @@ direction or expanding the feature set.
 
 ## Product surface
 
-- **Keyword Explorer** (`/`) — search with live suggestions, a keyword table
-  with Popularity / Difficulty bars and Trend sparklines, and a detail panel
-  with 30-day charts, related keywords, and the top 10 apps for the term.
+- **Keyword Explorer** (`/`) — zero-setup search with live suggestions, a
+  keyword table with estimated Popularity / Difficulty bars and Trend
+  sparklines, and a detail panel with 30-day charts, related keywords, and the
+  top 10 apps for the term. No app setup required.
+- **My Apps tracker** (`/`, sidebar) — add an iOS app by name, App Store URL, or
+  ID; get metadata-based keyword suggestions; track estimated scores, observed
+  position in public iTunes results (first 200), notes, and real rank history
+  locally per app + storefront.
 - **Storefronts** — US, GB, DE, FR, RU, JP.
-- **Local history** — one daily snapshot per keyword per country in
-  `localStorage`; the first check seeds an estimated 30-day baseline
-  (`backfilled: true`), and every later check records a real measurement.
+- **Local history** — Keyword Explorer: one daily snapshot per keyword per
+  country in `appclimb:kw:v1:*` (first check seeds an estimated baseline with
+  `backfilled: true`). My Apps: real position/metrics snapshots in
+  `appclimb:tracker:v1` (rank history is never backfilled).
 - **Marketing pages** — `/app-store-keywords`, `/guides/keyword-research`,
   `/blog` (+ 4 notes), `/about`, `/pricing` (free), `/privacy`, `/terms`,
   `/refunds`.
@@ -35,11 +41,11 @@ backend API**: the tool queries `itunes.apple.com` directly from the browser
 never leaves the visitor's browser.
 
 - `src/app` — pages, layout, sitemap/robots/feed/manifest
-- `src/components` — `keyword-explorer`, `keyword-detail`, `keyword-charts`,
-  marketing shell + layout components
-- `src/lib/aso.ts` — estimation heuristics, history persistence, related
-  keywords (the product logic; unit-tested)
-- `src/lib/itunes.ts` — public iTunes Search API helpers
+- `src/components` — `app-workspace`, `tracker-view`, `keyword-explorer`,
+  `keyword-detail`, `keyword-charts`, marketing shell + layout components
+- `src/lib/aso.ts` — estimation heuristics, explorer history, related keywords
+- `src/lib/itunes.ts` — public iTunes Search API helpers + keyword suggestions
+- `src/lib/tracker.ts` — My Apps localStorage schema, position, rank trends
 - `src/lib/site.ts` — public discovery inventory (sitemap/feed metadata)
 - `wrangler.jsonc` — the `appclimb-web` Worker (assets only)
 - `worker/`, `deploy/`, `compose.yml` — frozen rollback artifacts from earlier

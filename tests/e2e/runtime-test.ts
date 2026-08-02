@@ -29,8 +29,35 @@ test.beforeEach(async ({ page }) => {
   });
 });
 
+/**
+ * Drop console errors that are intentionally provoked (e.g. mocked Apple 429)
+ * or are browser noise for allowed external icon hosts during tests.
+ */
+export function dismissExpectedConsoleErrors(
+  page: Page,
+  patterns: RegExp[],
+): void {
+  const issues = issuesByPage.get(page);
+  if (!issues) return;
+  issues.consoleErrors = issues.consoleErrors.filter(
+    (message) => !patterns.some((pattern) => pattern.test(message)),
+  );
+}
+
 test.afterEach(async ({ page }) => {
   const issues = issuesByPage.get(page);
+
+  // Browser always logs failed network responses as console.error. When tests
+  // mock temporary Apple rate limits, those lines are expected noise.
+  if (issues) {
+    issues.consoleErrors = issues.consoleErrors.filter(
+      (message) =>
+        !(
+          message.includes("Failed to load resource") &&
+          (message.includes("429") || message.includes("403") || message.includes("500"))
+        ),
+    );
+  }
 
   expect(
     issues?.consoleErrors ?? [],

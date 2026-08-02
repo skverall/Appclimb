@@ -1,0 +1,776 @@
+"use client";
+
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Lightbulb,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+} from "lucide-react";
+
+import { AddKeywordsModal } from "@/components/add-keywords-modal";
+import { SuggestionsModal } from "@/components/suggestions-modal";
+import { TrackerDetail } from "@/components/tracker-detail";
+import { SUPPORTED_COUNTRIES } from "@/lib/aso";
+import type { CatalogApp, KeywordSuggestion } from "@/lib/itunes";
+import {
+  REFRESH_CONCURRENCY,
+  REFRESH_GAP_MS,
+  addKeywordsToStore,
+  analyzeWithRetry,
+  applyAnalysisToStore,
+  buildKeywordSuggestions,
+  describeRankTrend,
+  formatPosition,
+  humanizeItunesError,
+  isKeywordStale,
+  keywordKey,
+  listKeywordsForApp,
+  loadAppMetadata,
+  markKeywordUnavailable,
+  mapWithConcurrency,
+  normalizeKeyword,
+  removeKeywordFromStore,
+  snapshotsFor,
+  updateKeywordNote,
+  type TrackedApp,
+  type TrackerStore,
+} from "@/lib/tracker";
+
+type SortKey =
+  | "keyword"
+  | "popularity"
+  | "difficulty"
+  | "position"
+  | "lastUpdate";
+
+function MetricBar({
+  value,
+  tone,
+}: {
+  value: number;
+  tone: "popularity" | "difficulty";
+}) {
+  return (
+    <span className={`metric-bar metric-bar--${tone}`} aria-hidden="true">
+      <i style={{ width: `${value}%` }} />
+      <b>{value}</b>
+    </span>
+  );
+}
+
+function TopAppIcons({
+  apps,
+}: {
+  apps: Array<{
+    appStoreId: string;
+    name: string;
+    developer: string;
+    iconUrl: string;
+    position: number;
+  }>;
+}) {
+  const visible = apps.slice(0, 5);
+  if (visible.length === 0) {
+    return <em className="keyword-pending">—</em>;
+  }
+  return (
+    <span className="tracker-top-icons">
+      {visible.map((app) => (
+        <span
+          key={app.appStoreId}
+          className="tracker-top-icon"
+          title={`#${app.position} ${app.name} — ${app.developer}`}
+        >
+          {app.iconUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={app.iconUrl} alt="" width={22} height={22} loading="lazy" />
+          ) : (
+            <span aria-hidden="true">{app.name.charAt(0)}</span>
+          )}
+        </span>
+      ))}
+      {apps.length > 5 && (
+        <span className="tracker-top-more">+{apps.length - 5}</span>
+      )}
+    </span>
+  );
+}
+
+export function TrackerView({
+  app,
+  store,
+  onStoreChange,
+}: {
+  app: TrackedApp;
+  store: TrackerStore;
+  onStoreChange: (next: TrackerStore) => void;
+}) {
+  const [filter, setFilter] = useState("");
+  const [historyDays, setHistoryDays] = useState<7 | 30>(30);
+  const [sortKey, setSortKey] = useState<SortKey>("keyword");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [selected, setSelected] = useState<string | null>(null);
+  const [busyKeys, setBusyKeys] = useState<Set<string>>(new Set());
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(
+    null,
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [addKeywordsOpen, setAddKeywordsOpen] = useState(false);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState<
+    Array<KeywordSuggestion & { alreadyTracked: boolean }>
+  >([]);
+  const [suggestionsBusy, setSuggestionsBusy] = useState(false);
+  const abortRef = useRef<AbortController | null>(null);
+  const autoRefreshDone = useRef<string | null>(null);
+  const storeRef = useRef(store);
+
+  useEffect(() => {
+    storeRef.current = store;
+  }, [store]);
+
+  const keywords = useMemo(
+    () => listKeywordsForApp(store, app.appStoreId, app.country),
+    [store, app.appStoreId, app.country],
+  );
+
+  const existingNormalized = useMemo(
+    () => new Set(keywords.map((row) => row.normalizedKeyword)),
+    [keywords],
+  );
+
+  const countryLabel =
+    SUPPORTED_COUNTRIES.find((item) => item.code === app.country)?.label ??
+    app.country;
+
+  const refreshKeywords = useCallback(
+    async (targets: string[], options: { openFirst?: boolean } = {}) => {
+      if (targets.length === 0) return;
+      abortRef.current?.abort();
+      const controller = new AbortController();
+      abortRef.current = controller;
+      setError(null);
+      setProgress({ done: 0, total: targets.length });
+      setBusyKeys(new Set(targets.map((kw) => normalizeKeyword(kw))));
+
+      let working = storeRef.current;
+      let done = 0;
+      let failures = 0;
+
+      try {
+        const outcomes = await mapWithConcurrency(
+          targets,
+          REFRESH_CONCURRENCY,
+          async (keyword) => {
+            const analysis = await analyzeWithRetry(
+              keyword,
+              app.country,
+              app.appStoreId,
+              { signal: controller.signal },
+            );
+            return analysis;
+          },
+          { signal: controller.signal, gapMs: REFRESH_GAP_MS },
+        );
+
+        // Re-read latest store so concurrent note edits are not clobbered.
+        working = storeRef.current;
+        for (const outcome of outcomes) {
+          done += 1;
+          setProgress({ done, total: targets.length });
+          if (outcome.result) {
+            working = applyAnalysisToStore(
+              working,
+              app.appStoreId,
+              app.country,
+              outcome.item,
+              outcome.result,
+            );
+          } else if (outcome.error) {
+            failures += 1;
+            working = markKeywordUnavailable(
+              working,
+              app.appStoreId,
+              app.country,
+              outcome.item,
+            );
+          }
+        }
+        onStoreChange(working);
+        if (options.openFirst && targets[0]) {
+          setSelected(normalizeKeyword(targets[0]));
+        }
+        if (failures > 0) {
+          setError(
+            failures === targets.length
+              ? humanizeItunesError(
+                  outcomes.find((item) => item.error)?.error ??
+                    new Error("app_store_catalog_unavailable:429"),
+                )
+              : `Updated ${targets.length - failures} of ${targets.length} keywords. Some requests failed; existing data was kept.`,
+          );
+        }
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          setError(null);
+        } else {
+          setError(humanizeItunesError(err));
+        }
+      } finally {
+        setBusyKeys(new Set());
+        setProgress(null);
+      }
+    },
+    [app.appStoreId, app.country, onStoreChange],
+  );
+
+  // Auto-refresh stale keywords when switching to an app (once per app session).
+  useEffect(() => {
+    const sessionKey = `${app.appStoreId}:${app.country}`;
+    if (autoRefreshDone.current === sessionKey) return;
+    autoRefreshDone.current = sessionKey;
+    let cancelled = false;
+    void (async () => {
+      await Promise.resolve();
+      if (cancelled) return;
+      const rows = listKeywordsForApp(
+        storeRef.current,
+        app.appStoreId,
+        app.country,
+      );
+      const stale = rows
+        .filter((row) => isKeywordStale(row))
+        .map((row) => row.keyword);
+      if (stale.length > 0) {
+        await refreshKeywords(stale);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [app.appStoreId, app.country, refreshKeywords]);
+
+  useEffect(() => {
+    return () => {
+      abortRef.current?.abort();
+    };
+  }, []);
+
+  const openSuggestions = useCallback(async () => {
+    setSuggestionsBusy(true);
+    setError(null);
+    try {
+      const meta = await loadAppMetadata(app.appStoreId, app.country);
+      const raw = meta?.raw ?? {
+        trackName: app.name,
+        primaryGenreName: app.genre,
+        description: app.description,
+      };
+      // Lightweight competitor seed: use top apps from first tracked keyword if any.
+      let competitorApps: CatalogApp[] = [];
+      const firstWithMetrics = keywords.find(
+        (row) => row.currentMetrics && row.currentMetrics.topApps.length > 0,
+      );
+      if (firstWithMetrics?.currentMetrics) {
+        competitorApps = firstWithMetrics.currentMetrics.topApps
+          .filter((top) => top.appStoreId !== app.appStoreId)
+          .slice(0, 5)
+          .map((top) => ({
+            appStoreId: top.appStoreId,
+            name: top.name,
+            bundleId: "",
+            developer: top.developer,
+            genre: top.genre,
+            iconUrl: top.iconUrl,
+            storeUrl: top.storeUrl,
+          }));
+      }
+      const next = buildKeywordSuggestions(raw, app.name, {
+        existingNormalized,
+        competitorApps,
+      });
+      setSuggestions(next);
+      setSuggestionsOpen(true);
+    } catch (err) {
+      setError(humanizeItunesError(err));
+    } finally {
+      setSuggestionsBusy(false);
+    }
+  }, [app, existingNormalized, keywords]);
+
+  const filteredSorted = useMemo(() => {
+    const needle = filter.trim().toLocaleLowerCase();
+    let rows = keywords;
+    if (needle) {
+      rows = rows.filter(
+        (row) =>
+          row.keyword.toLocaleLowerCase().includes(needle) ||
+          row.note.toLocaleLowerCase().includes(needle),
+      );
+    }
+    const dir = sortDir === "asc" ? 1 : -1;
+    return [...rows].sort((left, right) => {
+      const lm = left.currentMetrics;
+      const rm = right.currentMetrics;
+      switch (sortKey) {
+        case "popularity":
+          return ((lm?.popularity ?? -1) - (rm?.popularity ?? -1)) * dir;
+        case "difficulty":
+          return ((lm?.difficulty ?? -1) - (rm?.difficulty ?? -1)) * dir;
+        case "position": {
+          const lp = lm?.unavailable ? 9999 : (lm?.position ?? 9998);
+          const rp = rm?.unavailable ? 9999 : (rm?.position ?? 9998);
+          return (lp - rp) * dir;
+        }
+        case "lastUpdate": {
+          const lt = left.lastCheckedAt ? Date.parse(left.lastCheckedAt) : 0;
+          const rt = right.lastCheckedAt ? Date.parse(right.lastCheckedAt) : 0;
+          return (lt - rt) * dir;
+        }
+        default:
+          return left.keyword.localeCompare(right.keyword) * dir;
+      }
+    });
+  }, [keywords, filter, sortKey, sortDir]);
+
+  const selectedRow = selected
+    ? keywords.find((row) => row.normalizedKeyword === selected) ?? null
+    : null;
+
+  const toggleSort = (key: SortKey) => {
+    if (sortKey === key) {
+      setSortDir((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir(key === "keyword" ? "asc" : "desc");
+    }
+  };
+
+  const confirmDelete = (normalized: string, label: string) => {
+    if (
+      !window.confirm(
+        `Remove “${label}” from tracking? Its local notes and rank history for this app will be deleted.`,
+      )
+    ) {
+      return;
+    }
+    onStoreChange(
+      removeKeywordFromStore(store, app.appStoreId, app.country, normalized),
+    );
+    setSelected((current) => (current === normalized ? null : current));
+  };
+
+  return (
+    <div className="tracker-view">
+      <header className="tracker-view-header">
+        <div className="tracker-view-app">
+          {app.iconUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={app.iconUrl} alt="" width={40} height={40} />
+          ) : (
+            <span className="tracker-app-icon-fallback" aria-hidden="true">
+              {app.name.charAt(0)}
+            </span>
+          )}
+          <div>
+            <h1>{app.name}</h1>
+            <p>
+              {app.developer || "Unknown developer"}
+              {app.genre ? ` · ${app.genre}` : ""} · {countryLabel}
+            </p>
+          </div>
+        </div>
+      </header>
+
+      <div className="tracker-toolbar">
+        <label className="country-select tracker-toolbar-store">
+          <span>Store</span>
+          <select value={app.country} disabled aria-label="Active storefront">
+            {SUPPORTED_COUNTRIES.map((item) => (
+              <option key={item.code} value={item.code}>
+                {item.flag} {item.code}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <button
+          type="button"
+          className="tracker-button-primary"
+          onClick={() => setAddKeywordsOpen(true)}
+        >
+          <Plus size={15} aria-hidden="true" />
+          Add Keywords
+        </button>
+        <button
+          type="button"
+          className="tracker-button-accent"
+          onClick={() => void openSuggestions()}
+          disabled={suggestionsBusy}
+        >
+          {suggestionsBusy ? (
+            <Loader2 className="spin" size={15} aria-hidden="true" />
+          ) : (
+            <Lightbulb size={15} aria-hidden="true" />
+          )}
+          Get Suggestions
+        </button>
+        <button
+          type="button"
+          className="refresh-all-button"
+          onClick={() => void refreshKeywords(keywords.map((row) => row.keyword))}
+          disabled={keywords.length === 0 || busyKeys.size > 0}
+        >
+          <RefreshCw
+            className={busyKeys.size > 0 ? "spin" : ""}
+            size={15}
+            aria-hidden="true"
+          />
+          Refresh All
+        </button>
+
+        <label className="tracker-filter">
+          <Search size={14} aria-hidden="true" />
+          <input
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            placeholder="Filter keywords…"
+            aria-label="Filter keywords"
+          />
+        </label>
+
+        <label className="country-select">
+          <span>History</span>
+          <select
+            value={historyDays}
+            onChange={(event) =>
+              setHistoryDays(Number(event.target.value) === 7 ? 7 : 30)
+            }
+            aria-label="History period"
+          >
+            <option value={7}>7 days</option>
+            <option value={30}>30 days</option>
+          </select>
+        </label>
+
+        {progress && (
+          <div
+            className="tracker-progress"
+            role="status"
+            aria-live="polite"
+            aria-label={`Refreshing ${progress.done} of ${progress.total}`}
+          >
+            <span>
+              Updating {progress.done}/{progress.total}
+            </span>
+            <i>
+              <b style={{ width: `${(progress.done / progress.total) * 100}%` }} />
+            </i>
+          </div>
+        )}
+      </div>
+
+      {error && (
+        <div className="keyword-error" role="alert">
+          {error}
+        </div>
+      )}
+
+      {keywords.length === 0 ? (
+        <div className="keyword-empty">
+          <Lightbulb size={24} aria-hidden="true" />
+          <strong>No keywords for this app yet</strong>
+          <span>
+            Get suggestions from public App Store metadata, or add keywords
+            manually to see estimated popularity, difficulty, and observed
+            position.
+          </span>
+          <div className="keyword-examples">
+            <button type="button" onClick={() => void openSuggestions()}>
+              Get Suggestions
+            </button>
+            <button type="button" onClick={() => setAddKeywordsOpen(true)}>
+              Add Keywords
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="tracker-main-split">
+          <div className="keyword-table-wrap tracker-table-wrap">
+            <div className="tracker-table-scroll">
+              <table className="keyword-table tracker-table">
+                <thead>
+                  <tr>
+                    <th>
+                      <button type="button" onClick={() => toggleSort("keyword")}>
+                        Keyword
+                      </button>
+                    </th>
+                    <th>Notes</th>
+                    <th>
+                      <button type="button" onClick={() => toggleSort("lastUpdate")}>
+                        Last update
+                      </button>
+                    </th>
+                    <th>Store</th>
+                    <th>
+                      <button type="button" onClick={() => toggleSort("popularity")}>
+                        Popularity · Est.
+                      </button>
+                    </th>
+                    <th>
+                      <button type="button" onClick={() => toggleSort("difficulty")}>
+                        Difficulty · Est.
+                      </button>
+                    </th>
+                    <th>
+                      <button type="button" onClick={() => toggleSort("position")}>
+                        Position
+                      </button>
+                    </th>
+                    <th>Rank trend</th>
+                    <th>Apps in ranking</th>
+                    <th aria-label="Actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredSorted.map((row) => {
+                    const key = row.normalizedKeyword;
+                    const isBusy = busyKeys.has(key);
+                    const metrics = row.currentMetrics;
+                    const snaps = snapshotsFor(
+                      store,
+                      app.appStoreId,
+                      app.country,
+                      key,
+                      historyDays,
+                    );
+                    const previous =
+                      snaps.length >= 2 ? snaps[snaps.length - 2] : undefined;
+                    const trend = describeRankTrend(
+                      previous,
+                      metrics
+                        ? {
+                            position: metrics.unavailable
+                              ? metrics.position
+                              : metrics.position,
+                          }
+                        : null,
+                    );
+                    const lastUpdate = row.lastCheckedAt
+                      ? new Date(row.lastCheckedAt).toLocaleString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })
+                      : "—";
+                    return (
+                      <tr
+                        key={keywordKey(app.appStoreId, app.country, key)}
+                        className={selected === key ? "is-selected" : ""}
+                        onClick={() => setSelected(key)}
+                      >
+                        <td>
+                          <strong className="keyword-name">{row.keyword}</strong>
+                        </td>
+                        <td onClick={(event) => event.stopPropagation()}>
+                          <input
+                            className="tracker-note-input"
+                            value={row.note}
+                            placeholder="Note…"
+                            aria-label={`Note for ${row.keyword}`}
+                            onChange={(event) => {
+                              onStoreChange(
+                                updateKeywordNote(
+                                  store,
+                                  app.appStoreId,
+                                  app.country,
+                                  key,
+                                  event.target.value,
+                                ),
+                              );
+                            }}
+                          />
+                        </td>
+                        <td>
+                          <small>{lastUpdate}</small>
+                        </td>
+                        <td>
+                          <small>{row.country}</small>
+                        </td>
+                        <td>
+                          {isBusy && !metrics ? (
+                            <em className="keyword-pending">Checking…</em>
+                          ) : metrics && !metrics.unavailable ? (
+                            <MetricBar
+                              value={metrics.popularity}
+                              tone="popularity"
+                            />
+                          ) : metrics?.unavailable && metrics.popularity > 0 ? (
+                            <MetricBar
+                              value={metrics.popularity}
+                              tone="popularity"
+                            />
+                          ) : (
+                            <em className="keyword-pending">—</em>
+                          )}
+                        </td>
+                        <td>
+                          {metrics && metrics.difficulty > 0 ? (
+                            <MetricBar
+                              value={metrics.difficulty}
+                              tone="difficulty"
+                            />
+                          ) : (
+                            <em className="keyword-pending">—</em>
+                          )}
+                        </td>
+                        <td>
+                          <strong className="tracker-position">
+                            {isBusy && !metrics
+                              ? "…"
+                              : formatPosition(
+                                  metrics?.position ?? null,
+                                  Boolean(
+                                    metrics?.unavailable &&
+                                      metrics.popularity === 0,
+                                  ),
+                                )}
+                          </strong>
+                        </td>
+                        <td>
+                          <span className={`rank-trend rank-trend--${trend.kind}`}>
+                            {metrics?.unavailable && metrics.popularity === 0
+                              ? "Unavailable"
+                              : snaps.length < 2
+                                ? "New"
+                                : trend.label}
+                          </span>
+                        </td>
+                        <td>
+                          {metrics?.topApps ? (
+                            <TopAppIcons apps={metrics.topApps} />
+                          ) : (
+                            <em className="keyword-pending">—</em>
+                          )}
+                        </td>
+                        <td
+                          className="keyword-row-actions"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            aria-label={`Refresh ${row.keyword}`}
+                            disabled={isBusy}
+                            onClick={() => void refreshKeywords([row.keyword])}
+                          >
+                            {isBusy ? (
+                              <Loader2 className="spin" size={15} aria-hidden="true" />
+                            ) : (
+                              <RefreshCw size={15} aria-hidden="true" />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            className="keyword-remove"
+                            aria-label={`Delete ${row.keyword}`}
+                            onClick={() =>
+                              confirmDelete(row.normalizedKeyword, row.keyword)
+                            }
+                          >
+                            <Trash2 size={15} aria-hidden="true" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <footer className="keyword-table-foot">
+              <span>
+                Saved in your browser only. Position is observed in the public
+                iTunes Search results (first 200). Popularity and difficulty are
+                estimates.
+              </span>
+              <span>
+                {keywords.length} keyword{keywords.length === 1 ? "" : "s"} ·{" "}
+                {countryLabel}
+              </span>
+            </footer>
+          </div>
+
+          {selectedRow && (
+            <TrackerDetail
+              app={app}
+              keyword={selectedRow}
+              snapshots={snapshotsFor(
+                store,
+                app.appStoreId,
+                app.country,
+                selectedRow.normalizedKeyword,
+                historyDays,
+              )}
+              historyDays={historyDays}
+              busy={busyKeys.has(selectedRow.normalizedKeyword)}
+              onClose={() => setSelected(null)}
+              onRefresh={() => void refreshKeywords([selectedRow.keyword], {
+                openFirst: true,
+              })}
+              onDelete={() =>
+                confirmDelete(
+                  selectedRow.normalizedKeyword,
+                  selectedRow.keyword,
+                )
+              }
+            />
+          )}
+        </div>
+      )}
+
+      <AddKeywordsModal
+        open={addKeywordsOpen}
+        defaultCountry={app.country}
+        existingNormalized={existingNormalized}
+        onClose={() => setAddKeywordsOpen(false)}
+        onConfirm={(list) => {
+          const { store: next, added } = addKeywordsToStore(
+            store,
+            app.appStoreId,
+            app.country,
+            list,
+          );
+          onStoreChange(next);
+          setAddKeywordsOpen(false);
+          if (added.length > 0) {
+            void refreshKeywords(added.map((row) => row.keyword));
+          }
+        }}
+      />
+
+      <SuggestionsModal
+        open={suggestionsOpen}
+        appName={app.name}
+        suggestions={suggestions}
+        onClose={() => setSuggestionsOpen(false)}
+        onConfirm={(list) => {
+          const { store: next, added } = addKeywordsToStore(
+            store,
+            app.appStoreId,
+            app.country,
+            list,
+          );
+          onStoreChange(next);
+          setSuggestionsOpen(false);
+          if (added.length > 0) {
+            void refreshKeywords(added.map((row) => row.keyword));
+          }
+        }}
+      />
+    </div>
+  );
+}

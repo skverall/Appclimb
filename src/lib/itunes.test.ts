@@ -8,6 +8,7 @@ import {
   lookupAppStoreApp,
   lookupAppStoreIcon,
   boundedStorefront,
+  parseAppStoreIdInput,
 } from "./itunes";
 
 afterEach(() => {
@@ -191,6 +192,63 @@ describe("deriveKeywordSuggestions", () => {
     });
     const keywords = suggestions.map((s) => s.keyword);
     expect(new Set(keywords).size).toBe(keywords.length);
+    expect(suggestions.length).toBeLessThanOrEqual(20);
+  });
+
+  it("labels category, description, and competitor sources", () => {
+    const suggestions = deriveKeywordSuggestions(
+      {
+        trackName: "Invoice Scanner Pro",
+        primaryGenreName: "Business",
+        description:
+          "Scan invoices quickly. Invoice scanning helps freelancers track invoices.",
+      },
+      "fallback",
+      {
+        competitorApps: [
+          {
+            name: "Receipt Keeper",
+            genre: "Finance",
+          },
+        ],
+      },
+    );
+    expect(suggestions.some((item) => item.reason === "App Store category")).toBe(
+      true,
+    );
+    expect(suggestions.some((item) => item.reason === "Competitor metadata")).toBe(
+      true,
+    );
+  });
+});
+
+describe("parseAppStoreIdInput", () => {
+  it("extracts ids from urls and bare numbers", () => {
+    expect(parseAppStoreIdInput("https://apps.apple.com/us/app/x/id555666777")).toBe(
+      "555666777",
+    );
+    expect(parseAppStoreIdInput("555666777")).toBe("555666777");
+    expect(parseAppStoreIdInput("id888999000")).toBe("888999000");
+    expect(parseAppStoreIdInput("")).toBeNull();
+    expect(parseAppStoreIdInput("hello")).toBeNull();
+  });
+});
+
+describe("cleanSearchResult bounds", () => {
+  it("truncates long fields and accepts valid rows", () => {
+    const cleaned = cleanSearchResult({
+      trackId: 42,
+      trackName: "  Nice App  ",
+      bundleId: "b".repeat(300),
+      sellerName: "s".repeat(200),
+      primaryGenreName: "g".repeat(100),
+      artworkUrl100: "https://icon",
+      trackViewUrl: "https://store",
+    });
+    expect(cleaned?.name).toBe("Nice App");
+    expect(cleaned?.bundleId).toHaveLength(255);
+    expect(cleaned?.developer).toHaveLength(160);
+    expect(cleaned?.genre).toHaveLength(80);
   });
 });
 

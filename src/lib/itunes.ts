@@ -161,63 +161,176 @@ export async function lookupAppStoreApp(
 }
 
 const suggestionStopWords = new Set([
+  "a",
+  "an",
   "and",
   "app",
+  "apps",
+  "are",
+  "as",
+  "at",
+  "be",
+  "by",
   "for",
   "from",
   "get",
   "in",
   "is",
+  "it",
+  "its",
   "of",
   "on",
+  "or",
+  "our",
   "the",
+  "this",
   "to",
   "with",
+  "you",
   "your",
 ]);
 
+export type SuggestionReason =
+  | "App title"
+  | "App description"
+  | "App Store category"
+  | "Related phrase"
+  | "Competitor metadata"
+  | "Store metadata";
+
+export interface KeywordSuggestion {
+  keyword: string;
+  reason: SuggestionReason;
+}
+
 /**
- * Derive keyword suggestions from app metadata, mirroring the previous server
- * `keywordSuggestions` logic. Returns up to 8 candidates with their reason.
+ * Extract a numeric App Store ID from a bare id or apps.apple.com URL.
+ * Accepts:
+ * - "123456789"
+ * - "https://apps.apple.com/us/app/name/id123456789"
+ * - "apps.apple.com/.../id123456789?mt=8"
+ */
+export function parseAppStoreIdInput(input: string): string | null {
+  const raw = input.trim();
+  if (!raw) return null;
+  if (/^\d{5,15}$/u.test(raw)) return raw;
+  const fromUrl = raw.match(/(?:apps\.apple\.com|itunes\.apple\.com)\/[^\s]*?[\/?]id(\d{5,15})/iu);
+  if (fromUrl?.[1]) return fromUrl[1];
+  const bareId = raw.match(/\bid(\d{5,15})\b/iu);
+  if (bareId?.[1]) return bareId[1];
+  return null;
+}
+
+function normalizeSuggestionPhrase(value: string): string {
+  return value
+    .toLocaleLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/gu, " ")
+    .trim();
+}
+
+function isUsableSuggestion(phrase: string): boolean {
+  if (phrase.length < 2 || phrase.length > 80) return false;
+  const words = phrase.split(" ");
+  if (words.every((word) => suggestionStopWords.has(word))) return false;
+  // Drop pure single-character noise and numeric-only tokens under 3 digits.
+  if (words.length === 1 && /^\d{1,2}$/u.test(words[0])) return false;
+  return true;
+}
+
+function significantWords(text: string): string[] {
+  return (
+    text
+      .toLocaleLowerCase()
+      .match(/[\p{L}\p{N}]{3,}/gu)
+      ?.filter((word) => !suggestionStopWords.has(word)) ?? []
+  );
+}
+
+/**
+ * Derive keyword suggestions from app metadata. Returns up to `limit`
+ * candidates (default 20) with an honest reason label for each.
  */
 export function deriveKeywordSuggestions(
   raw: AppStoreResult,
   fallbackName: string,
-): { keyword: string; reason: string }[] {
-  const title = String(raw.trackName ?? fallbackName).toLocaleLowerCase();
-  const genre = String(raw.primaryGenreName ?? "").toLocaleLowerCase();
-  const words = `${title} ${String(raw.description ?? "")}`
-    .toLocaleLowerCase()
-    .match(/[\p{L}\p{N}]{3,}/gu)
-    ?.filter((word) => !suggestionStopWords.has(word)) ?? [];
+  options: {
+    limit?: number;
+    competitorApps?: Array<Pick<CatalogApp, "name" | "genre">>;
+  } = {},
+): KeywordSuggestion[] {
+  const limit = Math.min(20, Math.max(1, options.limit ?? 20));
+  const title = normalizeSuggestionPhrase(
+    String(raw.trackName ?? fallbackName),
+  );
+  const genre = normalizeSuggestionPhrase(String(raw.primaryGenreName ?? ""));
+  const description = String(raw.description ?? "");
+  const titleWords = significantWords(title);
+  const descriptionWords = significantWords(description);
   const counts = new Map<string, number>();
-  for (const word of words) counts.set(word, (counts.get(word) ?? 0) + 1);
-  const candidates = [
-    title,
-    genre,
-    ...title.split(/\s+/u).map((word) => `${word} ${genre}`.trim()),
-    ...[...counts.entries()]
-      .sort((left, right) => right[1] - left[1])
-      .slice(0, 12)
-      .map(([word]) => word),
-  ]
-    .map((value) => value.trim().replace(/\s+/gu, " "))
-    .filter(
-      (value, index, values) =>
-        value.length >= 3 &&
-        value.length <= 80 &&
-        values.indexOf(value) === index,
-    )
-    .slice(0, 8);
-  return candidates.map((keyword, index) => ({
-    keyword,
-    reason:
-      index === 0
-        ? "App title"
-        : keyword === genre
-          ? "App Store category"
-          : "Store metadata",
-  }));
+  for (const word of descriptionWords) {
+    counts.set(word, (counts.get(word) ?? 0) + 1);
+  }
+
+  const ordered: KeywordSuggestion[] = [];
+  const seen = new Set<string>();
+
+  const push = (phrase: string, reason: SuggestionReason) => {
+    const clean = normalizeSuggestionPhrase(phrase);
+    if (!isUsableSuggestion(clean) || seen.has(clean)) return;
+    seen.add(clean);
+    ordered.push({ keyword: clean, reason });
+  };
+
+  if (title) push(title, "App title");
+  for (const word of titleWords) push(word, "App title");
+  if (genre) push(genre, "App Store category");
+
+  // Title word + category combos (only when both are meaningful).
+  if (genre) {
+    for (const word of titleWords.slice(0, 4)) {
+      if (word !== genre) push(`${word} ${genre}`, "Related phrase");
+    }
+  }
+
+  // Adjacent 2–3 word phrases from the title.
+  for (let index = 0; index < titleWords.length - 1; index += 1) {
+    push(`${titleWords[index]} ${titleWords[index + 1]}`, "Related phrase");
+    if (index < titleWords.length - 2) {
+      push(
+        `${titleWords[index]} ${titleWords[index + 1]} ${titleWords[index + 2]}`,
+        "Related phrase",
+      );
+    }
+  }
+
+  // Frequent description words (appear more than once, or top-ranked).
+  const rankedDescription = [...counts.entries()]
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .slice(0, 12);
+  for (const [word, count] of rankedDescription) {
+    if (count >= 2 || rankedDescription.indexOf([word, count]) < 6) {
+      push(word, "App description");
+    }
+  }
+
+  // Competitor title words / genres when search results are already available.
+  for (const competitor of options.competitorApps ?? []) {
+    const competitorTitle = normalizeSuggestionPhrase(competitor.name);
+    const competitorGenre = normalizeSuggestionPhrase(competitor.genre);
+    if (competitorTitle && competitorTitle !== title) {
+      const words = significantWords(competitorTitle).slice(0, 3);
+      for (const word of words) push(word, "Competitor metadata");
+      if (words.length >= 2) {
+        push(`${words[0]} ${words[1]}`, "Competitor metadata");
+      }
+    }
+    if (competitorGenre && competitorGenre !== genre) {
+      push(competitorGenre, "Competitor metadata");
+    }
+  }
+
+  return ordered.slice(0, limit);
 }
 
 /**
