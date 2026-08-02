@@ -5,6 +5,9 @@ import {
   keywordRankPosition,
   deriveKeywordSuggestions,
   cleanSearchResult,
+  lookupAppStoreApp,
+  lookupAppStoreIcon,
+  boundedStorefront,
 } from "./itunes";
 
 afterEach(() => {
@@ -88,6 +91,87 @@ describe("keywordRankPosition", () => {
     await expect(
       keywordRankPosition("kw", "US", "999", { fetchImpl }),
     ).resolves.toBeNull();
+    expect(String((fetchImpl.mock.calls[0] as unknown[])[0])).toContain(
+      "limit=200",
+    );
+  });
+
+  it("rejects an invalid storefront", async () => {
+    await expect(keywordRankPosition("kw", "usa", "1")).rejects.toThrow(
+      /invalid_storefront/u,
+    );
+  });
+});
+
+describe("lookupAppStoreApp", () => {
+  it("returns the first result for an app id", async () => {
+    const fetchImpl = vi.fn(async () =>
+      Response.json({
+        results: [
+          { trackId: 1, trackName: "Calm", primaryGenreName: "Health" },
+          { trackId: 2, trackName: "Other" },
+        ],
+      }),
+    );
+    vi.stubGlobal("fetch", fetchImpl);
+    await expect(lookupAppStoreApp("1", "us", { fetchImpl })).resolves.toEqual({
+      trackId: 1,
+      trackName: "Calm",
+      primaryGenreName: "Health",
+    });
+  });
+
+  it("returns an empty object when the lookup has no results", async () => {
+    const fetchImpl = vi.fn(async () => Response.json({ results: [] }));
+    await expect(lookupAppStoreApp("999", "US", { fetchImpl })).resolves.toEqual(
+      {},
+    );
+  });
+
+  it("throws on non-2xx responses", async () => {
+    const fetchImpl = vi.fn(
+      async () => new Response("nope", { status: 429 }),
+    );
+    await expect(lookupAppStoreApp("1", "US", { fetchImpl })).rejects.toThrow(
+      /app_store_catalog_unavailable:429/u,
+    );
+  });
+});
+
+describe("lookupAppStoreIcon", () => {
+  it("returns the artwork URL from the lookup", async () => {
+    const fetchImpl = vi.fn(async () =>
+      Response.json({
+        results: [
+          { trackId: 1, artworkUrl100: "https://example.com/icon.jpg" },
+        ],
+      }),
+    );
+    await expect(lookupAppStoreIcon("abc123", "US", { fetchImpl })).resolves.toBe(
+      "https://example.com/icon.jpg",
+    );
+  });
+
+  it("returns null for non-numeric ids, failures, and empty results", async () => {
+    await expect(lookupAppStoreIcon("", "US")).resolves.toBeNull();
+    await expect(
+      lookupAppStoreIcon("1", "US", {
+        fetchImpl: vi.fn(async () => new Response(null, { status: 500 })),
+      }),
+    ).resolves.toBeNull();
+    await expect(
+      lookupAppStoreIcon("1", "US", {
+        fetchImpl: vi.fn(async () => Response.json({ results: [] })),
+      }),
+    ).resolves.toBeNull();
+  });
+});
+
+describe("boundedStorefront", () => {
+  it("normalizes lowercase codes and rejects anything else", () => {
+    expect(boundedStorefront("us")).toBe("US");
+    expect(() => boundedStorefront("usa")).toThrow(/invalid_storefront/u);
+    expect(() => boundedStorefront("")).toThrow(/invalid_storefront/u);
   });
 });
 

@@ -9,8 +9,8 @@ export default function sitemap(): MetadataRoute.Sitemap {
     changeFrequency: page.changeFrequency,
     priority: page.priority,
     ...(page.path === "/" ||
-    page.path === "/ios-subscription-analytics" ||
-    page.path === "/guides/ios-subscription-growth"
+    page.path === "/app-store-keywords" ||
+    page.path === "/guides/keyword-research"
       ? { images: [absoluteUrl("/opengraph-image")] }
       : {}),
   }));

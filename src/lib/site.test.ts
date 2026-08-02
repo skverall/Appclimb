@@ -8,10 +8,12 @@ describe("public discovery inventory", () => {
 
     expect(new Set(paths).size).toBe(paths.length);
     expect(paths).toContain("/");
-    expect(paths).toContain("/ios-subscription-analytics");
-    expect(paths).toContain("/guides/ios-subscription-growth");
+    expect(paths).toContain("/app-store-keywords");
+    expect(paths).toContain("/guides/keyword-research");
     expect(paths).not.toContain("/login");
     expect(paths).not.toContain("/checkout/success");
+    expect(paths).not.toContain("/ios-subscription-analytics");
+    expect(paths).not.toContain("/guides/ios-subscription-growth");
 
     for (const path of paths) {
       const url = new URL(absoluteUrl(path));

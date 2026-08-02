@@ -4,10 +4,10 @@ import Link from "next/link";
 import { BrandMark } from "@/components/brand-mark";
 
 const navigation = [
-  { href: "/ios-subscription-analytics", label: "Product" },
-  { href: "/guides/ios-subscription-growth", label: "Growth guide" },
+  { href: "/app-store-keywords", label: "Keyword research" },
+  { href: "/guides/keyword-research", label: "ASO guide" },
   { href: "/blog", label: "Field notes" },
-  { href: "/pricing", label: "Pricing" },
+  { href: "/about", label: "About" },
 ] as const;
 
 export function MarketingHeader() {
@@ -25,11 +25,8 @@ export function MarketingHeader() {
           ))}
         </nav>
         <div className="marketing-actions">
-          <Link href="/login" className="marketing-sign-in">
-            Sign in
-          </Link>
-          <Link href="/?demo=1" className="marketing-primary-action">
-            Explore the demo <ArrowRight size={15} aria-hidden="true" />
+          <Link href="/" className="marketing-primary-action">
+            Search keywords <ArrowRight size={15} aria-hidden="true" />
           </Link>
         </div>
       </div>
@@ -44,17 +41,17 @@ export function MarketingFooter() {
         <div>
           <BrandMark />
           <p>
-            Visual growth diagnosis for independent iOS subscription app
-            builders.
+            Free App Store keyword research: estimated popularity, difficulty,
+            and trends from public data.
           </p>
-          <span>Built around evidence, uncertainty, and read-only control.</span>
+          <span>No account. No tracking. Estimates, never invented volumes.</span>
         </div>
         <div>
           <strong>Explore</strong>
-          <Link href="/ios-subscription-analytics">Product</Link>
-          <Link href="/guides/ios-subscription-growth">Growth guide</Link>
+          <Link href="/">Keyword explorer</Link>
+          <Link href="/app-store-keywords">Keyword research</Link>
+          <Link href="/guides/keyword-research">ASO guide</Link>
           <Link href="/blog">Field notes</Link>
-          <Link href="/pricing">Pricing</Link>
         </div>
         <div>
           <strong>Company</strong>
@@ -73,13 +70,12 @@ export function MarketingFooter() {
             <Code2 size={14} aria-hidden="true" /> GitHub
           </a>
           <Link href="/llms.txt">AI-readable overview</Link>
-          <Link href="/pricing.md">Machine-readable pricing</Link>
           <Link href="/feed.xml">RSS feed</Link>
         </div>
       </div>
       <div className="marketing-container marketing-footer-bottom">
         <span>© 2026 AppClimb</span>
-        <span>Early access · complete live-data coverage is in development</span>
+        <span>Free · open data · estimates labeled honestly</span>
       </div>
     </footer>
   );

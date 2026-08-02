@@ -45,8 +45,5 @@ jobs:
       - name: Unit tests and coverage
         run: npm run test:coverage
 
-      - name: Cloudflare API tests
-        run: npm run cloudflare:api:test
-
       - name: Build for Cloudflare Workers
         run: npm run build:cloudflare

@@ -1,0 +1,556 @@
+// App Store keyword estimation, entirely client-side.
+//
+// Apple's public iTunes Search API is the only free source that works from a
+// browser (CORS *). It does NOT expose search volume, so "popularity" is an
+// honest estimate derived from competition pressure and top-result strength,
+// and "difficulty" is an estimate of how hard it is to rank for the keyword.
+// The UI labels both as estimates and never presents them as Apple Ads data.
+//
+// History is kept in localStorage: one daily snapshot per keyword per country,
+// plus an estimated backfill so the 30-day trend chart is useful on first
+// check. Backfilled points are flagged and labeled as estimates.
+
+import { boundedStorefront, type CatalogApp } from "@/lib/itunes";
+
+export const ITUNES_ORIGIN = "https://itunes.apple.com";
+
+export interface SupportedCountry {
+  code: string;
+  label: string;
+  flag: string;
+}
+
+export const SUPPORTED_COUNTRIES: readonly SupportedCountry[] = [
+  { code: "US", label: "United States", flag: "🇺🇸" },
+  { code: "GB", label: "United Kingdom", flag: "🇬🇧" },
+  { code: "DE", label: "Germany", flag: "🇩🇪" },
+  { code: "FR", label: "France", flag: "🇫🇷" },
+  { code: "RU", label: "Russia", flag: "🇷🇺" },
+  { code: "JP", label: "Japan", flag: "🇯🇵" },
+] as const;
+
+export interface TopApp {
+  appStoreId: string;
+  name: string;
+  developer: string;
+  genre: string;
+  iconUrl: string;
+  storeUrl: string;
+  ratingsCount: number;
+  ratingAverage: number;
+  position: number;
+}
+
+export interface KeywordMetrics {
+  keyword: string;
+  country: string;
+  /** Estimated 0–100 popularity (competition + top-result strength). */
+  popularity: number;
+  /** Estimated 0–100 difficulty (barrier to rank in top results). */
+  difficulty: number;
+  /** Number of apps returned by the search (capped at 200 by iTunes). */
+  results: number;
+  /** True when the result list hit the 200-item cap (heavy competition). */
+  saturated: boolean;
+  topApps: TopApp[];
+  sampledAt: string;
+}
+
+export interface KeywordHistoryPoint {
+  /** Local date, YYYY-MM-DD. */
+  date: string;
+  popularity: number;
+  difficulty: number;
+}
+
+export interface KeywordRecord {
+  keyword: string;
+  country: string;
+  firstSeen: string;
+  /** True when the leading history points are estimated backfill. */
+  backfilled: boolean;
+  /** Sorted ascending by date; the last point is a real measurement. */
+  history: KeywordHistoryPoint[];
+}
+
+export const HISTORY_DAYS = 30;
+export const SEARCH_LIMIT = 200;
+export const BACKFILL_DAYS = 29; // 29 estimated days + today's real snapshot.
+
+/* ------------------------------------------------------------------ */
+/* Raw iTunes fetch                                                    */
+/* ------------------------------------------------------------------ */
+
+interface RawSearchResult {
+  trackId?: number;
+  trackName?: string;
+  sellerName?: string;
+  primaryGenreName?: string;
+  artworkUrl100?: string;
+  trackViewUrl?: string;
+  userRatingCount?: number;
+  averageUserRating?: number;
+}
+
+export function toTopApp(
+  result: RawSearchResult,
+  position: number,
+): TopApp | null {
+  const appStoreId = Number(result.trackId);
+  const name = typeof result.trackName === "string" ? result.trackName.trim() : "";
+  if (!Number.isInteger(appStoreId) || appStoreId <= 0 || !name) return null;
+  return {
+    appStoreId: String(appStoreId),
+    name: name.slice(0, 120),
+    developer:
+      typeof result.sellerName === "string" ? result.sellerName.slice(0, 160) : "",
+    genre:
+      typeof result.primaryGenreName === "string"
+        ? result.primaryGenreName.slice(0, 80)
+        : "",
+    iconUrl:
+      typeof result.artworkUrl100 === "string" ? result.artworkUrl100 : "",
+    storeUrl:
+      typeof result.trackViewUrl === "string" ? result.trackViewUrl : "",
+    ratingsCount: Math.max(0, Number(result.userRatingCount) || 0),
+    ratingAverage: Math.min(5, Math.max(0, Number(result.averageUserRating) || 0)),
+    position,
+  };
+}
+
+/** Fetch the full result set for one keyword from the public catalog. */
+export async function fetchKeywordResults(
+  keyword: string,
+  country: string,
+  options: { fetchImpl?: typeof fetch; signal?: AbortSignal } = {},
+): Promise<{ apps: TopApp[]; saturated: boolean }> {
+  const term = keyword.trim();
+  if (term.length < 2 || term.length > 80) {
+    throw new Error("invalid_keyword_search");
+  }
+  const storefront = boundedStorefront(country);
+  const parameters = new URLSearchParams({
+    term,
+    country: storefront,
+    media: "software",
+    entity: "software",
+    limit: String(SEARCH_LIMIT),
+    explicit: "No",
+  });
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const response = await fetchImpl(`${ITUNES_ORIGIN}/search?${parameters}`, {
+    headers: { accept: "application/json" },
+    signal: options.signal,
+  });
+  if (!response.ok) {
+    throw new Error(`app_store_catalog_unavailable:${response.status}`);
+  }
+  const payload = (await response.json()) as { results?: RawSearchResult[] };
+  const results = Array.isArray(payload.results) ? payload.results : [];
+  const apps = results
+    .map((result, index) => toTopApp(result, index + 1))
+    .filter((app): app is TopApp => app !== null);
+  return { apps, saturated: results.length >= SEARCH_LIMIT };
+}
+
+/* ------------------------------------------------------------------ */
+/* Estimation heuristics                                               */
+/* ------------------------------------------------------------------ */
+
+/** Sellers whose presence in the top 10 signals a hard, fought-over term. */
+const MEGA_BRANDS = new Set([
+  "google",
+  "meta platforms",
+  "facebook",
+  "instagram",
+  "amazon",
+  "apple",
+  "microsoft",
+  "adobe",
+  "netflix",
+  "spotify",
+  "tiktok",
+  "youtube",
+  "samsung",
+  "linkedin",
+  "uber",
+  "airbnb",
+  "telegram",
+  "whatsapp",
+  "zoom",
+  "slack",
+  "pinterest",
+  "snap",
+  "discord",
+  "roblox",
+  "canva",
+  "duolingo",
+  "dropbox",
+  "notion labs",
+  "figma",
+  "x corp",
+]);
+
+/** Deterministic small variation so similar keywords do not score identically. */
+export function keywordJitter(keyword: string): number {
+  let hash = 0;
+  for (let index = 0; index < keyword.length; index += 1) {
+    hash = (hash * 31 + keyword.charCodeAt(index)) >>> 0;
+  }
+  return (hash % 9) - 4; // -4..+4
+}
+
+function clampScore(value: number): number {
+  return Math.max(2, Math.min(98, Math.round(value)));
+}
+
+/**
+ * Estimate popularity and difficulty from raw search results. Pure — no
+ * network, no randomness — so it is deterministic and testable.
+ */
+export function estimateMetrics(
+  keyword: string,
+  country: string,
+  apps: TopApp[],
+  saturated: boolean,
+  sampledAt = new Date().toISOString(),
+): KeywordMetrics {
+  const topApps = apps.slice(0, 10);
+  const resultCount = apps.length;
+
+  // Competition: how many apps chase the term (capped at 200, sqrt-curved).
+  const competition = saturated ? 1 : Math.sqrt(resultCount / SEARCH_LIMIT);
+
+  // Strength of the top-10: average lifetime ratings, log-scaled so a term
+  // dominated by apps with 100k+ ratings reads as high.
+  const averageRatings =
+    topApps.length === 0
+      ? 0
+      : topApps.reduce((sum, app) => sum + app.ratingsCount, 0) / topApps.length;
+  const topStrength = Math.min(1, Math.log10(1 + averageRatings) / 5);
+
+  // How many of the top 10 are known mega-brands (hard to displace).
+  const brandShare =
+    topApps.length === 0
+      ? 0
+      : topApps.filter((app) => MEGA_BRANDS.has(app.developer.toLocaleLowerCase())).length /
+        topApps.length;
+
+  // Relevance: how many top apps carry the keyword in their title.
+  const tokens = keyword.toLocaleLowerCase().split(/\s+/u);
+  const relevant = topApps.filter((app) => {
+    const title = app.name.toLocaleLowerCase();
+    return tokens.some((token) => title.includes(token));
+  }).length;
+  const relevance = topApps.length === 0 ? 0 : relevant / topApps.length;
+
+  const noResults = resultCount === 0;
+  const popularity = noResults
+    ? 2
+    : clampScore(
+        competition * 70 + topStrength * 20 + relevance * 10 + keywordJitter(keyword) * 0.6,
+      );
+  const difficulty = noResults
+    ? 2
+    : clampScore(
+        competition * 40 + topStrength * 35 + brandShare * 15 + relevance * 10 + keywordJitter(keyword) * 0.4,
+      );
+
+  return {
+    keyword: keyword.trim(),
+    country,
+    popularity,
+    difficulty,
+    results: resultCount,
+    saturated,
+    topApps,
+    sampledAt,
+  };
+}
+
+/** Fetch + estimate in one step. */
+export async function estimateKeyword(
+  keyword: string,
+  country: string,
+  options: { fetchImpl?: typeof fetch; signal?: AbortSignal } = {},
+): Promise<KeywordMetrics> {
+  const { apps, saturated } = await fetchKeywordResults(keyword, country, options);
+  return estimateMetrics(keyword, country, apps, saturated);
+}
+
+/* ------------------------------------------------------------------ */
+/* History (localStorage)                                              */
+/* ------------------------------------------------------------------ */
+
+export function historyStorageKey(keyword: string, country: string): string {
+  return `appclimb:kw:v1:${country}:${keyword.trim().toLocaleLowerCase()}`;
+}
+
+export function listStorageKey(country: string): string {
+  return `appclimb:kw:v1:list:${country}`;
+}
+
+export type KeywordStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+
+/** Remove a keyword's persisted history entirely. */
+export function deleteRecord(
+  storage: KeywordStorage,
+  keyword: string,
+  country: string,
+): void {
+  storage.removeItem(historyStorageKey(keyword, country));
+}
+
+export function toLocalDate(date = new Date()): string {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+/**
+ * Deterministic pseudo-random walk ending exactly on the measured values.
+ * Used to backfill the leading days of a trend chart; every point is labeled
+ * "estimated" in the UI.
+ */
+export function backfillHistory(
+  metrics: KeywordMetrics,
+  days = BACKFILL_DAYS,
+): KeywordHistoryPoint[] {
+  const today = toLocalDate();
+  const points: KeywordHistoryPoint[] = [];
+  let popularity = metrics.popularity;
+  let difficulty = metrics.difficulty;
+  // Walk backwards from today, varying by ±6% per step with a deterministic
+  // seed so the same keyword always produces the same estimated shape.
+  let step = 0;
+  const seedLength = Math.max(1, metrics.keyword.length);
+  for (let offset = days; offset >= 1; offset -= 1) {
+    step =
+      ((step * 31 +
+        (metrics.keyword.charCodeAt(Math.abs(step) % seedLength) || 7) +
+        offset) >>>
+        0) %
+      997;
+    const wobble = ((step % 13) - 6) / 100; // -0.06..+0.06
+    popularity = Math.max(
+      2,
+      Math.min(98, Math.round(popularity - popularity * wobble)),
+    );
+    difficulty = Math.max(
+      2,
+      Math.min(98, Math.round(difficulty - difficulty * wobble * 0.7)),
+    );
+    const date = new Date();
+    date.setDate(date.getDate() - offset);
+    points.push({
+      date: toLocalDate(date),
+      popularity,
+      difficulty,
+    });
+  }
+  points.push({
+    date: today,
+    popularity: metrics.popularity,
+    difficulty: metrics.difficulty,
+  });
+  return points;
+}
+
+export function loadRecord(
+  storage: KeywordStorage,
+  keyword: string,
+  country: string,
+): KeywordRecord | null {
+  const raw = storage.getItem(historyStorageKey(keyword, country));
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as KeywordRecord;
+    if (
+      typeof parsed.keyword !== "string" ||
+      typeof parsed.country !== "string" ||
+      !Array.isArray(parsed.history)
+    ) {
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function saveRecord(
+  storage: KeywordStorage,
+  record: KeywordRecord,
+): void {
+  storage.setItem(
+    historyStorageKey(record.keyword, record.country),
+    JSON.stringify(record),
+  );
+}
+
+/** Append (or refresh) today's measured snapshot and persist the record. */
+export function recordSnapshot(
+  storage: KeywordStorage,
+  metrics: KeywordMetrics,
+): KeywordRecord {
+  const existing = loadRecord(storage, metrics.keyword, metrics.country);
+  const today = toLocalDate();
+  const history = existing?.history ?? [];
+  const last = history[history.length - 1];
+  if (last && last.date === today) {
+    // Same-day refresh: keep the day's single measured point, update values.
+    history[history.length - 1] = {
+      date: today,
+      popularity: metrics.popularity,
+      difficulty: metrics.difficulty,
+    };
+  } else {
+    history.push({
+      date: today,
+      popularity: metrics.popularity,
+      difficulty: metrics.difficulty,
+    });
+  }
+  const record: KeywordRecord = {
+    keyword: metrics.keyword.trim(),
+    country: metrics.country,
+    firstSeen: existing?.firstSeen ?? today,
+    backfilled: existing?.backfilled ?? history.length <= 2,
+    history,
+  };
+  if (record.backfilled && history.length === 1) {
+    record.history = backfillHistory(metrics);
+  }
+  saveRecord(storage, record);
+  return record;
+}
+
+/** Trim history to the trailing window, newest last. */
+export function recentHistory(record: KeywordRecord, days = HISTORY_DAYS): KeywordHistoryPoint[] {
+  return record.history.slice(-days);
+}
+
+/** Trend arrow value: change between the last two points, or null. */
+export function trendDelta(history: KeywordHistoryPoint[]): number | null {
+  if (history.length < 2) return null;
+  const previous = history[history.length - 2].popularity;
+  const current = history[history.length - 1].popularity;
+  return current - previous;
+}
+
+/** Persisted keyword list for one country (row order). */
+export function loadKeywordList(
+  storage: KeywordStorage,
+  country: string,
+): string[] {
+  const raw = storage.getItem(listStorageKey(country));
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    return Array.isArray(parsed)
+      ? parsed.filter((value): value is string => typeof value === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveKeywordList(
+  storage: KeywordStorage,
+  country: string,
+  keywords: string[],
+): void {
+  storage.setItem(listStorageKey(country), JSON.stringify(keywords));
+}
+
+/** Add a keyword to the persisted list without duplicates. */
+export function addKeywordToList(
+  storage: KeywordStorage,
+  country: string,
+  keyword: string,
+): string[] {
+  const current = loadKeywordList(storage, country);
+  const next = [
+    keyword.trim(),
+    ...current.filter(
+      (value) => value.toLocaleLowerCase() !== keyword.trim().toLocaleLowerCase(),
+    ),
+  ];
+  saveKeywordList(storage, country, next);
+  return next;
+}
+
+export function removeKeywordFromList(
+  storage: KeywordStorage,
+  country: string,
+  keyword: string,
+): string[] {
+  const next = loadKeywordList(storage, country).filter(
+    (value) => value.toLocaleLowerCase() !== keyword.toLocaleLowerCase(),
+  );
+  saveKeywordList(storage, country, next);
+  return next;
+}
+
+/* ------------------------------------------------------------------ */
+/* Related keywords                                                    */
+/* ------------------------------------------------------------------ */
+const SUGGESTION_STOP_WORDS = new Set([
+  "and",
+  "app",
+  "for",
+  "from",
+  "get",
+  "in",
+  "is",
+  "of",
+  "on",
+  "the",
+  "to",
+  "with",
+  "your",
+]);
+
+/**
+ * Derive related keyword phrases from the metadata of the top apps that rank
+ * for the term. Purely public data; returns up to 8 phrases.
+ */
+export function relatedKeywords(topApps: TopApp[], keyword: string): string[] {
+  const seed = keyword.trim().toLocaleLowerCase();
+  const phrases = new Set<string>();
+  for (const app of topApps.slice(0, 5)) {
+    const title = app.name.toLocaleLowerCase();
+    const genre = app.genre.toLocaleLowerCase();
+    const words =
+      title.match(/[\p{L}\p{N}]{3,}/gu)?.filter((word) => !SUGGESTION_STOP_WORDS.has(word)) ?? [];
+    const candidates = [title, genre, `${seed} ${genre}`.trim(), ...words];
+    for (const candidate of candidates) {
+      const clean = candidate.replace(/\s+/gu, " ").trim();
+      if (clean.length >= 3 && clean.length <= 80 && clean !== seed) {
+        phrases.add(clean);
+      }
+    }
+  }
+  return [...phrases].slice(0, 8);
+}
+
+/**
+ * Search-as-you-type suggestions: the exact term plus phrases derived from the
+ * apps currently ranking for it. Used for the explorer's autocomplete.
+ */
+export function suggestKeywords(term: string, apps: CatalogApp[]): string[] {
+  const topApps: TopApp[] = apps.map((app, index) => ({
+    appStoreId: app.appStoreId,
+    name: app.name,
+    developer: app.developer,
+    genre: app.genre,
+    iconUrl: app.iconUrl,
+    storeUrl: app.storeUrl,
+    ratingsCount: 0,
+    ratingAverage: 0,
+    position: index + 1,
+  }));
+  const exact = term.trim();
+  return [...new Set([exact, ...relatedKeywords(topApps, exact)])].slice(0, 8);
+}

@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     url: "/blog/app-store-conversion-rate",
     type: "article",
     publishedTime: "2026-07-25",
-    modifiedTime: "2026-07-25",
+    modifiedTime: "2026-08-02",
   },
 };
 
@@ -30,7 +30,7 @@ export default function AppStoreConversionArticle() {
       description="Apple’s exact formula, the product-page metric people often confuse with it, and a practical diagnosis workflow."
       category="Acquisition"
       published="2026-07-25"
-      updated="2026-07-25"
+      updated="2026-08-02"
       readingTime="8 min read"
       slug="app-store-conversion-rate"
     >
@@ -209,13 +209,8 @@ export default function AppStoreConversionArticle() {
             </tr>
             <tr>
               <td>Downloads rise; activation falls</td>
-              <td>PostHog onboarding funnel by acquisition cohort</td>
+              <td>Onboarding funnel by acquisition source</td>
               <td>Fix expectation mismatch or first-session friction</td>
-            </tr>
-            <tr>
-              <td>Activation is stable; trial starts fall</td>
-              <td>Superwall presentation and variant exposure</td>
-              <td>Test paywall message, timing, or placement</td>
             </tr>
           </tbody>
         </table>
@@ -248,21 +243,21 @@ export default function AppStoreConversionArticle() {
         </a>
       </div>
 
-      <h2>Connect conversion to the whole growth journey</h2>
+      <h2>Connect conversion to the keywords that drive it</h2>
       <p>
-        Store conversion is one transition, not the business. The useful
-        question is not only “did more people download?” but “did the right
-        people move through activation, paywall, trial, paid, and renewal?”
+        Store conversion is one transition in the search journey. The useful
+        question is not only “did more people download?” but “which keywords
+        bring people who actually convert?”
       </p>
       <p>
         The{" "}
         <Link href="/blog/ios-subscription-analytics-stack">
-          iOS subscription analytics source map
+          public keyword data map
         </Link>{" "}
-        explains which provider should own each downstream metric. For the full
-        diagnosis framework, read the{" "}
-        <Link href="/guides/ios-subscription-growth">
-          practical guide to iOS subscription growth{" "}
+        explains which search signals are honestly available. For the full
+        workflow, read the{" "}
+        <Link href="/guides/keyword-research">
+          practical guide to App Store keyword research{" "}
           <ArrowRight size={15} aria-hidden="true" />
         </Link>
         .

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ArrowRight, Compass, Eye, ShieldCheck } from "lucide-react";
+import { ArrowRight, Eye, ShieldCheck, Sparkles } from "lucide-react";
 import Link from "next/link";
 
 import { JsonLd } from "@/components/json-ld";
@@ -9,14 +9,14 @@ import { absoluteUrl } from "@/lib/site";
 export const metadata: Metadata = {
   title: "About AppClimb",
   description:
-    "Why AppClimb is building a visual, evidence-first growth operating system for independent product builders.",
+    "Why AppClimb is building a free, honest App Store keyword tool on public data — no invented volumes, no dark patterns.",
   alternates: {
     canonical: "/about",
   },
   openGraph: {
     title: "About AppClimb",
     description:
-      "The product direction, principles, and honest early-access status behind River Atlas.",
+      "The product direction, principles, and honest status behind AppClimb's App Store keyword explorer.",
     url: "/about",
   },
 };
@@ -31,7 +31,7 @@ export default function AboutPage() {
           name: "About AppClimb",
           url: absoluteUrl("/about"),
           description:
-            "AppClimb is building a visual growth operating system for independent product builders.",
+            "AppClimb is a free App Store keyword explorer built on public data.",
           mainEntity: {
             "@id": "https://appclimb.app/#organization",
           },
@@ -40,41 +40,41 @@ export default function AboutPage() {
       <main className="about-page">
         <section className="about-hero marketing-container">
           <span className="marketing-eyebrow">Why AppClimb exists</span>
-          <h1>Independent builders have data. They need a coherent next step.</h1>
+          <h1>Keyword tools hide their data. We show ours.</h1>
           <p>
-            Growth evidence is scattered across stores, product analytics,
-            paywalls, billing platforms, reviews, and spreadsheets. AppClimb is
-            being built to turn those fragments into a visual map of the
-            business and one evidence-backed learning loop.
+            Every serious ASO tool sells &ldquo;search volume&rdquo; — but true App Store
+            search volume only exists inside Apple&apos;s paid Search Ads API.
+            AppClimb is a free keyword explorer that estimates popularity and
+            difficulty from public data instead, and labels every number as an
+            estimate.
           </p>
         </section>
 
         <section className="about-principles marketing-container">
           <article>
             <Eye aria-hidden="true" />
-            <h2>Visual before textual</h2>
+            <h2>Public data only</h2>
             <p>
-              Width shows volume, position shows sequence, color shows health,
-              and motion explains change. Text supports the visual instead of
-              replacing it with another report.
+              Everything comes from the public iTunes Search API, queried
+              directly from your browser. No accounts, no API keys, no
+              third-party data brokers in the middle.
             </p>
           </article>
           <article>
             <ShieldCheck aria-hidden="true" />
-            <h2>Evidence before advice</h2>
+            <h2>Estimates, never invented volumes</h2>
             <p>
-              Every conclusion should expose its source, window, freshness,
-              confidence, and limitations. Observations, calculations, and
-              hypotheses are not interchangeable.
+              Popularity and difficulty are derived from competition pressure
+              and top-result strength. They are clearly labeled as estimates and
+              never presented as Apple Ads data.
             </p>
           </article>
           <article>
-            <Compass aria-hidden="true" />
-            <h2>Read-only before automation</h2>
+            <Sparkles aria-hidden="true" />
+            <h2>No account, no tracking</h2>
             <p>
-              AppClimb can prepare an experiment, but the builder stays in
-              control. The product does not silently mutate metadata, ads,
-              prices, paywalls, or external systems.
+              Your keyword list and history live in your browser. There is no
+              login, no billing, and no analytics collection on this site.
             </p>
           </article>
         </section>
@@ -82,19 +82,18 @@ export default function AboutPage() {
         <section className="about-story marketing-container">
           <div>
             <span className="marketing-eyebrow">Initial focus</span>
-            <h2>One truthful iOS subscription journey first.</h2>
+            <h2>One honest App Store keyword tool first.</h2>
           </div>
           <div>
             <p>
-              AppClimb begins with independent developers and micro-teams
-              running iOS subscription apps. Their path from App Store
-              discovery to activation, trial, paid conversion, and renewal is
-              measurable—but fragmented across providers.
+              AppClimb starts with independent developers and micro-teams who
+              publish iOS apps and need to pick keywords without paying for a
+              data subscription they can&apos;t verify.
             </p>
             <p>
-              The long-term direction includes Android apps, SaaS products, and
-              web services. Expansion comes after the first real iOS journey is
-              complete and trusted, not before.
+              The tool records one daily snapshot per keyword in your browser,
+              so a 30-day trend builds itself over time — and the first check
+              gets an estimated baseline so the chart is useful immediately.
             </p>
           </div>
         </section>
@@ -102,17 +101,15 @@ export default function AboutPage() {
         <section className="about-status">
           <div className="marketing-container">
             <span className="marketing-eyebrow">Current status</span>
-            <h2>River Atlas is an early-access product prototype.</h2>
+            <h2>The keyword explorer is live and free.</h2>
             <p>
-              The interactive demo, authentication, trial, pricing, billing,
-              account controls, secure connector setup, and production
-              foundation are available. Most visible demo data is synthetic.
-              Complete live imports and full evidence-backed diagnosis remain
-              in development.
+              Keyword search, estimated popularity and difficulty, 30-day trend
+              charts, related keywords, and top-app breakdowns all work from
+              public App Store data. No accounts, no billing, no tracking.
             </p>
             <div className="marketing-hero-actions">
-              <Link href="/?demo=1" className="marketing-primary-action large">
-                Explore the demo <ArrowRight size={17} aria-hidden="true" />
+              <Link href="/" className="marketing-primary-action large">
+                Search keywords <ArrowRight size={17} aria-hidden="true" />
               </Link>
               <a
                 href="https://github.com/skverall/Appclimb"

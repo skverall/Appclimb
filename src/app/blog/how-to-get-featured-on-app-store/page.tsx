@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { ExternalLink } from "lucide-react";
-import Link from "next/link";
 
 import { ArticleLayout } from "@/components/article-layout";
 
@@ -19,7 +18,7 @@ export const metadata: Metadata = {
     url: "/blog/how-to-get-featured-on-app-store",
     type: "article",
     publishedTime: "2026-07-27",
-    modifiedTime: "2026-07-27",
+    modifiedTime: "2026-08-02",
   },
 };
 
@@ -30,7 +29,7 @@ export default function HowToGetFeaturedArticle() {
       description="Get featured on the App Store with these 7 concrete steps. Learn Apple\u2019s nomination process, what editors look for, and how indie devs land editorial placements."
       category="ASO Strategy"
       published="2026-07-27"
-      updated="2026-07-27"
+      updated="2026-08-02"
       readingTime="9 min read"
       slug="how-to-get-featured-on-app-store"
     >
@@ -323,9 +322,9 @@ export default function HowToGetFeaturedArticle() {
       </ol>
       <p>
         To maximize this compounding effect, make sure your keyword metadata is
-        optimized before the feature goes live. Then track the impact — seeing
-        the ranking lift in real time tells you exactly which keywords to double
-        down on next.
+        optimized before the feature goes live. Then track the impact —
+        re-checking your target keywords daily shows which terms moved and
+        tells you exactly what to double down on next.
       </p>
 
       <h2>Frequently Asked Questions</h2>

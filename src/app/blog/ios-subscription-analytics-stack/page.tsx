@@ -5,21 +5,20 @@ import Link from "next/link";
 import { ArticleLayout } from "@/components/article-layout";
 
 export const metadata: Metadata = {
-  title:
-    "The iOS Subscription Analytics Stack: Which Tool Owns Which Metric?",
+  title: "What App Store Keyword Data Is Public (and What Isn't)",
   description:
-    "A practical source-of-truth map for App Store Connect, RevenueCat, PostHog, and Superwall, including the metrics each tool should own.",
+    "A source-of-truth map of App Store search data: what Apple publishes, what only Apple Ads shows, and how estimates are made honestly.",
   alternates: {
     canonical: "/blog/ios-subscription-analytics-stack",
   },
   openGraph: {
-    title: "The iOS Subscription Analytics Stack",
+    title: "What App Store Keyword Data Is Public",
     description:
-      "Which metrics belong to App Store Connect, RevenueCat, PostHog, and Superwall—and how to diagnose growth without blending incompatible data.",
+      "Which keyword signals are public, which live only inside Apple Search Ads, and how honest estimates are built.",
     url: "/blog/ios-subscription-analytics-stack",
     type: "article",
     publishedTime: "2026-07-25",
-    modifiedTime: "2026-07-25",
+    modifiedTime: "2026-08-02",
   },
 };
 
@@ -28,98 +27,87 @@ const sourceLinkClass = "article-source-link";
 export default function AnalyticsStackArticle() {
   return (
     <ArticleLayout
-      title="The iOS Subscription Analytics Stack: Which Tool Owns Which Metric?"
-      description="A practical source-of-truth map for App Store Connect, RevenueCat, PostHog, and Superwall."
-      category="Analytics architecture"
+      title="What App Store Keyword Data Is Public (and What Isn't)"
+      description="A source-of-truth map of App Store search data: what Apple publishes, what only Apple Ads shows, and how estimates are made honestly."
+      category="Data"
       published="2026-07-25"
-      updated="2026-07-25"
+      updated="2026-08-02"
       readingTime="9 min read"
       slug="ios-subscription-analytics-stack"
     >
       <p className="article-answer">
-        A reliable iOS subscription analytics stack gives each stage of the
-        customer journey to the provider that observes it most directly: App
-        Store Connect for acquisition, PostHog for product behavior, Superwall
-        for paywall exposure, and RevenueCat for subscription lifecycle. The
-        goal is not one giant dashboard. It is one coherent decision model.
+        Public App Store search data gives you four honest signals: which apps
+        rank for a keyword, how many apps compete for it, how strong the top
+        results are, and the keyword&apos;s result metadata. True search volume
+        exists only inside Apple&apos;s paid Search Ads API. Every free tool
+        that shows you a &ldquo;popularity&rdquo; number is estimating — the question is
+        whether it admits it.
       </p>
 
-      <h2>Why one analytics tool is not enough</h2>
+      <h2>Why keyword data is split into two worlds</h2>
       <p>
-        An iOS subscription app crosses several systems before revenue appears.
-        Someone discovers the app in the store, downloads it, completes an
-        activation behavior, sees a paywall, starts an offer, becomes paid, and
-        may renew. No single provider observes every transition with the same
-        authority.
+        When you search the App Store, Apple runs a private ranking system over
+        a private index. Two facts about that system are public: the results it
+        returns, and which keywords your app appears for (visible to you in App
+        Store Connect). Everything else — how many people search a term, how
+        impressions convert, what competitors spend — is Apple&apos;s business
+        data.
       </p>
       <p>
-        The common failure is to treat “analytics” as one interchangeable
-        bucket. That creates questions the data cannot answer: RevenueCat knows
-        a trial started, but not necessarily why onboarding failed. PostHog can
-        see a paywall event, but the billing system should decide whether a
-        subscription is active. App Store Connect knows discovery and
-        downloads, but it does not replace product instrumentation.
+        The consequence is simple: <strong>there is no free source of App Store
+        search volume</strong>. Paid ASO platforms license volume from Apple
+        Search Ads data partnerships or model it from panels. Tools that claim
+        to show &ldquo;searches per month&rdquo; without such a source are showing a
+        model — sometimes a good one, sometimes a guess wearing a number.
       </p>
 
-      <h2>The source-of-truth map</h2>
+      <h2>The public data map</h2>
       <div className="article-table-wrap">
         <table>
           <thead>
             <tr>
-              <th>Growth stage</th>
-              <th>Primary source</th>
-              <th>What it should own</th>
-              <th>Important limitation</th>
+              <th>Signal</th>
+              <th>Public?</th>
+              <th>Where it lives</th>
+              <th>What it tells you</th>
             </tr>
           </thead>
           <tbody>
             <tr>
-              <td>Discover → Store → Install</td>
+              <td>Top apps for a keyword</td>
+              <td>Yes</td>
+              <td>iTunes Search API / app store search</td>
+              <td>Who you would compete with</td>
+            </tr>
+            <tr>
+              <td>Competing app count</td>
+              <td>Partly</td>
+              <td>iTunes Search API (capped at 200)</td>
+              <td>How crowded the term is</td>
+            </tr>
+            <tr>
+              <td>Ratings volume of top apps</td>
+              <td>Yes</td>
+              <td>iTunes Search API / product pages</td>
+              <td>How established the incumbents are</td>
+            </tr>
+            <tr>
+              <td>App Store suggestions</td>
+              <td>Yes</td>
+              <td>iTunes autocomplete (search box)</td>
+              <td>What Apple considers related</td>
+            </tr>
+            <tr>
+              <td>Search volume / impressions</td>
+              <td>No</td>
+              <td>Apple Search Ads API (paid)</td>
+              <td>True demand for the term</td>
+            </tr>
+            <tr>
+              <td>Your keyword ranks</td>
+              <td>Yes, for your app</td>
               <td>App Store Connect</td>
-              <td>
-                Impressions, product-page views, source type, downloads,
-                conversion, territory, and Apple peer benchmarks
-              </td>
-              <td>
-                Usage metrics can depend on analytics-sharing eligibility and
-                Apple’s reporting windows.
-              </td>
-            </tr>
-            <tr>
-              <td>Install → Activate</td>
-              <td>PostHog</td>
-              <td>
-                Onboarding steps, activation events, funnels, feature use,
-                cohorts, and behavioral retention
-              </td>
-              <td>
-                Event quality depends on a stable tracking plan and consistent
-                identity.
-              </td>
-            </tr>
-            <tr>
-              <td>Activate → Paywall → Offer</td>
-              <td>Superwall</td>
-              <td>
-                Paywall presentation, placement, variant, experiment exposure,
-                and paywall conversion
-              </td>
-              <td>
-                A paywall event is not the final authority for subscription
-                entitlement.
-              </td>
-            </tr>
-            <tr>
-              <td>Trial → Paid → Renew</td>
-              <td>RevenueCat</td>
-              <td>
-                Trial lifecycle, entitlements, paid conversion, renewal, churn,
-                and subscription revenue
-              </td>
-              <td>
-                Revenue data alone cannot explain product behavior before the
-                purchase.
-              </td>
+              <td>Where your app actually appears</td>
             </tr>
           </tbody>
         </table>
@@ -129,145 +117,118 @@ export default function AnalyticsStackArticle() {
         <strong>Primary documentation</strong>
         <a
           className={sourceLinkClass}
-          href="https://developer.apple.com/help/app-store-connect-analytics/"
+          href="https://developer.apple.com/documentation/apple_search_ads/"
           target="_blank"
           rel="noreferrer"
         >
-          Apple: App Store Connect Analytics{" "}
-          <ExternalLink size={14} aria-hidden="true" />
+          Apple: Search Ads API <ExternalLink size={14} aria-hidden="true" />
         </a>
         <a
           className={sourceLinkClass}
-          href="https://www.revenuecat.com/docs/dashboard-and-metrics/overview"
+          href="https://developer.apple.com/documentation/appstoreconnectapi"
           target="_blank"
           rel="noreferrer"
         >
-          RevenueCat: dashboard and metrics{" "}
-          <ExternalLink size={14} aria-hidden="true" />
+          Apple: App Store Connect API <ExternalLink size={14} aria-hidden="true" />
         </a>
         <a
           className={sourceLinkClass}
-          href="https://posthog.com/docs/product-analytics"
+          href="https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/"
           target="_blank"
           rel="noreferrer"
         >
-          PostHog: product analytics{" "}
-          <ExternalLink size={14} aria-hidden="true" />
-        </a>
-        <a
-          className={sourceLinkClass}
-          href="https://superwall.com/docs/dashboard/dashboard-settings/overview-settings-revenue-tracking"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Superwall: revenue tracking{" "}
-          <ExternalLink size={14} aria-hidden="true" />
+          Apple: iTunes Search API <ExternalLink size={14} aria-hidden="true" />
         </a>
       </div>
 
-      <h2>Do not force a user-level join</h2>
+      <h2>How honest estimates are built</h2>
       <p>
-        A shared customer identifier can make cross-source analysis powerful,
-        but it is only valid when the same identifier is intentionally passed
-        and confirmed across providers. Email, device identifiers, anonymous
-        event IDs, App Store aggregates, and RevenueCat App User IDs are not
-        automatically interchangeable.
+        Without volume data, you can still rank keywords usefully — if you are
+        transparent about what each number means. AppClimb&apos;s approach
+        derives two estimates from the public result set:
       </p>
+      <ul>
+        <li>
+          <strong>Popularity (estimated demand)</strong> — how much competition
+          pressure and top-result strength suggest the term is searched. A
+          saturated result list with strong incumbents implies an active term.
+        </li>
+        <li>
+          <strong>Difficulty (barrier to rank)</strong> — how hard it looks to
+          reach the top results: how many apps compete, how many ratings the
+          incumbents hold, and whether mega-brands dominate the first page.
+        </li>
+      </ul>
       <p>
-        Without a verified identity mapping, use aggregate UTC windows,
-        aligned cohorts, and before/after comparisons. State the limitation
-        explicitly. A truthful aggregate comparison is more useful than a
-        precise-looking join that never existed.
+        These are directional, not oracle numbers. Two keywords with the same
+        score can behave differently across countries and seasons. That is why
+        AppClimb labels every score as an estimate and shows the underlying
+        evidence (result count, top apps, ratings) next to the score instead of
+        hiding it behind a single mysterious number.
       </p>
 
-      <h2>Align time before comparing numbers</h2>
-      <p>
-        Two dashboards can both be correct and still disagree. One may use
-        event time while another uses processing time. A provider may include
-        redownloads, sandbox transactions, grace periods, refunds, or delayed
-        reports differently. Before diagnosing a change, align:
-      </p>
+      <h2>What to never trust</h2>
       <ol>
-        <li>The exact UTC start and end timestamps.</li>
-        <li>The app, environment, storefront, plan, and cohort filters.</li>
-        <li>The provider’s metric definition and inclusion rules.</li>
-        <li>The report freshness and expected ingestion delay.</li>
-        <li>Whether the number counts events, devices, users, or subscribers.</li>
+        <li>
+          <strong>Precise monthly search volume without a stated source.</strong>{" "}
+          No public API exposes it.
+        </li>
+        <li>
+          <strong>Trends with no history.</strong> A 30-day chart needs 30 days
+          of observations or an openly labeled baseline.
+        </li>
+        <li>
+          <strong>Difficulty scores with no evidence.</strong> &ldquo;72&rdquo; means
+          nothing unless you can see why.
+        </li>
       </ol>
-
-      <h2>Find the earliest meaningful constraint</h2>
-      <p>
-        Diagnose upstream before downstream. If installs fall, a smaller paid
-        cohort does not prove the paywall became worse. If activation falls
-        after a release, renewal will eventually soften even if subscription
-        mechanics remain healthy.
-      </p>
       <div className="article-callout">
         <strong>A practical rule</strong>
         <p>
-          Start with the earliest material loss that has enough volume,
-          freshness, and evidence to support action. Everything downstream is
-          context until the upstream change is explained.
+          If a tool won&apos;t tell you where its keyword numbers come from,
+          assume they are modeled. If it tells you, you can judge whether the
+          model is sane. Estimates are fine — secrecy is the problem.
         </p>
       </div>
 
-      <h2>Separate observations from hypotheses</h2>
-      <p>
-        “Activation declined from one period to another” can be an observation.
-        “The onboarding release caused the decline” is derived only when the
-        timing, segment, and evidence support that relationship. “Shorter
-        onboarding will recover activation” is a hypothesis until an experiment
-        tests it.
-      </p>
-      <p>Every useful insight should therefore include:</p>
-      <ul>
-        <li>the source and metric definition;</li>
-        <li>the exact time window and volume;</li>
-        <li>freshness and known exclusions;</li>
-        <li>evidence references;</li>
-        <li>a label: observed, derived, or hypothesis;</li>
-        <li>confidence and the next fact that would change the conclusion.</li>
-      </ul>
-
-      <h2>The smallest useful weekly workflow</h2>
+      <h2>The smallest useful workflow</h2>
       <ol>
         <li>
-          Check source freshness and coverage before reading the funnel.
+          Search a candidate term and record popularity, difficulty, and result
+          count.
         </li>
         <li>
-          Compare the complete journey, not an isolated revenue or conversion
-          card.
+          Open the top apps: are the incumbents relevant to your product, and
+          how strong are their ratings?
         </li>
         <li>
-          Inspect the earliest supported constraint and the change events
-          around it.
+          Prefer terms where difficulty is below the average of your niche and
+          popularity is not near-zero.
         </li>
         <li>
-          Choose one hypothesis with one primary metric and at least one
-          guardrail.
+          Track the same terms daily so the trend becomes real data instead of
+          a one-day snapshot.
         </li>
         <li>
-          Record the outcome so the next diagnosis begins with accumulated
-          learning.
+          Re-check after a metadata or release update and keep the history.
         </li>
       </ol>
 
       <h2>Where AppClimb fits</h2>
       <p>
-        AppClimb is being built as the visual diagnosis layer above this stack,
-        not as a replacement for the systems that collect the evidence. The
-        River Atlas prototype demonstrates the intended Observe → Diagnose →
-        Experiment → Learn loop. Complete live connector coverage is still in
-        development and the current demo uses clearly labeled synthetic data.
+        AppClimb is a free keyword explorer built entirely on public data. It
+        shows estimated popularity and difficulty with the evidence behind
+        them, stores one daily snapshot per keyword in your browser, and labels
+        estimated history as estimated. No accounts, no billing, no invented
+        volumes.
       </p>
       <p>
-        <Link href="/ios-subscription-analytics">
-          See the product status and source model{" "}
-          <ArrowRight size={15} aria-hidden="true" />
+        <Link href="/">
+          Open the keyword explorer <ArrowRight size={15} aria-hidden="true" />
         </Link>
-        , or{" "}
-        <Link href="/?demo=1">
-          explore the interactive River Atlas demo
+        , or read{" "}
+        <Link href="/guides/keyword-research">
+          the guide to App Store keyword research
         </Link>
         .
       </p>

@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { DM_Sans, Manrope } from "next/font/google";
-import Script from "next/script";
 
 import { JsonLd } from "@/components/json-ld";
 import {
@@ -11,8 +10,6 @@ import {
 } from "@/lib/site";
 
 import "./globals.css";
-import "./ai-visibility.css";
-import "./web-tracking.css";
 
 const dmSans = DM_Sans({
   variable: "--font-body",
@@ -27,7 +24,7 @@ const manrope = Manrope({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "AppClimb — Growth CI for iOS subscription apps",
+    default: "AppClimb — App Store keyword explorer",
     template: "%s · AppClimb",
   },
   description: SITE_DESCRIPTION,
@@ -35,16 +32,14 @@ export const metadata: Metadata = {
   authors: [{ name: "AppClimb", url: SITE_URL }],
   creator: "AppClimb",
   publisher: "AppClimb",
-  category: "Business software",
+  category: "Developer tools",
   keywords: [
-    "iOS subscription analytics",
-    "mobile app growth analytics",
-    "app funnel analytics",
-    "RevenueCat analytics",
-    "App Store Connect analytics",
-    "PostHog mobile analytics",
-    "Superwall analytics",
-    "subscription growth",
+    "App Store keyword research",
+    "ASO keywords",
+    "keyword popularity",
+    "keyword difficulty",
+    "App Store search",
+    "app store optimization",
   ],
   manifest: "/manifest.webmanifest",
   icons: {
@@ -78,7 +73,7 @@ export const metadata: Metadata = {
     },
   },
   openGraph: {
-    title: "AppClimb — Visual growth diagnosis for iOS subscription apps",
+    title: "AppClimb — App Store keyword explorer",
     description: SITE_DESCRIPTION,
     type: "website",
     url: "/",
@@ -89,13 +84,13 @@ export const metadata: Metadata = {
         url: "/opengraph-image",
         width: 1200,
         height: 630,
-        alt: "AppClimb River Atlas visual growth diagnosis",
+        alt: "AppClimb App Store keyword explorer",
       },
     ],
   },
   twitter: {
     card: "summary_large_image",
-    title: "AppClimb — See where your app stops growing",
+    title: "AppClimb — Find keywords worth ranking for",
     description: SITE_DESCRIPTION,
     images: ["/opengraph-image"],
   },
@@ -149,14 +144,6 @@ export default function RootLayout({
           }}
         />
         {children}
-        {process.env.APPCLIMB_TRACKING_TOKEN && (
-          <Script
-            src="/appclimb-analytics.js"
-            data-token={process.env.APPCLIMB_TRACKING_TOKEN}
-            data-storage="session"
-            strategy="afterInteractive"
-          />
-        )}
       </body>
     </html>
   );

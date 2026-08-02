@@ -1,54 +1,43 @@
-import Link from "next/link";
+import { MarketingShell } from "@/components/marketing-shell";
 
 export const metadata = {
   title: "Refund policy",
-  description: "AppClimb refund policy for subscriptions billed by Paddle.",
+  description:
+    "AppClimb is free — there is nothing to refund. This page explains why no payment is ever required.",
   alternates: { canonical: "/refunds" },
 };
 
 export default function RefundPolicyPage() {
   return (
-    <main className="legal-page">
-      <Link href="/">← AppClimb</Link>
-      <span className="eyebrow">Legal</span>
-      <h1>Refund policy</h1>
-      <p className="legal-updated">Last updated July 23, 2026</p>
-      <section>
-        <h2>Requesting a refund</h2>
-        <p>
-          Open{" "}
-          <a
-            href="https://paddle.net/contact"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Paddle buyer support
-          </a>{" "}
-          and choose <strong>Request refund</strong>. Use the email from
-          checkout and your Paddle transaction reference so the purchase can
-          be located. Eligibility is reviewed under applicable consumer law
-          and Paddle&apos;s buyer terms.
-        </p>
-      </section>
-      <section>
-        <h2>Subscriptions</h2>
-        <p>
-          Canceling stops future renewals but does not automatically refund the
-          current billing period. Approved refunds are returned to the original
-          payment method.
-        </p>
-      </section>
-      <section>
-        <h2>Duplicate or incorrect charges</h2>
-        <p>
-          Report duplicate or unrecognized charges through the same Paddle
-          buyer-support page. Paddle may request additional transaction details
-          to verify and resolve the charge.
-        </p>
-      </section>
-      <p className="legal-note">
-        Refund eligibility may vary by country and applicable consumer law.
-      </p>
-    </main>
+    <MarketingShell>
+      <main className="legal-page">
+        <span className="eyebrow">Legal</span>
+        <h1>Refund policy</h1>
+        <p className="legal-updated">Last updated August 2, 2026</p>
+        <section>
+          <h2>There is nothing to pay for</h2>
+          <p>
+            AppClimb is completely free. There is no subscription, no trial,
+            no in-app purchase, and no payment processing on this site.
+          </p>
+        </section>
+        <section>
+          <h2>Why this page exists</h2>
+          <p>
+            Refund policies are a standard part of app and service websites.
+            Because AppClimb never charges you anything, no refund can ever be
+            owed or requested — and no payment information is ever collected.
+          </p>
+        </section>
+        <section>
+          <h2>If you believe you were charged</h2>
+          <p>
+            Any charge you do not recognize is not from AppClimb. Do not enter
+            payment details anywhere claiming to be AppClimb; report the
+            unauthorized charge to your bank or payment provider.
+          </p>
+        </section>
+      </main>
+    </MarketingShell>
   );
 }

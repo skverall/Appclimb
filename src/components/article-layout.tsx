@@ -54,9 +54,10 @@ export function ArticleLayout({
             },
           },
           about: [
-            "iOS subscription analytics",
-            "mobile app growth",
-            "App Store Connect",
+            "App Store keyword research",
+            "ASO",
+            "keyword popularity",
+            "keyword difficulty",
           ],
         }}
       />
@@ -108,18 +109,18 @@ export function ArticleLayout({
         <div className="article-layout marketing-container">
           <article className="article-body">{children}</article>
           <aside className="article-aside">
-            <span className="marketing-eyebrow">See the model</span>
-            <h2>Map the whole growth journey.</h2>
+            <span className="marketing-eyebrow">Try the tool</span>
+            <h2>See keyword data yourself.</h2>
             <p>
-              Explore a clearly labeled sample workspace before connecting any
-              source.
+              Search any App Store keyword for estimated popularity, difficulty,
+              and a 30-day trend — free, without an account.
             </p>
-            <Link href="/?demo=1">
-              Open River Atlas <ArrowRight size={15} aria-hidden="true" />
+            <Link href="/">
+              Open the keyword explorer <ArrowRight size={15} aria-hidden="true" />
             </Link>
             <small>
-              The demo uses synthetic data. Complete live imports are still in
-              development.
+              Popularity and difficulty are estimates from public App Store
+              data, clearly labeled in the UI.
             </small>
           </aside>
         </div>

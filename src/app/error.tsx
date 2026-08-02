@@ -4,6 +4,8 @@ import { AlertTriangle, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef } from "react";
 
+import { MarketingShell } from "@/components/marketing-shell";
+
 export default function ErrorPage({
   error,
   unstable_retry,
@@ -19,37 +21,30 @@ export default function ErrorPage({
   }, [error]);
 
   return (
-    <main className="checkout-success-page">
-      <section
-        className="checkout-success-card"
-        role="alert"
-        aria-live="assertive"
-        aria-labelledby="error-title"
-      >
-        <span className="checkout-success-icon" aria-hidden="true">
-          <AlertTriangle size={28} />
-        </span>
+    <MarketingShell>
+      <main className="legal-page">
         <span className="eyebrow">Unexpected interruption</span>
-        <h1 id="error-title" ref={headingRef} tabIndex={-1}>
-          AppClimb could not load this view.
+        <h1 ref={headingRef} tabIndex={-1}>
+          AppClimb could not load this page.
         </h1>
         <p>
-          Try the view again. Source credentials are never displayed in this
-          fallback. If a save was in progress, check the workspace before
-          submitting it again.
+          Try loading again. If the problem persists, Apple&apos;s public
+          catalog may be temporarily unavailable.
         </p>
-        <button
-          className="auth-submit"
-          type="button"
-          onClick={unstable_retry}
-        >
-          <RotateCcw size={16} aria-hidden="true" />
-          Try loading again
-        </button>
-        <div className="checkout-legal-links">
-          <Link href="/">Return to River Atlas</Link>
+        <div className="marketing-hero-actions">
+          <button
+            className="marketing-primary-action"
+            type="button"
+            onClick={unstable_retry}
+          >
+            <RotateCcw size={16} aria-hidden="true" />
+            Try loading again
+          </button>
+          <Link href="/" className="marketing-secondary-action">
+            <AlertTriangle size={16} aria-hidden="true" /> Back to the explorer
+          </Link>
         </div>
-      </section>
-    </main>
+      </main>
+    </MarketingShell>
   );
 }

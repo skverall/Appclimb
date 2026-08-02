@@ -1,20 +1,18 @@
 import { ImageResponse } from "next/og";
 
 export const alt =
-  "AppClimb — visual growth diagnosis for iOS subscription apps";
+  "AppClimb — App Store keyword explorer with estimated popularity and difficulty";
 export const size = {
   width: 1200,
   height: 630,
 };
 export const contentType = "image/png";
 
-const stages = [
-  { label: "Discover", width: 150, color: "#55c7bd" },
-  { label: "Store", width: 128, color: "#39bdb7" },
-  { label: "Install", width: 102, color: "#25aaa2" },
-  { label: "Activate", width: 65, color: "#e97361" },
-  { label: "Paywall", width: 56, color: "#735dd7" },
-  { label: "Paid", width: 42, color: "#08787d" },
+const rows = [
+  { keyword: "meditation", popularity: 78, difficulty: 52 },
+  { keyword: "habit tracker", popularity: 64, difficulty: 71 },
+  { keyword: "invoice scanner", popularity: 41, difficulty: 33 },
+  { keyword: "workout planner", popularity: 57, difficulty: 44 },
 ];
 
 export default function OpenGraphImage() {
@@ -28,16 +26,17 @@ export default function OpenGraphImage() {
           padding: "64px 72px",
           color: "#17272d",
           background:
-            "radial-gradient(circle at 78% 18%, rgba(57,189,183,.28), transparent 30%), linear-gradient(145deg, #fbfcfa 0%, #edf6f2 100%)",
+            "radial-gradient(circle at 82% 12%, rgba(57,189,183,.28), transparent 32%), linear-gradient(145deg, #fbfcfa 0%, #edf6f2 100%)",
           fontFamily: "Arial, sans-serif",
         }}
       >
         <div
           style={{
             display: "flex",
-            width: "54%",
+            width: "52%",
             flexDirection: "column",
             justifyContent: "space-between",
+            paddingRight: 40,
           }}
         >
           <div
@@ -67,40 +66,40 @@ export default function OpenGraphImage() {
                 textTransform: "uppercase",
               }}
             >
-              Visual growth diagnosis
+              App Store keyword explorer
             </span>
             <div
               style={{
-                maxWidth: 620,
+                maxWidth: 600,
                 fontSize: 60,
                 fontWeight: 750,
                 letterSpacing: -3,
                 lineHeight: 1.04,
               }}
             >
-              See where your app stops growing.
+              Find keywords worth ranking for.
             </div>
             <p
               style={{
-                maxWidth: 590,
+                maxWidth: 560,
                 margin: 0,
                 color: "#5d7475",
                 fontSize: 24,
                 lineHeight: 1.45,
               }}
             >
-              Connect the evidence. Find the earliest constraint. Know what to
-              test next.
+              Estimated popularity, difficulty, and 30-day trends — built from
+              public App Store data. Free, no account.
             </p>
           </div>
           <span style={{ color: "#6b7c80", fontSize: 18 }}>
-            appclimb.app · interactive early-access demo
+            appclimb.app · honest estimates, never invented volumes
           </span>
         </div>
         <div
           style={{
             display: "flex",
-            width: "46%",
+            width: "48%",
             alignItems: "center",
             justifyContent: "center",
           }}
@@ -108,14 +107,13 @@ export default function OpenGraphImage() {
           <div
             style={{
               display: "flex",
-              width: 470,
-              height: 450,
-              padding: 34,
+              width: 500,
+              padding: 24,
               flexDirection: "column",
-              justifyContent: "space-between",
+              gap: 10,
               border: "1px solid #d7e5e1",
               borderRadius: 28,
-              background: "rgba(255,255,255,.86)",
+              background: "rgba(255,255,255,.9)",
               boxShadow: "0 24px 70px rgba(25,57,62,.10)",
             }}
           >
@@ -124,14 +122,16 @@ export default function OpenGraphImage() {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
+                padding: "4px 10px 14px",
+                borderBottom: "1px solid #e5ecea",
               }}
             >
               <span style={{ fontSize: 16, fontWeight: 700 }}>
-                Growth River
+                Keyword Explorer
               </span>
               <span
                 style={{
-                  padding: "8px 12px",
+                  padding: "7px 12px",
                   borderRadius: 99,
                   color: "#08736f",
                   background: "#e5f6f2",
@@ -139,54 +139,97 @@ export default function OpenGraphImage() {
                   fontWeight: 700,
                 }}
               >
-                Evidence first
+                US · Estimated
               </span>
             </div>
-            <div
-              style={{
-                display: "flex",
-                height: 300,
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 8,
-              }}
-            >
-              {stages.map((stage) => (
+            {rows.map((row) => (
+              <div
+                key={row.keyword}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 14,
+                  padding: "10px 10px",
+                }}
+              >
+                <span style={{ width: 150, fontSize: 17, fontWeight: 700 }}>
+                  {row.keyword}
+                </span>
                 <div
-                  key={stage.label}
                   style={{
                     display: "flex",
-                    height: stage.width,
-                    minWidth: 48,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderRadius: 14,
-                    color: "#fff",
-                    background: stage.color,
-                    fontSize: 12,
-                    fontWeight: 700,
-                    writingMode: "vertical-rl",
-                    transform: "rotate(180deg)",
+                    flexDirection: "column",
+                    gap: 6,
+                    flexGrow: 1,
                   }}
                 >
-                  {stage.label}
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexGrow: 1,
+                        height: 10,
+                        borderRadius: 99,
+                        background: "#e5ecea",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          width: `${row.popularity}%`,
+                          height: "100%",
+                          borderRadius: 99,
+                          background: "linear-gradient(90deg,#b5ddd5,#0c8e88)",
+                        }}
+                      />
+                    </div>
+                    <span style={{ fontSize: 14, color: "#08736f", fontWeight: 700 }}>
+                      {row.popularity}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        flexGrow: 1,
+                        height: 10,
+                        borderRadius: 99,
+                        background: "#e5ecea",
+                        overflow: "hidden",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          width: `${row.difficulty}%`,
+                          height: "100%",
+                          borderRadius: 99,
+                          background: "linear-gradient(90deg,#efb8ac,#e97361)",
+                        }}
+                      />
+                    </div>
+                    <span style={{ fontSize: 14, color: "#bc584b", fontWeight: 700 }}>
+                      {row.difficulty}
+                    </span>
+                  </div>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
             <div
               style={{
                 display: "flex",
-                padding: "14px 16px",
+                padding: "12px 14px",
                 alignItems: "center",
                 justifyContent: "space-between",
                 borderRadius: 14,
-                color: "#8b4236",
-                background: "#fff0ec",
-                fontSize: 14,
+                color: "#8f661e",
+                background: "#fdf3e0",
+                fontSize: 13,
               }}
             >
-              <span>First constraint</span>
-              <strong>Activation</strong>
+              <span>Popularity &amp; difficulty are estimates</span>
+              <strong>from public data</strong>
             </div>
           </div>
         </div>

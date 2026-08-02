@@ -44,29 +44,13 @@ jobs:
       - name: Build for Cloudflare Workers
         run: npm run build:cloudflare
 
-      - name: Apply D1 migrations
-        run: npm run cloudflare:d1:production
-
-      - name: Deploy API Worker
-        run: npm run deploy:cloudflare:api
-
       - name: Deploy web Worker
         run: npx opennextjs-cloudflare deploy --env=''
 
-      - name: Verify API readiness
-        run: curl --fail --silent --show-error https://appclimb-api.aydmaxx.workers.dev/readyz
-
-      - name: Verify web-to-API service binding
-        run: curl --fail --silent --show-error https://appclimb-web.aydmaxx.workers.dev/api/health
-
-      - name: Verify canonical production health
+      - name: Verify canonical homepage
         run: |
-          curl --fail --silent --show-error https://appclimb.app/api/health \
-            | jq --exit-status '
-                .status == "ok"
-                and .backend == "ready"
-                and .backendOrigin == "https://appclimb-api.internal"
-              '
+          curl --fail --silent --show-error https://appclimb.app/ \
+            | grep -q "Find keywords worth ranking for"
 
       - name: Wait for the canonical sitemap
         run: |

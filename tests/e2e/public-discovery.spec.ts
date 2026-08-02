@@ -1,29 +1,24 @@
 import { expect, test } from "./runtime-test";
 
-test("commercial landing page is indexable, factual, and mobile-safe", async ({
+test("keyword research landing page is indexable and mobile-safe", async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/ios-subscription-analytics");
+  await page.goto("/app-store-keywords");
 
-  await expect(page).toHaveTitle(
-    /iOS Subscription Analytics and Growth Diagnosis/,
-  );
+  await expect(page).toHaveTitle(/App Store Keyword Research/);
   await expect(
     page.getByRole("heading", {
       level: 1,
-      name: "See the growth journey—not another wall of dashboards.",
+      name: /Pick keywords worth ranking for/,
     }),
   ).toBeVisible();
   await expect(
-    page.getByText("Complete source coverage", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    page.getByText(/powered mostly by clearly labeled synthetic data/i),
+    page.getByText("✅ Estimates labeled honestly"),
   ).toBeVisible();
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
     "href",
-    "https://appclimb.app/ios-subscription-analytics",
+    "https://appclimb.app/app-store-keywords",
   );
 
   const pageOverflow = await page.evaluate(
@@ -34,6 +29,25 @@ test("commercial landing page is indexable, factual, and mobile-safe", async ({
       ) - document.documentElement.clientWidth,
   );
   expect(pageOverflow).toBeLessThanOrEqual(0);
+});
+
+test("home page renders the keyword explorer without an account", async ({
+  page,
+}) => {
+  await page.goto("/");
+
+  await expect(
+    page.getByRole("heading", {
+      level: 1,
+      name: /Find keywords worth ranking for/,
+    }),
+  ).toBeVisible();
+  await expect(
+    page.getByPlaceholder(/meditation/),
+  ).toBeVisible();
+  await expect(
+    page.getByText(/Estimates, never invented volumes/i),
+  ).toBeVisible();
 });
 
 test("articles expose canonical metadata and parseable JSON-LD", async ({
@@ -82,12 +96,13 @@ test("crawl and agent discovery endpoints are public and coherent", async ({
   expect(sitemap.ok()).toBe(true);
   const sitemapBody = await sitemap.text();
   expect(sitemapBody).toContain(
-    "<loc>https://appclimb.app/ios-subscription-analytics</loc>",
+    "<loc>https://appclimb.app/app-store-keywords</loc>",
   );
   expect(sitemapBody).toContain(
-    "<loc>https://appclimb.app/guides/ios-subscription-growth</loc>",
+    "<loc>https://appclimb.app/guides/keyword-research</loc>",
   );
   expect(sitemapBody).not.toContain("/login");
+  expect(sitemapBody).not.toContain("/checkout");
 
   for (const endpoint of [
     "/manifest.webmanifest",

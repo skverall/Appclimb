@@ -3,23 +3,28 @@ import { ArrowRight, BookOpen, CalendarDays } from "lucide-react";
 import Link from "next/link";
 
 import { MarketingShell } from "@/components/marketing-shell";
-import { ARTICLES } from "@/lib/site";
+import { ARTICLES, SITE_UPDATED } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "Field Notes on iOS Subscription Growth",
+  title: "Field Notes on App Store Keywords and ASO",
   description:
-    "Evidence-first guides for independent builders working on iOS subscription growth, analytics, conversion, and retention.",
+    "Practical notes for independent app builders on App Store search, keyword research, ASO, and discovery.",
   alternates: {
     canonical: "/blog",
   },
   openGraph: {
     title: "AppClimb Field Notes",
     description:
-      "Practical, source-aware guides for diagnosing iOS subscription growth.",
+      "Practical notes on App Store search, keyword research, and ASO.",
     url: "/blog",
     type: "website",
   },
 };
+
+const updatedDate = new Date(`${SITE_UPDATED}T12:00:00Z`).toLocaleDateString(
+  "en-US",
+  { year: "numeric", month: "long", day: "numeric" },
+);
 
 export default function BlogPage() {
   return (
@@ -27,26 +32,23 @@ export default function BlogPage() {
       <main className="blog-index">
         <section className="blog-index-hero marketing-container">
           <span className="marketing-eyebrow">AppClimb Field Notes</span>
-          <h1>Understand the system before changing the metric.</h1>
+          <h1>Understand App Store search before picking keywords.</h1>
           <p>
-            Practical guides for independent iOS subscription app builders:
-            source ownership, funnel diagnosis, conversion, retention, and
-            evidence-based experiments.
+            Practical notes for independent app builders: what keyword data is
+            public, how popularity and difficulty are estimated, and how to
+            build a keyword list that earns installs.
           </p>
         </section>
         <section className="blog-index-grid marketing-container">
-          {ARTICLES.map((article, index) => (
-            <article
-              key={article.slug}
-              className={index === 0 ? "blog-card featured" : "blog-card"}
-            >
+          {ARTICLES.map((article) => (
+            <article key={article.slug} className="blog-card">
               <div className="blog-card-icon">
                 <BookOpen aria-hidden="true" />
               </div>
               <div className="blog-card-meta">
                 <span>{article.category}</span>
                 <span>
-                  <CalendarDays size={13} aria-hidden="true" /> July 25, 2026
+                  <CalendarDays size={13} aria-hidden="true" /> {updatedDate}
                 </span>
               </div>
               <h2>
@@ -54,7 +56,7 @@ export default function BlogPage() {
               </h2>
               <p>{article.description}</p>
               <Link href={`/blog/${article.slug}`} className="blog-card-link">
-                Read the guide <ArrowRight size={15} aria-hidden="true" />
+                Read the note <ArrowRight size={15} aria-hidden="true" />
               </Link>
             </article>
           ))}
@@ -63,19 +65,16 @@ export default function BlogPage() {
               <span>Definitive guide</span>
             </div>
             <h2>
-              <Link href="/guides/ios-subscription-growth">
-                The practical guide to iOS subscription growth
+              <Link href="/guides/keyword-research">
+                The practical guide to App Store keyword research
               </Link>
             </h2>
             <p>
-              A complete framework for locating the earliest constraint across
-              discovery, activation, paywalls, trials, paid conversion, and
-              renewal.
+              A complete framework for finding keywords worth ranking for:
+              search, estimate popularity and difficulty, track trends, and
+              iterate.
             </p>
-            <Link
-              href="/guides/ios-subscription-growth"
-              className="blog-card-link"
-            >
+            <Link href="/guides/keyword-research" className="blog-card-link">
               Open the guide <ArrowRight size={15} aria-hidden="true" />
             </Link>
           </article>

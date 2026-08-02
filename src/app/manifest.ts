@@ -4,7 +4,7 @@ import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/site";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: `${SITE_NAME} — Visual Growth Diagnosis`,
+    name: `${SITE_NAME} — App Store Keyword Explorer`,
     short_name: SITE_NAME,
     description: SITE_DESCRIPTION,
     start_url: "/",
@@ -13,7 +13,7 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: "#f4f7f5",
     theme_color: "#08787d",
     orientation: "any",
-    categories: ["business", "productivity", "analytics"],
+    categories: ["utilities", "productivity"],
     icons: [
       {
         src: "/icon.svg",

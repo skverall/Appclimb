@@ -17,27 +17,9 @@
       "head_sampling_rate": 1
     }
   },
-  "vars": {
-    "APPCLIMB_API_URL": "https://appclimb-api.aydmaxx.workers.dev"
-  },
-  "services": [
-    {
-      "binding": "APPCLIMB_API",
-      "service": "appclimb-api"
-    }
-  ],
   "env": {
     "staging": {
-      "name": "appclimb-web-staging",
-      "vars": {
-        "APPCLIMB_API_URL": "https://appclimb-api-staging.aydmaxx.workers.dev"
-      },
-      "services": [
-        {
-          "binding": "APPCLIMB_API",
-          "service": "appclimb-api-staging"
-        }
-      ]
+      "name": "appclimb-web-staging"
     }
   }
 }

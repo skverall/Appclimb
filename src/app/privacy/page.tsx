@@ -1,48 +1,60 @@
-import Link from "next/link";
+import { MarketingShell } from "@/components/marketing-shell";
 
 export const metadata = {
   title: "Privacy",
   description:
-    "How AppClimb protects source credentials, limits identity joins, and handles deletion.",
+    "AppClimb privacy principles: no account, no tracking, no server-side storage of your keyword data.",
   alternates: { canonical: "/privacy" },
 };
 
 export default function PrivacyPage() {
   return (
-    <main className="legal-page">
-      <Link href="/">← AppClimb</Link>
-      <span className="eyebrow">Legal</span>
-      <h1>Privacy principles</h1>
-      <p className="legal-updated">Last updated July 23, 2026</p>
-      <section>
-        <h2>Minimal access</h2>
-        <p>
-          AppClimb connects to data sources with read-only credentials whenever
-          the provider supports them. After submission, credentials are
-          envelope encrypted at rest, are never returned in source responses
-          and are not included in AI requests.
+    <MarketingShell>
+      <main className="legal-page">
+        <span className="eyebrow">Legal</span>
+        <h1>Privacy principles</h1>
+        <p className="legal-updated">Last updated August 2, 2026</p>
+        <section>
+          <h2>No account, no personal data</h2>
+          <p>
+            AppClimb is a public tool. There is no registration, no login, and
+            no server-side user profile. We have nothing to associate with an
+            individual.
+          </p>
+        </section>
+        <section>
+          <h2>Keyword data stays in your browser</h2>
+          <p>
+            The keyword explorer queries Apple&apos;s public iTunes Search API
+            directly from your browser. Your keyword list, history, and trend
+            charts are stored in your browser&apos;s localStorage and never
+            uploaded to AppClimb servers. Clearing your browser data removes
+            them permanently.
+          </p>
+        </section>
+        <section>
+          <h2>No tracking</h2>
+          <p>
+            This site does not run third-party analytics, advertising, or
+            fingerprinting scripts. We do not use cookies for marketing or
+            measurement purposes. The hosting provider may keep standard
+            infrastructure logs (for example, for abuse prevention), which are
+            not used to profile visitors.
+          </p>
+        </section>
+        <section>
+          <h2>Third parties</h2>
+          <p>
+            When you search a keyword, your browser sends the query directly to
+            Apple&apos;s iTunes Search API. Apple&apos;s handling of those
+            requests is governed by Apple&apos;s own privacy policy.
+          </p>
+        </section>
+        <p className="legal-note">
+          If you have questions about this policy, contact us via the GitHub
+          repository linked on this site.
         </p>
-      </section>
-      <section>
-        <h2>Aggregated diagnosis</h2>
-        <p>
-          We process aggregate store, product, paywall and subscription metrics.
-          User-level joins are disabled unless a workspace explicitly confirms
-          a shared App User ID across the connected sources.
-        </p>
-      </section>
-      <section>
-        <h2>Retention and deletion</h2>
-        <p>
-          Metric history is retained for 90 days. Revoking a source deletes its
-          stored credential envelope. Account deletion removes the user,
-          workspace data and source credentials.
-        </p>
-      </section>
-      <p className="legal-note">
-        Source revocation and permanent account deletion are available from the
-        account settings in an authenticated workspace.
-      </p>
-    </main>
+      </main>
+    </MarketingShell>
   );
 }

@@ -1,35 +1,23 @@
 # AppClimb Pricing
 
-Last updated: 2026-07-28
+Last updated: 2026-08-02
 
-## Free
+## Free forever
 
 - Price: USD 0
 - Card required: No
-- Includes: one iOS app, RevenueCat + PostHog connection, first complete release verdict, one Growth Task export/copy, limited history, bounded manual refresh
+- Account required: No
+- Includes: unlimited keyword searches, estimated popularity (0–100), estimated difficulty (0–100), 30-day trend charts, related keywords, top-app breakdowns, six storefronts (US, GB, DE, FR, RU, JP)
 
-## Pro monthly
+## What you don't pay for
 
-- Price: USD 12.99 per month
-- Billing interval: Monthly
-- Billing provider: Paddle
-- Includes: automatic six-hour monitoring, ongoing release verdicts, Agent Bridge, verification loop, 90-day history, digests
-
-## Pro yearly
-
-- Price: USD 129 per year
-- Monthly equivalent: USD 10.75
-- Savings compared with twelve monthly payments: approximately 17%
-- Billing provider: Paddle
+- There is no paid tier, no trial, and no subscription. AppClimb is the tool.
 
 ## Current product status
 
-- Product promise: Growth CI for AI-built iOS subscription apps
-- Available foundation: authentication, Paddle billing, encrypted RevenueCat/PostHog connections, Cloudflare Workers/D1/Queues
-- In development on `feat/growth-ci`: release evaluation, one incident/task loop, Agent Bridge, single-screen UI
-- Production verification of the full Growth CI loop is not claimed until a real app completes it
-
-Existing active Paddle subscriptions remain entitled. New users get the first release verdict free rather than a pure calendar trial.
+- Product promise: free App Store keyword research on public data
+- Shipped: keyword explorer, estimation heuristics, localStorage history with estimated 30-day baseline, marketing pages
+- Honest limits: popularity and difficulty are estimates from public signals; they are labeled as such and are not Apple Search Ads volume
 
 Human-readable pricing: https://appclimb.app/pricing
 Contact: aydmaxx@gmail.com

@@ -27,9 +27,9 @@ export function GET() {
   <channel>
     <title>${SITE_NAME} Field Notes</title>
     <link>${SITE_URL}/blog</link>
-    <description>Evidence-first guides for independent iOS subscription app builders.</description>
+    <description>Practical notes on App Store search, keyword research, and ASO.</description>
     <language>en-us</language>
-    <lastBuildDate>${new Date("2026-07-25T12:00:00Z").toUTCString()}</lastBuildDate>
+    <lastBuildDate>${new Date("2026-08-02T12:00:00Z").toUTCString()}</lastBuildDate>
     ${items}
   </channel>
 </rss>`;

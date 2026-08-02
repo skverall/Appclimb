@@ -1,19 +1,19 @@
-import { ArrowLeft, Check, Clock3, ShieldCheck } from "lucide-react";
+import { Check } from "lucide-react";
 import Link from "next/link";
 
-import { BrandMark } from "@/components/brand-mark";
 import { JsonLd } from "@/components/json-ld";
+import { MarketingShell } from "@/components/marketing-shell";
 import { absoluteUrl } from "@/lib/site";
 
 export const metadata = {
   title: "Pricing",
   description:
-    "Growth CI for iOS subscription apps. First complete release verdict free, then $12.99/month or $129/year for ongoing monitoring and Agent Bridge.",
+    "AppClimb is free: App Store keyword popularity and difficulty estimates from public data, no account or payment required.",
   alternates: { canonical: "/pricing" },
   openGraph: {
     title: "AppClimb Pricing",
     description:
-      "First release verdict free. Pro is $12.99 monthly or $129 yearly for automatic Growth CI and Agent Bridge.",
+      "Free. No accounts. No billing. Estimated keyword popularity and difficulty from public App Store data.",
     url: "/pricing",
   },
 };
@@ -22,58 +22,45 @@ const accessDetails = [
   {
     status: "Free",
     detail:
-      "one iOS app, RevenueCat + PostHog, first complete release verdict, one Growth Task export",
+      "unlimited keyword searches, estimated popularity and difficulty, 30-day trends",
     inDevelopment: false,
   },
   {
-    status: "Pro",
+    status: "No account",
     detail:
-      "automatic six-hour monitoring, ongoing verdicts, Agent Bridge, verification loop, 90-day history",
+      "your keyword list and history stay in your browser's localStorage",
     inDevelopment: false,
   },
   {
-    status: "Core sources",
-    detail: "RevenueCat (money) and PostHog (behavior) only for measurement activation",
+    status: "Public data",
+    detail:
+      "everything is derived from the public iTunes Search API — no Apple Ads volume claims",
     inDevelopment: false,
   },
   {
     status: "Honest limits",
     detail:
-      "low-volume apps get collecting / inconclusive — never fabricated advice",
+      "estimates are labeled as estimates; trends start with an estimated baseline and grow with real daily snapshots",
     inDevelopment: false,
   },
 ];
 
 export default function PricingPage() {
   return (
-    <>
+    <MarketingShell>
       <JsonLd
         data={{
           "@context": "https://schema.org",
           "@type": "Product",
-          name: "AppClimb Growth CI",
+          name: "AppClimb Keyword Explorer",
           description:
-            "Growth CI for AI-built iOS subscription apps. Connect RevenueCat and PostHog, evaluate releases, and verify agent fixes with production data.",
+            "Free App Store keyword research: estimated popularity, difficulty, and 30-day trends from public data.",
           brand: { "@type": "Brand", name: "AppClimb" },
           offers: [
             {
               "@type": "Offer",
-              name: "Free first verdict",
+              name: "Free forever",
               price: "0",
-              priceCurrency: "USD",
-              url: absoluteUrl("/pricing"),
-            },
-            {
-              "@type": "Offer",
-              name: "Pro monthly",
-              price: "12.99",
-              priceCurrency: "USD",
-              url: absoluteUrl("/pricing"),
-            },
-            {
-              "@type": "Offer",
-              name: "Pro yearly",
-              price: "129",
               priceCurrency: "USD",
               url: absoluteUrl("/pricing"),
             },
@@ -81,68 +68,40 @@ export default function PricingPage() {
         }}
       />
       <main className="marketing-page pricing-page">
-        <header className="marketing-top">
-          <Link href="/" className="marketing-brand">
-            <BrandMark />
-          </Link>
-          <Link href="/" className="marketing-back">
-            <ArrowLeft size={16} /> Back
-          </Link>
-        </header>
-
         <section className="pricing-hero">
           <p className="eyebrow">Pricing</p>
-          <h1>Growth CI for AI-built iOS subscription apps.</h1>
+          <h1>Free forever. That&apos;s the whole plan.</h1>
           <p>
-            Your agents ship. AppClimb proves whether the release helped. First
-            complete release verdict free — then Pro for continuous monitoring
-            and Agent Bridge.
+            AppClimb is a public App Store keyword explorer. There is no paid
+            tier, no trial, no card required — the tool is the product.
           </p>
         </section>
 
         <section className="pricing-grid" aria-labelledby="pricing-title">
-          <div className="pricing-card">
-            <h2 id="pricing-title">Free</h2>
-            <p className="price">
-              $0 <span>first verdict</span>
-            </p>
-            <ul>
-              <li>
-                <Check size={16} /> One iOS app
-              </li>
-              <li>
-                <Check size={16} /> RevenueCat + PostHog
-              </li>
-              <li>
-                <Check size={16} /> First complete release verdict
-              </li>
-              <li>
-                <Check size={16} /> One Growth Task export/copy
-              </li>
-            </ul>
-          </div>
           <div className="pricing-card pricing-card-featured">
-            <h2>Pro</h2>
+            <h2 id="pricing-title">Keyword Explorer</h2>
             <p className="price">
-              $12.99 <span>/ month</span>
+              $0 <span>forever</span>
             </p>
-            <p className="price-alt">or $129 / year</p>
             <ul>
               <li>
-                <Check size={16} /> Automatic six-hour monitoring
+                <Check size={16} /> Unlimited keyword searches
               </li>
               <li>
-                <Check size={16} /> Ongoing release verdicts
+                <Check size={16} /> Estimated popularity (0–100)
               </li>
               <li>
-                <Check size={16} /> Agent Bridge + skill/cron
+                <Check size={16} /> Estimated difficulty (0–100)
               </li>
               <li>
-                <Check size={16} /> Verification loop + 90-day history
+                <Check size={16} /> 30-day trend charts
+              </li>
+              <li>
+                <Check size={16} /> Related keywords + top-app breakdowns
               </li>
             </ul>
-            <Link href="/login" className="primary-action">
-              Start with free verdict
+            <Link href="/" className="primary-action">
+              Search keywords
             </Link>
           </div>
         </section>
@@ -153,11 +112,7 @@ export default function PricingPage() {
             {accessDetails.map((item) => (
               <li key={item.detail}>
                 <span className="status-pill">
-                  {item.inDevelopment ? (
-                    <Clock3 size={14} />
-                  ) : (
-                    <ShieldCheck size={14} />
-                  )}
+                  <Check size={14} />
                   {item.status}
                 </span>
                 <span>{item.detail}</span>
@@ -166,6 +121,6 @@ export default function PricingPage() {
           </ul>
         </section>
       </main>
-    </>
+    </MarketingShell>
   );
 }

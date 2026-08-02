@@ -1,50 +1,23 @@
 # AppClimb
 
-> AppClimb is a visual growth diagnosis workspace for independent builders, beginning with iOS subscription apps.
+> AppClimb is a free App Store keyword explorer: estimated keyword popularity and difficulty with 30-day trend charts, built from public App Store data.
 
-AppClimb helps a builder see where a product's growth journey first becomes constrained, inspect the supporting evidence, and prepare the next experiment. Its core model is Observe -> Diagnose -> Experiment -> Learn.
+AppClimb searches any App Store keyword and shows an estimated popularity score (0–100), an estimated difficulty score (0–100), a 30-day trend chart, related keywords, and the top 10 apps ranking for the term. Everything comes from Apple's public iTunes Search API, queried directly from the browser. No account, no billing, no tracking.
 
-## Product status
+## Data honesty
 
-- Shipped: interactive River Atlas demo; authentication; 14-day no-card trial; pricing and Paddle checkout; account controls; secure connector setup foundation; production first-party Acquisition Atlas collection for AppClimb's own website.
-- Production-verified Acquisition Atlas scope: web referrers, UTM campaigns, landing pages, account/checkout/paid-activation goals, and separately counted crawler requests for the appclimb.app property.
-- Prototype: most visible Growth River and public Acquisition Atlas metrics use clearly labeled synthetic sample data.
-- In development: complete live imports and reliable end-to-end diagnosis across App Store Connect, RevenueCat, PostHog, and Superwall.
-- Roadmap: keyword monitoring, competitor intelligence, complete Voice of Customer analysis, and broader SaaS support.
-
-AppClimb must not be described as a completed live-data analytics platform yet. It is currently an early-access interactive product prototype and technical foundation.
-Acquisition Atlas is a Pulse projection, not a change to the initial iOS subscription-app wedge. Human visits referred by an AI assistant are separate from AI crawler requests. Current crawler attribution is detected from user agent and is not IP-verified. AppClimb does not use DataFast for this capability.
-
-## Audience
-
-The initial audience is solo developers and small teams running iOS subscription apps. The long-term direction includes Android apps, SaaS products, and web services.
-
-## Source ownership
-
-- App Store Connect: discovery, App Store engagement, downloads, Apple sales, and Apple usage metrics.
-- RevenueCat: subscription lifecycle, trials, paid conversion, renewal, churn, and subscription revenue.
-- PostHog: product behavior, activation, funnels, features, and retention.
-- Superwall: paywall exposure, variants, experiments, and paywall conversion.
-- AppClimb first-party analytics: web referrers, UTM attribution, landing-page journeys, explicit web goals, and server-observed crawler requests.
-
-AppClimb uses aggregate comparisons unless a customer explicitly confirms a shared identifier across sources. Insights are labeled Observed, Derived, or Hypothesis.
-
-## Pricing
-
-- Trial: 14 days, no card required.
-- Monthly: USD 12.99 per month.
-- Yearly: USD 129 per year.
-- Billing and tax handling: Paddle.
+- Popularity and difficulty are **estimates** derived from public signals (competition pressure, top-result ratings, mega-brand presence), not Apple Search Ads volume — which is not publicly available.
+- Every score is labeled as an estimate and shown alongside its evidence (result count, saturation, top apps, ratings).
+- Keyword history is stored in the visitor's browser (localStorage), one daily snapshot per keyword per country. The first check seeds an estimated 30-day baseline, clearly flagged; later checks record real measurements.
+- AppClimb is not affiliated with Apple.
 
 ## Key pages
 
-- Product: https://appclimb.app/ios-subscription-analytics
-- Interactive demo: https://appclimb.app/?demo=1
-- Acquisition Atlas demo: https://appclimb.app/?demo=1&atlas=1
-- iOS subscription growth guide: https://appclimb.app/guides/ios-subscription-growth
+- Keyword explorer: https://appclimb.app/
+- Keyword research: https://appclimb.app/app-store-keywords
+- ASO guide: https://appclimb.app/guides/keyword-research
 - Field notes: https://appclimb.app/blog
-- Pricing: https://appclimb.app/pricing
-- Machine-readable pricing: https://appclimb.app/pricing.md
+- Pricing (free): https://appclimb.app/pricing
 - About: https://appclimb.app/about
 - Privacy: https://appclimb.app/privacy
 - Terms: https://appclimb.app/terms
@@ -52,6 +25,6 @@ AppClimb uses aggregate comparisons unless a customer explicitly confirms a shar
 
 ## Preferred short description
 
-AppClimb is a visual growth diagnosis workspace for independent iOS subscription app builders. It connects acquisition, activation, paywall, subscription, and retention evidence so a builder can find the earliest constraint and choose the next experiment.
+AppClimb is a free App Store keyword tool that estimates keyword popularity and difficulty from public data, tracks trends in your browser, and never claims search volume it cannot verify.
 
-Last updated: 2026-07-25
+Last updated: 2026-08-02
