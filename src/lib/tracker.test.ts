@@ -17,14 +17,19 @@ import {
   isKeywordStale,
   isTransientItunesError,
   keywordKey,
+  buildKeywordsCsv,
   listKeywordsForApp,
   loadAppMetadata,
   loadTrackerStore,
   markKeywordUnavailable,
   mapWithConcurrency,
+  matchesStatusFilter,
   normalizeKeyword,
+  opportunityScore,
   parseKeywordBatch,
+  isRateLimitError,
   positionSeries,
+  positionSparklineValues,
   rankDelta,
   recordRankSnapshot,
   removeKeywordFromStore,
@@ -35,6 +40,7 @@ import {
   sleep,
   snapshotsFor,
   snapshotsToChartPoints,
+  trackAppInStorefront,
   TRACKER_STORAGE_KEY,
   updateKeywordNote,
   type TrackerStorage,
@@ -482,6 +488,187 @@ describe("concurrency and errors", () => {
 describe("normalizeKeyword", () => {
   it("trims and collapses whitespace case-insensitively", () => {
     expect(normalizeKeyword("  Focus   Timer ")).toBe("focus timer");
+  });
+});
+
+describe("opportunityScore and status filters", () => {
+  it("scores higher for high popularity and lower difficulty", () => {
+    const strong = opportunityScore({
+      popularity: 80,
+      difficulty: 30,
+      position: null,
+      unavailable: false,
+    });
+    const weak = opportunityScore({
+      popularity: 20,
+      difficulty: 90,
+      position: 3,
+      unavailable: false,
+    });
+    expect(strong).not.toBeNull();
+    expect(weak).not.toBeNull();
+    expect(strong!).toBeGreaterThan(weak!);
+  });
+
+  it("returns null when metrics are missing or unavailable", () => {
+    expect(opportunityScore(null)).toBeNull();
+    expect(
+      opportunityScore({
+        popularity: 50,
+        difficulty: 50,
+        position: 10,
+        unavailable: true,
+      }),
+    ).toBeNull();
+  });
+
+  it("filters ranked, out, new, unchecked, and opportunity rows", () => {
+    const ranked = {
+      appStoreId: "1",
+      country: "US",
+      keyword: "a",
+      normalizedKeyword: "a",
+      note: "",
+      createdAt: "x",
+      lastCheckedAt: "x",
+      currentMetrics: {
+        popularity: 70,
+        difficulty: 40,
+        results: 100,
+        saturated: false,
+        topApps: [],
+        position: 12,
+        sampledAt: "x",
+      },
+    };
+    const out = {
+      ...ranked,
+      keyword: "b",
+      normalizedKeyword: "b",
+      currentMetrics: {
+        ...ranked.currentMetrics!,
+        position: null,
+      },
+    };
+    const unchecked = {
+      ...ranked,
+      keyword: "c",
+      normalizedKeyword: "c",
+      currentMetrics: null,
+    };
+    expect(matchesStatusFilter(ranked, "all")).toBe(true);
+    expect(matchesStatusFilter(ranked, "ranked")).toBe(true);
+    expect(matchesStatusFilter(out, "out")).toBe(true);
+    expect(matchesStatusFilter(ranked, "new", [])).toBe(true);
+    expect(matchesStatusFilter(ranked, "new", [
+      {
+        date: "a",
+        sampledAt: "a",
+        position: 1,
+        popularity: 1,
+        difficulty: 1,
+        resultsCount: 1,
+        saturated: false,
+      },
+      {
+        date: "b",
+        sampledAt: "b",
+        position: 2,
+        popularity: 1,
+        difficulty: 1,
+        resultsCount: 1,
+        saturated: false,
+      },
+    ])).toBe(false);
+    expect(matchesStatusFilter(unchecked, "unchecked")).toBe(true);
+    expect(matchesStatusFilter(ranked, "opportunity")).toBe(true);
+    expect(
+      opportunityScore({
+        popularity: 50,
+        difficulty: 50,
+        position: 80,
+        unavailable: false,
+      }),
+    ).toBeGreaterThan(
+      opportunityScore({
+        popularity: 50,
+        difficulty: 50,
+        position: 5,
+        unavailable: false,
+      })!,
+    );
+  });
+});
+
+describe("rate-limit helpers and sparkline", () => {
+  it("detects rate-limit errors and maps positions for sparklines", () => {
+    expect(isRateLimitError(new Error("app_store_catalog_unavailable:429"))).toBe(
+      true,
+    );
+    expect(isRateLimitError(new Error("app_store_catalog_unavailable:500"))).toBe(
+      false,
+    );
+    expect(
+      positionSparklineValues([
+        {
+          date: "a",
+          sampledAt: "a",
+          position: 10,
+          popularity: 1,
+          difficulty: 1,
+          resultsCount: 1,
+          saturated: false,
+        },
+        {
+          date: "b",
+          sampledAt: "b",
+          position: null,
+          popularity: 1,
+          difficulty: 1,
+          resultsCount: 1,
+          saturated: false,
+        },
+      ]),
+    ).toEqual([10, 201]);
+  });
+});
+
+describe("CSV export and storefront clone", () => {
+  it("builds a CSV with header and estimated columns", () => {
+    let store = addTrackedApp(emptyStore(), sampleApp).store;
+    store = addKeywordsToStore(store, "123456789", "US", ["meditation"]).store;
+    store = applyAnalysisToStore(store, "123456789", "US", "meditation", {
+      metrics: {
+        keyword: "meditation",
+        country: "US",
+        popularity: 55,
+        difficulty: 40,
+        results: 80,
+        saturated: false,
+        topApps: [],
+        sampledAt: "2026-08-02T10:00:00Z",
+      },
+      position: 14,
+      topApps: [],
+    });
+    const rows = listKeywordsForApp(store, "123456789", "US");
+    const csv = buildKeywordsCsv(store.apps[0], rows);
+    expect(csv.split("\n")[0]).toContain("popularity_estimated");
+    expect(csv).toContain("meditation");
+    expect(csv).toContain("55");
+    expect(csv).toContain("14");
+  });
+
+  it("tracks the same app in another storefront without duplicating keywords", () => {
+    let store = addTrackedApp(emptyStore(), sampleApp).store;
+    store = addKeywordsToStore(store, "123456789", "US", ["yoga"]).store;
+    const cloned = trackAppInStorefront(store, store.apps[0], "DE");
+    expect(cloned.added).toBe(true);
+    store = cloned.store;
+    expect(store.apps).toHaveLength(2);
+    expect(listKeywordsForApp(store, "123456789", "DE")).toHaveLength(0);
+    expect(listKeywordsForApp(store, "123456789", "US")).toHaveLength(1);
+    expect(trackAppInStorefront(store, store.apps[0], "US").added).toBe(false);
   });
 });
 

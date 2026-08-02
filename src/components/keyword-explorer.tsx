@@ -179,16 +179,17 @@ export function KeywordExplorer() {
         <span className="marketing-eyebrow">App Store keyword intelligence</span>
         <h1>Find keywords worth ranking for</h1>
         <p className="keyword-hero-deck">
-          Search any keyword and see an estimated popularity score, how hard it
-          is to rank, and a 30-day trend — built entirely from public App Store
-          data, free and without an account.
+          Search any keyword for estimated popularity and difficulty — or use{" "}
+          <strong>My Apps</strong> in the sidebar to track your app’s position
+          on public App Store search. Free, local, no account.
         </p>
         <div className="keyword-estimate-note">
           <Info size={15} aria-hidden="true" />
           <span>
             Popularity and difficulty are <strong>estimates</strong> from public
             iTunes data (competition and top-result strength). They are not
-            Apple Ads search volume.
+            Apple Ads search volume. Position in My Apps is the observed rank in
+            the first 200 public results.
           </span>
         </div>
       </section>

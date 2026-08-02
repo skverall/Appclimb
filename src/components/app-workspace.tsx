@@ -34,6 +34,7 @@ import {
   removeTrackedApp,
   saveTrackerStore,
   setActiveApp,
+  trackAppInStorefront,
   type TrackedApp,
   type TrackerStore,
 } from "@/lib/tracker";
@@ -132,6 +133,39 @@ export function AppWorkspace() {
     const next = removeTrackedApp(storeRef.current, app.appStoreId, app.country);
     persist(next);
     if (next.apps.length === 0) setView("explorer");
+  };
+
+  const handleTrackInStorefront = (country: string) => {
+    if (!activeApp) return;
+    const { store: next, added, app } = trackAppInStorefront(
+      storeRef.current,
+      activeApp,
+      country,
+    );
+    persist(next);
+    setView("app");
+    if (!added) {
+      setBanner(`Already tracking this app in ${country}.`);
+      return;
+    }
+    setBanner(
+      `Now tracking ${app.name} in ${country}. Keyword history is separate per storefront.`,
+    );
+    // Offer suggestions for the new storefront entry.
+    const raw = {
+      trackName: app.name,
+      primaryGenreName: app.genre,
+      description: app.description,
+      trackId: Number(app.appStoreId),
+      bundleId: app.bundleId,
+      sellerName: app.developer,
+      artworkUrl100: app.iconUrl,
+      trackViewUrl: app.storeUrl,
+    };
+    const suggestions = buildKeywordSuggestions(raw, app.name, {
+      existingNormalized: new Set(),
+    });
+    setPendingSuggestions({ app, suggestions });
   };
 
   const handleSelectCatalogApp = async (catalog: CatalogApp, country: string) => {
@@ -462,13 +496,69 @@ export function AppWorkspace() {
         )}
 
         {view === "explorer" || !activeApp ? (
-          <KeywordExplorer />
+          <>
+            {store.apps.length === 0 && (
+              <section
+                className="tracker-onboarding marketing-container"
+                aria-label="How AppClimb works"
+              >
+                <div className="tracker-onboarding-intro">
+                  <span className="marketing-eyebrow">Free · local · no account</span>
+                  <h2>Track your app’s keywords in three steps</h2>
+                  <p>
+                    Add an iOS app, pick relevant keywords from public App Store
+                    metadata, and watch estimated scores plus observed position —
+                    all stored only in this browser.
+                  </p>
+                </div>
+                <ol className="tracker-onboarding-steps">
+                  <li>
+                    <strong>1. Add your app</strong>
+                    <span>Search by name, paste an App Store URL, or enter an ID.</span>
+                  </li>
+                  <li>
+                    <strong>2. Pick keywords</strong>
+                    <span>
+                      Use metadata suggestions or paste your own list — checks run
+                      automatically.
+                    </span>
+                  </li>
+                  <li>
+                    <strong>3. Watch position</strong>
+                    <span>
+                      See estimated popularity/difficulty and rank in the public
+                      iTunes results (first 200).
+                    </span>
+                  </li>
+                </ol>
+                <div className="tracker-onboarding-actions">
+                  <button
+                    type="button"
+                    className="tracker-button-primary"
+                    onClick={() => setAddAppOpen(true)}
+                  >
+                    <Plus size={16} aria-hidden="true" />
+                    Add your first app
+                  </button>
+                  <button
+                    type="button"
+                    className="tracker-button-secondary"
+                    onClick={selectExplorer}
+                  >
+                    Or search any keyword
+                  </button>
+                </div>
+              </section>
+            )}
+            <KeywordExplorer />
+          </>
         ) : (
           <TrackerView
             app={activeApp}
             store={store}
             onStoreChange={persist}
             suspendAutoRefresh={bootstrapping}
+            onTrackInStorefront={handleTrackInStorefront}
           />
         )}
       </div>

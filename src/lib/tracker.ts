@@ -32,7 +32,9 @@ export const TRACKER_SCHEMA_VERSION = 1 as const;
 export const MAX_KEYWORDS_PER_ADD = 50;
 export const MAX_SUGGESTIONS = 20;
 export const REFRESH_CONCURRENCY = 2;
-export const REFRESH_GAP_MS = 180;
+export const REFRESH_GAP_MS = 220;
+/** Extra pause after a rate-limit hit before the next keyword in the queue. */
+export const RATE_LIMIT_COOLDOWN_MS = 2500;
 export const STALE_AFTER_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 /* ------------------------------------------------------------------ */
@@ -828,6 +830,11 @@ export function humanizeItunesError(error: unknown): string {
   return "Could not reach the App Store catalog. Existing data is preserved.";
 }
 
+export function isRateLimitError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /app_store_catalog_unavailable:(429|403)/u.test(message);
+}
+
 /**
  * Run async work over items with a fixed concurrency and optional gap between
  * starts. Failures are collected; they never stop the remaining queue.
@@ -884,6 +891,7 @@ export async function analyzeWithRetry(
     fetchImpl?: typeof fetch;
     signal?: AbortSignal;
     maxAttempts?: number;
+    onRetry?: (info: { attempt: number; maxAttempts: number; error: unknown }) => void;
   } = {},
 ): Promise<AnalyzeKeywordResult> {
   const maxAttempts = options.maxAttempts ?? 3;
@@ -907,7 +915,9 @@ export async function analyzeWithRetry(
       if (!isTransientItunesError(error) || attempt >= maxAttempts) {
         throw error;
       }
-      const backoff = Math.min(2000, 250 * 2 ** (attempt - 1));
+      options.onRetry?.({ attempt, maxAttempts, error });
+      const base = isRateLimitError(error) ? 800 : 250;
+      const backoff = Math.min(5000, base * 2 ** (attempt - 1));
       await sleep(backoff, options.signal);
     }
   }
@@ -940,4 +950,187 @@ export function positionSeries(
   snapshots: RankSnapshot[],
 ): Array<{ date: string; position: number | null }> {
   return snapshots.map((snap) => ({ date: snap.date, position: snap.position }));
+}
+
+/* ------------------------------------------------------------------ */
+/* Opportunity heuristic (estimated — not search volume)               */
+/* ------------------------------------------------------------------ */
+
+export type KeywordStatusFilter =
+  | "all"
+  | "ranked"
+  | "out"
+  | "new"
+  | "unchecked"
+  | "opportunity";
+
+/**
+ * Estimated "worth watching" score 0–100.
+ * Higher = better estimated demand vs difficulty, with a boost when the app is
+ * outside the observed top 200 (room to enter) or already ranking mid-pack.
+ * Always a heuristic from public signals — never real search volume.
+ */
+export function opportunityScore(
+  metrics: Pick<TrackedKeywordMetrics, "popularity" | "difficulty" | "position" | "unavailable"> | null,
+): number | null {
+  if (!metrics || metrics.unavailable) return null;
+  const demand = metrics.popularity;
+  const barrier = metrics.difficulty;
+  // Sweet spot: solid demand, not maxed-out difficulty.
+  let score = demand * 0.55 + (100 - barrier) * 0.45;
+  if (metrics.position === null) {
+    // Outside top 200: still interesting if demand exists.
+    score += demand >= 40 ? 8 : 0;
+  } else if (metrics.position > 50) {
+    score += 6; // ranked but room to climb
+  } else if (metrics.position <= 10) {
+    score -= 4; // already strong — less "opportunity", still track
+  }
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+export function matchesStatusFilter(
+  row: TrackedKeyword,
+  filter: KeywordStatusFilter,
+  snapshots: RankSnapshot[] = [],
+): boolean {
+  const metrics = row.currentMetrics;
+  switch (filter) {
+    case "all":
+      return true;
+    case "ranked":
+      return Boolean(metrics && !metrics.unavailable && metrics.position !== null);
+    case "out":
+      return Boolean(metrics && !metrics.unavailable && metrics.position === null);
+    case "new":
+      return snapshots.length < 2;
+    case "unchecked":
+      return !metrics || Boolean(metrics.unavailable);
+    case "opportunity": {
+      const score = opportunityScore(metrics);
+      return score !== null && score >= 55;
+    }
+    default:
+      return true;
+  }
+}
+
+/** Clone an already-tracked app into another storefront (no keyword copy). */
+export function trackAppInStorefront(
+  store: TrackerStore,
+  app: TrackedApp,
+  country: string,
+): { store: TrackerStore; added: boolean; app: TrackedApp } {
+  return addTrackedApp(store, {
+    appStoreId: app.appStoreId,
+    name: app.name,
+    bundleId: app.bundleId,
+    developer: app.developer,
+    genre: app.genre,
+    iconUrl: app.iconUrl,
+    storeUrl: app.storeUrl,
+    country,
+    description: app.description,
+  });
+}
+
+/* ------------------------------------------------------------------ */
+/* CSV export (local only)                                             */
+/* ------------------------------------------------------------------ */
+
+function csvEscape(value: string): string {
+  if (/[",\n\r]/u.test(value)) {
+    return `"${value.replace(/"/gu, '""')}"`;
+  }
+  return value;
+}
+
+/** Build a CSV string for one app's keywords (browser download only). */
+export function buildKeywordsCsv(
+  app: TrackedApp,
+  keywords: TrackedKeyword[],
+  options: {
+    snapshotsFor?: (normalizedKeyword: string) => RankSnapshot[];
+  } = {},
+): string {
+  const header = [
+    "keyword",
+    "store",
+    "note",
+    "popularity_estimated",
+    "difficulty_estimated",
+    "position",
+    "results",
+    "saturated",
+    "opportunity_estimated",
+    "last_checked_at",
+    "rank_trend",
+    "app_store_id",
+    "app_name",
+  ];
+  const lines = [header.join(",")];
+  for (const row of keywords) {
+    const metrics = row.currentMetrics;
+    const snaps = options.snapshotsFor?.(row.normalizedKeyword) ?? [];
+    const previous = snaps.length >= 2 ? snaps[snaps.length - 2] : undefined;
+    const trend = describeRankTrend(
+      previous,
+      metrics ? { position: metrics.position } : null,
+    );
+    const positionLabel =
+      !metrics
+        ? ""
+        : metrics.unavailable
+          ? "Unavailable"
+          : metrics.position === null
+            ? ">200"
+            : String(metrics.position);
+    const opp = opportunityScore(metrics);
+    lines.push(
+      [
+        csvEscape(row.keyword),
+        csvEscape(row.country),
+        csvEscape(row.note),
+        metrics && !metrics.unavailable ? String(metrics.popularity) : "",
+        metrics && !metrics.unavailable ? String(metrics.difficulty) : "",
+        csvEscape(positionLabel),
+        metrics ? String(metrics.results) : "",
+        metrics ? String(metrics.saturated) : "",
+        opp === null ? "" : String(opp),
+        row.lastCheckedAt ?? "",
+        csvEscape(trend.label),
+        csvEscape(app.appStoreId),
+        csvEscape(app.name),
+      ].join(","),
+    );
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+export function downloadTextFile(
+  filename: string,
+  content: string,
+  mime = "text/csv;charset=utf-8",
+): void {
+  if (typeof document === "undefined") return;
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.rel = "noopener";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(url);
+}
+
+/** Numeric series for a compact position sparkline (null = outside 200 → 201). */
+export function positionSparklineValues(
+  snapshots: RankSnapshot[],
+  days = 30,
+): number[] {
+  return snapshots.slice(-days).map((snap) =>
+    snap.position === null ? 201 : snap.position,
+  );
 }

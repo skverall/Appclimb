@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Download,
   Lightbulb,
   Loader2,
   Plus,
@@ -13,28 +14,37 @@ import {
 import { AddKeywordsModal } from "@/components/add-keywords-modal";
 import { SuggestionsModal } from "@/components/suggestions-modal";
 import { TrackerDetail } from "@/components/tracker-detail";
+import { Sparkline } from "@/components/keyword-charts";
 import { SUPPORTED_COUNTRIES } from "@/lib/aso";
 import type { CatalogApp, KeywordSuggestion } from "@/lib/itunes";
 import {
+  RATE_LIMIT_COOLDOWN_MS,
   REFRESH_CONCURRENCY,
   REFRESH_GAP_MS,
   addKeywordsToStore,
   analyzeWithRetry,
   applyAnalysisToStore,
   buildKeywordSuggestions,
+  buildKeywordsCsv,
   describeRankTrend,
+  downloadTextFile,
   formatPosition,
   humanizeItunesError,
   isKeywordStale,
+  isRateLimitError,
   keywordKey,
   listKeywordsForApp,
   loadAppMetadata,
   markKeywordUnavailable,
   mapWithConcurrency,
+  matchesStatusFilter,
   normalizeKeyword,
+  opportunityScore,
+  positionSparklineValues,
   removeKeywordFromStore,
   snapshotsFor,
   updateKeywordNote,
+  type KeywordStatusFilter,
   type TrackedApp,
   type TrackerStore,
 } from "@/lib/tracker";
@@ -44,7 +54,19 @@ type SortKey =
   | "popularity"
   | "difficulty"
   | "position"
-  | "lastUpdate";
+  | "lastUpdate"
+  | "opportunity";
+
+type Density = "comfortable" | "compact";
+
+const STATUS_FILTERS: Array<{ id: KeywordStatusFilter; label: string }> = [
+  { id: "all", label: "All" },
+  { id: "ranked", label: "In top 200" },
+  { id: "out", label: ">200" },
+  { id: "new", label: "New" },
+  { id: "unchecked", label: "Needs check" },
+  { id: "opportunity", label: "Opportunity" },
+];
 
 function MetricBar({
   value,
@@ -104,22 +126,30 @@ export function TrackerView({
   store,
   onStoreChange,
   suspendAutoRefresh = false,
+  onTrackInStorefront,
 }: {
   app: TrackedApp;
   store: TrackerStore;
   onStoreChange: (next: TrackerStore) => void;
   /** Parent is already analyzing (e.g. post-add suggestions) — don't double-fetch. */
   suspendAutoRefresh?: boolean;
+  /** Offer tracking the same app id in another country. */
+  onTrackInStorefront?: (country: string) => void;
 }) {
   const [filter, setFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState<KeywordStatusFilter>("all");
   const [historyDays, setHistoryDays] = useState<7 | 30>(30);
-  const [sortKey, setSortKey] = useState<SortKey>("keyword");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [density, setDensity] = useState<Density>("comfortable");
+  const [sortKey, setSortKey] = useState<SortKey>("opportunity");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [selected, setSelected] = useState<string | null>(null);
   const [busyKeys, setBusyKeys] = useState<Set<string>>(new Set());
-  const [progress, setProgress] = useState<{ done: number; total: number } | null>(
-    null,
-  );
+  const [progress, setProgress] = useState<{
+    done: number;
+    total: number;
+    current?: string;
+    phase?: "checking" | "cooling";
+  } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [addKeywordsOpen, setAddKeywordsOpen] = useState(false);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
@@ -145,6 +175,20 @@ export function TrackerView({
     [keywords],
   );
 
+  const otherStorefronts = useMemo(
+    () =>
+      SUPPORTED_COUNTRIES.filter(
+        (item) =>
+          item.code !== app.country &&
+          !store.apps.some(
+            (tracked) =>
+              tracked.appStoreId === app.appStoreId &&
+              tracked.country === item.code,
+          ),
+      ),
+    [app.appStoreId, app.country, store.apps],
+  );
+
   const countryLabel =
     SUPPORTED_COUNTRIES.find((item) => item.code === app.country)?.label ??
     app.country;
@@ -156,34 +200,88 @@ export function TrackerView({
       const controller = new AbortController();
       abortRef.current = controller;
       setError(null);
-      setProgress({ done: 0, total: targets.length });
+      setProgress({ done: 0, total: targets.length, phase: "checking" });
       setBusyKeys(new Set(targets.map((kw) => normalizeKeyword(kw))));
 
       let working = storeRef.current;
       let done = 0;
       let failures = 0;
+      let rateLimited = 0;
 
       try {
         const outcomes = await mapWithConcurrency(
           targets,
           REFRESH_CONCURRENCY,
           async (keyword) => {
-            const analysis = await analyzeWithRetry(
-              keyword,
-              app.country,
-              app.appStoreId,
-              { signal: controller.signal },
+            setProgress((prev) =>
+              prev
+                ? { ...prev, current: keyword, phase: "checking" }
+                : prev,
             );
-            return analysis;
+            try {
+              return await analyzeWithRetry(
+                keyword,
+                app.country,
+                app.appStoreId,
+                {
+                  signal: controller.signal,
+                  onRetry: ({ attempt, maxAttempts, error }) => {
+                    if (isRateLimitError(error)) {
+                      setProgress((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              phase: "cooling",
+                              current: `Rate-limited — retry ${attempt}/${maxAttempts}`,
+                            }
+                          : prev,
+                      );
+                    }
+                  },
+                },
+              );
+            } catch (error) {
+              if (isRateLimitError(error)) {
+                rateLimited += 1;
+                setProgress((prev) =>
+                  prev
+                    ? {
+                        ...prev,
+                        phase: "cooling",
+                        current: "Cooling down after rate limit…",
+                      }
+                    : prev,
+                );
+                await new Promise<void>((resolve, reject) => {
+                  const timer = window.setTimeout(resolve, RATE_LIMIT_COOLDOWN_MS);
+                  const onAbort = () => {
+                    window.clearTimeout(timer);
+                    reject(new DOMException("Aborted", "AbortError"));
+                  };
+                  if (controller.signal.aborted) {
+                    onAbort();
+                    return;
+                  }
+                  controller.signal.addEventListener("abort", onAbort, {
+                    once: true,
+                  });
+                });
+              }
+              throw error;
+            }
           },
           { signal: controller.signal, gapMs: REFRESH_GAP_MS },
         );
 
-        // Re-read latest store so concurrent note edits are not clobbered.
         working = storeRef.current;
         for (const outcome of outcomes) {
           done += 1;
-          setProgress({ done, total: targets.length });
+          setProgress({
+            done,
+            total: targets.length,
+            current: outcome.item,
+            phase: "checking",
+          });
           if (outcome.result) {
             working = applyAnalysisToStore(
               working,
@@ -192,28 +290,34 @@ export function TrackerView({
               outcome.item,
               outcome.result,
             );
+            onStoreChange(working);
           } else if (outcome.error) {
             failures += 1;
+            if (isRateLimitError(outcome.error)) rateLimited += 1;
             working = markKeywordUnavailable(
               working,
               app.appStoreId,
               app.country,
               outcome.item,
             );
+            onStoreChange(working);
           }
         }
-        onStoreChange(working);
         if (options.openFirst && targets[0]) {
           setSelected(normalizeKeyword(targets[0]));
         }
         if (failures > 0) {
           setError(
             failures === targets.length
-              ? humanizeItunesError(
-                  outcomes.find((item) => item.error)?.error ??
-                    new Error("app_store_catalog_unavailable:429"),
-                )
-              : `Updated ${targets.length - failures} of ${targets.length} keywords. Some requests failed; existing data was kept.`,
+              ? rateLimited > 0
+                ? "Apple rate-limited this batch. Existing data is preserved — wait a moment and use Refresh All."
+                : humanizeItunesError(
+                    outcomes.find((item) => item.error)?.error ??
+                      new Error("app_store_catalog_unavailable:429"),
+                  )
+              : `Updated ${targets.length - failures} of ${targets.length} keywords${
+                  rateLimited > 0 ? " (some hits were rate-limited)" : ""
+                }. Existing data was kept.`,
           );
         }
       } catch (err) {
@@ -230,9 +334,6 @@ export function TrackerView({
     [app.appStoreId, app.country, onStoreChange],
   );
 
-  // Auto-check keywords that have never been measured (or are stale).
-  // Re-runs when new unchecked keywords appear (e.g. after Add Keywords),
-  // so the table fills without requiring a manual Refresh All.
   useEffect(() => {
     if (suspendAutoRefresh) return;
     let cancelled = false;
@@ -246,7 +347,6 @@ export function TrackerView({
         );
         const needsCheck = rows
           .filter((row) => {
-            // Never checked → auto-run. Failed/unavailable rows wait for manual refresh.
             if (!row.currentMetrics) return true;
             if (row.currentMetrics.unavailable) return false;
             return isKeywordStale(row);
@@ -254,7 +354,6 @@ export function TrackerView({
           .map((row) => row.keyword);
         if (needsCheck.length === 0) return;
 
-        // Deduplicate concurrent auto-runs for the same set.
         const fingerprint = `${app.appStoreId}:${app.country}:${needsCheck
           .map((k) => normalizeKeyword(k))
           .sort()
@@ -294,7 +393,6 @@ export function TrackerView({
         primaryGenreName: app.genre,
         description: app.description,
       };
-      // Lightweight competitor seed: use top apps from first tracked keyword if any.
       let competitorApps: CatalogApp[] = [];
       const firstWithMetrics = keywords.find(
         (row) => row.currentMetrics && row.currentMetrics.topApps.length > 0,
@@ -326,16 +424,48 @@ export function TrackerView({
     }
   }, [app, existingNormalized, keywords]);
 
+  const statusCounts = useMemo(() => {
+    const counts: Record<KeywordStatusFilter, number> = {
+      all: keywords.length,
+      ranked: 0,
+      out: 0,
+      new: 0,
+      unchecked: 0,
+      opportunity: 0,
+    };
+    for (const row of keywords) {
+      const snaps = snapshotsFor(
+        store,
+        app.appStoreId,
+        app.country,
+        row.normalizedKeyword,
+        historyDays,
+      );
+      for (const id of Object.keys(counts) as KeywordStatusFilter[]) {
+        if (id === "all") continue;
+        if (matchesStatusFilter(row, id, snaps)) counts[id] += 1;
+      }
+    }
+    return counts;
+  }, [keywords, store, app.appStoreId, app.country, historyDays]);
+
   const filteredSorted = useMemo(() => {
     const needle = filter.trim().toLocaleLowerCase();
-    let rows = keywords;
-    if (needle) {
-      rows = rows.filter(
-        (row) =>
-          row.keyword.toLocaleLowerCase().includes(needle) ||
-          row.note.toLocaleLowerCase().includes(needle),
+    const rows = keywords.filter((row) => {
+      const snaps = snapshotsFor(
+        store,
+        app.appStoreId,
+        app.country,
+        row.normalizedKeyword,
+        historyDays,
       );
-    }
+      if (!matchesStatusFilter(row, statusFilter, snaps)) return false;
+      if (!needle) return true;
+      return (
+        row.keyword.toLocaleLowerCase().includes(needle) ||
+        row.note.toLocaleLowerCase().includes(needle)
+      );
+    });
     const dir = sortDir === "asc" ? 1 : -1;
     return [...rows].sort((left, right) => {
       const lm = left.currentMetrics;
@@ -355,11 +485,26 @@ export function TrackerView({
           const rt = right.lastCheckedAt ? Date.parse(right.lastCheckedAt) : 0;
           return (lt - rt) * dir;
         }
+        case "opportunity": {
+          const lo = opportunityScore(lm) ?? -1;
+          const ro = opportunityScore(rm) ?? -1;
+          return (lo - ro) * dir;
+        }
         default:
           return left.keyword.localeCompare(right.keyword) * dir;
       }
     });
-  }, [keywords, filter, sortKey, sortDir]);
+  }, [
+    keywords,
+    filter,
+    sortKey,
+    sortDir,
+    statusFilter,
+    store,
+    app.appStoreId,
+    app.country,
+    historyDays,
+  ]);
 
   const selectedRow = selected
     ? keywords.find((row) => row.normalizedKeyword === selected) ?? null
@@ -388,8 +533,24 @@ export function TrackerView({
     setSelected((current) => (current === normalized ? null : current));
   };
 
+  const exportCsv = () => {
+    const csv = buildKeywordsCsv(app, keywords, {
+      snapshotsFor: (normalized) =>
+        snapshotsFor(store, app.appStoreId, app.country, normalized, historyDays),
+    });
+    const safeName = app.name
+      .toLocaleLowerCase()
+      .replace(/[^a-z0-9]+/giu, "-")
+      .replace(/^-|-$/gu, "")
+      .slice(0, 40);
+    downloadTextFile(
+      `appclimb-${safeName || app.appStoreId}-${app.country}.csv`,
+      csv,
+    );
+  };
+
   return (
-    <div className="tracker-view">
+    <div className={`tracker-view tracker-view--${density}`}>
       <header className="tracker-view-header">
         <div className="tracker-view-app">
           {app.iconUrl ? (
@@ -404,23 +565,42 @@ export function TrackerView({
             <h1>{app.name}</h1>
             <p>
               {app.developer || "Unknown developer"}
-              {app.genre ? ` · ${app.genre}` : ""} · {countryLabel}
+              {app.genre ? ` · ${app.genre}` : ""} · Tracked for{" "}
+              <strong>{countryLabel}</strong>
             </p>
           </div>
         </div>
+        {onTrackInStorefront && otherStorefronts.length > 0 && (
+          <label className="country-select tracker-track-storefront">
+            <span>Also track in</span>
+            <select
+              defaultValue=""
+              aria-label="Track this app in another storefront"
+              onChange={(event) => {
+                const code = event.target.value;
+                if (!code) return;
+                onTrackInStorefront(code);
+                event.target.value = "";
+              }}
+            >
+              <option value="" disabled>
+                Choose storefront…
+              </option>
+              {otherStorefronts.map((item) => (
+                <option key={item.code} value={item.code}>
+                  {item.flag} {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </header>
 
-      <div className="tracker-toolbar">
-        <label className="country-select tracker-toolbar-store">
-          <span>Store</span>
-          <select value={app.country} disabled aria-label="Active storefront">
-            {SUPPORTED_COUNTRIES.map((item) => (
-              <option key={item.code} value={item.code}>
-                {item.flag} {item.code}
-              </option>
-            ))}
-          </select>
-        </label>
+      <div className="tracker-toolbar" role="toolbar" aria-label="Keyword actions">
+        <span className="tracker-store-pill" title="Active storefront for this app">
+          {SUPPORTED_COUNTRIES.find((c) => c.code === app.country)?.flag}{" "}
+          {app.country}
+        </span>
 
         <button
           type="button"
@@ -456,6 +636,16 @@ export function TrackerView({
           />
           Refresh All
         </button>
+        <button
+          type="button"
+          className="refresh-all-button"
+          onClick={exportCsv}
+          disabled={keywords.length === 0}
+          aria-label="Export keywords as CSV"
+        >
+          <Download size={15} aria-hidden="true" />
+          Export CSV
+        </button>
 
         <label className="tracker-filter">
           <Search size={14} aria-hidden="true" />
@@ -481,22 +671,90 @@ export function TrackerView({
           </select>
         </label>
 
-        {progress && (
-          <div
-            className="tracker-progress"
-            role="status"
-            aria-live="polite"
-            aria-label={`Refreshing ${progress.done} of ${progress.total}`}
+        <label className="country-select">
+          <span>Density</span>
+          <select
+            value={density}
+            onChange={(event) =>
+              setDensity(
+                event.target.value === "compact" ? "compact" : "comfortable",
+              )
+            }
+            aria-label="Table density"
           >
-            <span>
-              Updating {progress.done}/{progress.total}
-            </span>
-            <i>
-              <b style={{ width: `${(progress.done / progress.total) * 100}%` }} />
-            </i>
-          </div>
-        )}
+            <option value="comfortable">Comfortable</option>
+            <option value="compact">Compact</option>
+          </select>
+        </label>
       </div>
+
+      {progress && (
+        <div
+          className={`tracker-queue-banner${
+            progress.phase === "cooling" ? " is-cooling" : ""
+          }`}
+          role="status"
+          aria-live="polite"
+        >
+          <Loader2 className="spin" size={15} aria-hidden="true" />
+          <div className="tracker-queue-banner-text">
+            <strong>
+              {progress.phase === "cooling"
+                ? "Paused — Apple rate limit"
+                : "Checking keywords"}
+            </strong>
+            <span>
+              {progress.done}/{progress.total}
+              {progress.current ? ` · ${progress.current}` : ""}
+            </span>
+          </div>
+          <i className="tracker-bootstrap-bar" aria-hidden="true">
+            <b
+              style={{
+                width: `${
+                  progress.total > 0
+                    ? (progress.done / progress.total) * 100
+                    : 0
+                }%`,
+              }}
+            />
+          </i>
+        </div>
+      )}
+
+      {keywords.length > 0 && (
+        <div
+          className="tracker-status-filters"
+          role="tablist"
+          aria-label="Keyword status filters"
+        >
+          {STATUS_FILTERS.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              role="tab"
+              aria-selected={statusFilter === item.id}
+              className={
+                statusFilter === item.id
+                  ? "tracker-status-chip is-active"
+                  : "tracker-status-chip"
+              }
+              onClick={() => setStatusFilter(item.id)}
+            >
+              {item.label}
+              <span>{statusCounts[item.id]}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
+      {statusFilter === "opportunity" && (
+        <p className="tracker-heuristic-note">
+          Opportunity is an <strong>estimated heuristic</strong> (public
+          popularity vs difficulty signals) — not Apple search volume or
+          downloads.
+        </p>
+      )}
 
       {error && (
         <div className="keyword-error" role="alert">
@@ -510,8 +768,7 @@ export function TrackerView({
           <strong>No keywords for this app yet</strong>
           <span>
             Get suggestions from public App Store metadata, or add keywords
-            manually to see estimated popularity, difficulty, and observed
-            position.
+            manually. Metrics fill in automatically after you add them.
           </span>
           <div className="keyword-examples">
             <button type="button" onClick={() => void openSuggestions()}>
@@ -522,6 +779,16 @@ export function TrackerView({
             </button>
           </div>
         </div>
+      ) : filteredSorted.length === 0 ? (
+        <div className="keyword-empty">
+          <strong>No keywords match this filter</strong>
+          <span>Try another status chip or clear the text filter.</span>
+          <div className="keyword-examples">
+            <button type="button" onClick={() => setStatusFilter("all")}>
+              Show all
+            </button>
+          </div>
+        </div>
       ) : (
         <div className="tracker-main-split">
           <div className="keyword-table-wrap tracker-table-wrap">
@@ -529,35 +796,57 @@ export function TrackerView({
               <table className="keyword-table tracker-table">
                 <thead>
                   <tr>
-                    <th>
+                    <th className="tracker-col-sticky">
                       <button type="button" onClick={() => toggleSort("keyword")}>
                         Keyword
                       </button>
                     </th>
-                    <th>Notes</th>
+                    <th className="tracker-col-optional">Notes</th>
                     <th>
-                      <button type="button" onClick={() => toggleSort("lastUpdate")}>
-                        Last update
+                      <button
+                        type="button"
+                        onClick={() => toggleSort("opportunity")}
+                      >
+                        Opp. · Est.
                       </button>
                     </th>
-                    <th>Store</th>
                     <th>
-                      <button type="button" onClick={() => toggleSort("popularity")}>
+                      <button
+                        type="button"
+                        onClick={() => toggleSort("popularity")}
+                      >
                         Popularity · Est.
                       </button>
                     </th>
                     <th>
-                      <button type="button" onClick={() => toggleSort("difficulty")}>
+                      <button
+                        type="button"
+                        onClick={() => toggleSort("difficulty")}
+                      >
                         Difficulty · Est.
                       </button>
                     </th>
                     <th>
-                      <button type="button" onClick={() => toggleSort("position")}>
+                      <button
+                        type="button"
+                        onClick={() => toggleSort("position")}
+                      >
                         Position
                       </button>
                     </th>
                     <th>Rank trend</th>
-                    <th>Apps in ranking</th>
+                    <th className="tracker-col-optional">Spark</th>
+                    <th className="tracker-col-optional">Apps</th>
+                    <th
+                      className="tracker-col-optional"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => toggleSort("lastUpdate")}
+                      >
+                        Updated
+                      </button>
+                    </th>
                     <th aria-label="Actions" />
                   </tr>
                 </thead>
@@ -577,14 +866,10 @@ export function TrackerView({
                       snaps.length >= 2 ? snaps[snaps.length - 2] : undefined;
                     const trend = describeRankTrend(
                       previous,
-                      metrics
-                        ? {
-                            position: metrics.unavailable
-                              ? metrics.position
-                              : metrics.position,
-                          }
-                        : null,
+                      metrics ? { position: metrics.position } : null,
                     );
+                    const opp = opportunityScore(metrics);
+                    const spark = positionSparklineValues(snaps, historyDays);
                     const lastUpdate = row.lastCheckedAt
                       ? new Date(row.lastCheckedAt).toLocaleString(undefined, {
                           month: "short",
@@ -598,11 +883,24 @@ export function TrackerView({
                         key={keywordKey(app.appStoreId, app.country, key)}
                         className={selected === key ? "is-selected" : ""}
                         onClick={() => setSelected(key)}
+                        tabIndex={0}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            setSelected(key);
+                          }
+                        }}
                       >
-                        <td>
+                        <td className="tracker-col-sticky">
                           <strong className="keyword-name">{row.keyword}</strong>
+                          <small className="tracker-row-store">
+                            {row.country}
+                          </small>
                         </td>
-                        <td onClick={(event) => event.stopPropagation()}>
+                        <td
+                          className="tracker-col-optional"
+                          onClick={(event) => event.stopPropagation()}
+                        >
                           <input
                             className="tracker-note-input"
                             value={row.note}
@@ -622,20 +920,21 @@ export function TrackerView({
                           />
                         </td>
                         <td>
-                          <small>{lastUpdate}</small>
-                        </td>
-                        <td>
-                          <small>{row.country}</small>
+                          {opp === null ? (
+                            <em className="keyword-pending">—</em>
+                          ) : (
+                            <span
+                              className="tracker-opp-score"
+                              title="Estimated opportunity heuristic from public signals"
+                            >
+                              {opp}
+                            </span>
+                          )}
                         </td>
                         <td>
                           {isBusy && !metrics ? (
                             <em className="keyword-pending">Checking…</em>
-                          ) : metrics && !metrics.unavailable ? (
-                            <MetricBar
-                              value={metrics.popularity}
-                              tone="popularity"
-                            />
-                          ) : metrics?.unavailable && metrics.popularity > 0 ? (
+                          ) : metrics && metrics.popularity > 0 ? (
                             <MetricBar
                               value={metrics.popularity}
                               tone="popularity"
@@ -668,7 +967,9 @@ export function TrackerView({
                           </strong>
                         </td>
                         <td>
-                          <span className={`rank-trend rank-trend--${trend.kind}`}>
+                          <span
+                            className={`rank-trend rank-trend--${trend.kind}`}
+                          >
                             {metrics?.unavailable && metrics.popularity === 0
                               ? "Unavailable"
                               : snaps.length < 2
@@ -676,12 +977,22 @@ export function TrackerView({
                                 : trend.label}
                           </span>
                         </td>
-                        <td>
+                        <td className="tracker-col-optional keyword-trend-cell">
+                          {spark.length >= 2 ? (
+                            <Sparkline values={spark} width={72} height={24} />
+                          ) : (
+                            <em className="keyword-pending">—</em>
+                          )}
+                        </td>
+                        <td className="tracker-col-optional">
                           {metrics?.topApps ? (
                             <TopAppIcons apps={metrics.topApps} />
                           ) : (
                             <em className="keyword-pending">—</em>
                           )}
+                        </td>
+                        <td className="tracker-col-optional">
+                          <small>{lastUpdate}</small>
                         </td>
                         <td
                           className="keyword-row-actions"
@@ -694,7 +1005,11 @@ export function TrackerView({
                             onClick={() => void refreshKeywords([row.keyword])}
                           >
                             {isBusy ? (
-                              <Loader2 className="spin" size={15} aria-hidden="true" />
+                              <Loader2
+                                className="spin"
+                                size={15}
+                                aria-hidden="true"
+                              />
                             ) : (
                               <RefreshCw size={15} aria-hidden="true" />
                             )}
@@ -718,13 +1033,17 @@ export function TrackerView({
             </div>
             <footer className="keyword-table-foot">
               <span>
-                Saved in your browser only. Position is observed in the public
-                iTunes Search results (first 200). Popularity and difficulty are
+                Browser-only storage. Position = observed iTunes Search rank
+                (first 200). Popularity, difficulty, and opportunity are
                 estimates.
               </span>
               <span>
-                {keywords.length} keyword{keywords.length === 1 ? "" : "s"} ·{" "}
-                {countryLabel}
+                {filteredSorted.length}
+                {filteredSorted.length !== keywords.length
+                  ? ` of ${keywords.length}`
+                  : ""}{" "}
+                keyword
+                {keywords.length === 1 ? "" : "s"} · {countryLabel}
               </span>
             </footer>
           </div>
@@ -743,9 +1062,11 @@ export function TrackerView({
               historyDays={historyDays}
               busy={busyKeys.has(selectedRow.normalizedKeyword)}
               onClose={() => setSelected(null)}
-              onRefresh={() => void refreshKeywords([selectedRow.keyword], {
-                openFirst: true,
-              })}
+              onRefresh={() =>
+                void refreshKeywords([selectedRow.keyword], {
+                  openFirst: true,
+                })
+              }
               onDelete={() =>
                 confirmDelete(
                   selectedRow.normalizedKeyword,

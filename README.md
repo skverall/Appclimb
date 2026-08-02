@@ -22,8 +22,8 @@ direction or expanding the feature set.
   top 10 apps for the term. No app setup required.
 - **My Apps tracker** (`/`, sidebar) — add an iOS app by name, App Store URL, or
   ID; get metadata-based keyword suggestions; track estimated scores, observed
-  position in public iTunes results (first 200), notes, and real rank history
-  locally per app + storefront.
+  position in public iTunes results (first 200), notes, opportunity heuristic,
+  status filters, CSV export, and real rank history locally per app + storefront.
 - **Storefronts** — US, GB, DE, FR, RU, JP.
 - **Local history** — Keyword Explorer: one daily snapshot per keyword per
   country in `appclimb:kw:v1:*` (first check seeds an estimated baseline with

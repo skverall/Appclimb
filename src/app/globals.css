@@ -128,12 +128,18 @@ html {
   background: var(--canvas);
 }
 
+.appclimb-fonts {
+  --font-body: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Helvetica Neue", Arial, sans-serif;
+  --font-display: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    "Helvetica Neue", Arial, sans-serif;
+}
+
 body {
   min-height: 100%;
   color: var(--ink);
   background: var(--canvas);
-  font-family: var(--font-body), ui-sans-serif, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", sans-serif;
+  font-family: var(--font-body);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -164,7 +170,7 @@ h1,
 h2,
 h3,
 h4 {
-  font-family: var(--font-display), var(--font-body), sans-serif;
+  font-family: var(--font-display);
   letter-spacing: var(--tracking-tight);
   line-height: var(--leading-tight);
 }
@@ -2264,6 +2270,253 @@ img {
 
 .tracker-button-block {
   width: 100%;
+}
+
+/* Onboarding (first visit, no apps) */
+.tracker-onboarding {
+  margin: 24px auto 8px;
+  padding: 28px 28px 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--card);
+  box-shadow: var(--shadow-sm);
+  display: grid;
+  gap: 20px;
+}
+
+.tracker-onboarding-intro h2 {
+  font-size: var(--text-2xl);
+  margin: 8px 0 10px;
+}
+
+.tracker-onboarding-intro p {
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  max-width: 62ch;
+}
+
+.tracker-onboarding-steps {
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+}
+
+.tracker-onboarding-steps li {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border-radius: var(--radius-lg);
+  background: var(--n-25);
+  border: 1px solid var(--line);
+}
+
+.tracker-onboarding-steps strong {
+  font-size: var(--text-sm);
+  color: var(--teal-700);
+}
+
+.tracker-onboarding-steps span {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  line-height: var(--leading-snug);
+}
+
+.tracker-onboarding-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+/* Status filter chips + queue banner */
+.tracker-status-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.tracker-status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  padding: 6px 12px;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-secondary);
+}
+
+.tracker-status-chip span {
+  min-width: 1.25em;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--n-100);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-muted);
+}
+
+.tracker-status-chip.is-active {
+  border-color: var(--teal-300);
+  background: var(--teal-50);
+  color: var(--teal-700);
+}
+
+.tracker-status-chip.is-active span {
+  background: var(--teal-100);
+  color: var(--teal-700);
+}
+
+.tracker-status-chip:focus-visible,
+.tracker-app-card:focus-visible,
+.tracker-button-primary:focus-visible,
+.tracker-button-secondary:focus-visible,
+.tracker-button-accent:focus-visible,
+.refresh-all-button:focus-visible,
+.tracker-nav-item:focus-visible {
+  outline: 2px solid var(--teal-400);
+  outline-offset: 2px;
+}
+
+.tracker-heuristic-note {
+  font-size: var(--text-2xs);
+  color: var(--amber-700);
+  background: var(--amber-100);
+  border: 1px solid var(--amber-300);
+  border-radius: var(--radius-md);
+  padding: 8px 12px;
+  line-height: var(--leading-snug);
+}
+
+.tracker-queue-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--teal-200);
+  background: var(--teal-50);
+  color: var(--teal-700);
+  font-size: var(--text-xs);
+}
+
+.tracker-queue-banner.is-cooling {
+  border-color: var(--amber-300);
+  background: var(--amber-100);
+  color: var(--amber-700);
+}
+
+.tracker-queue-banner-text {
+  display: grid;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.tracker-queue-banner-text span {
+  opacity: 0.9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tracker-store-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line-strong);
+  background: var(--card);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-secondary);
+}
+
+.tracker-track-storefront {
+  min-width: 160px;
+}
+
+.tracker-opp-score {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.2em;
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--teal-700);
+  font-size: var(--text-sm);
+}
+
+.tracker-row-store {
+  display: block;
+  color: var(--ink-muted);
+  font-size: var(--text-3xs);
+  margin-top: 2px;
+}
+
+.tracker-table .tracker-col-sticky {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+  background: var(--card);
+  box-shadow: 1px 0 0 var(--line);
+}
+
+.tracker-table tbody tr:hover .tracker-col-sticky,
+.tracker-table tbody tr.is-selected .tracker-col-sticky {
+  background: var(--teal-50);
+}
+
+.tracker-table thead .tracker-col-sticky {
+  z-index: 3;
+  background: var(--n-25);
+}
+
+.tracker-view--compact .keyword-table td,
+.tracker-view--compact .keyword-table th {
+  padding-block: 8px;
+}
+
+.tracker-view--compact .metric-bar {
+  width: 100px;
+}
+
+.tracker-view-header {
+  flex-wrap: wrap;
+}
+
+@media (max-width: 900px) {
+  .tracker-onboarding-steps {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .tracker-onboarding {
+    margin-inline: 12px;
+    width: auto;
+    padding: 20px 16px;
+  }
+
+  .tracker-status-filters {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tracker-status-chip {
+    flex: 0 0 auto;
+  }
 }
 
 .tracker-workspace-main {

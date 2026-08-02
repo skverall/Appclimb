@@ -26,7 +26,7 @@ export function MarketingHeader() {
         </nav>
         <div className="marketing-actions">
           <Link href="/" className="marketing-primary-action">
-            Search keywords <ArrowRight size={15} aria-hidden="true" />
+            Track keywords <ArrowRight size={15} aria-hidden="true" />
           </Link>
         </div>
       </div>
@@ -41,8 +41,8 @@ export function MarketingFooter() {
         <div>
           <BrandMark />
           <p>
-            Free App Store keyword research: estimated popularity, difficulty,
-            and trends from public data.
+            Free App Store keyword research and local app tracking: estimated
+            popularity, difficulty, and observed position from public data.
           </p>
           <span>No account. No tracking. Estimates, never invented volumes.</span>
         </div>

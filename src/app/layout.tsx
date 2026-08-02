@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { DM_Sans, Manrope } from "next/font/google";
 
 import { JsonLd } from "@/components/json-ld";
 import { iconUrl } from "@/lib/brand";
@@ -12,15 +11,14 @@ import {
 
 import "./globals.css";
 
-const dmSans = DM_Sans({
+// System font stacks keep production builds offline-safe (no Google Fonts
+// fetch at compile time) while matching the previous sans UI tone.
+const fontBody = {
   variable: "--font-body",
-  subsets: ["latin"],
-});
-
-const manrope = Manrope({
+} as const;
+const fontDisplay = {
   variable: "--font-display",
-  subsets: ["latin"],
-});
+} as const;
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -112,7 +110,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${dmSans.variable} ${manrope.variable}`}>
+    <html
+      lang="en"
+      className={`${fontBody.variable} ${fontDisplay.variable} appclimb-fonts`}
+    >
       <body>
         <JsonLd
           data={{
