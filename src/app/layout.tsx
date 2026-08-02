@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { DM_Sans, Manrope } from "next/font/google";
 
 import { JsonLd } from "@/components/json-ld";
+import { iconUrl } from "@/lib/brand";
 import {
   SITE_DESCRIPTION,
   SITE_NAME,
@@ -44,13 +45,14 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   icons: {
     icon: [
-      { url: "/icon.svg", type: "image/svg+xml" },
-      { url: "/favicon.ico", sizes: "48x48", type: "image/x-icon" },
+      { url: iconUrl("icon.svg"), type: "image/svg+xml" },
+      { url: iconUrl("icon-48.png"), sizes: "48x48", type: "image/png" },
+      { url: iconUrl("favicon.ico"), sizes: "48x48", type: "image/x-icon" },
     ],
-    shortcut: "/favicon.ico",
+    shortcut: iconUrl("favicon.ico"),
     apple: [
       {
-        url: "/apple-touch-icon.png",
+        url: iconUrl("apple-touch-icon.png"),
         sizes: "180x180",
         type: "image/png",
       },
@@ -123,7 +125,7 @@ export default function RootLayout({
                 url: SITE_URL,
                 logo: {
                   "@type": "ImageObject",
-                  url: absoluteUrl("/icon.svg"),
+                  url: absoluteUrl(iconUrl("icon-512.png")),
                   width: 512,
                   height: 512,
                 },

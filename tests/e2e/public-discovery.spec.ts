@@ -111,6 +111,10 @@ test("crawl and agent discovery endpoints are public and coherent", async ({
     "/pricing.md",
     "/favicon.ico",
     "/icon.svg",
+    "/icons/v2/favicon.ico",
+    "/icons/v2/icon.svg",
+    "/icons/v2/icon-192.png",
+    "/icons/v2/apple-touch-icon.png",
   ]) {
     const response = await request.get(endpoint);
     expect(response.ok(), `${endpoint} should return 200`).toBe(true);

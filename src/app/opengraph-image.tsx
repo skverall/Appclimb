@@ -8,11 +8,14 @@ export const size = {
 };
 export const contentType = "image/png";
 
+// Content revision: change layout/copy when brand assets change so OG caches refresh.
+
 const rows = [
   { keyword: "meditation", popularity: 78, difficulty: 52 },
   { keyword: "habit tracker", popularity: 64, difficulty: 71 },
   { keyword: "invoice scanner", popularity: 41, difficulty: 33 },
   { keyword: "workout planner", popularity: 57, difficulty: 44 },
+  { keyword: "sleep sounds", popularity: 49, difficulty: 38 },
 ];
 
 export default function OpenGraphImage() {

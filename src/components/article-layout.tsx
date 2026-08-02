@@ -3,6 +3,7 @@ import Link from "next/link";
 
 import { JsonLd } from "@/components/json-ld";
 import { MarketingShell } from "@/components/marketing-shell";
+import { iconUrl } from "@/lib/brand";
 import { absoluteUrl } from "@/lib/site";
 
 export function ArticleLayout({
@@ -50,7 +51,9 @@ export function ArticleLayout({
             url: absoluteUrl("/"),
             logo: {
               "@type": "ImageObject",
-              url: absoluteUrl("/icon.svg"),
+              url: absoluteUrl(iconUrl("icon-512.png")),
+              width: 512,
+              height: 512,
             },
           },
           about: [
