@@ -371,7 +371,11 @@ export function AppWorkspace() {
           </button>
         </nav>
 
-        <div className="tracker-sidebar-section">
+        <div
+          className={`tracker-sidebar-section${
+            store.apps.length === 0 ? " is-empty" : ""
+          }`}
+        >
           <div className="tracker-sidebar-section-label">My Apps</div>
           {store.apps.length === 0 ? (
             <p className="tracker-sidebar-empty">
@@ -497,13 +501,13 @@ export function AppWorkspace() {
 
         {view === "explorer" || !activeApp ? (
           <>
+            <KeywordExplorer />
             {store.apps.length === 0 && (
               <section
                 className="tracker-onboarding marketing-container"
                 aria-label="How AppClimb works"
               >
                 <div className="tracker-onboarding-intro">
-                  <span className="marketing-eyebrow">Free · local · no account</span>
                   <h2>Track your app’s keywords in three steps</h2>
                   <p>
                     Add an iOS app, pick relevant keywords from public App Store
@@ -540,17 +544,9 @@ export function AppWorkspace() {
                     <Plus size={16} aria-hidden="true" />
                     Add your first app
                   </button>
-                  <button
-                    type="button"
-                    className="tracker-button-secondary"
-                    onClick={selectExplorer}
-                  >
-                    Or search any keyword
-                  </button>
                 </div>
               </section>
             )}
-            <KeywordExplorer />
           </>
         ) : (
           <TrackerView

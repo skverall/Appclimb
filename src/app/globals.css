@@ -90,8 +90,8 @@
   --text-5xl: 44px;
 
   /* --- Tracking / leading / weight --- */
-  --tracking-tight: -0.015em;
-  --tracking-display: -0.045em;
+  --tracking-tight: -0.01em;
+  --tracking-display: -0.02em;
   --tracking-caps: 0.1em;
   --leading-none: 1.05;
   --leading-tight: 1.2;
@@ -128,12 +128,9 @@ html {
   background: var(--canvas);
 }
 
-.appclimb-fonts {
-  --font-body: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    "Helvetica Neue", Arial, sans-serif;
-  --font-display: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI",
-    "Helvetica Neue", Arial, sans-serif;
-}
+/* --font-body / --font-display / --font-mono are provided by next/font
+   classes on <html> (Instrument Sans / Archivo / IBM Plex Mono). Do NOT
+   re-declare them here — an override silently falls back to system fonts. */
 
 body {
   min-height: 100%;
@@ -300,7 +297,7 @@ img {
 }
 
 .marketing-footer {
-  margin-top: 80px;
+  margin-top: 40px;
   border-top: 1px solid var(--line);
   background: var(--n-25);
 }
@@ -603,7 +600,7 @@ img {
 }
 
 .keyword-search-form button[type="submit"]:disabled {
-  opacity: 0.55;
+  opacity: 0.7;
   cursor: default;
 }
 
@@ -663,6 +660,7 @@ img {
   border-radius: var(--radius-md);
   background: var(--card);
   padding: 10px 34px 10px 12px;
+  min-height: 48px;
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
   outline: none;
@@ -680,6 +678,7 @@ img {
   border-radius: var(--radius-md);
   background: var(--card);
   padding: 10px 16px;
+  min-height: 48px;
   font-size: var(--text-sm);
   font-weight: var(--weight-semibold);
   color: var(--ink);
@@ -776,11 +775,13 @@ img {
   border-radius: var(--radius-xl);
   background: var(--card);
   box-shadow: var(--shadow-sm);
-  overflow: hidden;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .keyword-table {
   width: 100%;
+  min-width: 640px;
   border-collapse: collapse;
   font-size: var(--text-sm);
 }
@@ -1962,6 +1963,21 @@ img {
   min-height: calc(100vh - 120px);
   border-top: 1px solid var(--line);
   background: var(--canvas);
+  position: relative;
+}
+
+/* The sidebar is sticky (viewport-height tall), so on long pages its card
+   background would stop mid-page leaving a seam. Paint the full column. */
+.app-workspace::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 248px;
+  background: var(--card);
+  border-right: 1px solid var(--line);
+  z-index: 0;
 }
 
 .app-workspace--loading {
@@ -2031,6 +2047,13 @@ img {
   min-height: 0;
   /* Keep free space BELOW the list — never stretch app rows. */
   justify-content: flex-start;
+}
+
+/* When the list is empty there is nothing to push the footer down —
+   collapse the section so the Add App button hugs the content instead
+   of leaving a tall gap on tall viewports. */
+.tracker-sidebar-section.is-empty {
+  flex: 0 0 auto;
 }
 
 .tracker-sidebar-section-label {
@@ -2272,21 +2295,21 @@ img {
   width: 100%;
 }
 
-/* Onboarding (first visit, no apps) */
+/* Onboarding (first visit, no apps) — sits below the explorer tool,
+   a supporting section, never a second hero. */
 .tracker-onboarding {
-  margin: 24px auto 8px;
+  margin: 40px auto 0;
   padding: 28px 28px 24px;
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
-  background: var(--card);
-  box-shadow: var(--shadow-sm);
+  background: var(--n-25);
   display: grid;
   gap: 20px;
 }
 
 .tracker-onboarding-intro h2 {
-  font-size: var(--text-2xl);
-  margin: 8px 0 10px;
+  font-size: var(--text-xl);
+  margin: 0 0 8px;
 }
 
 .tracker-onboarding-intro p {
@@ -2788,7 +2811,7 @@ img {
 }
 
 .chat-md code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   font-size: 0.92em;
   padding: 0.08em 0.35em;
   border-radius: 4px;
@@ -2943,7 +2966,7 @@ img {
 
 .tracker-workspace-main {
   min-width: 0;
-  padding: 0 0 40px;
+  padding: 0 0 24px;
 }
 
 .tracker-workspace-main .tool-page {
@@ -3629,6 +3652,10 @@ img {
 
   .app-workspace {
     grid-template-columns: 1fr;
+  }
+
+  .app-workspace::before {
+    display: none;
   }
 
   .tracker-sidebar-toggle {

@@ -9,16 +9,38 @@ import {
   absoluteUrl,
 } from "@/lib/site";
 
+import { Archivo, IBM_Plex_Mono, Instrument_Sans } from "next/font/google";
+
 import "./globals.css";
 
-// System font stacks keep production builds offline-safe (no Google Fonts
-// fetch at compile time) while matching the previous sans UI tone.
-const fontBody = {
+/*
+ * Typography — same pairing as cardealertracker.app.
+ * Archivo: industrial grotesque for display, reads bold at any size.
+ * Instrument Sans: wide, high x-height body face — stays legible at 14–16px
+ *   (system UI stacks looked thin and inconsistent across OSes).
+ * IBM Plex Mono: engineering mono for micro labels and numeric cells.
+ *
+ * CSS variable names are intentionally kept (--font-body, --font-display)
+ * so every existing reference in globals.css keeps working unchanged.
+ */
+const fontBody = Instrument_Sans({
   variable: "--font-body",
-} as const;
-const fontDisplay = {
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  display: "swap",
+});
+const fontDisplay = Archivo({
   variable: "--font-display",
-} as const;
+  subsets: ["latin"],
+  weight: ["500", "600", "700", "800", "900"],
+  display: "swap",
+});
+const fontMono = IBM_Plex_Mono({
+  variable: "--font-mono",
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -112,7 +134,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${fontBody.variable} ${fontDisplay.variable} appclimb-fonts`}
+      className={`${fontBody.variable} ${fontDisplay.variable} ${fontMono.variable} appclimb-fonts`}
     >
       <body>
         <JsonLd
