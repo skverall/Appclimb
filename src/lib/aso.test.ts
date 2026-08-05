@@ -5,17 +5,23 @@ import {
   SEARCH_LIMIT,
   addKeywordToList,
   backfillHistory,
+  buildExplorerCsv,
   deleteRecord,
   estimateKeyword,
   estimateMetrics,
+  exportExplorerBackup,
   fetchKeywordResults,
+  isGoldenKeyword,
   keywordJitter,
   loadKeywordList,
   loadRecord,
+  parseKeywordBatch,
   recentHistory,
   recordSnapshot,
   relatedKeywords,
   removeKeywordFromList,
+  restoreExplorerBackup,
+  runBatched,
   saveKeywordList,
   suggestKeywords,
   toLocalDate,
@@ -34,6 +40,10 @@ function makeStorage(initial: Record<string, string> = {}): KeywordStorage {
     },
     removeItem: (key) => {
       store.delete(key);
+    },
+    key: (index) => [...store.keys()][index] ?? null,
+    get length() {
+      return store.size;
     },
   };
 }
@@ -371,5 +381,184 @@ describe("estimateKeyword and list corruption", () => {
     await expect(
       fetchKeywordResults("x", "US", { fetchImpl: (async () => new Response()) as typeof fetch }),
     ).rejects.toThrow(/invalid_keyword_search/);
+  });
+});
+
+describe("isGoldenKeyword", () => {
+  it("flags solid demand with a low barrier", () => {
+    expect(
+      isGoldenKeyword({ popularity: 60, difficulty: 30 }),
+    ).toBe(true);
+  });
+
+  it("rejects weak demand or a high barrier", () => {
+    expect(isGoldenKeyword({ popularity: 54, difficulty: 30 })).toBe(false);
+    expect(isGoldenKeyword({ popularity: 60, difficulty: 41 })).toBe(false);
+    expect(isGoldenKeyword({ popularity: 55, difficulty: 40 })).toBe(true);
+  });
+});
+
+describe("parseKeywordBatch", () => {
+  it("splits on commas, semicolons, and newlines and normalizes whitespace", () => {
+    const result = parseKeywordBatch(
+      "meditation\nhabit tracker, sleep sounds;  yoga  \n",
+    );
+    expect(result.accepted).toEqual([
+      "meditation",
+      "habit tracker",
+      "sleep sounds",
+      "yoga",
+    ]);
+    expect(result.duplicates).toEqual([]);
+    expect(result.invalid).toEqual([]);
+  });
+
+  it("dedupes case-insensitively and reports duplicates", () => {
+    const result = parseKeywordBatch("Meditation\nMEDITATION\nmeditation");
+    expect(result.accepted).toEqual(["Meditation"]);
+    expect(result.duplicates).toEqual(["MEDITATION", "meditation"]);
+  });
+
+  it("rejects too-short, too-long, and over-cap entries", () => {
+    const result = parseKeywordBatch("x\na\n" + "k".repeat(81));
+    expect(result.invalid).toEqual(["x", "a", "k".repeat(81)]);
+    expect(result.accepted).toEqual([]);
+  });
+
+  it("caps the accepted list at the batch maximum", () => {
+    const input = Array.from({ length: 55 }, (_, index) => `kw${index}`).join(
+      "\n",
+    );
+    const result = parseKeywordBatch(input, { max: 50 });
+    expect(result.accepted).toHaveLength(50);
+    expect(result.invalid).toHaveLength(5);
+  });
+});
+
+describe("runBatched", () => {
+  it("runs every item and honors the concurrency limit", async () => {
+    const items = ["a", "b", "c", "d"];
+    const running = new Set<string>();
+    let peak = 0;
+    const { failed } = await runBatched(
+      items,
+      async (item) => {
+        running.add(item);
+        peak = Math.max(peak, running.size);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        running.delete(item);
+      },
+      { concurrency: 2, gapMs: 0 },
+    );
+    expect(failed).toEqual([]);
+    expect(peak).toBeLessThanOrEqual(2);
+  });
+
+  it("collects failures without stopping the queue", async () => {
+    const visited: string[] = [];
+    const { failed } = await runBatched(
+      ["ok1", "bad", "ok2"],
+      async (item) => {
+        visited.push(item);
+        if (item === "bad") throw new Error("boom");
+      },
+      { concurrency: 1, gapMs: 0 },
+    );
+    expect(failed).toEqual(["bad"]);
+    expect(visited).toEqual(["ok1", "bad", "ok2"]);
+  });
+});
+
+describe("buildExplorerCsv", () => {
+  it("writes a header and a row with metrics and trend", () => {
+    const metrics = metricsFor("meditation", [
+      makeApp({ name: "Meditation Timer", ratingsCount: 100 }),
+    ]);
+    const record = recordSnapshot(makeStorage(), metrics);
+    const csv = buildExplorerCsv([
+      {
+        keyword: "meditation",
+        country: "US",
+        metrics,
+        record,
+      },
+    ]);
+    expect(csv.split("\n")[0]).toBe(
+      "keyword,store,popularity_estimated,difficulty_estimated,results,saturated,trend_delta,last_checked_at",
+    );
+    expect(csv).toContain("meditation,US");
+    expect(csv).toContain(metrics.sampledAt);
+  });
+
+  it("escapes commas and leaves blank cells for pending rows", () => {
+    const csv = buildExplorerCsv([
+      {
+        keyword: "habit, tracker",
+        country: "US",
+        metrics: null,
+        record: null,
+      },
+    ]);
+    expect(csv).toContain('"habit, tracker",US,,,,,,');
+  });
+});
+
+describe("backup / restore", () => {
+  it("exports only keyword records and restores them round-trip", () => {
+    const storage = makeStorage();
+    const metrics = metricsFor("meditation", [
+      makeApp({ name: "Meditation Timer" }),
+    ]);
+    recordSnapshot(storage, metrics);
+    addKeywordToList(storage, "US", "meditation");
+    // A non-keyword key must be ignored by the exporter.
+    storage.setItem("unrelated:key", "value");
+
+    const backup = exportExplorerBackup(storage);
+    const parsed = JSON.parse(backup) as {
+      version: number;
+      data: Record<string, string>;
+    };
+    expect(parsed.version).toBe(1);
+    expect(Object.keys(parsed.data)).toHaveLength(2);
+    expect(parsed.data["unrelated:key"]).toBeUndefined();
+
+    const empty = makeStorage();
+    expect(restoreExplorerBackup(empty, backup)).toBe(1);
+    expect(loadRecord(empty, "meditation", "US")?.keyword).toBe("meditation");
+    expect(loadKeywordList(empty, "US")).toEqual(["meditation"]);
+  });
+
+  it("returns 0 for malformed JSON and wrong versions", () => {
+    const storage = makeStorage();
+    expect(restoreExplorerBackup(storage, "{not json")).toBe(0);
+    expect(
+      restoreExplorerBackup(
+        storage,
+        JSON.stringify({ version: 99, data: {} }),
+      ),
+    ).toBe(0);
+    expect(
+      restoreExplorerBackup(storage, JSON.stringify({ version: 1 })),
+    ).toBe(0);
+  });
+
+  it("skips malformed records inside a valid backup", () => {
+    const storage = makeStorage();
+    const restored = restoreExplorerBackup(
+      storage,
+      JSON.stringify({
+        version: 1,
+        data: {
+          "appclimb:kw:v1:US:good": JSON.stringify({
+            keyword: "good",
+            country: "US",
+            history: [],
+          }),
+          "appclimb:kw:v1:US:bad": JSON.stringify({ keyword: 42 }),
+        },
+      }),
+    );
+    expect(restored).toBe(1);
   });
 });

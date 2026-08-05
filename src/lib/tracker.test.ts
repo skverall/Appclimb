@@ -57,6 +57,10 @@ function makeStorage(initial: Record<string, string> = {}): TrackerStorage {
     removeItem: (key) => {
       store.delete(key);
     },
+    key: (index) => [...store.keys()][index] ?? null,
+    get length() {
+      return store.size;
+    },
   };
 }
 

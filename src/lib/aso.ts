@@ -10,7 +10,12 @@
 // plus an estimated backfill so the 30-day trend chart is useful on first
 // check. Backfilled points are flagged and labeled as estimates.
 
-import { boundedStorefront, type CatalogApp } from "@/lib/itunes";
+import {
+  boundedStorefront,
+  storefrontLang,
+  type CatalogApp,
+} from "@/lib/itunes";
+import { csvEscape } from "@/lib/file";
 
 export const ITUNES_ORIGIN = "https://itunes.apple.com";
 
@@ -27,6 +32,16 @@ export const SUPPORTED_COUNTRIES: readonly SupportedCountry[] = [
   { code: "FR", label: "France", flag: "🇫🇷" },
   { code: "RU", label: "Russia", flag: "🇷🇺" },
   { code: "JP", label: "Japan", flag: "🇯🇵" },
+  { code: "CA", label: "Canada", flag: "🇨🇦" },
+  { code: "AU", label: "Australia", flag: "🇦🇺" },
+  { code: "IN", label: "India", flag: "🇮🇳" },
+  { code: "BR", label: "Brazil", flag: "🇧🇷" },
+  { code: "MX", label: "Mexico", flag: "🇲🇽" },
+  { code: "KR", label: "South Korea", flag: "🇰🇷" },
+  { code: "IT", label: "Italy", flag: "🇮🇹" },
+  { code: "ES", label: "Spain", flag: "🇪🇸" },
+  { code: "NL", label: "Netherlands", flag: "🇳🇱" },
+  { code: "SE", label: "Sweden", flag: "🇸🇪" },
 ] as const;
 
 export interface TopApp {
@@ -132,6 +147,7 @@ export async function fetchKeywordResults(
   const parameters = new URLSearchParams({
     term,
     country: storefront,
+    lang: storefrontLang(storefront),
     media: "software",
     entity: "software",
     limit: String(SEARCH_LIMIT),
@@ -290,7 +306,21 @@ export function listStorageKey(country: string): string {
   return `appclimb:kw:v1:list:${country}`;
 }
 
-export type KeywordStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+export type KeywordStorage = Pick<
+  Storage,
+  "getItem" | "setItem" | "removeItem" | "key" | "length"
+>;
+
+/** Structural check for a persisted keyword record (used by load + restore). */
+export function isKeywordRecord(parsed: unknown): parsed is KeywordRecord {
+  if (typeof parsed !== "object" || parsed === null) return false;
+  const record = parsed as Record<string, unknown>;
+  return (
+    typeof record.keyword === "string" &&
+    typeof record.country === "string" &&
+    Array.isArray(record.history)
+  );
+}
 
 /** Remove a keyword's persisted history entirely. */
 export function deleteRecord(
@@ -365,15 +395,8 @@ export function loadRecord(
   const raw = storage.getItem(historyStorageKey(keyword, country));
   if (!raw) return null;
   try {
-    const parsed = JSON.parse(raw) as KeywordRecord;
-    if (
-      typeof parsed.keyword !== "string" ||
-      typeof parsed.country !== "string" ||
-      !Array.isArray(parsed.history)
-    ) {
-      return null;
-    }
-    return parsed;
+    const parsed = JSON.parse(raw) as unknown;
+    return isKeywordRecord(parsed) ? parsed : null;
   } catch {
     return null;
   }
@@ -553,4 +576,249 @@ export function suggestKeywords(term: string, apps: CatalogApp[]): string[] {
   }));
   const exact = term.trim();
   return [...new Set([exact, ...relatedKeywords(topApps, exact)])].slice(0, 8);
+}
+
+/* ------------------------------------------------------------------ */
+/* Golden keywords                                                     */
+/* ------------------------------------------------------------------ */
+
+/** A keyword is "golden" when demand is solid and the barrier is low. */
+export const GOLDEN_POPULARITY_MIN = 55;
+export const GOLDEN_DIFFICULTY_MAX = 40;
+
+export function isGoldenKeyword(
+  metrics: Pick<KeywordMetrics, "popularity" | "difficulty">,
+): boolean {
+  return (
+    metrics.popularity >= GOLDEN_POPULARITY_MIN &&
+    metrics.difficulty <= GOLDEN_DIFFICULTY_MAX
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Batch analysis                                                      */
+/* ------------------------------------------------------------------ */
+
+export const MAX_BATCH_KEYWORDS = 50;
+export const BATCH_CONCURRENCY = 2;
+export const BATCH_GAP_MS = 220;
+
+export interface ParseKeywordBatchResult {
+  /** Valid, unique keywords ready to analyze (original casing, max 50). */
+  accepted: string[];
+  /** Entries that repeated an already-accepted keyword (case-insensitive). */
+  duplicates: string[];
+  /** Entries that are too short, too long, or hit the batch cap. */
+  invalid: string[];
+}
+
+/**
+ * Parse a pasted keyword list (commas, semicolons, or newlines), normalize
+ * whitespace, dedupe case-insensitively, and cap the batch size.
+ */
+export function parseKeywordBatch(
+  input: string,
+  options: { max?: number } = {},
+): ParseKeywordBatchResult {
+  const max = Math.max(1, options.max ?? MAX_BATCH_KEYWORDS);
+  const accepted: string[] = [];
+  const duplicates: string[] = [];
+  const invalid: string[] = [];
+  const seen = new Set<string>();
+
+  const parts = input
+    .split(/[,\n;]+/u)
+    .map((part) => part.trim().replace(/\s+/gu, " "))
+    .filter(Boolean);
+
+  for (const part of parts) {
+    if (part.length < 2 || part.length > 80) {
+      invalid.push(part);
+      continue;
+    }
+    const key = part.toLocaleLowerCase();
+    if (seen.has(key)) {
+      duplicates.push(part);
+      continue;
+    }
+    if (accepted.length >= max) {
+      invalid.push(part);
+      continue;
+    }
+    seen.add(key);
+    accepted.push(part);
+  }
+
+  return { accepted, duplicates, invalid };
+}
+
+function batchSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Run async work over items with bounded concurrency, a small gap between
+ * starts, and per-item failure tolerance. Failures are collected and returned,
+ * never thrown — the remaining queue always runs to completion.
+ */
+export async function runBatched<T>(
+  items: readonly T[],
+  worker: (item: T, index: number) => Promise<void>,
+  options: { concurrency?: number; gapMs?: number } = {},
+): Promise<{ failed: T[] }> {
+  const concurrency = Math.max(1, options.concurrency ?? BATCH_CONCURRENCY);
+  const gapMs = Math.max(0, options.gapMs ?? BATCH_GAP_MS);
+  const failed: T[] = [];
+  let cursor = 0;
+
+  async function runOne(): Promise<void> {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      const item = items[index];
+      if (gapMs > 0 && index > 0) await batchSleep(gapMs);
+      try {
+        await worker(item, index);
+      } catch {
+        failed.push(item);
+      }
+    }
+  }
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, items.length) }, () => runOne()),
+  );
+  return { failed };
+}
+
+/* ------------------------------------------------------------------ */
+/* Explorer CSV export (local only)                                    */
+/* ------------------------------------------------------------------ */
+
+export interface ExplorerCsvRow {
+  keyword: string;
+  country: string;
+  metrics: KeywordMetrics | null;
+  record: KeywordRecord | null;
+}
+
+/** Build a CSV string for the keyword explorer table (browser download). */
+export function buildExplorerCsv(rows: readonly ExplorerCsvRow[]): string {
+  const header = [
+    "keyword",
+    "store",
+    "popularity_estimated",
+    "difficulty_estimated",
+    "results",
+    "saturated",
+    "trend_delta",
+    "last_checked_at",
+  ];
+  const lines = [header.join(",")];
+  for (const row of rows) {
+    const metrics = row.metrics;
+    const delta =
+      row.record && row.record.history.length >= 2
+        ? trendDelta(row.record.history)
+        : null;
+    const lastChecked =
+      metrics?.sampledAt ??
+      (row.record && row.record.history.length > 0
+        ? row.record.history[row.record.history.length - 1].date
+        : "");
+    lines.push(
+      [
+        csvEscape(row.keyword),
+        csvEscape(row.country),
+        metrics ? String(metrics.popularity) : "",
+        metrics ? String(metrics.difficulty) : "",
+        metrics ? String(metrics.results) : "",
+        metrics ? String(metrics.saturated) : "",
+        delta === null ? "" : String(delta),
+        csvEscape(lastChecked),
+      ].join(","),
+    );
+  }
+  return `${lines.join("\n")}\n`;
+}
+
+/* ------------------------------------------------------------------ */
+/* History backup / restore (local files only)                         */
+/* ------------------------------------------------------------------ */
+
+export const EXPLORER_BACKUP_VERSION = 1 as const;
+const EXPLORER_KEY_PREFIX = "appclimb:kw:v1:";
+
+export interface ExplorerBackup {
+  version: typeof EXPLORER_BACKUP_VERSION;
+  exportedAt: string;
+  data: Record<string, string>;
+}
+
+/** Serialize every keyword history record into a portable JSON backup. */
+export function exportExplorerBackup(storage: KeywordStorage): string {
+  const data: Record<string, string> = {};
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (!key || !key.startsWith(EXPLORER_KEY_PREFIX)) continue;
+    const raw = storage.getItem(key);
+    if (raw) data[key] = raw;
+  }
+  const backup: ExplorerBackup = {
+    version: EXPLORER_BACKUP_VERSION,
+    exportedAt: new Date().toISOString(),
+    data,
+  };
+  return JSON.stringify(backup, null, 2);
+}
+
+/**
+ * Restore records from a backup JSON string. Only valid keyword records are
+ * written back; malformed entries are skipped. Country keyword lists are
+ * rebuilt from the restored records so restored keywords reappear without
+ * extra steps. Returns the number restored.
+ */
+export function restoreExplorerBackup(
+  storage: KeywordStorage,
+  json: string,
+): number {
+  let backup: unknown;
+  try {
+    backup = JSON.parse(json);
+  } catch {
+    return 0;
+  }
+  if (
+    typeof backup !== "object" ||
+    backup === null ||
+    (backup as Record<string, unknown>).version !== EXPLORER_BACKUP_VERSION
+  ) {
+    return 0;
+  }
+  const data = (backup as Record<string, unknown>).data;
+  if (typeof data !== "object" || data === null) return 0;
+
+  const lists = new Map<string, string[]>();
+  let restored = 0;
+  for (const [key, raw] of Object.entries(data)) {
+    if (typeof raw !== "string" || !key.startsWith(EXPLORER_KEY_PREFIX)) {
+      continue;
+    }
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (!isKeywordRecord(parsed)) continue;
+      storage.setItem(key, raw);
+      const country = parsed.country.toUpperCase();
+      const list = lists.get(country) ?? [];
+      if (!list.includes(parsed.keyword)) list.push(parsed.keyword);
+      lists.set(country, list);
+      restored += 1;
+    } catch {
+      // Skip malformed entries; keep whatever is already valid.
+    }
+  }
+  for (const [country, keywords] of lists) {
+    saveKeywordList(storage, country, keywords);
+  }
+  return restored;
 }

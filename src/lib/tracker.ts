@@ -26,6 +26,7 @@ import {
   type CatalogApp,
   type KeywordSuggestion,
 } from "@/lib/itunes";
+import { csvEscape } from "@/lib/file";
 
 export const TRACKER_STORAGE_KEY = "appclimb:tracker:v1";
 export const TRACKER_SCHEMA_VERSION = 1 as const;
@@ -1038,12 +1039,9 @@ export function trackAppInStorefront(
 /* CSV export (local only)                                             */
 /* ------------------------------------------------------------------ */
 
-function csvEscape(value: string): string {
-  if (/[",\n\r]/u.test(value)) {
-    return `"${value.replace(/"/gu, '""')}"`;
-  }
-  return value;
-}
+// csvEscape + downloadTextFile are shared with the Keyword Explorer and live
+// in src/lib/file.ts; re-exported here so existing callers keep working.
+export { csvEscape, downloadTextFile } from "@/lib/file";
 
 /** Build a CSV string for one app's keywords (browser download only). */
 export function buildKeywordsCsv(
@@ -1105,24 +1103,6 @@ export function buildKeywordsCsv(
     );
   }
   return `${lines.join("\n")}\n`;
-}
-
-export function downloadTextFile(
-  filename: string,
-  content: string,
-  mime = "text/csv;charset=utf-8",
-): void {
-  if (typeof document === "undefined") return;
-  const blob = new Blob([content], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.rel = "noopener";
-  document.body.appendChild(anchor);
-  anchor.click();
-  anchor.remove();
-  URL.revokeObjectURL(url);
 }
 
 /** Numeric series for a compact position sparkline (null = outside 200 → 201). */

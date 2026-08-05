@@ -67,6 +67,35 @@ export function boundedStorefront(value: string): string {
   return storefront;
 }
 
+/**
+ * iTunes `lang` parameter for a storefront. Localizes genre names, localized
+ * titles, and related metadata in API responses so suggestions follow the
+ * store's language. Falls back to a derived `xx_xx` code for unknown countries.
+ */
+const STOREFRONT_LANGS: Record<string, string> = {
+  US: "en_us",
+  GB: "en_gb",
+  CA: "en_ca",
+  AU: "en_au",
+  IN: "en_in",
+  DE: "de_de",
+  FR: "fr_fr",
+  IT: "it_it",
+  ES: "es_es",
+  NL: "nl_nl",
+  SE: "sv_se",
+  RU: "ru_ru",
+  JP: "ja_jp",
+  KR: "ko_kr",
+  BR: "pt_br",
+  MX: "es_mx",
+};
+
+export function storefrontLang(country: string): string {
+  const code = boundedStorefront(country);
+  return STOREFRONT_LANGS[code] ?? `${code.toLowerCase()}_${code.toLowerCase()}`;
+}
+
 /** Query iTunes `/search` and return cleaned app results. Throws on non-2xx. */
 export async function searchAppStoreCatalog(
   query: string,
@@ -81,6 +110,7 @@ export async function searchAppStoreCatalog(
   const parameters = new URLSearchParams({
     term,
     country: storefront,
+    lang: storefrontLang(storefront),
     media: "software",
     entity: "software",
     limit: "8",
@@ -115,6 +145,7 @@ export async function keywordRankPosition(
   const parameters = new URLSearchParams({
     term: keyword,
     country: storefront,
+    lang: storefrontLang(storefront),
     media: "software",
     entity: "software",
     limit: String(options.limit ?? 200),
@@ -146,6 +177,7 @@ export async function lookupAppStoreApp(
   const parameters = new URLSearchParams({
     id: appStoreId,
     country: storefront,
+    lang: storefrontLang(storefront),
     entity: "software",
   });
   const fetchImpl = options.fetchImpl ?? fetch;

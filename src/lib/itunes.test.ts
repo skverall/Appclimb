@@ -9,6 +9,7 @@ import {
   lookupAppStoreIcon,
   boundedStorefront,
   parseAppStoreIdInput,
+  storefrontLang,
 } from "./itunes";
 
 afterEach(() => {
@@ -22,7 +23,7 @@ describe("searchAppStoreCatalog", () => {
         void init;
         // Verify the request targets iTunes with the expected query params.
         expect(String(input)).toBe(
-          "https://itunes.apple.com/search?term=car+dealer&country=US&media=software&entity=software&limit=8&explicit=No",
+          "https://itunes.apple.com/search?term=car+dealer&country=US&lang=en_us&media=software&entity=software&limit=8&explicit=No",
         );
         return Response.json({
           resultCount: 1,
@@ -173,6 +174,26 @@ describe("boundedStorefront", () => {
     expect(boundedStorefront("us")).toBe("US");
     expect(() => boundedStorefront("usa")).toThrow(/invalid_storefront/u);
     expect(() => boundedStorefront("")).toThrow(/invalid_storefront/u);
+  });
+});
+
+describe("storefrontLang", () => {
+  it("maps known storefronts to their iTunes language codes", () => {
+    expect(storefrontLang("US")).toBe("en_us");
+    expect(storefrontLang("DE")).toBe("de_de");
+    expect(storefrontLang("JP")).toBe("ja_jp");
+    expect(storefrontLang("BR")).toBe("pt_br");
+    expect(storefrontLang("MX")).toBe("es_mx");
+  });
+
+  it("falls back to a derived xx_xx code for unknown countries", () => {
+    expect(storefrontLang("TR")).toBe("tr_tr");
+    expect(storefrontLang("PL")).toBe("pl_pl");
+    expect(storefrontLang("AE")).toBe("ae_ae");
+  });
+
+  it("normalizes lowercase country input like boundedStorefront", () => {
+    expect(storefrontLang("gb")).toBe("en_gb");
   });
 });
 

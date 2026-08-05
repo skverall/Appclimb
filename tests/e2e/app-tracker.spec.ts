@@ -185,7 +185,7 @@ test("keyword explorer works without adding an app", async ({ page }) => {
   await expect(page.getByRole("button", { name: /Add App/i }).first()).toBeVisible();
 
   await page.getByPlaceholder(/meditation/).fill("meditation");
-  await page.getByRole("button", { name: "Analyze" }).click();
+  await page.getByRole("button", { name: "Analyze", exact: true }).click();
   await expect(page.getByText("meditation").first()).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText(/Estimated/i).first()).toBeVisible();
 });
@@ -257,38 +257,43 @@ test("second app stays isolated; Apple errors preserve prior metrics", async ({
   await expect(page.getByRole("heading", { name: "Calm Focus" })).toBeVisible();
   await expect(page.locator(".tracker-table tbody tr")).toHaveCount(calmKeywordCount);
 
-  // Force a failing refresh and ensure the row is not wiped.
+  // Let the auto-analysis queue finish so captured state is stable. The
+  // needsCheck queue starts asynchronously after the app switch, so first
+  // wait for it to appear (if it runs at all), then for it to disappear.
+  await page
+    .waitForSelector(".tracker-queue-banner", { state: "visible", timeout: 5_000 })
+    .catch(() => {});
+  await expect(page.locator(".tracker-queue-banner")).toBeHidden({
+    timeout: 30_000,
+  });
+
+  // Force a failing refresh and ensure the row is not wiped. The row may
+  // move under the default opportunity sort (a failed keyword has no fresh
+  // opportunity signal), so locate it by its exact keyword name.
   const firstKeyword = await page
     .locator(".tracker-table tbody tr")
     .first()
     .locator(".keyword-name")
     .innerText();
-  const positionBefore = await page
-    .locator(".tracker-table tbody tr")
-    .first()
-    .locator(".tracker-position")
-    .innerText();
+  const targetRow = page.locator(".tracker-table tbody tr").filter({
+    has: page.getByText(firstKeyword, { exact: true }),
+  });
+  const positionBefore = await targetRow.locator(".tracker-position").innerText();
 
   await page.route(`${ITUNES}/search?**`, async (route) => {
     await route.fulfill({ status: 429, body: "rate limited" });
   });
 
-  await page
-    .locator(".tracker-table tbody tr")
-    .first()
+  await targetRow
     .getByRole("button", { name: new RegExp(`Refresh ${firstKeyword}`, "i") })
     .click();
 
   await expect(page.getByRole("alert").first()).toContainText(/rate-limiting|preserved/i, {
     timeout: 10_000,
   });
-  await expect(
-    page.locator(".tracker-table tbody tr").first().locator(".keyword-name"),
-  ).toHaveText(firstKeyword);
+  await expect(targetRow.locator(".keyword-name")).toHaveText(firstKeyword);
   // Position text should still show a prior value (not blank wipe).
-  await expect(
-    page.locator(".tracker-table tbody tr").first().locator(".tracker-position"),
-  ).toHaveText(positionBefore);
+  await expect(targetRow.locator(".tracker-position")).toHaveText(positionBefore);
 });
 
 test("mobile layout keeps tracker actions reachable", async ({ page }) => {

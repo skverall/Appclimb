@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
-import { ExternalLink, Loader2, RefreshCw, Star, X } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Check, ExternalLink, Link2, Loader2, RefreshCw, Star, X } from "lucide-react";
 
 import {
   recentHistory,
@@ -19,6 +19,7 @@ function formatCount(value: number): string {
 
 export function KeywordDetail({
   keyword,
+  countryCode,
   countryLabel,
   metrics,
   record,
@@ -28,6 +29,7 @@ export function KeywordDetail({
   onAnalyze,
 }: {
   keyword: string;
+  countryCode: string;
   countryLabel: string;
   metrics: KeywordMetrics | null;
   record: KeywordRecord | null;
@@ -36,6 +38,7 @@ export function KeywordDetail({
   onRefresh: () => void;
   onAnalyze: (keyword: string) => void;
 }) {
+  const [copied, setCopied] = useState(false);
   const history = useMemo(() => (record ? recentHistory(record) : []), [record]);
   const related = useMemo(
     () => (metrics ? relatedKeywords(metrics.topApps, keyword) : []),
@@ -51,6 +54,37 @@ export function KeywordDetail({
           ? "Moderate"
           : "Light";
 
+  const shareUrl = `${window.location.origin}${window.location.pathname}?kw=${encodeURIComponent(keyword)}&country=${encodeURIComponent(countryCode)}`;
+
+  const copyShareLink = async () => {
+    const fallback = () => {
+      const textarea = document.createElement("textarea");
+      textarea.value = shareUrl;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand("copy");
+      } catch {
+        // Clipboard unavailable; nothing else we can do in this browser.
+      }
+      textarea.remove();
+      setCopied(true);
+    };
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(shareUrl);
+        setCopied(true);
+      } else {
+        fallback();
+      }
+    } catch {
+      fallback();
+    }
+    window.setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <section className="keyword-detail" aria-labelledby="keyword-detail-title">
       <header className="keyword-detail-header">
@@ -61,6 +95,18 @@ export function KeywordDetail({
           <h2 id="keyword-detail-title">{keyword}</h2>
         </div>
         <div className="keyword-detail-actions">
+          <button
+            type="button"
+            className="keyword-detail-share"
+            onClick={() => void copyShareLink()}
+          >
+            {copied ? (
+              <Check size={15} aria-hidden="true" />
+            ) : (
+              <Link2 size={15} aria-hidden="true" />
+            )}
+            {copied ? "Copied" : "Share"}
+          </button>
           <button
             type="button"
             className="keyword-detail-refresh"
