@@ -133,6 +133,12 @@ export function KeywordExplorer() {
         throwOnError?: boolean;
         /** Explicit storefront for share links (before country state settles). */
         country?: string;
+        /**
+         * Clear the search box after the run. Defaults to true for direct
+         * searches; background runs (refresh all, bulk, detail refresh) pass
+         * false so the user's typing is never wiped mid-queue.
+         */
+        clearInput?: boolean;
       } = {},
     ) => {
       const clean = keyword.trim();
@@ -163,7 +169,9 @@ export function KeywordExplorer() {
           next.delete(key);
           return next;
         });
-        setQuery("");
+        if (options.clearInput !== false) {
+          setQuery("");
+        }
         setSuggestionsOpen(false);
       }
     },
@@ -205,7 +213,7 @@ export function KeywordExplorer() {
      large list does not trip iTunes rate limits. */
   const refreshAll = useCallback(async () => {
     await runBatched(keywords, async (keyword) => {
-      await analyze(keyword, { open: false, reorder: false });
+      await analyze(keyword, { open: false, reorder: false, clearInput: false });
     });
   }, [analyze, keywords]);
 
@@ -217,7 +225,12 @@ export function KeywordExplorer() {
       setBatchResult(null);
       setBatchProgress({ done: 0, total: batch.length });
       const { failed } = await runBatched(batch, async (keyword, index) => {
-        await analyze(keyword, { open: false, reorder: true, throwOnError: true });
+        await analyze(keyword, {
+          open: false,
+          reorder: true,
+          throwOnError: true,
+          clearInput: false,
+        });
         setBatchProgress({ done: index + 1, total: batch.length });
       });
       setBatchProgress(null);
@@ -499,6 +512,8 @@ export function KeywordExplorer() {
               value={country}
               onChange={(event) => setCountry(event.target.value)}
               aria-label="Store country"
+              disabled={busy.size > 0}
+              title={busy.size > 0 ? "Wait for the current analysis to finish" : undefined}
             >
               {SUPPORTED_COUNTRIES.map((item) => (
                 <option key={item.code} value={item.code}>
@@ -873,7 +888,13 @@ export function KeywordExplorer() {
             record={selectedRecord ?? null}
             busy={selectedBusy}
             onClose={() => setSelected(null)}
-            onRefresh={() => void analyze(selected, { open: true, reorder: false })}
+            onRefresh={() =>
+              void analyze(selected, {
+                open: true,
+                reorder: false,
+                clearInput: false,
+              })
+            }
             onAnalyze={(keyword) => void analyze(keyword)}
           />
         )}
