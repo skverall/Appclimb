@@ -578,7 +578,7 @@ export function KeywordExplorer() {
             <Search size={24} aria-hidden="true" />
             <strong>No keywords yet</strong>
             <span>
-              Search above or start with one of these:
+              Search above, paste a whole list, or start with one of these:
             </span>
             <div className="keyword-examples">
               {EXAMPLE_KEYWORDS.map((example) => (

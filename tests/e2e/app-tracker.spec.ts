@@ -190,6 +190,64 @@ test("keyword explorer works without adding an app", async ({ page }) => {
   await expect(page.getByText(/Estimated/i).first()).toBeVisible();
 });
 
+test("onboarding walks a first-time user from CTA to tracked keywords", async ({
+  page,
+}) => {
+  await mockItunes(page);
+  await page.goto("/");
+
+  // Before any app exists, the onboarding section explains the flow.
+  await expect(
+    page.getByRole("heading", {
+      name: /Track your app’s keywords in three steps/i,
+    }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /Add your first app/i }).click();
+  await expect(page.getByRole("heading", { name: "Add App" })).toBeVisible();
+
+  // Add the app by pasting an App Store URL (the /lookup path).
+  await page
+    .getByLabel("Search for an app")
+    .fill("https://apps.apple.com/us/app/calm-focus/id123456789");
+  await page.getByRole("button", { name: "Search" }).click();
+  await expect(page.getByRole("button", { name: /Add Calm Focus/i })).toBeVisible({
+    timeout: 10_000,
+  });
+  await page.getByRole("button", { name: /Add Calm Focus/i }).click();
+
+  // Dismiss the suggestions modal and land on the empty keyword state.
+  await expect(
+    page.getByRole("heading", { name: /Keyword suggestions/i }),
+  ).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("button", { name: /Close suggestions/i }).click();
+  await expect(page.getByText(/No keywords for this app yet/i)).toBeVisible();
+
+  // Re-open suggestions from the empty state and accept them.
+  await page
+    .locator(".keyword-empty")
+    .getByRole("button", { name: "Get Suggestions" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: /Keyword suggestions/i }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /Add selected/i }).click();
+  await expect(page.locator(".tracker-table tbody tr").first()).toBeVisible({
+    timeout: 20_000,
+  });
+  const suggestedCount = await page.locator(".tracker-table tbody tr").count();
+  expect(suggestedCount).toBeGreaterThan(0);
+
+  // Add keywords manually on top of the suggestions.
+  await page.getByRole("button", { name: "Add Keywords" }).click();
+  await expect(page.getByRole("heading", { name: "Add Keywords" })).toBeVisible();
+  await page.getByLabel("Keywords to add").fill("meditation\nyoga");
+  await page.getByRole("button", { name: /Add 2 keywords/i }).click();
+  await expect(page.locator(".tracker-table tbody tr")).toHaveCount(
+    suggestedCount + 2,
+    { timeout: 20_000 },
+  );
+});
+
 test("add app by search, accept suggestions, persist after reload", async ({
   page,
 }) => {
