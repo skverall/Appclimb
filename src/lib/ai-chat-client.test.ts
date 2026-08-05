@@ -3,15 +3,22 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AI_LIMITS } from "@/lib/ai-chat";
 import {
   AI_CLIENT_DAY_KEY,
+  AI_CONVERSATIONS_KEY,
   AI_MESSAGES_KEY,
   AI_WELCOME,
   clearStoredMessages,
+  conversationTitleFromMessages,
+  createConversation,
+  deleteConversation,
+  loadChatState,
   loadStoredMessages,
   loadTrackerContext,
   readClientDayCount,
   requestAssistantReply,
   saveStoredMessages,
+  setActiveConversation,
   writeClientDayCount,
+  type AiChatStore,
   type UiMessage,
 } from "@/lib/ai-chat-client";
 
@@ -43,6 +50,35 @@ const sample: UiMessage[] = [
   },
 ];
 
+function conversation(
+  id: string,
+  messages: UiMessage[] = sample,
+  updatedAt = "2026-01-01T00:00:00.000Z",
+) {
+  return {
+    id,
+    title: "Chat",
+    createdAt: "2026-01-01T00:00:00.000Z",
+    updatedAt,
+    messages,
+  };
+}
+
+/** Seed the conversations store and stub window.localStorage with it. */
+function seedStore(
+  storage: ReturnType<typeof makeStorage>,
+  conversations: AiChatStore["conversations"],
+  activeId?: string,
+): void {
+  const store: AiChatStore = {
+    version: 1,
+    activeId: activeId ?? conversations[0]?.id ?? null,
+    conversations,
+  };
+  storage.setItem(AI_CONVERSATIONS_KEY, JSON.stringify(store));
+  vi.stubGlobal("window", { localStorage: storage });
+}
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -55,6 +91,10 @@ describe("ai-chat-client SSR guards", () => {
     expect(() => saveStoredMessages([AI_WELCOME])).not.toThrow();
     expect(() => clearStoredMessages()).not.toThrow();
     expect(loadTrackerContext()).toBeNull();
+    expect(loadChatState()).toEqual({ activeId: null, conversations: [] });
+    expect(() => createConversation()).not.toThrow();
+    expect(setActiveConversation("c1")).toBe(false);
+    expect(deleteConversation("c1")).toBe(false);
   });
 });
 
@@ -102,10 +142,8 @@ describe("stored messages", () => {
       { id: "z", role: "assistant" },
       ...sample,
     ];
-    const storage = makeStorage({
-      [AI_MESSAGES_KEY]: JSON.stringify(junk),
-    });
-    vi.stubGlobal("window", { localStorage: storage });
+    const storage = makeStorage();
+    seedStore(storage, [conversation("c1", junk as UiMessage[])]);
     expect(loadStoredMessages()).toEqual([AI_WELCOME, ...sample]);
 
     const long = Array.from({ length: 90 }, (_, i) => ({
@@ -119,11 +157,11 @@ describe("stored messages", () => {
   });
 
   it("returns the welcome for empty or corrupt storage", () => {
-    const empty = makeStorage({ [AI_MESSAGES_KEY]: "[]" });
+    const empty = makeStorage({ [AI_CONVERSATIONS_KEY]: "[]" });
     vi.stubGlobal("window", { localStorage: empty });
     expect(loadStoredMessages()).toEqual([AI_WELCOME]);
 
-    const corrupt = makeStorage({ [AI_MESSAGES_KEY]: "{bad" });
+    const corrupt = makeStorage({ [AI_CONVERSATIONS_KEY]: "{bad" });
     vi.stubGlobal("window", { localStorage: corrupt });
     expect(loadStoredMessages()).toEqual([AI_WELCOME]);
   });
@@ -132,9 +170,142 @@ describe("stored messages", () => {
     const storage = makeStorage();
     vi.stubGlobal("window", { localStorage: storage });
     saveStoredMessages([AI_WELCOME, ...sample]);
-    const saved = JSON.parse(storage.getItem(AI_MESSAGES_KEY) ?? "[]") as unknown[];
-    expect(saved).toHaveLength(2);
-    expect(saved.some((m) => (m as UiMessage).id === "welcome")).toBe(false);
+    const store = JSON.parse(
+      storage.getItem(AI_CONVERSATIONS_KEY) ?? "{}",
+    ) as AiChatStore;
+    const active = store.conversations.find((c) => c.id === store.activeId);
+    expect(active?.messages).toHaveLength(2);
+    expect(active?.messages.some((m) => m.id === "welcome")).toBe(false);
+  });
+});
+
+describe("conversation history", () => {
+  it("migrates the legacy single thread into the first conversation", () => {
+    const storage = makeStorage({
+      [AI_MESSAGES_KEY]: JSON.stringify(sample),
+    });
+    vi.stubGlobal("window", { localStorage: storage });
+
+    const state = loadChatState();
+    expect(state.conversations).toHaveLength(1);
+    expect(state.conversations[0]?.title).toBe("suggest keywords");
+    expect(state.conversations[0]?.messageCount).toBe(2);
+    expect(state.activeId).toBe(state.conversations[0]?.id);
+    expect(loadStoredMessages()).toEqual([AI_WELCOME, ...sample]);
+    expect(storage.getItem(AI_MESSAGES_KEY)).toBeNull();
+    expect(storage.getItem(AI_CONVERSATIONS_KEY)).not.toBeNull();
+  });
+
+  it("keeps the conversations store and removes the legacy key when both exist", () => {
+    const storage = makeStorage({
+      [AI_MESSAGES_KEY]: JSON.stringify(sample),
+    });
+    seedStore(storage, [conversation("c1", sample, "2026-02-01T00:00:00.000Z")]);
+    const state = loadChatState();
+    expect(state.conversations).toHaveLength(1);
+    expect(state.conversations[0]?.id).toBe("c1");
+    expect(storage.getItem(AI_MESSAGES_KEY)).toBeNull();
+  });
+
+  it("creates, switches, and deletes conversations", () => {
+    const storage = makeStorage();
+    vi.stubGlobal("window", { localStorage: storage });
+    expect(loadStoredMessages()).toEqual([AI_WELCOME]);
+
+    // First real thread.
+    saveStoredMessages([AI_WELCOME, ...sample]);
+    const firstId = loadChatState().activeId;
+    expect(firstId).toBeTruthy();
+
+    // New chat becomes active with the welcome state.
+    createConversation();
+    const state = loadChatState();
+    expect(state.conversations).toHaveLength(2);
+    expect(state.activeId).not.toBe(firstId);
+    expect(loadStoredMessages()).toEqual([AI_WELCOME]);
+
+    // Switching back restores the first thread.
+    expect(setActiveConversation(firstId as string)).toBe(true);
+    expect(loadStoredMessages()).toEqual([AI_WELCOME, ...sample]);
+    expect(setActiveConversation("missing")).toBe(false);
+
+    // Deleting the active conversation falls back to the remaining one.
+    expect(deleteConversation(state.activeId as string)).toBe(true);
+    expect(loadChatState().activeId).toBe(firstId);
+    expect(loadStoredMessages()).toEqual([AI_WELCOME, ...sample]);
+
+    // Deleting the last conversation creates a fresh one.
+    expect(deleteConversation(firstId as string)).toBe(true);
+    expect(loadChatState().conversations).toHaveLength(1);
+    expect(loadStoredMessages()).toEqual([AI_WELCOME]);
+    expect(deleteConversation("missing")).toBe(false);
+  });
+
+  it("titles conversations from the first user message", () => {
+    expect(conversationTitleFromMessages([])).toBe("New chat");
+    expect(conversationTitleFromMessages([AI_WELCOME])).toBe("New chat");
+    expect(
+      conversationTitleFromMessages([
+        AI_WELCOME,
+        { id: "u1", role: "user", content: "  suggest   keywords  " },
+      ]),
+    ).toBe("suggest keywords");
+
+    const long = "x".repeat(60);
+    expect(
+      conversationTitleFromMessages([
+        { id: "u1", role: "user", content: long },
+      ]),
+    ).toBe(`${"x".repeat(48)}…`);
+  });
+
+  it("caps the conversation list and sorts by recency", () => {
+    const conversations = Array.from({ length: 55 }, (_, i) =>
+      conversation(
+        `c${i}`,
+        sample,
+        `2026-01-01T00:00:${String(i).padStart(2, "0")}.000Z`,
+      ),
+    );
+    const storage = makeStorage();
+    seedStore(storage, conversations, "c54");
+    const state = loadChatState();
+    expect(state.conversations).toHaveLength(50);
+    expect(state.conversations[0]?.id).toBe("c54"); // most recent first
+    expect(state.activeId).toBe("c54");
+  });
+
+  it("falls back to a fresh conversation on a corrupt store", () => {
+    const storage = makeStorage({ [AI_CONVERSATIONS_KEY]: "{bad" });
+    vi.stubGlobal("window", { localStorage: storage });
+    expect(loadChatState().conversations).toHaveLength(1);
+    expect(loadStoredMessages()).toEqual([AI_WELCOME]);
+    // The corrupt key is replaced with a valid store.
+    expect(
+      JSON.parse(storage.getItem(AI_CONVERSATIONS_KEY) ?? "null"),
+    ).toMatchObject({ version: 1 });
+  });
+
+  it("drops malformed conversations during sanitizing", () => {
+    const storage = makeStorage();
+    seedStore(storage, [
+      conversation("c1"),
+      { id: "c2" } as unknown as AiChatStore["conversations"][number],
+      { ...conversation("c3", []), id: "c3" },
+    ]);
+    const state = loadChatState();
+    expect(state.conversations.map((c) => c.id)).toEqual(["c1"]);
+    expect(state.activeId).toBe("c1");
+  });
+
+  it("repairs a dangling active id to the most recent conversation", () => {
+    const storage = makeStorage();
+    seedStore(storage, [
+      conversation("old", sample, "2026-01-01T00:00:00.000Z"),
+      conversation("newer", sample, "2026-02-01T00:00:00.000Z"),
+    ], "ghost");
+    const state = loadChatState();
+    expect(state.activeId).toBe("newer");
   });
 });
 
@@ -325,12 +496,11 @@ describe("requestAssistantReply", () => {
   });
 });
 
-// Helper: load messages from a raw storage without restubbing window.
+// Helper: load messages from a seeded store without extra stubbing.
 function loadStoredMessagesFrom(
   storage: ReturnType<typeof makeStorage>,
   raw: unknown[],
 ): UiMessage[] {
-  storage.setItem(AI_MESSAGES_KEY, JSON.stringify(raw));
-  vi.stubGlobal("window", { localStorage: storage });
+  seedStore(storage, [conversation("c1", raw as UiMessage[])]);
   return loadStoredMessages();
 }

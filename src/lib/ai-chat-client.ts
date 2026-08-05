@@ -1,4 +1,7 @@
 // Browser-only helpers for the ASO assistant UI (popup + full page).
+// Conversations live in localStorage under `appclimb:ai:conversations:v1`;
+// the pre-history single-thread key (`appclimb:ai:messages:v1`) is migrated
+// once into the new store on first load and then removed.
 
 import { AI_LIMITS, type AppChatContext } from "@/lib/ai-chat";
 
@@ -9,8 +12,35 @@ export type UiMessage = {
   createdAt?: string;
 };
 
+export type AiConversation = {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messages: UiMessage[];
+};
+
+export type AiConversationSummary = {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+};
+
+export type AiChatStore = {
+  version: 1;
+  activeId: string | null;
+  conversations: AiConversation[];
+};
+
 export const AI_CLIENT_DAY_KEY = "appclimb:ai:day";
+export const AI_CONVERSATIONS_KEY = "appclimb:ai:conversations:v1";
+/** Legacy single-thread key; migrated into the conversations store on first load. */
 export const AI_MESSAGES_KEY = "appclimb:ai:messages:v1";
+
+export const AI_CONVERSATION_LIMIT = 50;
+export const AI_TITLE_MAX_CHARS = 48;
 
 export const AI_WELCOME: UiMessage = {
   id: "welcome",
@@ -54,51 +84,264 @@ export function writeClientDayCount(count: number): void {
   );
 }
 
-export function loadStoredMessages(): UiMessage[] {
-  if (typeof window === "undefined") return [AI_WELCOME];
-  try {
-    const raw = window.localStorage.getItem(AI_MESSAGES_KEY);
-    if (!raw) return [AI_WELCOME];
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed) || parsed.length === 0) return [AI_WELCOME];
-    const messages = parsed
-      .filter((item): item is UiMessage => {
-        if (!item || typeof item !== "object") return false;
-        const row = item as UiMessage;
-        return (
-          (row.role === "user" || row.role === "assistant") &&
-          typeof row.content === "string" &&
-          typeof row.id === "string" &&
-          row.content.trim().length > 0
-        );
-      })
-      .slice(-80);
-    if (messages.length === 0) return [AI_WELCOME];
-    if (messages[0]?.id !== "welcome") {
-      return [AI_WELCOME, ...messages];
-    }
-    return messages;
-  } catch {
-    return [AI_WELCOME];
-  }
+function emptyStore(): AiChatStore {
+  return { version: 1, activeId: null, conversations: [] };
 }
 
-export function saveStoredMessages(messages: UiMessage[]): void {
+function freshConversation(): AiConversation {
+  const now = new Date().toISOString();
+  return {
+    id: `c-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    title: "New chat",
+    createdAt: now,
+    updatedAt: now,
+    messages: [AI_WELCOME],
+  };
+}
+
+/** Derived title: the first user message, whitespace-collapsed and truncated. */
+export function conversationTitleFromMessages(messages: UiMessage[]): string {
+  const first = messages.find((m) => m.role === "user");
+  const text = (first?.content ?? "").replace(/\s+/g, " ").trim();
+  if (!text) return "New chat";
+  return text.length > AI_TITLE_MAX_CHARS
+    ? `${text.slice(0, AI_TITLE_MAX_CHARS)}…`
+    : text;
+}
+
+// --- sanitizing (shared by the live store and the legacy migration) ---
+
+function isStoredMessage(value: unknown): value is UiMessage {
+  if (!value || typeof value !== "object") return false;
+  const row = value as UiMessage;
+  return (
+    (row.role === "user" || row.role === "assistant") &&
+    typeof row.content === "string" &&
+    typeof row.id === "string" &&
+    row.content.trim().length > 0
+  );
+}
+
+function sanitizeMessages(raw: unknown): UiMessage[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(isStoredMessage).slice(-80);
+}
+
+function sanitizeConversations(raw: unknown): AiConversation[] {
+  if (!Array.isArray(raw)) return [];
+  const conversations: AiConversation[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const row = item as AiConversation;
+    if (
+      typeof row.id !== "string" ||
+      typeof row.title !== "string" ||
+      typeof row.createdAt !== "string" ||
+      typeof row.updatedAt !== "string"
+    ) {
+      continue;
+    }
+    const messages = sanitizeMessages(row.messages);
+    if (messages.length === 0) continue;
+    conversations.push({
+      id: row.id,
+      title: row.title.slice(0, AI_TITLE_MAX_CHARS),
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      messages,
+    });
+  }
+  conversations.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  return conversations.slice(0, AI_CONVERSATION_LIMIT);
+}
+
+function sanitizeStore(raw: unknown): AiChatStore | null {
+  if (!raw || typeof raw !== "object") return null;
+  const row = raw as {
+    activeId?: unknown;
+    conversations?: unknown;
+  };
+  if (!Array.isArray(row.conversations)) return null;
+  const conversations = sanitizeConversations(row.conversations);
+  const activeId =
+    typeof row.activeId === "string" &&
+    conversations.some((c) => c.id === row.activeId)
+      ? row.activeId
+      : null;
+  return { version: 1, activeId, conversations };
+}
+
+function ensureActive(store: AiChatStore): AiChatStore {
+  if (store.conversations.some((c) => c.id === store.activeId)) {
+    return store;
+  }
+  const next: AiChatStore = { ...store };
+  if (next.conversations.length === 0) {
+    next.conversations = [freshConversation()];
+  }
+  next.activeId = next.conversations.reduce((a, b) =>
+    b.updatedAt > a.updatedAt ? b : a,
+  ).id;
+  return next;
+}
+
+export function loadAiChatStore(): AiChatStore {
+  if (typeof window === "undefined") return emptyStore();
+  let store: AiChatStore = emptyStore();
+  try {
+    const raw = window.localStorage.getItem(AI_CONVERSATIONS_KEY);
+    if (raw) {
+      try {
+        const parsed = sanitizeStore(JSON.parse(raw));
+        if (parsed) store = parsed;
+      } catch {
+        // Corrupt store — start fresh and drop the bad key below.
+      }
+      if (store.conversations.length === 0) {
+        window.localStorage.removeItem(AI_CONVERSATIONS_KEY);
+      }
+    }
+    // One-time migration: the pre-history thread becomes the first
+    // conversation, titled from its first user message.
+    if (store.conversations.length === 0) {
+      const legacyRaw = window.localStorage.getItem(AI_MESSAGES_KEY);
+      if (legacyRaw) {
+        const legacy = sanitizeMessages(JSON.parse(legacyRaw));
+        if (legacy.length > 0) {
+          const now = new Date().toISOString();
+          const conversation: AiConversation = {
+            id: `c-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            title: conversationTitleFromMessages(legacy),
+            createdAt: now,
+            updatedAt: now,
+            messages: legacy,
+          };
+          store.conversations = [conversation];
+          store.activeId = conversation.id;
+        }
+      }
+    }
+    // The legacy key is obsolete once the conversations store exists.
+    window.localStorage.removeItem(AI_MESSAGES_KEY);
+  } catch {
+    store = emptyStore();
+  }
+  const finalized = ensureActive(store);
+  // Persist migration/fresh-store results so they survive even when the
+  // caller only reads (no component save follows).
+  saveAiChatStore(finalized);
+  return finalized;
+}
+
+export function saveAiChatStore(store: AiChatStore): void {
   if (typeof window === "undefined") return;
   try {
-    // Drop the static welcome when persisting long threads to save space.
-    const toSave = messages
-      .filter((m) => m.id !== "welcome" || messages.length <= 2)
-      .slice(-80);
-    window.localStorage.setItem(AI_MESSAGES_KEY, JSON.stringify(toSave));
+    window.localStorage.setItem(AI_CONVERSATIONS_KEY, JSON.stringify(store));
   } catch {
     // Quota / private mode — ignore.
   }
 }
 
+// --- active-thread helpers (same contract as the legacy single-thread API) ---
+
+function storedMessages(store: AiChatStore): UiMessage[] {
+  const active = store.conversations.find((c) => c.id === store.activeId);
+  return active?.messages ?? [];
+}
+
+export function loadStoredMessages(): UiMessage[] {
+  const stored = storedMessages(loadAiChatStore());
+  if (stored.length === 0) return [AI_WELCOME];
+  if (stored[0]?.id !== "welcome") return [AI_WELCOME, ...stored];
+  return stored;
+}
+
+export function saveStoredMessages(messages: UiMessage[]): void {
+  if (typeof window === "undefined") return;
+  const store = loadAiChatStore();
+  // Drop the static welcome when persisting long threads to save space.
+  const toSave = messages
+    .filter((m) => m.id !== "welcome" || messages.length <= 2)
+    .slice(-80);
+  const now = new Date().toISOString();
+  saveAiChatStore({
+    ...store,
+    conversations: store.conversations.map((c) =>
+      c.id === store.activeId
+        ? {
+            ...c,
+            messages: toSave,
+            title: conversationTitleFromMessages(messages),
+            updatedAt: now,
+          }
+        : c,
+    ),
+  });
+}
+
 export function clearStoredMessages(): void {
   if (typeof window === "undefined") return;
-  window.localStorage.removeItem(AI_MESSAGES_KEY);
+  const store = loadAiChatStore();
+  const now = new Date().toISOString();
+  saveAiChatStore({
+    ...store,
+    conversations: store.conversations.map((c) =>
+      c.id === store.activeId
+        ? { ...c, messages: [AI_WELCOME], title: "New chat", updatedAt: now }
+        : c,
+    ),
+  });
+}
+
+// --- conversation history ---
+
+export function loadChatState(): {
+  activeId: string | null;
+  conversations: AiConversationSummary[];
+} {
+  const store = loadAiChatStore();
+  const conversations = store.conversations.map((c) => ({
+    id: c.id,
+    title: c.title,
+    createdAt: c.createdAt,
+    updatedAt: c.updatedAt,
+    messageCount: c.messages.filter((m) => m.id !== "welcome").length,
+  }));
+  conversations.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  return { activeId: store.activeId, conversations };
+}
+
+export function createConversation(): void {
+  if (typeof window === "undefined") return;
+  const store = loadAiChatStore();
+  const conversation = freshConversation();
+  saveAiChatStore({
+    ...store,
+    activeId: conversation.id,
+    conversations: [conversation, ...store.conversations],
+  });
+}
+
+export function setActiveConversation(id: string): boolean {
+  if (typeof window === "undefined") return false;
+  const store = loadAiChatStore();
+  if (!store.conversations.some((c) => c.id === id)) return false;
+  saveAiChatStore({ ...store, activeId: id });
+  return true;
+}
+
+export function deleteConversation(id: string): boolean {
+  if (typeof window === "undefined") return false;
+  const store = loadAiChatStore();
+  const conversations = store.conversations.filter((c) => c.id !== id);
+  if (conversations.length === store.conversations.length) return false;
+  const next = ensureActive({
+    ...store,
+    activeId: store.activeId === id ? null : store.activeId,
+    conversations,
+  });
+  saveAiChatStore(next);
+  return true;
 }
 
 export function loadTrackerContext(): AppChatContext | null {

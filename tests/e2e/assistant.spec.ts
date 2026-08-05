@@ -54,6 +54,56 @@ test("assistant replies to a message and persists the thread", async ({
   ).toBeVisible();
 });
 
+test("conversation history: new chat, switch back, delete", async ({
+  page,
+}) => {
+  let calls = 0;
+  await page.route("**/api/chat", async (route) => {
+    calls += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        message: `reply ${calls}`,
+        remainingDay: 19,
+        remainingHour: 5,
+      }),
+    });
+  });
+
+  await page.goto("/assistant");
+  await page.getByRole("button", { name: SUGGESTION }).click();
+  await expect(page.getByText(/reply 1/i)).toBeVisible({ timeout: 15_000 });
+
+  // A new chat shows the welcome state; the old thread stays in history.
+  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  await expect(page.getByText(/reply 1/i)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: SUGGESTION })).toBeVisible();
+
+  // The sidebar lists the first chat, titled (truncated) from its first
+  // user message.
+  const historyList = page.locator(".ai-chat-history-list");
+  const firstChat = historyList.getByRole("button", {
+    name: /^(?!Delete conversation: )Which of my tracked keywords are worth focusing/i,
+  });
+  await expect(firstChat).toBeVisible();
+  await firstChat.click();
+  await expect(page.getByText(/reply 1/i)).toBeVisible();
+
+  // Deleting the empty chat keeps the remaining conversation active.
+  page.once("dialog", (dialog) => void dialog.accept());
+  await historyList
+    .getByRole("button", { name: "Delete conversation: New chat" })
+    .click();
+  await expect(page.getByText(/reply 1/i)).toBeVisible();
+  await expect(historyList.locator("li")).toHaveCount(1);
+
+  // History survives a reload.
+  await page.reload();
+  await expect(page.getByText(/reply 1/i)).toBeVisible({ timeout: 10_000 });
+  await expect(historyList.locator("li")).toHaveCount(1);
+});
+
 test("assistant surfaces rate-limit and local-limit errors", async ({
   page,
 }) => {

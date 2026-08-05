@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 
 export default function AssistantPage() {
   return (
-    <MarketingShell hideAiFab>
+    <MarketingShell hideAiFab hideFooter>
       <main className="ai-chat-page">
         <div className="ai-chat-page-frame">
           <AiChatConversation variant="page" />

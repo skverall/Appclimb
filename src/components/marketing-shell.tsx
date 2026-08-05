@@ -87,16 +87,19 @@ export function MarketingFooter() {
 export function MarketingShell({
   children,
   hideAiFab = false,
+  hideFooter = false,
 }: {
   children: React.ReactNode;
   /** Hide the floating popup on the full-page assistant route. */
   hideAiFab?: boolean;
+  /** Hide the marketing footer on app-like pages that fill the viewport. */
+  hideFooter?: boolean;
 }) {
   return (
     <div className="marketing-site">
       <MarketingHeader />
       {children}
-      <MarketingFooter />
+      {!hideFooter && <MarketingFooter />}
       {!hideAiFab && <AiChatPanel />}
     </div>
   );

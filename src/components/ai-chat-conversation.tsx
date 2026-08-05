@@ -3,24 +3,35 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
+  ChevronDown,
   ExternalLink,
+  History,
   Loader2,
   Maximize2,
   Send,
   Sparkles,
+  SquarePen,
   Trash2,
 } from "lucide-react";
 
+import { AiChatHistory } from "@/components/ai-chat-history";
 import { ChatMarkdown } from "@/components/chat-markdown";
 import { AI_LIMITS } from "@/lib/ai-chat";
 import {
+  AI_CONVERSATIONS_KEY,
+  AI_MESSAGES_KEY,
   AI_SUGGESTIONS,
   AI_WELCOME,
   clearStoredMessages,
+  createConversation,
+  deleteConversation,
+  loadChatState,
   loadStoredMessages,
   loadTrackerContext,
   requestAssistantReply,
   saveStoredMessages,
+  setActiveConversation,
+  type AiConversationSummary,
   type UiMessage,
 } from "@/lib/ai-chat-client";
 
@@ -36,12 +47,30 @@ export function AiChatConversation({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [remainingDay, setRemainingDay] = useState<number | null>(null);
-  const [messages, setMessages] = useState<UiMessage[]>([AI_WELCOME]);
   const [contextLabel, setContextLabel] = useState<string | null>(null);
+  const [messages, setMessages] = useState<UiMessage[]>([AI_WELCOME]);
+  const [conversations, setConversations] = useState<AiConversationSummary[]>(
+    [],
+  );
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [showJump, setShowJump] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const stickToBottom = useRef(true);
   const messagesRef = useRef(messages);
+
+  // On wide screens the history sidebar starts open; smaller screens start
+  // with it closed so it never covers the chat on first visit.
+  useEffect(() => {
+    if (variant !== "page") return;
+    void (async () => {
+      await Promise.resolve();
+      if (window.matchMedia("(min-width: 900px)").matches) {
+        setHistoryOpen(true);
+      }
+    })();
+  }, [variant]);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,6 +80,9 @@ export function AiChatConversation({
       const stored = loadStoredMessages();
       setMessages(stored);
       messagesRef.current = stored;
+      const state = loadChatState();
+      setActiveId(state.activeId);
+      setConversations(state.conversations);
       const ctx = loadTrackerContext();
       setContextLabel(
         ctx?.appName
@@ -68,7 +100,50 @@ export function AiChatConversation({
     if (!hydrated) return;
     messagesRef.current = messages;
     saveStoredMessages(messages);
+    let cancelled = false;
+    void (async () => {
+      await Promise.resolve();
+      if (cancelled) return;
+      const state = loadChatState();
+      setActiveId(state.activeId);
+      setConversations(state.conversations);
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [messages, hydrated]);
+
+  // Keep the sidebar/popup in sync when another tab writes the same store.
+  useEffect(() => {
+    if (!hydrated) return;
+    const onStorage = (event: StorageEvent) => {
+      if (
+        event.key !== AI_CONVERSATIONS_KEY &&
+        event.key !== AI_MESSAGES_KEY
+      ) {
+        return;
+      }
+      const state = loadChatState();
+      const stored = loadStoredMessages();
+      messagesRef.current = stored;
+      setActiveId(state.activeId);
+      setConversations(state.conversations);
+      setMessages(stored);
+      setError(null);
+      stickToBottom.current = true;
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [hydrated]);
+
+  useEffect(() => {
+    if (!historyOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setHistoryOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [historyOpen]);
 
   useEffect(() => {
     if (!listRef.current || !stickToBottom.current) return;
@@ -80,13 +155,22 @@ export function AiChatConversation({
       const timer = window.setTimeout(() => inputRef.current?.focus(), 40);
       return () => window.clearTimeout(timer);
     }
-  }, [variant, hydrated]);
+  }, [variant, hydrated, activeId]);
 
   const onScroll = () => {
     const el = listRef.current;
     if (!el) return;
     const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
     stickToBottom.current = distance < 80;
+    setShowJump(!stickToBottom.current);
+  };
+
+  const jumpToBottom = () => {
+    const el = listRef.current;
+    if (!el) return;
+    stickToBottom.current = true;
+    setShowJump(false);
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   };
 
   const send = useCallback(
@@ -148,8 +232,66 @@ export function AiChatConversation({
       return;
     }
     clearStoredMessages();
-    setMessages([AI_WELCOME]);
+    const stored = [AI_WELCOME];
+    messagesRef.current = stored;
+    setMessages(stored);
     setError(null);
+  };
+
+  // History lives in an overlay (popup popover, mobile drawer) or a persistent
+  // sidebar; only the overlays should close after picking a chat.
+  const closeOverlayHistory = () => {
+    if (
+      variant === "panel" ||
+      (typeof window !== "undefined" &&
+        window.matchMedia("(max-width: 899px)").matches)
+    ) {
+      setHistoryOpen(false);
+    }
+  };
+
+  const refreshHistory = () => {
+    const state = loadChatState();
+    setActiveId(state.activeId);
+    setConversations(state.conversations);
+  };
+
+  const switchTo = (id: string) => {
+    if (busy) return;
+    closeOverlayHistory();
+    if (id === activeId) return;
+    setActiveConversation(id);
+    const stored = loadStoredMessages();
+    messagesRef.current = stored;
+    setMessages(stored);
+    setError(null);
+    stickToBottom.current = true;
+    refreshHistory();
+  };
+
+  const startNewChat = () => {
+    if (busy) return;
+    closeOverlayHistory();
+    createConversation();
+    const stored = [AI_WELCOME];
+    messagesRef.current = stored;
+    setMessages(stored);
+    setError(null);
+    stickToBottom.current = true;
+    refreshHistory();
+  };
+
+  const deleteChat = (id: string) => {
+    if (busy) return;
+    if (!window.confirm("Delete this conversation on this device?")) return;
+    closeOverlayHistory();
+    deleteConversation(id);
+    const stored = loadStoredMessages();
+    messagesRef.current = stored;
+    setMessages(stored);
+    setError(null);
+    stickToBottom.current = true;
+    refreshHistory();
   };
 
   const showSuggestions =
@@ -163,173 +305,266 @@ export function AiChatConversation({
           : "ai-chat-shell ai-chat-shell--panel"
       }
     >
-      <header className="ai-chat-header">
-        <div>
-          <strong>
-            <Sparkles size={15} aria-hidden="true" /> ASO Assistant
-          </strong>
-          <span>
-            DeepSeek V4 Flash · estimates only · no secrets
-            {contextLabel ? ` · ${contextLabel}` : ""}
-          </span>
-        </div>
-        <div className="ai-chat-header-actions">
-          {variant === "panel" && (
-            <Link
-              href="/assistant"
-              className="ai-chat-icon-link"
-              aria-label="Open full-page chat"
-              title="Open full-page chat"
-              onClick={onClose}
-            >
-              <Maximize2 size={16} aria-hidden="true" />
-            </Link>
-          )}
+      {variant === "page" && (
+        <>
           <button
             type="button"
-            className="ai-chat-icon-link"
-            onClick={clearChat}
-            aria-label="Clear conversation"
-            title="Clear conversation"
+            className={`ai-chat-history-scrim${historyOpen ? " is-open" : ""}`}
+            onClick={() => setHistoryOpen(false)}
+            aria-label="Close chat history"
+            tabIndex={-1}
+          />
+          <aside
+            className={`ai-chat-history ai-chat-history--sidebar${
+              historyOpen ? " is-open" : ""
+            }`}
+            aria-label="Chat history"
           >
-            <Trash2 size={16} aria-hidden="true" />
-          </button>
-          {variant === "panel" && onClose && (
-            <button
-              type="button"
-              className="tracker-icon-button"
-              onClick={onClose}
-              aria-label="Close assistant"
-            >
-              <span aria-hidden="true">×</span>
-            </button>
-          )}
-          {variant === "page" && (
-            <Link href="/" className="ai-chat-text-link">
-              Back to tool
-            </Link>
-          )}
-        </div>
-      </header>
-
-      {variant === "page" && (
-        <div className="ai-chat-page-banner">
-          <p>
-            Full-screen chat with the same ASO assistant. Conversation is saved
-            in this browser only and stays in sync with the popup. Context comes
-            from your active <strong>My Apps</strong> tracker when present.
-          </p>
-          {!contextLabel && (
-            <p className="ai-chat-page-banner-hint">
-              Tip: add an app on the home page so the assistant can see your
-              keywords and positions.
-            </p>
-          )}
-        </div>
+            <AiChatHistory
+              conversations={conversations}
+              activeId={activeId}
+              disabled={busy}
+              onSelect={switchTo}
+              onNew={startNewChat}
+              onDelete={deleteChat}
+            />
+          </aside>
+        </>
       )}
 
-      <div
-        className="ai-chat-messages"
-        ref={listRef}
-        onScroll={onScroll}
-        role="log"
-        aria-live="polite"
-        aria-relevant="additions"
-      >
-        {messages.map((message) => (
-          <div
-            key={message.id}
-            className={`ai-chat-bubble ai-chat-bubble--${message.role}`}
-          >
-            {message.role === "assistant" ? (
-              <ChatMarkdown text={message.content} />
-            ) : (
-              message.content
+      <div className="ai-chat-shell-main">
+        <header className="ai-chat-header">
+          <div>
+            <strong>
+              <Sparkles size={15} aria-hidden="true" /> ASO Assistant
+            </strong>
+            <span>
+              DeepSeek V4 Flash · estimates only · no secrets
+              {contextLabel ? ` · ${contextLabel}` : ""}
+            </span>
+          </div>
+          <div className="ai-chat-header-actions">
+            {variant === "page" && (
+              <button
+                type="button"
+                className={`ai-chat-icon-link${
+                  historyOpen ? " is-active" : ""
+                }`}
+                onClick={() => setHistoryOpen((open) => !open)}
+                aria-label="Toggle chat history"
+                aria-pressed={historyOpen}
+                title="Chat history"
+              >
+                <History size={16} aria-hidden="true" />
+              </button>
+            )}
+            <button
+              type="button"
+              className="ai-chat-icon-link"
+              onClick={startNewChat}
+              disabled={busy}
+              aria-label="New chat"
+              title="New chat"
+            >
+              <SquarePen size={16} aria-hidden="true" />
+            </button>
+            {variant === "panel" && (
+              <button
+                type="button"
+                className={`ai-chat-icon-link${
+                  historyOpen ? " is-active" : ""
+                }`}
+                onClick={() => setHistoryOpen((open) => !open)}
+                aria-label="Chat history"
+                aria-pressed={historyOpen}
+                title="Chat history"
+              >
+                <History size={16} aria-hidden="true" />
+              </button>
+            )}
+            {variant === "panel" && (
+              <Link
+                href="/assistant"
+                className="ai-chat-icon-link"
+                aria-label="Open full-page chat"
+                title="Open full-page chat"
+                onClick={onClose}
+              >
+                <Maximize2 size={16} aria-hidden="true" />
+              </Link>
+            )}
+            <button
+              type="button"
+              className="ai-chat-icon-link"
+              onClick={clearChat}
+              aria-label="Clear conversation"
+              title="Clear conversation"
+            >
+              <Trash2 size={16} aria-hidden="true" />
+            </button>
+            {variant === "panel" && onClose && (
+              <button
+                type="button"
+                className="tracker-icon-button"
+                onClick={onClose}
+                aria-label="Close assistant"
+              >
+                <span aria-hidden="true">×</span>
+              </button>
+            )}
+            {variant === "page" && (
+              <Link href="/" className="ai-chat-text-link">
+                Back to tool
+              </Link>
             )}
           </div>
-        ))}
-        {busy && (
-          <div className="ai-chat-bubble ai-chat-bubble--assistant is-typing">
-            <Loader2 className="spin" size={14} aria-hidden="true" />
-            Thinking…
+        </header>
+
+        {variant === "page" && (
+          <div className="ai-chat-page-banner">
+            <p>
+              This chat and your history are saved in this browser only and stay
+              in sync with the popup. Context comes from your active{" "}
+              <strong>My Apps</strong> tracker when present.
+            </p>
+            {!contextLabel && (
+              <p className="ai-chat-page-banner-hint">
+                Tip: add an app on the home page so the assistant can see your
+                keywords and positions.
+              </p>
+            )}
           </div>
         )}
+
+        <div className="ai-chat-messages-wrap">
+          <div
+            className="ai-chat-messages"
+            ref={listRef}
+            onScroll={onScroll}
+            role="log"
+            aria-live="polite"
+            aria-relevant="additions"
+          >
+            {messages.map((message) => (
+              <div
+                key={message.id}
+                className={`ai-chat-bubble ai-chat-bubble--${message.role}`}
+              >
+                {message.role === "assistant" ? (
+                  <ChatMarkdown text={message.content} />
+                ) : (
+                  message.content
+                )}
+              </div>
+            ))}
+            {busy && (
+              <div className="ai-chat-bubble ai-chat-bubble--assistant is-typing">
+                <Loader2 className="spin" size={14} aria-hidden="true" />
+                Thinking…
+              </div>
+            )}
+          </div>
+          {showJump && (
+            <button
+              type="button"
+              className="ai-chat-jump"
+              onClick={jumpToBottom}
+              aria-label="Scroll to latest message"
+              title="Scroll to latest message"
+            >
+              <ChevronDown size={16} aria-hidden="true" />
+            </button>
+          )}
+        </div>
+
+        {showSuggestions && (
+          <div className="ai-chat-suggestions">
+            {AI_SUGGESTIONS.slice(0, variant === "page" ? 6 : 4).map((item) => (
+              <button
+                key={item}
+                type="button"
+                disabled={busy}
+                onClick={() => void send(item)}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {error && (
+          <div className="ai-chat-error" role="alert">
+            {error}
+          </div>
+        )}
+
+        <form
+          className="ai-chat-composer"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void send(input);
+          }}
+        >
+          <textarea
+            ref={inputRef}
+            value={input}
+            onChange={(event) => setInput(event.target.value)}
+            placeholder="Ask about keywords, positions, listing copy, or a research plan…"
+            rows={variant === "page" ? 3 : 2}
+            maxLength={AI_LIMITS.maxMessageChars}
+            disabled={busy}
+            aria-label="Message the ASO assistant"
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                void send(input);
+              }
+            }}
+          />
+          <div className="ai-chat-composer-bar">
+            <small>
+              {remainingDay != null
+                ? `${remainingDay} server msgs left today`
+                : `${AI_LIMITS.maxMessagesPerDay}/day limit`}
+              {" · "}
+              saved in this browser
+              {variant === "panel" && (
+                <>
+                  {" · "}
+                  <Link href="/assistant" onClick={onClose}>
+                    Full page <ExternalLink size={11} aria-hidden="true" />
+                  </Link>
+                </>
+              )}
+            </small>
+            <button
+              type="submit"
+              className="tracker-button-primary"
+              disabled={busy || input.trim().length < 2}
+            >
+              {busy ? (
+                <Loader2 className="spin" size={15} aria-hidden="true" />
+              ) : (
+                <Send size={15} aria-hidden="true" />
+              )}
+              Send
+            </button>
+          </div>
+        </form>
       </div>
 
-      {showSuggestions && (
-        <div className="ai-chat-suggestions">
-          {AI_SUGGESTIONS.slice(0, variant === "page" ? 6 : 4).map((item) => (
-            <button
-              key={item}
-              type="button"
-              disabled={busy}
-              onClick={() => void send(item)}
-            >
-              {item}
-            </button>
-          ))}
+      {variant === "panel" && historyOpen && (
+        <div className="ai-chat-history-popover" aria-label="Chat history">
+          <AiChatHistory
+            conversations={conversations}
+            activeId={activeId}
+            disabled={busy}
+            onSelect={switchTo}
+            onNew={startNewChat}
+            onDelete={deleteChat}
+          />
         </div>
       )}
-
-      {error && (
-        <div className="ai-chat-error" role="alert">
-          {error}
-        </div>
-      )}
-
-      <form
-        className="ai-chat-composer"
-        onSubmit={(event) => {
-          event.preventDefault();
-          void send(input);
-        }}
-      >
-        <textarea
-          ref={inputRef}
-          value={input}
-          onChange={(event) => setInput(event.target.value)}
-          placeholder="Ask about keywords, positions, listing copy, or a research plan…"
-          rows={variant === "page" ? 3 : 2}
-          maxLength={AI_LIMITS.maxMessageChars}
-          disabled={busy}
-          aria-label="Message the ASO assistant"
-          onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
-              event.preventDefault();
-              void send(input);
-            }
-          }}
-        />
-        <div className="ai-chat-composer-bar">
-          <small>
-            {remainingDay != null
-              ? `${remainingDay} server msgs left today`
-              : `${AI_LIMITS.maxMessagesPerDay}/day limit`}
-            {" · "}
-            saved in this browser
-            {variant === "panel" && (
-              <>
-                {" · "}
-                <Link href="/assistant" onClick={onClose}>
-                  Full page <ExternalLink size={11} aria-hidden="true" />
-                </Link>
-              </>
-            )}
-          </small>
-          <button
-            type="submit"
-            className="tracker-button-primary"
-            disabled={busy || input.trim().length < 2}
-          >
-            {busy ? (
-              <Loader2 className="spin" size={15} aria-hidden="true" />
-            ) : (
-              <Send size={15} aria-hidden="true" />
-            )}
-            Send
-          </button>
-        </div>
-      </form>
     </div>
   );
 }
