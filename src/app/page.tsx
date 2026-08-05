@@ -6,7 +6,7 @@ import { MarketingShell } from "@/components/marketing-shell";
 export const metadata: Metadata = {
   title: "AppClimb — free App Store keyword tracker & explorer",
   description:
-    "Track your iOS app’s keywords locally: estimated popularity and difficulty, observed App Store position, suggestions from public metadata — free, no account, no tracking.",
+    "Explore App Store keywords: estimated popularity and difficulty, bulk list analysis, golden-keyword filter, CSV export, and local backup — plus observed position tracking for your app. Free, no account.",
   alternates: {
     canonical: "/",
   },

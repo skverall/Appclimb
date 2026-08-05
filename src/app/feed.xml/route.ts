@@ -1,4 +1,10 @@
-import { ARTICLES, SITE_NAME, SITE_URL, absoluteUrl } from "@/lib/site";
+import {
+  ARTICLES,
+  SITE_NAME,
+  SITE_UPDATED,
+  SITE_URL,
+  absoluteUrl,
+} from "@/lib/site";
 
 export const dynamic = "force-static";
 
@@ -29,7 +35,7 @@ export function GET() {
     <link>${SITE_URL}/blog</link>
     <description>Practical notes on App Store search, keyword research, and ASO.</description>
     <language>en-us</language>
-    <lastBuildDate>${new Date("2026-08-02T12:00:00Z").toUTCString()}</lastBuildDate>
+    <lastBuildDate>${new Date(`${SITE_UPDATED}T12:00:00Z`).toUTCString()}</lastBuildDate>
     ${items}
   </channel>
 </rss>`;

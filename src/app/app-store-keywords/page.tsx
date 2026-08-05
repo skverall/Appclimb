@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { ArrowRight, Eye, Search, Sparkles, TrendingUp } from "lucide-react";
+import { ArrowRight, Eye, ListPlus, Search, Sparkles, TrendingUp } from "lucide-react";
 import Link from "next/link";
 
 import { JsonLd } from "@/components/json-ld";
@@ -9,14 +9,14 @@ import { SITE_DESCRIPTION, absoluteUrl } from "@/lib/site";
 export const metadata: Metadata = {
   title: "App Store Keyword Research: Popularity and Difficulty Estimates",
   description:
-    "How AppClimb estimates keyword popularity and difficulty from public App Store data, and how to use the estimates to pick keywords worth ranking for.",
+    "How AppClimb estimates keyword popularity and difficulty from public App Store data, and how to use bulk analysis, the golden-keyword filter, CSV export, and local backup to pick keywords worth ranking for.",
   alternates: {
     canonical: "/app-store-keywords",
   },
   openGraph: {
     title: "App Store Keyword Research · AppClimb",
     description:
-      "Estimated popularity, difficulty, and trends for any App Store keyword — from public data, free and without an account.",
+      "Estimated popularity, difficulty, and trends for any App Store keyword — bulk list analysis, golden-keyword filtering, and CSV export from public data, free and without an account.",
     url: "/app-store-keywords",
   },
 };
@@ -37,6 +37,11 @@ const steps = [
     text: "One daily snapshot per keyword builds a 30-day chart in your browser. The first check gets an estimated baseline so the chart is useful immediately.",
     icon: TrendingUp,
   },
+  {
+    title: "Filter, export, back up",
+    text: "Paste up to 50 keywords at once, filter for golden opportunities (solid demand, low barrier), export rows to CSV, and keep a local JSON backup you can restore on any browser.",
+    icon: ListPlus,
+  },
 ];
 
 const faq = [
@@ -54,6 +59,16 @@ const faq = [
     question: "Do I need an account?",
     answer:
       "No. There is no login, no billing, and no tracking. Your keyword list and history live in your browser's localStorage.",
+  },
+  {
+    question: "Can I analyze a whole list at once?",
+    answer:
+      "Yes. Paste up to 50 keywords — one per line or comma-separated — and AppClimb analyzes them in small paced batches so the public API doesn't rate-limit you. Rows that fail are reported in a summary while the rest of the queue keeps running.",
+  },
+  {
+    question: "Can I export or back up my keyword data?",
+    answer:
+      "Yes. Export the table as CSV for spreadsheets, and download a JSON backup of your full keyword history that you can restore at any time — even on a fresh browser or after clearing local data. Everything stays on your device.",
   },
   {
     question: "Why does difficulty matter?",
@@ -105,6 +120,7 @@ export default function KeywordResearchPage() {
             <div className="marketing-trust-row">
               <span>✅ Public iTunes data only</span>
               <span>✅ Estimates labeled honestly</span>
+              <span>✅ Bulk lists, CSV export & backup</span>
               <span>✅ No account or tracking</span>
             </div>
           </div>

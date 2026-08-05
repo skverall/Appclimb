@@ -431,9 +431,11 @@ export function KeywordExplorer() {
         <span className="marketing-eyebrow">App Store keyword intelligence</span>
         <h1>Find keywords worth ranking for</h1>
         <p className="keyword-hero-deck">
-          Search any keyword for estimated popularity and difficulty — or use{" "}
-          <strong>My Apps</strong> in the sidebar to track your app’s position
-          on public App Store search. Free, local, no account.
+          Search keywords for estimated popularity and difficulty, analyze a
+          whole list at once, and filter for{" "}
+          <strong>golden</strong> opportunities — or use <strong>My Apps</strong>{" "}
+          in the sidebar to track your app’s position on public App Store
+          search. Free, local, no account.
         </p>
         <div className="keyword-estimate-note">
           <Info size={15} aria-hidden="true" />
@@ -590,6 +592,14 @@ export function KeywordExplorer() {
                 </button>
               ))}
             </div>
+            <button
+              type="button"
+              className="keyword-empty-restore"
+              onClick={() => restoreInputRef.current?.click()}
+            >
+              <Upload size={14} aria-hidden="true" />
+              Restore a backup
+            </button>
           </div>
         ) : (
           <div className="keyword-table-wrap">
@@ -825,17 +835,6 @@ export function KeywordExplorer() {
                   <Upload size={14} aria-hidden="true" />
                   Restore
                 </button>
-                <input
-                  ref={restoreInputRef}
-                  type="file"
-                  accept=".json,application/json"
-                  hidden
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) void handleRestoreFile(file);
-                    event.target.value = "";
-                  }}
-                />
               </div>
               <div className="keyword-table-foot-meta">
                 <span>
@@ -850,6 +849,20 @@ export function KeywordExplorer() {
             </footer>
           </div>
         )}
+
+        {/* Shared restore picker: rendered in both empty and table states so a
+            wiped list can always be recovered from a backup. */}
+        <input
+          ref={restoreInputRef}
+          type="file"
+          accept=".json,application/json"
+          hidden
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) void handleRestoreFile(file);
+            event.target.value = "";
+          }}
+        />
 
         {selected && (
           <KeywordDetail

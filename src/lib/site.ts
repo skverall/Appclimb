@@ -1,15 +1,15 @@
 export const SITE_URL = "https://appclimb.app";
 export const SITE_NAME = "AppClimb";
 export const SITE_DESCRIPTION =
-  "Free App Store keyword research: estimated popularity, difficulty, and 30-day trends built from public App Store data — no account required.";
-export const SITE_UPDATED = "2026-08-02";
+  "Free App Store keyword research: estimated popularity and difficulty, bulk list analysis, golden-keyword filtering, CSV export, and 30-day trends built from public App Store data — no account required.";
+export const SITE_UPDATED = "2026-08-05";
 
 export const PUBLIC_PAGES = [
   {
     path: "/",
     title: "AppClimb — App Store keyword explorer",
     description:
-      "Search any App Store keyword and see estimated popularity, difficulty, and a 30-day trend — free, from public data, without an account.",
+      "Search any App Store keyword for estimated popularity and difficulty, analyze lists in bulk, filter golden opportunities, and export or back up — free, from public data, without an account.",
     changeFrequency: "weekly" as const,
     priority: 1,
     lastModified: SITE_UPDATED,
