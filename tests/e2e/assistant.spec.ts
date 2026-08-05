@@ -1,0 +1,84 @@
+import { expect, test } from "./runtime-test";
+
+const SUGGESTION =
+  "Which of my tracked keywords are worth focusing on first?";
+
+test("assistant replies to a message and persists the thread", async ({
+  page,
+}) => {
+  await page.route("**/api/chat", async (route) => {
+    const body = route.request().postDataJSON() as {
+      message: string;
+      messages: Array<{ role: string; content: string }>;
+      context: unknown;
+    };
+    expect(body.message).toBe(SUGGESTION);
+    expect(body.messages.length).toBeGreaterThanOrEqual(1);
+    expect(body.context).toBeNull(); // no My Apps tracker context yet
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        message:
+          "Start with **long-tail** keywords like “habit tracker” — solid demand, less competition.",
+        remainingDay: 19,
+        remainingHour: 5,
+      }),
+    });
+  });
+
+  await page.goto("/assistant");
+  await expect(page.getByText(/ASO assistant \(DeepSeek V4 Flash\)/i)).toBeVisible();
+
+  // Suggestion chips are offered before the first user message.
+  const chip = page.getByRole("button", { name: SUGGESTION });
+  await expect(chip).toBeVisible();
+  await chip.click();
+
+  // The markdown reply renders and the server-reported quota is shown.
+  await expect(page.getByText(/Start with/i)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/19 server msgs left today/i)).toBeVisible();
+  await expect(page.getByText(SUGGESTION)).toBeVisible();
+
+  // The thread survives a reload (stored in localStorage).
+  await page.reload();
+  await expect(page.getByText(/Start with/i)).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(SUGGESTION)).toBeVisible();
+
+  // Clearing resets to the welcome state (confirm dialog accepted).
+  page.once("dialog", (dialog) => void dialog.accept());
+  await page.getByRole("button", { name: /Clear conversation/i }).click();
+  await expect(page.getByText(/Start with/i)).toHaveCount(0);
+  await expect(
+    page.getByRole("button", { name: SUGGESTION }),
+  ).toBeVisible();
+});
+
+test("assistant surfaces rate-limit and local-limit errors", async ({
+  page,
+}) => {
+  await page.route("**/api/chat", async (route) => {
+    await route.fulfill({ status: 429, body: "{}" });
+  });
+
+  await page.goto("/assistant");
+  await page.getByLabel("Message the ASO assistant").fill("suggest keywords");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.locator(".ai-chat-error")).toContainText(/Rate limit reached/i, {
+    timeout: 15_000,
+  });
+
+  // The client-side daily cap blocks without ever hitting the server.
+  await page.evaluate(() => {
+    const day = new Date().toISOString().slice(0, 10);
+    window.localStorage.setItem(
+      "appclimb:ai:day",
+      JSON.stringify({ day, count: 999 }),
+    );
+  });
+  await page.getByLabel("Message the ASO assistant").fill("more keywords");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.locator(".ai-chat-error")).toContainText(/local assistant limit/i, {
+    timeout: 15_000,
+  });
+});
