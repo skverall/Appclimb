@@ -32,5 +32,5 @@ changing direction.
   (`appclimb:kw:v1:*`) with an estimated backfill flagged `backfilled: true`.
 - For any live-data claim, verify repository code and the deployed site
   separately; the site runs client-side logic that unit tests do not execute.
-- A push to `main` is a production deploy. Do not push or deploy without
-  founder approval.
+- A push to `main` deploys to production immediately, so run `npm run check`
+  and `npm run test:e2e` locally before pushing.

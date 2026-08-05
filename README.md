@@ -89,8 +89,8 @@ npm run test:e2e
 
 Pushes to `main` run `.github/workflows/cloudflare-deploy.yml`, which builds,
 deploys the web Worker, verifies the canonical homepage, waits for the sitemap,
-and notifies IndexNow. **Do not push or deploy without explicit founder
-approval.**
+and notifies IndexNow. Deploys go live immediately — run `npm run check` and
+`npm run test:e2e` before pushing.
 
 The canonical production host is `https://appclimb.app`; the staging Worker is
 `appclimb-web-staging`.
