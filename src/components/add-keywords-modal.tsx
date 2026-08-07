@@ -119,7 +119,7 @@ export function AddKeywordsModal({
               className="tracker-button-secondary"
               onClick={() => setText(STARTER_KEYWORDS.join("\n"))}
             >
-              Use Fish Identifier starter set
+              Use starter keyword set
             </button>
           </div>
 

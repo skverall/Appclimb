@@ -48,19 +48,19 @@ const secondApp = {
   averageUserRating: 4.1,
 };
 
-// Mirrors the Fish Identifier quick-start preset (tracker STARTER_APP_ID).
-const fishApp = {
-  trackId: 6475028001,
-  trackName: "Fish Identifier: AI Scanner",
-  bundleId: "com.adamlyttleapps.Fish-Identifier",
-  sellerName: "App All Day Pty Ltd",
-  primaryGenreName: "Education",
-  artworkUrl100: "https://is1-ssl.mzstatic.com/image/thumb/fish.png",
-  trackViewUrl: "https://apps.apple.com/app/id6475028001",
+// Mirrors the quick-start preset (tracker STARTER_APP_ID).
+const carDealerApp = {
+  trackId: 6755675367,
+  trackName: "Car Dealer Tracker: Profit",
+  bundleId: "com.ezcar24.business",
+  sellerName: "Shokhabbos Makhmudov",
+  primaryGenreName: "Business",
+  artworkUrl100: "https://is1-ssl.mzstatic.com/image/thumb/dealer.png",
+  trackViewUrl: "https://apps.apple.com/app/id6755675367",
   description:
-    "Point your camera at any fish and get an instant AI identification.",
-  userRatingCount: 300,
-  averageUserRating: 4.6,
+    "Car Dealer Tracker helps auto dealers manage vehicle inventory, track car sales, expenses, and profit in one place.",
+  userRatingCount: 40,
+  averageUserRating: 4.3,
 };
 
 // 1×1 PNG so icon <img> tags do not console.error on 404.
@@ -100,11 +100,11 @@ async function mockItunes(page: import("@playwright/test").Page) {
         });
         return;
       }
-      if (id === "6475028001") {
+      if (id === "6755675367") {
         await route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify(searchPayload([fishApp])),
+          body: JSON.stringify(searchPayload([carDealerApp])),
         });
         return;
       }
@@ -147,7 +147,7 @@ async function mockItunes(page: import("@playwright/test").Page) {
       const ranked = [
         competitor,
         calmApp,
-        fishApp,
+        carDealerApp,
         {
           trackId: 222,
           trackName: "Focus Timer",
@@ -272,7 +272,7 @@ test("onboarding walks a first-time user from CTA to tracked keywords", async ({
   );
 });
 
-test("quick start seeds the Fish Identifier sample app and its keywords", async ({
+test("quick start seeds the sample app and its keywords", async ({
   page,
 }) => {
   await mockItunes(page);
@@ -284,11 +284,11 @@ test("quick start seeds the Fish Identifier sample app and its keywords", async 
       name: /Track your app’s keywords in three steps/i,
     }),
   ).toBeVisible();
-  await page.getByRole("button", { name: /Try Fish Identifier sample/i }).click();
+  await page.getByRole("button", { name: /Try a sample app/i }).click();
 
   // The app lands in the tracker view and all starter keywords get checked.
   await expect(
-    page.getByRole("heading", { name: /Fish Identifier: AI Scanner/i }),
+    page.getByRole("heading", { name: /Car Dealer Tracker: Profit/i }),
   ).toBeVisible({ timeout: 15_000 });
   await expect(page.locator(".tracker-table tbody tr")).toHaveCount(7, {
     timeout: 30_000,

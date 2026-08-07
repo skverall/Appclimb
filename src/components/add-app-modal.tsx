@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { Fish, Loader2, Search, X } from "lucide-react";
+import { Loader2, Search, Sparkles, X } from "lucide-react";
 
 import { SUPPORTED_COUNTRIES } from "@/lib/aso";
 import {
@@ -257,13 +257,13 @@ export function AddAppModal({
                 {quickStartBusy ? (
                   <Loader2 className="spin" size={15} aria-hidden="true" />
                 ) : (
-                  <Fish size={15} aria-hidden="true" />
+                  <Sparkles size={15} aria-hidden="true" />
                 )}
                 {quickStartBusy
                   ? "Adding…"
                   : starterTracked
                     ? "Already added"
-                    : "Try Fish Identifier sample"}
+                    : "Try sample app"}
               </button>
             </div>
           )}

@@ -3,10 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Compass,
-  Fish,
   Loader2,
   Menu,
   Plus,
+  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
@@ -616,8 +616,8 @@ export function AppWorkspace() {
                     disabled={bootstrapping}
                     onClick={() => void handleQuickStart("US")}
                   >
-                    <Fish size={16} aria-hidden="true" />
-                    Try Fish Identifier sample
+                    <Sparkles size={16} aria-hidden="true" />
+                    Try a sample app
                   </button>
                 </div>
               </section>

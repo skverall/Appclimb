@@ -220,7 +220,7 @@ describe("keyword batch parsing and dedupe", () => {
   });
 });
 
-describe("Fish Identifier starter preset", () => {
+describe("quick-start starter preset", () => {
   it("has a real app id and a display name", () => {
     expect(STARTER_APP_ID).toMatch(/^\d+$/u);
     expect(STARTER_APP_NAME.length).toBeGreaterThan(0);
