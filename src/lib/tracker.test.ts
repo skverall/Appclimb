@@ -41,6 +41,9 @@ import {
   snapshotsFor,
   snapshotsToChartPoints,
   trackAppInStorefront,
+  STARTER_APP_ID,
+  STARTER_APP_NAME,
+  STARTER_KEYWORDS,
   TRACKER_STORAGE_KEY,
   updateKeywordNote,
   type TrackerStorage,
@@ -214,6 +217,39 @@ describe("keyword batch parsing and dedupe", () => {
     ).toBe("primary");
     store = removeKeywordFromStore(store, "123456789", "US", "yoga");
     expect(Object.keys(store.keywords)).toHaveLength(1);
+  });
+});
+
+describe("Fish Identifier starter preset", () => {
+  it("has a real app id and a display name", () => {
+    expect(STARTER_APP_ID).toMatch(/^\d+$/u);
+    expect(STARTER_APP_NAME.length).toBeGreaterThan(0);
+  });
+
+  it("lists unique, valid keywords that all pass batch parsing", () => {
+    expect(STARTER_KEYWORDS.length).toBeGreaterThan(0);
+    const normalized = STARTER_KEYWORDS.map((keyword) =>
+      normalizeKeyword(keyword),
+    );
+    expect(new Set(normalized).size).toBe(normalized.length);
+    const parsed = parseKeywordBatch(STARTER_KEYWORDS.join("\n"), new Set());
+    expect(parsed.accepted).toHaveLength(STARTER_KEYWORDS.length);
+    expect(parsed.duplicates).toEqual([]);
+    expect(parsed.invalid).toEqual([]);
+  });
+
+  it("adds every starter keyword to a tracked app in one batch", () => {
+    const store = addTrackedApp(
+      emptyStore(),
+      { ...sampleApp, appStoreId: STARTER_APP_ID },
+    ).store;
+    const { store: withKeys, added } = addKeywordsToStore(store, STARTER_APP_ID, "US", [
+      ...STARTER_KEYWORDS,
+    ]);
+    expect(added).toHaveLength(STARTER_KEYWORDS.length);
+    expect(listKeywordsForApp(withKeys, STARTER_APP_ID, "US")).toHaveLength(
+      STARTER_KEYWORDS.length,
+    );
   });
 });
 

@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { Loader2, Search, X } from "lucide-react";
+import { Fish, Loader2, Search, X } from "lucide-react";
 
 import { SUPPORTED_COUNTRIES } from "@/lib/aso";
 import {
   humanizeItunesError,
   resolveAppCandidates,
+  STARTER_APP_ID,
+  STARTER_APP_NAME,
+  STARTER_KEYWORDS,
 } from "@/lib/tracker";
 import type { CatalogApp } from "@/lib/itunes";
 
@@ -16,6 +19,8 @@ export function AddAppModal({
   existingKeys,
   onClose,
   onSelect,
+  onQuickStart,
+  quickStartBusy = false,
 }: {
   open: boolean;
   defaultCountry?: string;
@@ -23,6 +28,9 @@ export function AddAppModal({
   existingKeys: ReadonlySet<string>;
   onClose: () => void;
   onSelect: (app: CatalogApp, country: string) => void;
+  /** One-click sample app; hidden when not provided. */
+  onQuickStart?: (country: string) => void;
+  quickStartBusy?: boolean;
 }) {
   const titleId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -66,6 +74,8 @@ export function AddAppModal({
   }, []);
 
   if (!open) return null;
+
+  const starterTracked = existingKeys.has(`${STARTER_APP_ID}:${country}`);
 
   const search = async () => {
     const term = query.trim();
@@ -226,6 +236,36 @@ export function AddAppModal({
                 );
               })}
             </ul>
+          )}
+
+          {onQuickStart && (
+            <div className="tracker-quick-start">
+              <div className="tracker-quick-start-copy">
+                <strong>Just exploring?</strong>
+                <span>
+                  One click adds <b>{STARTER_APP_NAME}</b> with{" "}
+                  {STARTER_KEYWORDS.length} starter keywords and checks them
+                  right away.
+                </span>
+              </div>
+              <button
+                type="button"
+                className="tracker-button-accent"
+                disabled={quickStartBusy || starterTracked}
+                onClick={() => onQuickStart(country)}
+              >
+                {quickStartBusy ? (
+                  <Loader2 className="spin" size={15} aria-hidden="true" />
+                ) : (
+                  <Fish size={15} aria-hidden="true" />
+                )}
+                {quickStartBusy
+                  ? "Adding…"
+                  : starterTracked
+                    ? "Already added"
+                    : "Try Fish Identifier sample"}
+              </button>
+            </div>
           )}
         </div>
       </div>

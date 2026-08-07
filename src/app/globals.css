@@ -2565,6 +2565,56 @@ img {
   align-items: center;
 }
 
+/* Quick-start sample card (Add App modal) */
+.tracker-quick-start {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 14px 16px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-lg);
+  background: var(--n-25);
+}
+
+.tracker-quick-start-copy {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.tracker-quick-start-copy strong {
+  font-size: var(--text-sm);
+  color: var(--ink);
+}
+
+.tracker-quick-start-copy span {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  line-height: var(--leading-snug);
+}
+
+.tracker-quick-start .tracker-button-accent {
+  flex-shrink: 0;
+}
+
+/* Ready-made keyword preset row (Add Keywords modal) */
+.tracker-preset-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.tracker-preset-row .tracker-button-secondary {
+  padding: 7px 12px;
+  font-size: var(--text-xs);
+}
+
 /* Status filter chips + queue banner */
 .tracker-status-filters {
   display: flex;

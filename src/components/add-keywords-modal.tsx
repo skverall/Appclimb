@@ -4,7 +4,11 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { X } from "lucide-react";
 
 import { SUPPORTED_COUNTRIES } from "@/lib/aso";
-import { MAX_KEYWORDS_PER_ADD, parseKeywordBatch } from "@/lib/tracker";
+import {
+  MAX_KEYWORDS_PER_ADD,
+  parseKeywordBatch,
+  STARTER_KEYWORDS,
+} from "@/lib/tracker";
 
 export function AddKeywordsModal({
   open,
@@ -107,6 +111,17 @@ export function AddKeywordsModal({
               spellCheck={false}
             />
           </label>
+
+          <div className="tracker-preset-row">
+            <span>Need a ready-made list?</span>
+            <button
+              type="button"
+              className="tracker-button-secondary"
+              onClick={() => setText(STARTER_KEYWORDS.join("\n"))}
+            >
+              Use Fish Identifier starter set
+            </button>
+          </div>
 
           <div className="tracker-parse-summary" aria-live="polite">
             <span>

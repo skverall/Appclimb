@@ -48,6 +48,21 @@ const secondApp = {
   averageUserRating: 4.1,
 };
 
+// Mirrors the Fish Identifier quick-start preset (tracker STARTER_APP_ID).
+const fishApp = {
+  trackId: 6475028001,
+  trackName: "Fish Identifier: AI Scanner",
+  bundleId: "com.adamlyttleapps.Fish-Identifier",
+  sellerName: "App All Day Pty Ltd",
+  primaryGenreName: "Education",
+  artworkUrl100: "https://is1-ssl.mzstatic.com/image/thumb/fish.png",
+  trackViewUrl: "https://apps.apple.com/app/id6475028001",
+  description:
+    "Point your camera at any fish and get an instant AI identification.",
+  userRatingCount: 300,
+  averageUserRating: 4.6,
+};
+
 // 1×1 PNG so icon <img> tags do not console.error on 404.
 const PIXEL_PNG = Buffer.from(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
@@ -82,6 +97,14 @@ async function mockItunes(page: import("@playwright/test").Page) {
           status: 200,
           contentType: "application/json",
           body: JSON.stringify(searchPayload([secondApp])),
+        });
+        return;
+      }
+      if (id === "6475028001") {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(searchPayload([fishApp])),
         });
         return;
       }
@@ -124,6 +147,7 @@ async function mockItunes(page: import("@playwright/test").Page) {
       const ranked = [
         competitor,
         calmApp,
+        fishApp,
         {
           trackId: 222,
           trackName: "Focus Timer",
@@ -246,6 +270,36 @@ test("onboarding walks a first-time user from CTA to tracked keywords", async ({
     suggestedCount + 2,
     { timeout: 20_000 },
   );
+});
+
+test("quick start seeds the Fish Identifier sample app and its keywords", async ({
+  page,
+}) => {
+  await mockItunes(page);
+  await page.goto("/");
+
+  // Onboarding CTA runs the one-click sample without any typing.
+  await expect(
+    page.getByRole("heading", {
+      name: /Track your app’s keywords in three steps/i,
+    }),
+  ).toBeVisible();
+  await page.getByRole("button", { name: /Try Fish Identifier sample/i }).click();
+
+  // The app lands in the tracker view and all starter keywords get checked.
+  await expect(
+    page.getByRole("heading", { name: /Fish Identifier: AI Scanner/i }),
+  ).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator(".tracker-table tbody tr")).toHaveCount(7, {
+    timeout: 30_000,
+  });
+
+  // The Add App modal offers the same quick start and knows it was added.
+  await page.getByRole("button", { name: /Add App/i }).first().click();
+  await expect(page.getByRole("heading", { name: "Add App" })).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Already added/i }),
+  ).toBeVisible();
 });
 
 test("add app by search, accept suggestions, persist after reload", async ({

@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Compass,
+  Fish,
   Loader2,
   Menu,
   Plus,
@@ -34,6 +35,9 @@ import {
   removeTrackedApp,
   saveTrackerStore,
   setActiveApp,
+  STARTER_APP_ID,
+  STARTER_APP_NAME,
+  STARTER_KEYWORDS,
   trackAppInStorefront,
   type TrackedApp,
   type TrackerStore,
@@ -168,6 +172,25 @@ export function AppWorkspace() {
     setPendingSuggestions({ app, suggestions });
   };
 
+  /** Map a catalog hit to a tracked app entry and persist it. */
+  const trackCatalogApp = (
+    catalog: CatalogApp,
+    country: string,
+    description?: string,
+  ) => {
+    return addTrackedApp(storeRef.current, {
+      appStoreId: catalog.appStoreId,
+      name: catalog.name,
+      bundleId: catalog.bundleId,
+      developer: catalog.developer,
+      genre: catalog.genre,
+      iconUrl: catalog.iconUrl,
+      storeUrl: catalog.storeUrl,
+      country,
+      description,
+    });
+  };
+
   const handleSelectCatalogApp = async (catalog: CatalogApp, country: string) => {
     setAddAppOpen(false);
     setBootstrapping(true);
@@ -189,17 +212,11 @@ export function AppWorkspace() {
         // Metadata enrichment is best-effort; catalog fields are enough to add.
       }
 
-      const { store: withApp, app, added } = addTrackedApp(storeRef.current, {
-        appStoreId: enriched.appStoreId,
-        name: enriched.name,
-        bundleId: enriched.bundleId,
-        developer: enriched.developer,
-        genre: enriched.genre,
-        iconUrl: enriched.iconUrl,
-        storeUrl: enriched.storeUrl,
+      const { store: withApp, app, added } = trackCatalogApp(
+        enriched,
         country,
         description,
-      });
+      );
       persist(withApp);
       setView("app");
 
@@ -230,10 +247,54 @@ export function AppWorkspace() {
     }
   };
 
-  const handleConfirmSuggestions = async (keywords: string[]) => {
-    if (!pendingSuggestions) return;
-    const { app } = pendingSuggestions;
-    setPendingSuggestions(null);
+  /**
+   * One-click sample: add the Fish Identifier starter app and analyze its
+   * curated keyword set, so a fresh visitor sees the whole flow working.
+   */
+  const handleQuickStart = async (country: string) => {
+    setAddAppOpen(false);
+    setBootstrapping(true);
+    setBootstrapLabel(`Loading ${STARTER_APP_NAME} from the App Store…`);
+    setBanner(null);
+    try {
+      const meta = await loadAppMetadata(STARTER_APP_ID, country);
+      if (!meta) {
+        setBanner(
+          `Could not load the ${STARTER_APP_NAME} sample from the App Store catalog.`,
+        );
+        return;
+      }
+      const description =
+        typeof meta.raw.description === "string"
+          ? meta.raw.description
+          : undefined;
+      const { store: withApp, app, added } = trackCatalogApp(
+        meta.catalog,
+        country,
+        description,
+      );
+      persist(withApp);
+      setView("app");
+
+      if (!added) {
+        setBanner(`${STARTER_APP_NAME} is already tracked for that storefront.`);
+        return;
+      }
+      await runKeywordAnalysis(app, [...STARTER_KEYWORDS]);
+    } catch (err) {
+      setBanner(humanizeItunesError(err));
+    } finally {
+      setBootstrapping(false);
+      setBootstrapLabel("Loading…");
+    }
+  };
+
+  /**
+   * Add the given keywords to the app and immediately analyze each one so the
+   * table fills in without a manual "Refresh All". Shared by the suggestions
+   * flow and the Fish Identifier quick start.
+   */
+  const runKeywordAnalysis = async (app: TrackedApp, keywords: string[]) => {
     setBanner(null);
 
     // Always read the latest store so we don't drop the newly added app.
@@ -246,8 +307,6 @@ export function AppWorkspace() {
     persist(withKeys);
     if (added.length === 0) return;
 
-    // Immediately analyze every selected keyword so the table fills in without
-    // requiring a manual "Refresh All".
     setBootstrapping(true);
     setBootstrapLabel(
       `Checking ${added.length} keyword${added.length === 1 ? "" : "s"} against the App Store…`,
@@ -310,6 +369,13 @@ export function AppWorkspace() {
       setAnalyzeProgress(null);
       setBootstrapLabel("Loading…");
     }
+  };
+
+  const handleConfirmSuggestions = async (keywords: string[]) => {
+    if (!pendingSuggestions) return;
+    const { app } = pendingSuggestions;
+    setPendingSuggestions(null);
+    await runKeywordAnalysis(app, keywords);
   };
 
   if (!hydrated) {
@@ -544,6 +610,15 @@ export function AppWorkspace() {
                     <Plus size={16} aria-hidden="true" />
                     Add your first app
                   </button>
+                  <button
+                    type="button"
+                    className="tracker-button-secondary"
+                    disabled={bootstrapping}
+                    onClick={() => void handleQuickStart("US")}
+                  >
+                    <Fish size={16} aria-hidden="true" />
+                    Try Fish Identifier sample
+                  </button>
                 </div>
               </section>
             )}
@@ -566,6 +641,8 @@ export function AppWorkspace() {
         onSelect={(app, country) => {
           void handleSelectCatalogApp(app, country);
         }}
+        onQuickStart={(country) => void handleQuickStart(country)}
+        quickStartBusy={bootstrapping}
       />
 
       <SuggestionsModal

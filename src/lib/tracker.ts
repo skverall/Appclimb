@@ -39,6 +39,28 @@ export const RATE_LIMIT_COOLDOWN_MS = 2500;
 export const STALE_AFTER_MS = 12 * 60 * 60 * 1000; // 12 hours
 
 /* ------------------------------------------------------------------ */
+/* Quick-start preset                                                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * One-click sample app: a real US storefront app plus a starter keyword set,
+ * so first-time visitors can see the tracker working without typing anything.
+ * The keyword list mirrors a typical fish-identifier ASO setup (deduplicated
+ * phrases) — popularity/difficulty are still estimated from public data.
+ */
+export const STARTER_APP_ID = "6475028001"; // Fish Identifier: AI Scanner
+export const STARTER_APP_NAME = "Fish Identifier: AI Scanner";
+export const STARTER_KEYWORDS: readonly string[] = [
+  "ai fish identifier",
+  "fish identifier app",
+  "app for identifying fish",
+  "app for fish identification",
+  "ai fish identification",
+  "fish identification app",
+  "app to identify fish",
+] as const;
+
+/* ------------------------------------------------------------------ */
 /* Types                                                               */
 /* ------------------------------------------------------------------ */
 
