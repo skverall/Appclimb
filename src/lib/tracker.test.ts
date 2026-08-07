@@ -41,14 +41,19 @@ import {
   snapshotsFor,
   snapshotsToChartPoints,
   trackAppInStorefront,
+  allRankedApps,
+  bestPositionSeries,
+  myRankings,
   STARTER_APP_ID,
   STARTER_APP_NAME,
   STARTER_KEYWORDS,
   TRACKER_STORAGE_KEY,
   updateKeywordNote,
   type TrackerStorage,
+  type TrackerStore,
 } from "@/lib/tracker";
 import { parseAppStoreIdInput } from "@/lib/itunes";
+import { toLocalDate, type TopApp } from "@/lib/aso";
 
 function makeStorage(initial: Record<string, string> = {}): TrackerStorage {
   const store = new Map(Object.entries(initial));
@@ -1069,5 +1074,252 @@ describe("loadTrackerStore edge cases", () => {
     expect(
       listKeywordsForApp(store, "123456789", "US").map((row) => row.keyword),
     ).toEqual(["alpha", "yoga"]);
+  });
+});
+
+describe("overview aggregations (best position, my rankings, ranked apps)", () => {
+  const dayAgo = (days: number) =>
+    toLocalDate(new Date(Date.now() - days * 86_400_000));
+
+  function applyMetrics(
+    store: TrackerStore,
+    keyword: string,
+    options: { position: number | null; sampledAt: string; topApps?: TopApp[] },
+  ): TrackerStore {
+    const topApps = options.topApps ?? [];
+    return applyAnalysisToStore(store, "123456789", "US", keyword, {
+      metrics: {
+        keyword,
+        country: "US",
+        popularity: 50,
+        difficulty: 20,
+        results: 100,
+        saturated: false,
+        topApps,
+        sampledAt: options.sampledAt,
+      },
+      position: options.position,
+      topApps,
+    });
+  }
+
+  function sampleTopApp(id: string, position: number): TopApp {
+    return {
+      appStoreId: id,
+      name: `App ${id}`,
+      developer: "Dev",
+      genre: "Tools",
+      iconUrl: "",
+      storeUrl: "",
+      ratingsCount: 0,
+      ratingAverage: 0,
+      position,
+    };
+  }
+
+  it("bestPositionSeries takes the best per-day position across keywords", () => {
+    let store = addTrackedApp(emptyStore(), sampleApp).store;
+    store = addKeywordsToStore(store, "123456789", "US", [
+      "meditation",
+      "yoga",
+    ]).store;
+    const today = dayAgo(0);
+    const yesterday = dayAgo(1);
+    const twoDaysAgo = dayAgo(2);
+    const snap = (date: string) => ({
+      date,
+      sampledAt: `${date}T10:00:00Z`,
+      popularity: 50,
+      difficulty: 20,
+      resultsCount: 100,
+      saturated: false,
+    });
+    // meditation: #10 two days ago, #5 today; yoga: #8 yesterday, #12 today.
+    store = recordRankSnapshot(store, "123456789", "US", "meditation", {
+      ...snap(twoDaysAgo),
+      position: 10,
+    });
+    store = recordRankSnapshot(store, "123456789", "US", "meditation", {
+      ...snap(today),
+      position: 5,
+    });
+    store = recordRankSnapshot(store, "123456789", "US", "yoga", {
+      ...snap(yesterday),
+      position: 8,
+    });
+    store = recordRankSnapshot(store, "123456789", "US", "yoga", {
+      ...snap(today),
+      position: 12,
+    });
+
+    const series = bestPositionSeries(store, "123456789", "US", 7);
+    expect(series).toEqual([
+      { date: twoDaysAgo, position: 10 },
+      { date: yesterday, position: 8 },
+      { date: today, position: 5 },
+    ]);
+  });
+
+  it("bestPositionSeries skips unmeasured days and out-of-200 snapshots", () => {
+    let store = addTrackedApp(emptyStore(), sampleApp).store;
+    store = addKeywordsToStore(store, "123456789", "US", ["meditation"]).store;
+    const today = dayAgo(0);
+    const threeDaysAgo = dayAgo(3);
+    store = recordRankSnapshot(store, "123456789", "US", "meditation", {
+      sampledAt: `${threeDaysAgo}T10:00:00Z`,
+      position: null,
+      popularity: 50,
+      difficulty: 20,
+      resultsCount: 100,
+      saturated: false,
+    });
+    store = recordRankSnapshot(store, "123456789", "US", "meditation", {
+      sampledAt: `${today}T10:00:00Z`,
+      position: 7,
+      popularity: 50,
+      difficulty: 20,
+      resultsCount: 100,
+      saturated: false,
+    });
+
+    const series = bestPositionSeries(store, "123456789", "US", 7);
+    // Day with only an out-of-200 measurement is not a ranked day.
+    expect(series).toEqual([{ date: today, position: 7 }]);
+  });
+
+  it("myRankings lists ranked keywords with surge, excluding >200 and unavailable", () => {
+    let store = addTrackedApp(emptyStore(), sampleApp).store;
+    store = addKeywordsToStore(store, "123456789", "US", [
+      "meditation",
+      "yoga",
+      "focus",
+      "sleep",
+      "streak",
+    ]).store;
+    const today = dayAgo(0);
+    const sixDaysAgo = dayAgo(6);
+
+    // meditation: #12 six days ago → #8 today (moved up 4).
+    store = recordRankSnapshot(store, "123456789", "US", "meditation", {
+      date: sixDaysAgo,
+      sampledAt: `${sixDaysAgo}T10:00:00Z`,
+      position: 12,
+      popularity: 50,
+      difficulty: 20,
+      resultsCount: 100,
+      saturated: false,
+    });
+    store = applyMetrics(store, "meditation", {
+      position: 8,
+      sampledAt: `${today}T10:00:00Z`,
+    });
+    // yoga: measured only today → surge null.
+    store = applyMetrics(store, "yoga", {
+      position: 3,
+      sampledAt: `${today}T10:00:00Z`,
+    });
+    // streak: #5 → #9 (moved down 4).
+    store = recordRankSnapshot(store, "123456789", "US", "streak", {
+      date: sixDaysAgo,
+      sampledAt: `${sixDaysAgo}T10:00:00Z`,
+      position: 5,
+      popularity: 50,
+      difficulty: 20,
+      resultsCount: 100,
+      saturated: false,
+    });
+    store = applyMetrics(store, "streak", {
+      position: 9,
+      sampledAt: `${today}T10:00:00Z`,
+    });
+    // focus: outside top 200; sleep: unavailable → both excluded.
+    store = applyMetrics(store, "focus", {
+      position: null,
+      sampledAt: `${today}T10:00:00Z`,
+    });
+    store = markKeywordUnavailable(store, "123456789", "US", "sleep");
+
+    const rankings = myRankings(store, "123456789", "US", 7);
+    expect(rankings).toEqual([
+      {
+        keyword: "yoga",
+        normalizedKeyword: "yoga",
+        position: 3,
+        surge: null,
+      },
+      {
+        keyword: "meditation",
+        normalizedKeyword: "meditation",
+        position: 8,
+        surge: 4,
+      },
+      {
+        keyword: "streak",
+        normalizedKeyword: "streak",
+        position: 9,
+        surge: -4,
+      },
+    ]);
+  });
+
+  it("allRankedApps aggregates competitors, excludes the tracked app, dedupes", () => {
+    let store = addTrackedApp(emptyStore(), sampleApp).store;
+    store = addKeywordsToStore(store, "123456789", "US", [
+      "meditation",
+      "yoga",
+    ]).store;
+    const today = dayAgo(0);
+    store = applyMetrics(store, "meditation", {
+      position: 2,
+      sampledAt: `${today}T10:00:00Z`,
+      topApps: [
+        sampleTopApp("111", 1),
+        { ...sampleTopApp("123456789", 2), name: "Calm Focus" },
+        sampleTopApp("222", 3),
+      ],
+    });
+    store = applyMetrics(store, "yoga", {
+      position: 5,
+      sampledAt: `${today}T10:00:00Z`,
+      topApps: [
+        sampleTopApp("111", 2),
+        sampleTopApp("333", 1),
+        sampleTopApp("222", 7),
+      ],
+    });
+
+    const apps = allRankedApps(store, "123456789", "US");
+    expect(apps).toEqual([
+      {
+        appStoreId: "111",
+        name: "App 111",
+        developer: "Dev",
+        iconUrl: "",
+        storeUrl: "",
+        bestPosition: 1,
+        keywordCount: 2,
+      },
+      {
+        appStoreId: "333",
+        name: "App 333",
+        developer: "Dev",
+        iconUrl: "",
+        storeUrl: "",
+        bestPosition: 1,
+        keywordCount: 1,
+      },
+      {
+        appStoreId: "222",
+        name: "App 222",
+        developer: "Dev",
+        iconUrl: "",
+        storeUrl: "",
+        bestPosition: 3,
+        keywordCount: 2,
+      },
+    ]);
+    expect(
+      allRankedApps(store, "123456789", "US", 2).map((app) => app.appStoreId),
+    ).toEqual(["111", "333"]);
   });
 });

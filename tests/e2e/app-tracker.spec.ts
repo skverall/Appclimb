@@ -294,6 +294,36 @@ test("quick start seeds the sample app and its keywords", async ({
     timeout: 30_000,
   });
 
+  // Right-side overview mirrors the Everank-style panel: best position
+  // history, my rankings, and all ranked apps.
+  await expect(
+    page.getByRole("heading", { name: /Best Position History/i }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /My Rankings/i }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /All Ranked Apps/i }),
+  ).toBeVisible();
+  // The tracked app is excluded from competitors; mocked results put the
+  // car dealer app at #3, so it should not appear in the list.
+  await expect(
+    page.locator(".tracker-overview-apps").getByText(/Car Dealer Tracker/i),
+  ).toHaveCount(0);
+
+  // My Rankings rows are clickable and open the keyword detail panel.
+  await page
+    .locator(".tracker-overview-list")
+    .getByRole("button", { name: /car dealer tracker/i })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "car dealer tracker", exact: true }),
+  ).toBeVisible({ timeout: 5_000 });
+  await page.getByRole("button", { name: /Close keyword detail/i }).click();
+  await expect(
+    page.getByRole("heading", { name: /My Rankings/i }),
+  ).toBeVisible();
+
   // The Add App modal offers the same quick start and knows it was added.
   await page.getByRole("button", { name: /Add App/i }).first().click();
   await expect(page.getByRole("heading", { name: "Add App" })).toBeVisible();

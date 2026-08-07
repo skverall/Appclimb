@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 
 import { AddKeywordsModal } from "@/components/add-keywords-modal";
+import { RankingOverview } from "@/components/ranking-overview";
 import { SuggestionsModal } from "@/components/suggestions-modal";
 import { TrackerDetail } from "@/components/tracker-detail";
 import { Sparkline } from "@/components/keyword-charts";
@@ -1048,7 +1049,7 @@ export function TrackerView({
             </footer>
           </div>
 
-          {selectedRow && (
+          {selectedRow ? (
             <TrackerDetail
               app={app}
               keyword={selectedRow}
@@ -1073,6 +1074,12 @@ export function TrackerView({
                   selectedRow.keyword,
                 )
               }
+            />
+          ) : (
+            <RankingOverview
+              app={app}
+              store={store}
+              onSelectKeyword={setSelected}
             />
           )}
         </div>

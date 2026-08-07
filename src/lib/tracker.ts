@@ -1137,3 +1137,191 @@ export function positionSparklineValues(
     snap.position === null ? 201 : snap.position,
   );
 }
+
+/* ------------------------------------------------------------------ */
+/* Overview panel aggregations (My Rankings / All Ranked Apps)         */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Calendar cutoff (YYYY-MM-DD) for the trailing `days`-day window, inclusive
+ * of today. Snapshots are daily, so filtering by date keeps the window
+ * honest even when some days were never measured.
+ */
+function windowStartDate(days: number): string {
+  return toLocalDate(new Date(Date.now() - (days - 1) * 86_400_000));
+}
+
+/** All snapshots for an app's keywords within the trailing calendar window. */
+function snapshotsInWindow(
+  store: TrackerStore,
+  appStoreId: string,
+  country: string,
+  days: number,
+): Array<{ keyword: string; normalizedKeyword: string; snap: RankSnapshot }> {
+  const cutoff = windowStartDate(days);
+  const out: Array<{
+    keyword: string;
+    normalizedKeyword: string;
+    snap: RankSnapshot;
+  }> = [];
+  for (const row of listKeywordsForApp(store, appStoreId, country)) {
+    for (const snap of snapshotsFor(
+      store,
+      appStoreId,
+      country,
+      row.normalizedKeyword,
+      90,
+    )) {
+      if (snap.date >= cutoff) {
+        out.push({
+          keyword: row.keyword,
+          normalizedKeyword: row.normalizedKeyword,
+          snap,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+export interface BestPositionPoint {
+  date: string;
+  position: number;
+}
+
+/**
+ * Best (lowest) observed position per day across all tracked keywords.
+ * Only days with at least one real measurement appear — nothing is
+ * interpolated or backfilled.
+ */
+export function bestPositionSeries(
+  store: TrackerStore,
+  appStoreId: string,
+  country: string,
+  days = 7,
+): BestPositionPoint[] {
+  const byDate = new Map<string, number>();
+  for (const { snap } of snapshotsInWindow(store, appStoreId, country, days)) {
+    if (snap.position === null) continue;
+    const current = byDate.get(snap.date);
+    if (current === undefined || snap.position < current) {
+      byDate.set(snap.date, snap.position);
+    }
+  }
+  return [...byDate.entries()]
+    .map(([date, position]) => ({ date, position }))
+    .sort((left, right) => left.date.localeCompare(right.date));
+}
+
+export interface MyRanking {
+  keyword: string;
+  normalizedKeyword: string;
+  position: number;
+  /**
+   * Movement over the window: position at the first measured day minus the
+   * current position. Positive = moved up. Null when there is no earlier
+   * measurement to compare against.
+   */
+  surge: number | null;
+}
+
+/**
+ * Keywords where the app currently ranks (1–200), sorted by position.
+ * The surge mirrors the Everank-style "what place am I at" column: how far
+ * the app moved across the trailing window from real daily checks only.
+ */
+export function myRankings(
+  store: TrackerStore,
+  appStoreId: string,
+  country: string,
+  days = 7,
+): MyRanking[] {
+  const cutoff = windowStartDate(days);
+  const out: MyRanking[] = [];
+  for (const row of listKeywordsForApp(store, appStoreId, country)) {
+    const metrics = row.currentMetrics;
+    if (!metrics || metrics.unavailable || metrics.position === null) continue;
+    const snaps = snapshotsFor(
+      store,
+      appStoreId,
+      country,
+      row.normalizedKeyword,
+      90,
+    ).filter((snap) => snap.date >= cutoff);
+    let surge: number | null = null;
+    if (snaps.length >= 2) {
+      const first = snaps[0];
+      const last = snaps[snaps.length - 1];
+      if (
+        first.date < last.date &&
+        first.position !== null &&
+        last.position !== null
+      ) {
+        surge = first.position - last.position;
+      }
+    }
+    out.push({
+      keyword: row.keyword,
+      normalizedKeyword: row.normalizedKeyword,
+      position: metrics.position,
+      surge,
+    });
+  }
+  return out.sort((left, right) => left.position - right.position);
+}
+
+export interface RankedAppSummary {
+  appStoreId: string;
+  name: string;
+  developer: string;
+  iconUrl: string;
+  storeUrl: string;
+  /** Best (lowest) position observed across the app's tracked keywords. */
+  bestPosition: number;
+  /** How many tracked keywords this app appeared in the top results for. */
+  keywordCount: number;
+}
+
+/**
+ * Competitor apps observed in the top results across all tracked keywords:
+ * how many keywords each app ranks for and its best position. The tracked
+ * app itself is excluded. Sorted by best position, then keyword count.
+ */
+export function allRankedApps(
+  store: TrackerStore,
+  appStoreId: string,
+  country: string,
+  limit = 10,
+): RankedAppSummary[] {
+  const byId = new Map<string, RankedAppSummary>();
+  for (const row of listKeywordsForApp(store, appStoreId, country)) {
+    const topApps = row.currentMetrics?.topApps ?? [];
+    for (const top of topApps) {
+      if (top.appStoreId === appStoreId) continue;
+      const existing = byId.get(top.appStoreId);
+      if (existing) {
+        existing.keywordCount += 1;
+        if (top.position < existing.bestPosition) {
+          existing.bestPosition = top.position;
+        }
+      } else {
+        byId.set(top.appStoreId, {
+          appStoreId: top.appStoreId,
+          name: top.name,
+          developer: top.developer,
+          iconUrl: top.iconUrl,
+          storeUrl: top.storeUrl,
+          bestPosition: top.position,
+          keywordCount: 1,
+        });
+      }
+    }
+  }
+  return [...byId.values()]
+    .sort(
+      (left, right) =>
+        left.bestPosition - right.bestPosition ||
+        right.keywordCount - left.keywordCount,
+    )
+    .slice(0, limit);
+}

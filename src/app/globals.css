@@ -2615,6 +2615,149 @@ img {
   font-size: var(--text-xs);
 }
 
+/* Ranking overview panel (right column of the app tracker) */
+.tracker-overview {
+  display: grid;
+  gap: 18px;
+}
+
+.tracker-overview-section {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.tracker-overview-section h3 {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--ink);
+}
+
+.tracker-overview-sub {
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.tracker-overview-empty {
+  margin: 0;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+  line-height: var(--leading-snug);
+}
+
+.tracker-overview-chart {
+  width: 100%;
+  height: auto;
+  margin-top: 4px;
+}
+
+.tracker-overview-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.tracker-overview-list button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: var(--radius-md);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tracker-overview-list button:hover {
+  background: var(--n-25);
+}
+
+.tracker-overview-kw {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-xs);
+  color: var(--ink);
+}
+
+.tracker-overview-list .tracker-position {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.tracker-overview-apps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.tracker-overview-apps li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.tracker-overview-apps img,
+.tracker-overview-apps .tracker-app-icon-fallback {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.tracker-overview-apps .tracker-app-icon-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  background: var(--n-25);
+  color: var(--ink-secondary);
+}
+
+.tracker-overview-app-meta {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 1px;
+}
+
+.tracker-overview-app-meta strong {
+  font-size: var(--text-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tracker-overview-app-meta small {
+  font-size: 11px;
+  color: var(--ink-muted);
+}
+
+.tracker-overview-app-pos {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--teal-700);
+  flex-shrink: 0;
+}
+
+.tracker-overview-note {
+  margin: 0;
+  font-size: 11px;
+  color: var(--ink-muted);
+  line-height: var(--leading-snug);
+}
+
 /* Status filter chips + queue banner */
 .tracker-status-filters {
   display: flex;
