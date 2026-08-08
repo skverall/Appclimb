@@ -128,12 +128,22 @@ export function TrackerDetail({
         <div className="keyword-stat">
           <span>Popularity</span>
           <strong>{metrics && !metrics.unavailable ? metrics.popularity : "—"}</strong>
-          <small>Estimated</small>
+          {metrics && !metrics.unavailable && (
+            <i className="stat-bar stat-bar--popularity">
+              <b style={{ width: `${metrics.popularity}%` }} />
+            </i>
+          )}
+          <small>Estimated demand</small>
         </div>
         <div className="keyword-stat">
           <span>Difficulty</span>
           <strong>{metrics && !metrics.unavailable ? metrics.difficulty : "—"}</strong>
-          <small>Estimated</small>
+          {metrics && !metrics.unavailable && (
+            <i className="stat-bar stat-bar--difficulty">
+              <b style={{ width: `${metrics.difficulty}%` }} />
+            </i>
+          )}
+          <small>Harder to rank = higher</small>
         </div>
       </div>
 
