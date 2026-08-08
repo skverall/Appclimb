@@ -4478,3 +4478,130 @@ img {
     flex: 1 1 auto;
   }
 }
+
+/* Mobile Bottom-Sheet Drawer for Keyword & Tracker Details */
+@media (max-width: 768px) {
+  .tracker-detail,
+  .keyword-detail {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 90;
+    max-height: 85vh;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+    border-top: 1px solid var(--line-strong);
+    box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.2);
+    animation: slideUpSheet 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    background: var(--card);
+  }
+}
+
+@keyframes slideUpSheet {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* Keyword Tag Badges & Competitor Overlap UI */
+.keyword-tag-list {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.keyword-tag-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  font-size: var(--text-3xs);
+  font-weight: var(--weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--teal-700);
+  background: var(--teal-50);
+  border: 1px solid var(--teal-200);
+  border-radius: var(--radius-sm);
+}
+
+.competitor-overlap-section {
+  display: grid;
+  gap: 10px;
+}
+
+.competitor-overlap-section h4 {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.competitor-overlap-list {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.competitor-overlap-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: var(--n-25);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+}
+
+.competitor-overlap-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.competitor-overlap-meta img {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  flex-shrink: 0;
+}
+
+.competitor-overlap-info {
+  min-width: 0;
+  display: grid;
+}
+
+.competitor-overlap-info strong {
+  font-size: var(--text-xs);
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.competitor-overlap-info small {
+  font-size: var(--text-3xs);
+  color: var(--ink-muted);
+}
+
+.competitor-overlap-badge {
+  padding: 3px 8px;
+  font-size: var(--text-3xs);
+  font-weight: var(--weight-bold);
+  color: var(--teal-800);
+  background: var(--teal-100);
+  border-radius: var(--radius-pill);
+  white-space: nowrap;
+}
+

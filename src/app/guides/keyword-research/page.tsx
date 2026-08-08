@@ -66,6 +66,41 @@ export default function KeywordResearchGuide() {
           ],
         }}
       />
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@type": "HowTo",
+          name: "How to Perform App Store Keyword Research",
+          description:
+            "A source-aware framework for finding App Store keywords worth ranking for.",
+          step: [
+            {
+              "@type": "HowToStep",
+              name: "Model the search funnel",
+              text: "Understand user search intent and how App Store search leads to app views and installs.",
+              url: absoluteUrl("/guides/keyword-research#model"),
+            },
+            {
+              "@type": "HowToStep",
+              name: "Inspect public signals",
+              text: "Query public iTunes Search results to check total app counts and top incumbent ratings.",
+              url: absoluteUrl("/guides/keyword-research#data"),
+            },
+            {
+              "@type": "HowToStep",
+              name: "Evaluate Popularity & Difficulty",
+              text: "Compare estimated demand against competition barrier to select achievable target terms.",
+              url: absoluteUrl("/guides/keyword-research#scores"),
+            },
+            {
+              "@type": "HowToStep",
+              name: "Track daily rank snapshots",
+              text: "Record local daily snapshots to measure real rank trends over 30 days.",
+              url: absoluteUrl("/guides/keyword-research#track"),
+            },
+          ],
+        }}
+      />
       <main className="guide-page">
         <section className="guide-hero marketing-container">
           <div>

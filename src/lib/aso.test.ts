@@ -11,6 +11,7 @@ import {
   estimateMetrics,
   exportExplorerBackup,
   fetchKeywordResults,
+  formatAsoKeywordField,
   isGoldenKeyword,
   keywordJitter,
   loadKeywordList,
@@ -562,3 +563,24 @@ describe("backup / restore", () => {
     expect(restored).toBe(1);
   });
 });
+
+describe("formatAsoKeywordField", () => {
+  it("joins keywords with commas and removes extra spaces", () => {
+    const result = formatAsoKeywordField(["  meditation ", "habit tracker", "mindfulness"]);
+    expect(result).toBe("meditation,habit tracker,mindfulness");
+  });
+
+  it("deduplicates terms case-insensitively and enforces 100 char limit", () => {
+    const keywords = [
+      "meditation",
+      "Meditation",
+      "habit tracker for daily routines and goals",
+      "mindfulness practice app for stress relief",
+      "sleep sounds and ocean rain background noise",
+    ];
+    const result = formatAsoKeywordField(keywords);
+    expect(result.length).toBeLessThanOrEqual(100);
+    expect(result).toBe("meditation,habit tracker for daily routines and goals,mindfulness practice app for stress relief");
+  });
+});
+

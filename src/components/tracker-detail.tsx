@@ -12,6 +12,7 @@ import {
 
 import { TrendChart } from "@/components/keyword-charts";
 import {
+  calculateCompetitorOverlap,
   describeRankTrend,
   formatPosition,
   snapshotsToChartPoints,
@@ -31,6 +32,7 @@ export function TrackerDetail({
   keyword,
   snapshots,
   historyDays,
+  allKeywords = [],
   busy,
   onClose,
   onRefresh,
@@ -40,12 +42,17 @@ export function TrackerDetail({
   keyword: TrackedKeyword;
   snapshots: RankSnapshot[];
   historyDays: 7 | 30;
+  allKeywords?: TrackedKeyword[];
   busy: boolean;
   onClose: () => void;
   onRefresh: () => void;
   onDelete: () => void;
 }) {
   const metrics = keyword.currentMetrics;
+  const competitorOverlap = useMemo(
+    () => (allKeywords.length > 0 ? calculateCompetitorOverlap(app.appStoreId, allKeywords) : []),
+    [app.appStoreId, allKeywords],
+  );
   const chartPoints = useMemo(
     () => snapshotsToChartPoints(snapshots.slice(-historyDays)),
     [snapshots, historyDays],
@@ -244,6 +251,34 @@ export function TrackerDetail({
               </li>
             ))}
           </ol>
+        </section>
+      )}
+
+      {competitorOverlap.length > 0 && (
+        <section className="competitor-overlap-section">
+          <h4>
+            <span>Top Competitor Overlap</span>
+            <small>Apps ranking in your keywords</small>
+          </h4>
+          <ul className="competitor-overlap-list">
+            {competitorOverlap.slice(0, 5).map((comp) => (
+              <li key={comp.appStoreId} className="competitor-overlap-item">
+                <div className="competitor-overlap-meta">
+                  {comp.iconUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={comp.iconUrl} alt="" width={24} height={24} loading="lazy" />
+                  ) : null}
+                  <div className="competitor-overlap-info">
+                    <strong>{comp.name}</strong>
+                    <small>{comp.developer}</small>
+                  </div>
+                </div>
+                <span className="competitor-overlap-badge">
+                  {comp.keywordCount} kw{comp.keywordCount > 1 ? "s" : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
         </section>
       )}
 

@@ -822,3 +822,26 @@ export function restoreExplorerBackup(
   }
   return restored;
 }
+
+/**
+ * Formats a list of keywords for Apple App Store Connect's 100-character
+ * keyword field: comma-separated without spaces, deduped, and capped at 100 chars.
+ */
+export function formatAsoKeywordField(keywords: string[]): string {
+  const seen = new Set<string>();
+  const parts: string[] = [];
+  let length = 0;
+
+  for (const raw of keywords) {
+    const trimmed = raw.trim().toLowerCase();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    const addedLen = parts.length === 0 ? trimmed.length : trimmed.length + 1;
+    if (length + addedLen > 100) break;
+    parts.push(trimmed);
+    length += addedLen;
+  }
+
+  return parts.join(",");
+}
+

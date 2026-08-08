@@ -48,9 +48,12 @@ import {
   STARTER_APP_NAME,
   STARTER_KEYWORDS,
   TRACKER_STORAGE_KEY,
+  calculateCompetitorOverlap,
+  updateKeywordTags,
   updateKeywordNote,
   type TrackerStorage,
   type TrackerStore,
+  type TrackedKeyword,
 } from "@/lib/tracker";
 import { parseAppStoreIdInput } from "@/lib/itunes";
 import { toLocalDate, type TopApp } from "@/lib/aso";
@@ -1323,3 +1326,85 @@ describe("overview aggregations (best position, my rankings, ranked apps)", () =
     ).toEqual(["111", "333"]);
   });
 });
+
+describe("updateKeywordTags and calculateCompetitorOverlap", () => {
+  it("sanitizes and caps tags on keywords", () => {
+    let store = emptyStore();
+    store = addTrackedApp(store, {
+      appStoreId: "100",
+      country: "US",
+      name: "Test App",
+      developer: "Test Dev",
+      genre: "Utilities",
+      iconUrl: "https://example.com/icon.png",
+      storeUrl: "https://apps.apple.com/app/id100",
+      bundleId: "com.example.test",
+    }).store;
+    store = addKeywordsToStore(store, "100", "US", ["meditation"]).store;
+
+    const updated = updateKeywordTags(store, "100", "US", "meditation", [
+      "  Brand ",
+      "brand",
+      "ASO",
+      "very long invalid tag name exceeding length",
+      "x",
+    ]);
+
+    const kw = updated.keywords["100:US:meditation"];
+    expect(kw?.tags).toEqual(["brand", "aso"]);
+  });
+
+  it("calculates competitor overlap across tracked keywords", () => {
+    const kws: TrackedKeyword[] = [
+      {
+        appStoreId: "100",
+        country: "US",
+        keyword: "meditation",
+        normalizedKeyword: "meditation",
+        note: "",
+        createdAt: "2026-08-08",
+        lastCheckedAt: "2026-08-08",
+        currentMetrics: {
+          popularity: 80,
+          difficulty: 60,
+          results: 100,
+          saturated: false,
+          position: 1,
+          sampledAt: "2026-08-08",
+          topApps: [
+            { appStoreId: "100", name: "My App", developer: "Me", genre: "Health & Fitness", iconUrl: "", storeUrl: "", position: 1, ratingAverage: 5, ratingsCount: 100 },
+            { appStoreId: "200", name: "Calm", developer: "Calm Inc", genre: "Health & Fitness", iconUrl: "", storeUrl: "", position: 2, ratingAverage: 4.8, ratingsCount: 500 },
+          ],
+        },
+      },
+      {
+        appStoreId: "100",
+        country: "US",
+        keyword: "sleep sounds",
+        normalizedKeyword: "sleep sounds",
+        note: "",
+        createdAt: "2026-08-08",
+        lastCheckedAt: "2026-08-08",
+        currentMetrics: {
+          popularity: 70,
+          difficulty: 50,
+          results: 80,
+          saturated: false,
+          position: 3,
+          sampledAt: "2026-08-08",
+          topApps: [
+            { appStoreId: "200", name: "Calm", developer: "Calm Inc", genre: "Health & Fitness", iconUrl: "", storeUrl: "", position: 1, ratingAverage: 4.8, ratingsCount: 500 },
+            { appStoreId: "300", name: "Headspace", developer: "Headspace Inc", genre: "Health & Fitness", iconUrl: "", storeUrl: "", position: 2, ratingAverage: 4.7, ratingsCount: 400 },
+          ],
+        },
+      },
+    ];
+
+    const overlap = calculateCompetitorOverlap("100", kws);
+    expect(overlap).toHaveLength(2);
+    expect(overlap[0].appStoreId).toBe("200");
+    expect(overlap[0].keywordCount).toBe(2);
+    expect(overlap[0].keywords).toEqual(["meditation", "sleep sounds"]);
+  });
+});
+

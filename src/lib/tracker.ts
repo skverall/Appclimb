@@ -98,6 +98,7 @@ export interface TrackedKeyword {
   keyword: string;
   normalizedKeyword: string;
   note: string;
+  tags?: string[];
   createdAt: string;
   lastCheckedAt: string | null;
   currentMetrics: TrackedKeywordMetrics | null;
@@ -239,12 +240,20 @@ export function loadTrackerStore(storage: TrackerStorage): TrackerStore {
     if (parsed.keywords && typeof parsed.keywords === "object") {
       for (const [key, value] of Object.entries(parsed.keywords)) {
         if (!isTrackedKeyword(value)) continue;
+        const rawItem = value as unknown as Record<string, unknown>;
         keywords[key] = {
           appStoreId: value.appStoreId,
           country: value.country.trim().toUpperCase(),
           keyword: value.keyword.trim().slice(0, 80),
           normalizedKeyword: normalizeKeyword(value.normalizedKeyword || value.keyword),
           note: typeof value.note === "string" ? value.note.slice(0, 500) : "",
+          tags: Array.isArray(rawItem.tags)
+            ? (rawItem.tags as unknown[])
+                .filter((t): t is string => typeof t === "string")
+                .map((t) => t.trim().toLowerCase())
+                .filter((t) => t.length >= 2 && t.length <= 20)
+                .slice(0, 5)
+            : [],
           createdAt: typeof value.createdAt === "string" ? value.createdAt : toLocalDate(),
           lastCheckedAt:
             typeof value.lastCheckedAt === "string" || value.lastCheckedAt === null
@@ -498,6 +507,84 @@ export function updateKeywordNote(
       [key]: { ...existing, note: note.slice(0, 500) },
     },
   };
+}
+
+export function updateKeywordTags(
+  store: TrackerStore,
+  appStoreId: string,
+  country: string,
+  normalizedKeyword: string,
+  tags: string[],
+): TrackerStore {
+  const key = keywordKey(appStoreId, country, normalizedKeyword);
+  const existing = store.keywords[key];
+  if (!existing) return store;
+  const cleanTags = Array.from(
+    new Set(
+      tags
+        .map((t) => t.trim().toLowerCase())
+        .filter((t) => t.length >= 2 && t.length <= 20),
+    ),
+  ).slice(0, 5);
+  return {
+    ...store,
+    keywords: {
+      ...store.keywords,
+      [key]: { ...existing, tags: cleanTags },
+    },
+  };
+}
+
+export interface CompetitorOverlap {
+  appStoreId: string;
+  name: string;
+  developer: string;
+  iconUrl: string;
+  keywordCount: number;
+  keywords: string[];
+}
+
+export function calculateCompetitorOverlap(
+  targetAppStoreId: string,
+  keywords: TrackedKeyword[],
+): CompetitorOverlap[] {
+  const map = new Map<
+    string,
+    {
+      appStoreId: string;
+      name: string;
+      developer: string;
+      iconUrl: string;
+      keywords: string[];
+    }
+  >();
+
+  for (const kw of keywords) {
+    const topApps = kw.currentMetrics?.topApps;
+    if (!topApps) continue;
+    for (const app of topApps) {
+      if (app.appStoreId === targetAppStoreId) continue;
+      const existing = map.get(app.appStoreId) ?? {
+        appStoreId: app.appStoreId,
+        name: app.name,
+        developer: app.developer,
+        iconUrl: app.iconUrl,
+        keywords: [],
+      };
+      if (!existing.keywords.includes(kw.keyword)) {
+        existing.keywords.push(kw.keyword);
+      }
+      map.set(app.appStoreId, existing);
+    }
+  }
+
+  const results: CompetitorOverlap[] = Array.from(map.values()).map((item) => ({
+    ...item,
+    keywordCount: item.keywords.length,
+  }));
+
+  results.sort((a, b) => b.keywordCount - a.keywordCount);
+  return results.slice(0, 8);
 }
 
 export function removeKeywordFromStore(
