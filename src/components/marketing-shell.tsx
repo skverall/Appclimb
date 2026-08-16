@@ -1,16 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowRight, Code2, Menu, Sparkles, X } from "lucide-react";
+import { ArrowRight, Code2, Menu, X } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { AccountMenu } from "@/components/account-menu";
 import { AiChatPanel } from "@/components/ai-chat-panel";
 import { BrandMark } from "@/components/brand-mark";
 
 const navigation = [
   { href: "/", label: "Keyword Explorer" },
   { href: "/assistant", label: "ASO Assistant" },
+  { href: "/pricing", label: "Pricing" },
   { href: "/guides/keyword-research", label: "ASO Guide" },
   { href: "/blog", label: "Field Notes" },
   { href: "/about", label: "About" },
@@ -48,16 +50,13 @@ export function MarketingHeader() {
         </nav>
 
         <div className="marketing-actions">
-          {!isHome ? (
+          {!isHome && (
             <Link href="/" className="marketing-primary-action">
               Open Explorer <ArrowRight size={15} aria-hidden="true" />
             </Link>
-          ) : (
-            <span className="marketing-status-badge">
-              <Sparkles size={13} aria-hidden="true" />
-              <span>Free · No Account</span>
-            </span>
           )}
+
+          <AccountMenu />
 
           <button
             type="button"
@@ -125,6 +124,7 @@ export function MarketingFooter() {
         </div>
         <div>
           <strong>Company</strong>
+          <Link href="/pricing">Pricing</Link>
           <Link href="/about">About</Link>
           <Link href="/privacy">Privacy</Link>
           <Link href="/terms">Terms</Link>

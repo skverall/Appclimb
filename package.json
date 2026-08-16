@@ -20,6 +20,7 @@
     "check": "npm run lint && npm run typecheck && npm run test:coverage && npm run build && npm run build:cloudflare"
   },
   "dependencies": {
+    "@paddle/paddle-js": "^1.6.4",
     "clsx": "^2.1.1",
     "lucide-react": "^1.26.0",
     "next": "16.2.11",
