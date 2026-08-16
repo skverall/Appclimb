@@ -80,13 +80,16 @@ export function KeywordExplorer() {
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [keywords, setKeywords] = useState<string[]>([]);
   const [records, setRecords] = useState<Map<string, KeywordRecord>>(new Map());
-  const [metrics, setMetrics] = useState<Map<string, KeywordMetrics>>(new Map());
+  const [metrics, setMetrics] = useState<Map<string, KeywordMetrics>>(
+    new Map(),
+  );
   const [busy, setBusy] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
-  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" } | null>(
-    null,
-  );
+  const [sort, setSort] = useState<{
+    key: SortKey;
+    dir: "asc" | "desc";
+  } | null>(null);
   const [goldenOnly, setGoldenOnly] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{
@@ -110,7 +113,9 @@ export function KeywordExplorer() {
   const shareInitRef = useRef(false);
 
   const { account, openUpgrade, syncVersion } = useAccount();
-  const explorerLimit = proEnabled() ? account.limits.explorerChecksPerDay : null;
+  const explorerLimit = proEnabled()
+    ? account.limits.explorerChecksPerDay
+    : null;
   const [limitHit, setLimitHit] = useState(false);
 
   // A successful upgrade lifts the cap; clear any stale limit banner.
@@ -128,9 +133,8 @@ export function KeywordExplorer() {
     }
   }, [explorerLimit]);
 
-  const countryLabel = SUPPORTED_COUNTRIES.find(
-    (item) => item.code === country,
-  )?.label ?? country;
+  const countryLabel =
+    SUPPORTED_COUNTRIES.find((item) => item.code === country)?.label ?? country;
 
   /* Rehydrate persisted rows whenever the country changes (or after a
      restore). The read is deferred out of the effect body so state updates
@@ -180,11 +184,16 @@ export function KeywordExplorer() {
 
       // Daily check cap (free tier). Only a keyword not already in the list
       // consumes a check; refreshing tracked keywords stays free.
-      const alreadyTracked = loadKeywordList(window.localStorage, targetCountry).some(
-        (item) => item.toLocaleLowerCase() === key,
-      );
+      const alreadyTracked = loadKeywordList(
+        window.localStorage,
+        targetCountry,
+      ).some((item) => item.toLocaleLowerCase() === key);
       if (!alreadyTracked) {
-        const gate = consumeDayUsage(window.localStorage, EXPLORER_DAY_KEY, explorerLimit);
+        const gate = consumeDayUsage(
+          window.localStorage,
+          EXPLORER_DAY_KEY,
+          explorerLimit,
+        );
         if (!gate.allowed) {
           setLimitHit(true);
           return;
@@ -263,7 +272,11 @@ export function KeywordExplorer() {
      large list does not trip iTunes rate limits. */
   const refreshAll = useCallback(async () => {
     await runBatched(keywords, async (keyword) => {
-      await analyze(keyword, { open: false, reorder: false, clearInput: false });
+      await analyze(keyword, {
+        open: false,
+        reorder: false,
+        clearInput: false,
+      });
     });
   }, [analyze, keywords]);
 
@@ -328,7 +341,11 @@ export function KeywordExplorer() {
       window.clearTimeout(undoTimeoutRef.current);
       undoTimeoutRef.current = null;
     }
-    const { keyword, metrics: stashedMetrics, record: stashedRecord } = undoState;
+    const {
+      keyword,
+      metrics: stashedMetrics,
+      record: stashedRecord,
+    } = undoState;
     if (stashedRecord) {
       saveRecord(window.localStorage, stashedRecord);
     }
@@ -364,19 +381,16 @@ export function KeywordExplorer() {
     );
   }, []);
 
-  const handleRestoreFile = useCallback(
-    async (file: File) => {
-      const text = await file.text();
-      const restored = restoreExplorerBackup(window.localStorage, text);
-      setRestoreMessage(
-        restored > 0
-          ? `Restored ${restored} keyword record${restored === 1 ? "" : "s"}.`
-          : "No valid keyword records found in that file.",
-      );
-      setRefreshVersion((version) => version + 1);
-    },
-    [],
-  );
+  const handleRestoreFile = useCallback(async (file: File) => {
+    const text = await file.text();
+    const restored = restoreExplorerBackup(window.localStorage, text);
+    setRestoreMessage(
+      restored > 0
+        ? `Restored ${restored} keyword record${restored === 1 ? "" : "s"}.`
+        : "No valid keyword records found in that file.",
+    );
+    setRefreshVersion((version) => version + 1);
+  }, []);
 
   /* Global shortcuts: "/" focuses the search box, Escape closes the detail
      panel. Skipped while typing in a form control. */
@@ -488,12 +502,16 @@ export function KeywordExplorer() {
 
   const selectedMetrics = selected ? metrics.get(selected) : null;
   const selectedRecord = selected ? records.get(selected) : null;
-  const selectedBusy = selected ? busy.has(selected.toLocaleLowerCase()) : false;
+  const selectedBusy = selected
+    ? busy.has(selected.toLocaleLowerCase())
+    : false;
 
   return (
     <main className="tool-page">
       <section className="keyword-hero marketing-container">
-        <span className="marketing-eyebrow">Official Apple Ads data</span>
+        <span className="marketing-eyebrow keyword-hero-eyebrow">
+          Official Apple Ads data
+        </span>
         <h1>Popularity from Apple. Not a black box.</h1>
         <p className="keyword-hero-deck">
           Competitors sell “search volume” and never say where it comes from.
@@ -533,7 +551,10 @@ export function KeywordExplorer() {
               autoComplete="off"
               spellCheck={false}
             />
-            <button type="submit" disabled={query.trim().length < 2 || busy.size > 0}>
+            <button
+              type="submit"
+              disabled={query.trim().length < 2 || busy.size > 0}
+            >
               {busy.size > 0 ? (
                 <Loader2 className="spin" size={16} aria-hidden="true" />
               ) : (
@@ -564,7 +585,11 @@ export function KeywordExplorer() {
               onChange={(event) => setCountry(event.target.value)}
               aria-label="Store country"
               disabled={busy.size > 0}
-              title={busy.size > 0 ? "Wait for the current analysis to finish" : undefined}
+              title={
+                busy.size > 0
+                  ? "Wait for the current analysis to finish"
+                  : undefined
+              }
             >
               {SUPPORTED_COUNTRIES.map((item) => (
                 <option key={item.code} value={item.code}>
@@ -588,7 +613,11 @@ export function KeywordExplorer() {
             onClick={() => void refreshAll()}
             disabled={keywords.length === 0 || busy.size > 0}
           >
-            <RefreshCw className={busy.size > 0 ? "spin" : ""} size={15} aria-hidden="true" />
+            <RefreshCw
+              className={busy.size > 0 ? "spin" : ""}
+              size={15}
+              aria-hidden="true"
+            />
             Refresh all
           </button>
         </div>
@@ -597,10 +626,15 @@ export function KeywordExplorer() {
           <div className="explorer-limit-banner" role="status">
             <Sparkles size={16} aria-hidden="true" />
             <span>
-              You&apos;ve used your <strong>{explorerLimit} free keyword checks</strong> for
-              today. Upgrade to Pro for unlimited checks, sync, and 90-day history.
+              You&apos;ve used your{" "}
+              <strong>{explorerLimit} free keyword checks</strong> for today.
+              Upgrade to Pro for unlimited checks, sync, and 90-day history.
             </span>
-            <button type="button" className="tracker-button-primary" onClick={openUpgrade}>
+            <button
+              type="button"
+              className="tracker-button-primary"
+              onClick={openUpgrade}
+            >
               Upgrade to Pro
             </button>
           </div>
@@ -608,8 +642,12 @@ export function KeywordExplorer() {
 
         {!limitHit && explorerLimit !== null && (
           <p className="explorer-checks-remaining">
-            {Math.max(0, explorerLimit - peekDayUsage(window.localStorage, EXPLORER_DAY_KEY))} of{" "}
-            {explorerLimit} free checks left today
+            {Math.max(
+              0,
+              explorerLimit -
+                peekDayUsage(window.localStorage, EXPLORER_DAY_KEY),
+            )}{" "}
+            of {explorerLimit} free checks left today
           </p>
         )}
 
@@ -623,7 +661,10 @@ export function KeywordExplorer() {
         )}
 
         {batchResult && (
-          <div className="keyword-batch-banner keyword-batch-banner--done" role="status">
+          <div
+            className="keyword-batch-banner keyword-batch-banner--done"
+            role="status"
+          >
             <span>
               {batchResult.failed.length === 0
                 ? `Done — all ${batchResult.total} keywords analyzed.`
@@ -688,262 +729,336 @@ export function KeywordExplorer() {
             </button>
           </div>
         ) : (
-          <div className="keyword-table-wrap">
-            <div className="keyword-status-filters" role="tablist" aria-label="Keyword filters">
-              <button
-                type="button"
-                role="tab"
-                aria-selected={!goldenOnly}
-                className={!goldenOnly ? "keyword-status-chip is-active" : "keyword-status-chip"}
-                onClick={() => setGoldenOnly(false)}
+          <div className="explorer-split">
+            <div className="keyword-table-wrap">
+              <div
+                className="keyword-status-filters"
+                role="tablist"
+                aria-label="Keyword filters"
               >
-                All <span>{keywords.length}</span>
-              </button>
-              <button
-                type="button"
-                role="tab"
-                aria-selected={goldenOnly}
-                className={goldenOnly ? "keyword-status-chip is-active" : "keyword-status-chip"}
-                onClick={() => setGoldenOnly(true)}
-              >
-                Golden <span>{goldenCount}</span>
-              </button>
-            </div>
-            {goldenOnly && (
-              <p className="keyword-heuristic-note">
-                “Golden” means popularity ≥ 55 and estimated difficulty ≤ 40 —
-                terms with solid demand and a low barrier, worth fighting for.
-              </p>
-            )}
-            <table className="keyword-table">
-              <thead>
-                <tr>
-                  <th
-                    aria-sort={
-                      sort?.key === "keyword"
-                        ? sort.dir === "asc"
-                          ? "ascending"
-                          : "descending"
-                        : undefined
-                    }
-                  >
-                    <button type="button" onClick={() => toggleSort("keyword")}>
-                      Keyword
-                      {sort?.key === "keyword" && (sort.dir === "asc" ? " ▲" : " ▼")}
-                    </button>
-                  </th>
-                  <th
-                    aria-sort={
-                      sort?.key === "popularity"
-                        ? sort.dir === "asc"
-                          ? "ascending"
-                          : "descending"
-                        : undefined
-                    }
-                  >
-                    <button type="button" onClick={() => toggleSort("popularity")}>
-                      Popularity
-                      {sort?.key === "popularity" && (sort.dir === "asc" ? " ▲" : " ▼")}
-                    </button>
-                  </th>
-                  <th
-                    aria-sort={
-                      sort?.key === "difficulty"
-                        ? sort.dir === "asc"
-                          ? "ascending"
-                          : "descending"
-                        : undefined
-                    }
-                  >
-                    <button type="button" onClick={() => toggleSort("difficulty")}>
-                      Difficulty
-                      {sort?.key === "difficulty" && (sort.dir === "asc" ? " ▲" : " ▼")}
-                    </button>
-                  </th>
-                  <th
-                    aria-sort={
-                      sort?.key === "trend"
-                        ? sort.dir === "asc"
-                          ? "ascending"
-                          : "descending"
-                        : undefined
-                    }
-                  >
-                    <button type="button" onClick={() => toggleSort("trend")}>
-                      Trend
-                      {sort?.key === "trend" && (sort.dir === "asc" ? " ▲" : " ▼")}
-                    </button>
-                  </th>
-                  <th
-                    aria-sort={
-                      sort?.key === "results"
-                        ? sort.dir === "asc"
-                          ? "ascending"
-                          : "descending"
-                        : undefined
-                    }
-                  >
-                    <button type="button" onClick={() => toggleSort("results")}>
-                      Results
-                      {sort?.key === "results" && (sort.dir === "asc" ? " ▲" : " ▼")}
-                    </button>
-                  </th>
-                  <th aria-label="Actions" />
-                </tr>
-              </thead>
-              <tbody>
-                {displayKeywords.map((keyword) => {
-                  const record = records.get(keyword);
-                  const metric = metrics.get(keyword);
-                  const history = record
-                    ? recentHistory(record).map((point) => point.popularity)
-                    : [];
-                  const delta = record ? trendDelta(record.history) : null;
-                  const isBusy = busy.has(keyword.toLocaleLowerCase());
-                  return (
-                    <tr
-                      key={keyword}
-                      className={selected === keyword ? "is-selected" : ""}
-                      onClick={() => setSelected(keyword)}
-                    >
-                      <td>
-                        <span className="keyword-name-row">
-                          <strong className="keyword-name">{keyword}</strong>
-                          {metric && isGoldenKeyword(metric) && (
-                            <span className="keyword-golden-badge">Golden</span>
-                          )}
-                        </span>
-                        <small>{countryLabel}</small>
-                      </td>
-                      <td>
-                        {metric ? (
-                          <span className="metric-with-source">
-                            <MetricBar value={metric.popularity} tone="popularity" />
-                            <span
-                              className={
-                                popularitySourceOf(metric) === "official"
-                                  ? "source-pill source-pill--official"
-                                  : "source-pill"
-                              }
-                            >
-                              {popularityShortLabel(popularitySourceOf(metric))}
-                            </span>
-                          </span>
-                        ) : (
-                          <em className="keyword-pending">
-                            {isBusy ? "Analyzing…" : "Pending"}
-                          </em>
-                        )}
-                      </td>
-                      <td>
-                        {metric ? (
-                          <MetricBar value={metric.difficulty} tone="difficulty" />
-                        ) : (
-                          <em className="keyword-pending">—</em>
-                        )}
-                      </td>
-                      <td className="keyword-trend-cell">
-                        {record ? (
-                          <>
-                            <Sparkline values={history} />
-                            {delta !== null && delta !== 0 && (
-                              <span className={delta > 0 ? "trend-up" : "trend-down"}>
-                                {delta > 0 ? "▲" : "▼"} {Math.abs(delta)}
-                              </span>
-                            )}
-                          </>
-                        ) : (
-                          <em className="keyword-pending">—</em>
-                        )}
-                      </td>
-                      <td className="keyword-results-cell">
-                        {metric ? (
-                          <span>
-                            <b>{metric.results}</b>
-                            <small>{metric.saturated ? "200+ found" : "apps"}</small>
-                          </span>
-                        ) : (
-                          <em className="keyword-pending">—</em>
-                        )}
-                      </td>
-                      <td className="keyword-row-actions">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={!goldenOnly}
+                  className={
+                    !goldenOnly
+                      ? "keyword-status-chip is-active"
+                      : "keyword-status-chip"
+                  }
+                  onClick={() => setGoldenOnly(false)}
+                >
+                  All <span>{keywords.length}</span>
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={goldenOnly}
+                  className={
+                    goldenOnly
+                      ? "keyword-status-chip is-active"
+                      : "keyword-status-chip"
+                  }
+                  onClick={() => setGoldenOnly(true)}
+                >
+                  Golden <span>{goldenCount}</span>
+                </button>
+              </div>
+              {goldenOnly && (
+                <p className="keyword-heuristic-note">
+                  “Golden” means popularity ≥ 55 and estimated difficulty ≤ 40 —
+                  terms with solid demand and a low barrier, worth fighting for.
+                </p>
+              )}
+              <div className="keyword-table-scroll">
+                <table className="keyword-table">
+                  <thead>
+                    <tr>
+                      <th
+                        aria-sort={
+                          sort?.key === "keyword"
+                            ? sort.dir === "asc"
+                              ? "ascending"
+                              : "descending"
+                            : undefined
+                        }
+                      >
                         <button
                           type="button"
-                          aria-label={`Open ${keyword}`}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            setSelected(keyword);
-                          }}
+                          onClick={() => toggleSort("keyword")}
                         >
-                          <ChevronRight size={16} aria-hidden="true" />
+                          Keyword
+                          {sort?.key === "keyword" &&
+                            (sort.dir === "asc" ? " ▲" : " ▼")}
                         </button>
+                      </th>
+                      <th
+                        aria-sort={
+                          sort?.key === "popularity"
+                            ? sort.dir === "asc"
+                              ? "ascending"
+                              : "descending"
+                            : undefined
+                        }
+                      >
                         <button
                           type="button"
-                          aria-label={`Remove ${keyword}`}
-                          className="keyword-remove"
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            removeRow(keyword);
-                          }}
+                          onClick={() => toggleSort("popularity")}
                         >
-                          <Trash2 size={15} aria-hidden="true" />
+                          Popularity
+                          {sort?.key === "popularity" &&
+                            (sort.dir === "asc" ? " ▲" : " ▼")}
                         </button>
-                      </td>
+                      </th>
+                      <th
+                        aria-sort={
+                          sort?.key === "difficulty"
+                            ? sort.dir === "asc"
+                              ? "ascending"
+                              : "descending"
+                            : undefined
+                        }
+                      >
+                        <button
+                          type="button"
+                          onClick={() => toggleSort("difficulty")}
+                        >
+                          Difficulty
+                          {sort?.key === "difficulty" &&
+                            (sort.dir === "asc" ? " ▲" : " ▼")}
+                        </button>
+                      </th>
+                      <th
+                        aria-sort={
+                          sort?.key === "trend"
+                            ? sort.dir === "asc"
+                              ? "ascending"
+                              : "descending"
+                            : undefined
+                        }
+                      >
+                        <button
+                          type="button"
+                          onClick={() => toggleSort("trend")}
+                        >
+                          Trend
+                          {sort?.key === "trend" &&
+                            (sort.dir === "asc" ? " ▲" : " ▼")}
+                        </button>
+                      </th>
+                      <th
+                        aria-sort={
+                          sort?.key === "results"
+                            ? sort.dir === "asc"
+                              ? "ascending"
+                              : "descending"
+                            : undefined
+                        }
+                      >
+                        <button
+                          type="button"
+                          onClick={() => toggleSort("results")}
+                        >
+                          Results
+                          {sort?.key === "results" &&
+                            (sort.dir === "asc" ? " ▲" : " ▼")}
+                        </button>
+                      </th>
+                      <th aria-label="Actions" />
                     </tr>
-                  );
-                })}
-                {displayKeywords.length === 0 && (
-                  <tr>
-                    <td colSpan={6}>
-                      <em className="keyword-pending">
-                        No keywords match this filter yet — analyze more terms or
-                        switch the filter.
-                      </em>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-            <footer className="keyword-table-foot">
-              <div className="keyword-table-actions">
-                <button
-                  type="button"
-                  className="refresh-all-button"
-                  onClick={exportCsv}
-                  disabled={keywords.length === 0}
-                >
-                  <Download size={14} aria-hidden="true" />
-                  Export CSV
-                </button>
-                <button
-                  type="button"
-                  className="refresh-all-button"
-                  onClick={backupJson}
-                  disabled={keywords.length === 0}
-                >
-                  <Download size={14} aria-hidden="true" />
-                  Backup
-                </button>
-                <button
-                  type="button"
-                  className="refresh-all-button"
-                  onClick={() => restoreInputRef.current?.click()}
-                >
-                  <Upload size={14} aria-hidden="true" />
-                  Restore
-                </button>
+                  </thead>
+                  <tbody>
+                    {displayKeywords.map((keyword) => {
+                      const record = records.get(keyword);
+                      const metric = metrics.get(keyword);
+                      const history = record
+                        ? recentHistory(record).map((point) => point.popularity)
+                        : [];
+                      const delta = record ? trendDelta(record.history) : null;
+                      const isBusy = busy.has(keyword.toLocaleLowerCase());
+                      return (
+                        <tr
+                          key={keyword}
+                          className={selected === keyword ? "is-selected" : ""}
+                          onClick={() => setSelected(keyword)}
+                        >
+                          <td>
+                            <span className="keyword-name-row">
+                              <strong className="keyword-name">
+                                {keyword}
+                              </strong>
+                              {metric && isGoldenKeyword(metric) && (
+                                <span className="keyword-golden-badge">
+                                  Golden
+                                </span>
+                              )}
+                            </span>
+                            <small>{countryLabel}</small>
+                          </td>
+                          <td>
+                            {metric ? (
+                              <span className="metric-with-source">
+                                <MetricBar
+                                  value={metric.popularity}
+                                  tone="popularity"
+                                />
+                                <span
+                                  className={
+                                    popularitySourceOf(metric) === "official"
+                                      ? "source-pill source-pill--official"
+                                      : "source-pill"
+                                  }
+                                >
+                                  {popularityShortLabel(
+                                    popularitySourceOf(metric),
+                                  )}
+                                </span>
+                              </span>
+                            ) : (
+                              <em className="keyword-pending">
+                                {isBusy ? "Analyzing…" : "Pending"}
+                              </em>
+                            )}
+                          </td>
+                          <td>
+                            {metric ? (
+                              <MetricBar
+                                value={metric.difficulty}
+                                tone="difficulty"
+                              />
+                            ) : (
+                              <em className="keyword-pending">—</em>
+                            )}
+                          </td>
+                          <td className="keyword-trend-cell">
+                            {record ? (
+                              <>
+                                <Sparkline values={history} />
+                                {delta !== null && delta !== 0 && (
+                                  <span
+                                    className={
+                                      delta > 0 ? "trend-up" : "trend-down"
+                                    }
+                                  >
+                                    {delta > 0 ? "▲" : "▼"} {Math.abs(delta)}
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              <em className="keyword-pending">—</em>
+                            )}
+                          </td>
+                          <td className="keyword-results-cell">
+                            {metric ? (
+                              <span>
+                                <b>{metric.results}</b>
+                                <small>
+                                  {metric.saturated ? "200+ found" : "apps"}
+                                </small>
+                              </span>
+                            ) : (
+                              <em className="keyword-pending">—</em>
+                            )}
+                          </td>
+                          <td className="keyword-row-actions">
+                            <button
+                              type="button"
+                              aria-label={`Open ${keyword}`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setSelected(keyword);
+                              }}
+                            >
+                              <ChevronRight size={16} aria-hidden="true" />
+                            </button>
+                            <button
+                              type="button"
+                              aria-label={`Remove ${keyword}`}
+                              className="keyword-remove"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                removeRow(keyword);
+                              }}
+                            >
+                              <Trash2 size={15} aria-hidden="true" />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {displayKeywords.length === 0 && (
+                      <tr>
+                        <td colSpan={6}>
+                          <em className="keyword-pending">
+                            No keywords match this filter yet — analyze more
+                            terms or switch the filter.
+                          </em>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
               </div>
-              <div className="keyword-table-foot-meta">
-                <span>
-                  Saved in your browser — history grows with one snapshot per day
-                  per keyword.
-                </span>
-                <span>
-                  {keywords.length} keyword{keywords.length === 1 ? "" : "s"} ·{" "}
-                  {countryLabel}
-                </span>
-              </div>
-            </footer>
+              <footer className="keyword-table-foot">
+                <div className="keyword-table-actions">
+                  <button
+                    type="button"
+                    className="refresh-all-button"
+                    onClick={exportCsv}
+                    disabled={keywords.length === 0}
+                  >
+                    <Download size={14} aria-hidden="true" />
+                    Export CSV
+                  </button>
+                  <button
+                    type="button"
+                    className="refresh-all-button"
+                    onClick={backupJson}
+                    disabled={keywords.length === 0}
+                  >
+                    <Download size={14} aria-hidden="true" />
+                    Backup
+                  </button>
+                  <button
+                    type="button"
+                    className="refresh-all-button"
+                    onClick={() => restoreInputRef.current?.click()}
+                  >
+                    <Upload size={14} aria-hidden="true" />
+                    Restore
+                  </button>
+                </div>
+                <div className="keyword-table-foot-meta">
+                  <span>
+                    Saved in your browser — history grows with one snapshot per
+                    day per keyword.
+                  </span>
+                  <span>
+                    {keywords.length} keyword{keywords.length === 1 ? "" : "s"}{" "}
+                    · {countryLabel}
+                  </span>
+                </div>
+              </footer>
+            </div>
+
+            {selected && (
+              <KeywordDetail
+                keyword={selected}
+                countryCode={country}
+                countryLabel={countryLabel}
+                metrics={selectedMetrics ?? null}
+                record={selectedRecord ?? null}
+                busy={selectedBusy}
+                onClose={() => setSelected(null)}
+                onRefresh={() =>
+                  void analyze(selected, {
+                    open: true,
+                    reorder: false,
+                    clearInput: false,
+                  })
+                }
+                onAnalyze={(keyword) => void analyze(keyword)}
+              />
+            )}
           </div>
         )}
 
@@ -960,26 +1075,6 @@ export function KeywordExplorer() {
             event.target.value = "";
           }}
         />
-
-        {selected && (
-          <KeywordDetail
-            keyword={selected}
-            countryCode={country}
-            countryLabel={countryLabel}
-            metrics={selectedMetrics ?? null}
-            record={selectedRecord ?? null}
-            busy={selectedBusy}
-            onClose={() => setSelected(null)}
-            onRefresh={() =>
-              void analyze(selected, {
-                open: true,
-                reorder: false,
-                clearInput: false,
-              })
-            }
-            onAnalyze={(keyword) => void analyze(keyword)}
-          />
-        )}
 
         <BulkKeywordsModal
           open={bulkOpen}
