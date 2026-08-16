@@ -223,7 +223,7 @@ test("onboarding walks a first-time user from CTA to tracked keywords", async ({
   // Before any app exists, the onboarding section explains the flow.
   await expect(
     page.getByRole("heading", {
-      name: /Track your app’s keywords in three steps/i,
+      name: /Track your own app/i,
     }),
   ).toBeVisible();
   await page.getByRole("button", { name: /Add your first app/i }).click();
@@ -281,7 +281,7 @@ test("quick start seeds the sample app and its keywords", async ({
   // Onboarding CTA runs the one-click sample without any typing.
   await expect(
     page.getByRole("heading", {
-      name: /Track your app’s keywords in three steps/i,
+      name: /Track your own app/i,
     }),
   ).toBeVisible();
   await page.getByRole("button", { name: /Try a sample app/i }).click();

@@ -82,7 +82,8 @@ export function AppWorkspace() {
   const [banner, setBanner] = useState<string | null>(null);
   const storeRef = useRef(store);
 
-  const { account, isPro, openAuth, openUpgrade, signOut, syncVersion } = useAccount();
+  const { account, isPro, openAuth, openUpgrade, signOut, syncVersion } =
+    useAccount();
   const proOn = proEnabled();
   const appLimit = proOn ? account.limits.trackedApps : null;
   const keywordLimit = proOn ? account.limits.keywordsPerApp : null;
@@ -196,18 +197,22 @@ export function AppWorkspace() {
     ) {
       return;
     }
-    const next = removeTrackedApp(storeRef.current, app.appStoreId, app.country);
+    const next = removeTrackedApp(
+      storeRef.current,
+      app.appStoreId,
+      app.country,
+    );
     persist(next);
     if (next.apps.length === 0) setView("explorer");
   };
 
   const handleTrackInStorefront = (country: string) => {
     if (!activeApp) return;
-    const { store: next, added, app } = trackAppInStorefront(
-      storeRef.current,
-      activeApp,
-      country,
-    );
+    const {
+      store: next,
+      added,
+      app,
+    } = trackAppInStorefront(storeRef.current, activeApp, country);
     persist(next);
     setView("app");
     if (!added) {
@@ -253,7 +258,10 @@ export function AppWorkspace() {
     });
   };
 
-  const handleSelectCatalogApp = async (catalog: CatalogApp, country: string) => {
+  const handleSelectCatalogApp = async (
+    catalog: CatalogApp,
+    country: string,
+  ) => {
     if (atAppLimit()) {
       setAddAppOpen(false);
       openUpgrade();
@@ -279,11 +287,11 @@ export function AppWorkspace() {
         // Metadata enrichment is best-effort; catalog fields are enough to add.
       }
 
-      const { store: withApp, app, added } = trackCatalogApp(
-        enriched,
-        country,
-        description,
-      );
+      const {
+        store: withApp,
+        app,
+        added,
+      } = trackCatalogApp(enriched, country, description);
       persist(withApp);
       setView("app");
 
@@ -340,16 +348,18 @@ export function AppWorkspace() {
         typeof meta.raw.description === "string"
           ? meta.raw.description
           : undefined;
-      const { store: withApp, app, added } = trackCatalogApp(
-        meta.catalog,
-        country,
-        description,
-      );
+      const {
+        store: withApp,
+        app,
+        added,
+      } = trackCatalogApp(meta.catalog, country, description);
       persist(withApp);
       setView("app");
 
       if (!added) {
-        setBanner(`${STARTER_APP_NAME} is already tracked for that storefront.`);
+        setBanner(
+          `${STARTER_APP_NAME} is already tracked for that storefront.`,
+        );
         return;
       }
       await runKeywordAnalysis(app, [...STARTER_KEYWORDS]);
@@ -370,7 +380,11 @@ export function AppWorkspace() {
     setBanner(null);
 
     // Always read the latest store so we don't drop the newly added app.
-    const { store: withKeys, added, capped } = addKeywordsToStore(
+    const {
+      store: withKeys,
+      added,
+      capped,
+    } = addKeywordsToStore(
       storeRef.current,
       app.appStoreId,
       app.country,
@@ -408,9 +422,7 @@ export function AppWorkspace() {
       for (const outcome of outcomes) {
         done += 1;
         setAnalyzeProgress({ done, total: added.length });
-        setBootstrapLabel(
-          `Checking keywords… ${done}/${added.length}`,
-        );
+        setBootstrapLabel(`Checking keywords… ${done}/${added.length}`);
         if (outcome.result) {
           working = applyAnalysisToStore(
             working,
@@ -525,15 +537,13 @@ export function AppWorkspace() {
           <div className="tracker-sidebar-section-label">My Apps</div>
           {store.apps.length === 0 ? (
             <p className="tracker-sidebar-empty">
-              Track an app to see keyword suggestions, estimated scores, and
-              observed positions.
+              No apps yet — add one to track its keywords and rank.
             </p>
           ) : (
             <ul className="tracker-app-list">
               {store.apps.map((app) => {
                 const key = appKey(app.appStoreId, app.country);
-                const active =
-                  view === "app" && store.activeAppKey === key;
+                const active = view === "app" && store.activeAppKey === key;
                 const count = listKeywordsForApp(
                   store,
                   app.appStoreId,
@@ -543,9 +553,7 @@ export function AppWorkspace() {
                   <li
                     key={key}
                     className={
-                      active
-                        ? "tracker-app-row is-active"
-                        : "tracker-app-row"
+                      active ? "tracker-app-row is-active" : "tracker-app-row"
                     }
                   >
                     <button
@@ -612,10 +620,14 @@ export function AppWorkspace() {
             <div className="tracker-sidebar-account">
               {account.user ? (
                 <>
-                  <span className={`account-plan-chip ${isPro ? "is-pro" : "is-free"}`}>
+                  <span
+                    className={`account-plan-chip ${isPro ? "is-pro" : "is-free"}`}
+                  >
                     {isPro ? "Pro" : "Free"}
                   </span>
-                  <span className="tracker-sidebar-footnote">{account.user.email}</span>
+                  <span className="tracker-sidebar-footnote">
+                    {account.user.email}
+                  </span>
                   <button
                     type="button"
                     className="tracker-sidebar-link"
@@ -626,7 +638,11 @@ export function AppWorkspace() {
                 </>
               ) : (
                 <>
-                  <button type="button" className="tracker-sidebar-link" onClick={openAuth}>
+                  <button
+                    type="button"
+                    className="tracker-sidebar-link"
+                    onClick={openAuth}
+                  >
                     Sign in to sync keywords
                   </button>
                   {!isPro && (
@@ -649,7 +665,11 @@ export function AppWorkspace() {
         {banner && (
           <div className="keyword-error tracker-banner" role="status">
             {banner}
-            <button type="button" onClick={() => setBanner(null)} aria-label="Dismiss">
+            <button
+              type="button"
+              onClick={() => setBanner(null)}
+              aria-label="Dismiss"
+            >
               <X size={14} aria-hidden="true" />
             </button>
           </div>
@@ -681,39 +701,17 @@ export function AppWorkspace() {
             <KeywordExplorer />
             {store.apps.length === 0 && (
               <section
-                className="tracker-onboarding marketing-container"
-                aria-label="How AppClimb works"
+                className="tracker-cta-strip marketing-container"
+                aria-label="Track your app"
               >
-                <div className="tracker-onboarding-intro">
-                  <h2>Track your app’s keywords in three steps</h2>
+                <div className="tracker-cta-copy">
+                  <h2>Track your own app</h2>
                   <p>
-                    Add an iOS app, pick relevant keywords from public App Store
-                    metadata, and watch estimated scores plus observed position —
-                    stored locally, with cloud sync on Pro.
+                    Add an app to watch its keywords — popularity, difficulty,
+                    and rank in the public App Store results.
                   </p>
                 </div>
-                <ol className="tracker-onboarding-steps">
-                  <li>
-                    <strong>1. Add your app</strong>
-                    <span>Search by name, paste an App Store URL, or enter an ID.</span>
-                  </li>
-                  <li>
-                    <strong>2. Pick keywords</strong>
-                    <span>
-                      Use metadata suggestions or paste your own list — checks run
-                      automatically.
-                    </span>
-                  </li>
-                  <li>
-                    <strong>3. Watch position</strong>
-                    <span>
-                      See Apple Ads popularity (or a labeled estimate),
-                      difficulty, and rank in the public iTunes results (first
-                      200).
-                    </span>
-                  </li>
-                </ol>
-                <div className="tracker-onboarding-actions">
+                <div className="tracker-cta-actions">
                   <button
                     type="button"
                     className="tracker-button-primary"

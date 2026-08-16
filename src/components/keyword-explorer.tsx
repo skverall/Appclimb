@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ChevronRight,
   Download,
-  Info,
   ListPlus,
   Loader2,
   RefreshCw,
@@ -514,112 +513,117 @@ export function KeywordExplorer() {
         </span>
         <h1>Popularity from Apple. Not a black box.</h1>
         <p className="keyword-hero-deck">
-          Competitors sell “search volume” and never say where it comes from.
-          AppClimb shows Apple&apos;s official Ads popularity (1–100) for the
-          keyword — labeled on every score, free to try. Difficulty is still an
-          estimate from public results.
+          Type a keyword to see Apple&apos;s official Ads popularity (1–100) and
+          an estimated difficulty — every score labeled with its source.
         </p>
-        <div className="keyword-estimate-note">
-          <Info size={15} aria-hidden="true" />
-          <span>
-            Apple Ads popularity is a <strong>relative 1–100 score</strong>, not
-            monthly searches. If Apple has no row for that storefront and genre
-            this week, we fall back to a labeled iTunes estimate. Position in My
-            Apps is the observed rank in the first 200 public results.
-          </span>
-        </div>
       </section>
 
       <section className="keyword-tool marketing-container">
-        <div className="keyword-search-row">
-          <form
-            className="keyword-search-form"
-            role="search"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void analyze(query);
-            }}
+        <form
+          className="keyword-search-form"
+          role="search"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void analyze(query);
+          }}
+        >
+          <Search size={17} aria-hidden="true" />
+          <input
+            ref={searchRef}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search a keyword, e.g. “meditation”"
+            maxLength={80}
+            aria-label="Search keywords"
+            autoComplete="off"
+            spellCheck={false}
+          />
+          <label
+            className="keyword-country-chip"
+            title={
+              busy.size > 0
+                ? "Wait for the current analysis to finish"
+                : "App Store country"
+            }
           >
-            <Search size={17} aria-hidden="true" />
-            <input
-              ref={searchRef}
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Try “meditation”, “habit tracker”, “invoice scanner”…"
-              maxLength={80}
-              aria-label="Search keywords"
-              autoComplete="off"
-              spellCheck={false}
-            />
-            <button
-              type="submit"
-              disabled={query.trim().length < 2 || busy.size > 0}
-            >
-              {busy.size > 0 ? (
-                <Loader2 className="spin" size={16} aria-hidden="true" />
-              ) : (
-                "Analyze"
-              )}
-            </button>
-            {suggestionsOpen && suggestions.length > 0 && (
-              <div className="keyword-suggestions" role="listbox">
-                {suggestions.map((suggestion) => (
-                  <button
-                    type="button"
-                    role="option"
-                    aria-selected={false}
-                    key={suggestion}
-                    onClick={() => void analyze(suggestion)}
-                  >
-                    <Search size={13} aria-hidden="true" />
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
-            )}
-          </form>
-          <label className="country-select">
-            <span>Store country</span>
             <select
               value={country}
               onChange={(event) => setCountry(event.target.value)}
               aria-label="Store country"
               disabled={busy.size > 0}
-              title={
-                busy.size > 0
-                  ? "Wait for the current analysis to finish"
-                  : undefined
-              }
             >
               {SUPPORTED_COUNTRIES.map((item) => (
                 <option key={item.code} value={item.code}>
-                  {item.flag} {item.label}
+                  {item.flag} {item.code}
                 </option>
               ))}
             </select>
           </label>
           <button
-            type="button"
-            className="refresh-all-button"
-            onClick={() => setBulkOpen(true)}
-            disabled={busy.size > 0}
+            type="submit"
+            disabled={query.trim().length < 2 || busy.size > 0}
           >
-            <ListPlus size={15} aria-hidden="true" />
-            Analyze list
+            {busy.size > 0 ? (
+              <Loader2 className="spin" size={16} aria-hidden="true" />
+            ) : (
+              "Analyze"
+            )}
           </button>
-          <button
-            type="button"
-            className="refresh-all-button"
-            onClick={() => void refreshAll()}
-            disabled={keywords.length === 0 || busy.size > 0}
-          >
-            <RefreshCw
-              className={busy.size > 0 ? "spin" : ""}
-              size={15}
-              aria-hidden="true"
-            />
-            Refresh all
-          </button>
+          {suggestionsOpen && suggestions.length > 0 && (
+            <div className="keyword-suggestions" role="listbox">
+              {suggestions.map((suggestion) => (
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={false}
+                  key={suggestion}
+                  onClick={() => void analyze(suggestion)}
+                >
+                  <Search size={13} aria-hidden="true" />
+                  {suggestion}
+                </button>
+              ))}
+            </div>
+          )}
+        </form>
+
+        <div className="keyword-meta-row">
+          <div className="keyword-examples" aria-label="Example keywords">
+            <span>Try:</span>
+            {EXAMPLE_KEYWORDS.map((example) => (
+              <button
+                type="button"
+                key={example}
+                onClick={() => void analyze(example)}
+                disabled={busy.size > 0}
+              >
+                {example}
+              </button>
+            ))}
+          </div>
+          <div className="keyword-meta-right">
+            {!limitHit &&
+              explorerLimit !== null &&
+              peekDayUsage(window.localStorage, EXPLORER_DAY_KEY) > 0 && (
+                <span className="explorer-checks-remaining">
+                  {Math.max(
+                    0,
+                    explorerLimit -
+                      peekDayUsage(window.localStorage, EXPLORER_DAY_KEY),
+                  )}{" "}
+                  of {explorerLimit} free checks left today
+                </span>
+              )}
+            <button
+              type="button"
+              className="keyword-meta-link"
+              onClick={() => setBulkOpen(true)}
+              disabled={busy.size > 0}
+            >
+              <ListPlus size={14} aria-hidden="true" />
+              Analyze list
+            </button>
+          </div>
         </div>
 
         {limitHit && (
@@ -638,17 +642,6 @@ export function KeywordExplorer() {
               Upgrade to Pro
             </button>
           </div>
-        )}
-
-        {!limitHit && explorerLimit !== null && (
-          <p className="explorer-checks-remaining">
-            {Math.max(
-              0,
-              explorerLimit -
-                peekDayUsage(window.localStorage, EXPLORER_DAY_KEY),
-            )}{" "}
-            of {explorerLimit} free checks left today
-          </p>
         )}
 
         {batchProgress && (
@@ -701,66 +694,65 @@ export function KeywordExplorer() {
         )}
 
         {keywords.length === 0 ? (
-          <div className="keyword-empty">
-            <Search size={24} aria-hidden="true" />
-            <strong>No keywords yet</strong>
-            <span>
-              Search above, paste a whole list, or start with one of these:
-            </span>
-            <div className="keyword-examples">
-              {EXAMPLE_KEYWORDS.map((example) => (
-                <button
-                  type="button"
-                  key={example}
-                  onClick={() => void analyze(example)}
-                  disabled={busy.size > 0}
-                >
-                  {example}
-                </button>
-              ))}
-            </div>
+          <div className="keyword-empty-slim">
+            <span>No keywords yet — try an example or paste a list.</span>
             <button
               type="button"
               className="keyword-empty-restore"
               onClick={() => restoreInputRef.current?.click()}
             >
-              <Upload size={14} aria-hidden="true" />
+              <Upload size={13} aria-hidden="true" />
               Restore a backup
             </button>
           </div>
         ) : (
           <div className="explorer-split">
             <div className="keyword-table-wrap">
-              <div
-                className="keyword-status-filters"
-                role="tablist"
-                aria-label="Keyword filters"
-              >
+              <div className="keyword-table-topbar">
+                <div
+                  className="keyword-status-filters"
+                  role="tablist"
+                  aria-label="Keyword filters"
+                >
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={!goldenOnly}
+                    className={
+                      !goldenOnly
+                        ? "keyword-status-chip is-active"
+                        : "keyword-status-chip"
+                    }
+                    onClick={() => setGoldenOnly(false)}
+                  >
+                    All <span>{keywords.length}</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={goldenOnly}
+                    className={
+                      goldenOnly
+                        ? "keyword-status-chip is-active"
+                        : "keyword-status-chip"
+                    }
+                    onClick={() => setGoldenOnly(true)}
+                  >
+                    Golden <span>{goldenCount}</span>
+                  </button>
+                </div>
                 <button
                   type="button"
-                  role="tab"
-                  aria-selected={!goldenOnly}
-                  className={
-                    !goldenOnly
-                      ? "keyword-status-chip is-active"
-                      : "keyword-status-chip"
-                  }
-                  onClick={() => setGoldenOnly(false)}
+                  className="refresh-all-button keyword-topbar-refresh"
+                  onClick={() => void refreshAll()}
+                  disabled={keywords.length === 0 || busy.size > 0}
                 >
-                  All <span>{keywords.length}</span>
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={goldenOnly}
-                  className={
-                    goldenOnly
-                      ? "keyword-status-chip is-active"
-                      : "keyword-status-chip"
-                  }
-                  onClick={() => setGoldenOnly(true)}
-                >
-                  Golden <span>{goldenCount}</span>
+                  <RefreshCw
+                    className={busy.size > 0 ? "spin" : ""}
+                    size={15}
+                    aria-hidden="true"
+                  />
+                  Refresh all
                 </button>
               </div>
               {goldenOnly && (

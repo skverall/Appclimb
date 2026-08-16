@@ -5745,3 +5745,271 @@ img {
     top: 68px;
   }
 }
+
+/* ==========================================================================
+   Simplification pass (2026-08) — one centered command bar with the country
+   chip inside, a quiet meta row, slim empty state, table topbar, CTA strip.
+   ========================================================================== */
+
+/* --- Hero: tighter, one short deck line ---------------------------------- */
+
+.keyword-hero {
+  padding-block: 26px 18px;
+}
+
+.keyword-hero-deck {
+  font-size: 15px;
+  line-height: 1.55;
+  max-width: 52ch;
+  margin-inline: auto;
+}
+
+/* --- Command bar: centered, country chip inside --------------------------- */
+
+.keyword-search-form {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: 760px;
+  margin-inline: auto;
+  gap: 8px;
+  padding: 0 8px 0 16px;
+}
+
+.keyword-country-chip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 4px 0 2px;
+  border-radius: 11px;
+  background: var(--n-100);
+  flex-shrink: 0;
+  transition: background 0.12s ease;
+}
+
+.keyword-country-chip:hover {
+  background: var(--n-150);
+}
+
+.keyword-country-chip select {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  outline: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-bold);
+  color: var(--ink-secondary);
+  padding: 0 18px 0 8px;
+  letter-spacing: 0.02em;
+}
+
+.keyword-country-chip select:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.keyword-country-chip::after {
+  content: "";
+  position: absolute;
+  right: 9px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid var(--ink-muted);
+  border-bottom: 1.5px solid var(--ink-muted);
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+}
+
+/* --- Meta row under the bar ------------------------------------------------ */
+
+.keyword-meta-row {
+  width: 100%;
+  max-width: 760px;
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  flex-wrap: wrap;
+}
+
+.keyword-examples {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 0;
+}
+
+.keyword-examples > span {
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  color: var(--ink-muted);
+  margin-right: 2px;
+}
+
+.keyword-examples button {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-medium);
+  color: var(--ink-secondary);
+}
+
+.keyword-examples button:hover:not(:disabled) {
+  background: var(--teal-50);
+  border-color: var(--teal-300);
+  color: var(--teal-800);
+}
+
+.keyword-examples button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.keyword-meta-right {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+
+.explorer-checks-remaining {
+  margin: 0;
+}
+
+.keyword-meta-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-2xs);
+  font-weight: var(--weight-semibold);
+  color: var(--teal-600);
+  transition: color 0.12s ease;
+}
+
+.keyword-meta-link:hover:not(:disabled) {
+  color: var(--teal-700);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.keyword-meta-link:disabled {
+  color: var(--ink-muted);
+  cursor: not-allowed;
+}
+
+/* --- Slim empty state -------------------------------------------------------- */
+
+.keyword-empty-slim {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 34px 12px 4px;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.keyword-empty-restore {
+  margin-top: 0;
+  font-size: var(--text-2xs);
+}
+
+/* --- Table topbar: filters left, Refresh all right --------------------------- */
+
+.keyword-table-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 14px 16px 8px;
+}
+
+.keyword-status-filters {
+  margin: 0;
+}
+
+.keyword-topbar-refresh {
+  height: 36px;
+  border-radius: var(--radius-md);
+}
+
+/* --- Compact app-tracking CTA strip ------------------------------------------- */
+
+.tracker-cta-strip {
+  margin-top: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  flex-wrap: wrap;
+  padding: 20px 24px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-sm);
+}
+
+.tracker-cta-copy h2 {
+  font-size: var(--text-lg);
+  letter-spacing: var(--tracking-tight);
+}
+
+.tracker-cta-copy p {
+  margin-top: 3px;
+  font-size: var(--text-xs);
+  color: var(--ink-secondary);
+  line-height: var(--leading-snug);
+  max-width: 52ch;
+}
+
+.tracker-cta-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* --- Responsive ---------------------------------------------------------------- */
+
+@media (max-width: 860px) {
+  .keyword-search-form {
+    height: 52px;
+  }
+
+  .keyword-search-form > button[type="submit"] {
+    padding: 0 16px;
+  }
+
+  .keyword-country-chip {
+    height: 36px;
+  }
+
+  .keyword-meta-right {
+    margin-left: 0;
+  }
+
+  .keyword-table-topbar {
+    padding: 12px 10px 6px;
+  }
+
+  .keyword-topbar-refresh {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+
+  .tracker-cta-strip {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
