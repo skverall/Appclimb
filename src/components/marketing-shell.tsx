@@ -113,7 +113,7 @@ export function MarketingFooter() {
             Official Apple Ads popularity (1–100), estimated difficulty, and
             observed App Store position — source labeled on every score.
           </p>
-          <span>No account. No tracking. Apple data, not a mystery model.</span>
+          <span>Official Apple Ads scores, labeled. Free plan with honest limits.</span>
         </div>
         <div>
           <strong>Explore</strong>
@@ -145,7 +145,7 @@ export function MarketingFooter() {
       </div>
       <div className="marketing-container marketing-footer-bottom">
         <span>© 2026 AppClimb</span>
-        <span>Free · open data · estimates labeled honestly</span>
+        <span>Free plan with honest limits · Pro $8/month · estimates labeled honestly</span>
       </div>
     </footer>
   );

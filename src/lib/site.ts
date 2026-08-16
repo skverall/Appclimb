@@ -1,7 +1,7 @@
 export const SITE_URL = "https://appclimb.app";
 export const SITE_NAME = "AppClimb";
 export const SITE_DESCRIPTION =
-  "App Store keyword popularity from Apple Ads — official 1–100 scores, labeled source, not a black-box volume. Estimated difficulty, bulk lists, and 30-day trends. Free, no account.";
+  "App Store keyword popularity from Apple Ads — official 1–100 scores, labeled source, not a black-box volume. Estimated difficulty, bulk lists, and 30-day trends. Free plan with honest daily limits; Pro at $8/month adds cloud sync.";
 export const SITE_UPDATED = "2026-08-16";
 
 export const PUBLIC_PAGES = [
@@ -9,16 +9,16 @@ export const PUBLIC_PAGES = [
     path: "/",
     title: "AppClimb — Apple Ads keyword popularity",
     description:
-      "Official Apple Ads popularity (1–100) for any App Store keyword — not a mystery volume. Estimated difficulty, bulk lists, and local trends. Free, no account.",
+      "Official Apple Ads popularity (1–100) for any App Store keyword — not a mystery volume. Estimated difficulty, bulk lists, and local trends. Free plan with honest limits; Pro adds cloud sync.",
     changeFrequency: "weekly" as const,
     priority: 1,
     lastModified: SITE_UPDATED,
   },
   {
     path: "/assistant",
-    title: "ASO Assistant — free App Store keyword chat",
+    title: "ASO Assistant — App Store keyword chat",
     description:
-      "Chat with AppClimb’s ASO assistant for keyword ideas, estimated score guidance, and listing tips — free, local context only.",
+      "Chat with AppClimb’s ASO assistant for keyword ideas, estimated score guidance, and listing tips — 5 messages/day on the free plan, 200 on Pro.",
     changeFrequency: "weekly" as const,
     priority: 0.92,
     lastModified: SITE_UPDATED,
@@ -90,7 +90,7 @@ export const PUBLIC_PAGES = [
     path: "/pricing",
     title: "Pricing",
     description:
-      "AppClimb is free: keyword popularity and difficulty estimates from public App Store data, no account or payment required.",
+      "AppClimb pricing: a free plan with honest daily limits and Pro at $8/month — unlimited checks, cloud sync, 90-day history.",
     changeFrequency: "monthly" as const,
     priority: 0.75,
     lastModified: SITE_UPDATED,
@@ -99,7 +99,7 @@ export const PUBLIC_PAGES = [
     path: "/about",
     title: "About AppClimb",
     description:
-      "Why AppClimb leads with official Apple Ads popularity instead of unexplained search volume — free, labeled, no account.",
+      "Why AppClimb leads with official Apple Ads popularity instead of unexplained search volume — labeled source, honest limits, Pro under $10/month.",
     changeFrequency: "monthly" as const,
     priority: 0.65,
     lastModified: SITE_UPDATED,

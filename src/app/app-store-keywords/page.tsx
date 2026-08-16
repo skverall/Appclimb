@@ -9,14 +9,14 @@ import { SITE_DESCRIPTION, absoluteUrl } from "@/lib/site";
 export const metadata: Metadata = {
   title: "App Store Keyword Research: Official Apple Ads Popularity",
   description:
-    "Official Apple Ads popularity (1–100) plus estimated difficulty. Competitors hide the source. AppClimb labels every score — free, no account.",
+    "Official Apple Ads popularity (1–100) plus estimated difficulty. Competitors hide the source. AppClimb labels every score — free plan with honest limits, Pro at $8/month.",
   alternates: {
     canonical: "/app-store-keywords",
   },
   openGraph: {
     title: "Official Apple Ads popularity · AppClimb",
     description:
-      "Apple’s official Ads popularity (1–100) for any App Store keyword — labeled source, not a black-box volume. Free, no account.",
+      "Apple’s official Ads popularity (1–100) for any App Store keyword — labeled source, not a black-box volume. Free plan with honest limits, Pro $8/month.",
     url: "/app-store-keywords",
   },
 };
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
 const steps = [
   {
     title: "Search any keyword",
-    text: "Type a term and AppClimb pulls the live result set from the public iTunes Search API — no account, no API key, nothing stored on a server.",
+    text: "Type a term and AppClimb pulls the live result set from the public iTunes Search API — no API key, and by default nothing is stored on a server.",
     icon: Search,
   },
   {
@@ -58,12 +58,12 @@ const faq = [
   {
     question: "Do I need an account?",
     answer:
-      "No. There is no login, no billing, and no tracking. Your keyword list and history live in your browser's localStorage.",
+      "No. The free plan works without one — 8 keyword checks, 5 assistant messages, and 30 official popularity lookups per day — and your keyword list and history live in your browser's localStorage. An optional account unlocks Pro ($8/month): unlimited checks, cloud sync, and 90-day history.",
   },
   {
     question: "Can I analyze a whole list at once?",
     answer:
-      "Yes. Paste up to 50 keywords — one per line or comma-separated — and AppClimb analyzes them in small paced batches so the public API doesn't rate-limit you. Rows that fail are reported in a summary while the rest of the queue keeps running.",
+      "Yes. Paste up to 50 keywords — one per line or comma-separated — and AppClimb analyzes them in small paced batches so the public API doesn't rate-limit you. Each new keyword uses one of your daily checks (8/day on the free plan, unlimited on Pro). Rows that fail are reported in a summary while the rest of the queue keeps running.",
   },
   {
     question: "Can I export or back up my keyword data?",
@@ -89,11 +89,20 @@ export default function KeywordResearchPage() {
           description: SITE_DESCRIPTION,
           applicationCategory: "DeveloperApplication",
           operatingSystem: "Any",
-          offers: {
-            "@type": "Offer",
-            price: "0",
-            priceCurrency: "USD",
-          },
+          offers: [
+            {
+              "@type": "Offer",
+              name: "Free plan",
+              price: "0",
+              priceCurrency: "USD",
+            },
+            {
+              "@type": "Offer",
+              name: "Pro monthly",
+              price: "8",
+              priceCurrency: "USD",
+            },
+          ],
         }}
       />
       <main className="marketing-page">
@@ -104,8 +113,8 @@ export default function KeywordResearchPage() {
             <p>
               Paid tools invent search volume and hide the model. AppClimb
               shows Apple&apos;s official Ads popularity (1–100) when the term
-              is in that storefront and genre — labeled on every score. Free,
-              no account.
+              is in that storefront and genre — labeled on every score. A free
+              plan with honest daily limits; Pro is $8/month.
             </p>
             <div className="marketing-hero-actions">
               <Link href="/" className="marketing-primary-action large">
@@ -122,7 +131,7 @@ export default function KeywordResearchPage() {
               <span>✅ Official Apple Ads popularity</span>
               <span>✅ Source labeled on every score</span>
               <span>✅ Bulk lists, CSV export & backup</span>
-              <span>✅ No account or tracking</span>
+              <span>✅ Free plan with honest limits</span>
             </div>
           </div>
         </section>
@@ -199,7 +208,7 @@ export default function KeywordResearchPage() {
 
         <section className="marketing-final-cta marketing-container">
           <h2>Your first keyword is one search away.</h2>
-          <p>Free. No account. Data you can verify.</p>
+          <p>Free plan with honest limits. Data you can verify.</p>
           <Link href="/" className="marketing-primary-action large">
             <Sparkles size={17} aria-hidden="true" /> Search keywords
           </Link>

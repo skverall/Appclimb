@@ -1,16 +1,21 @@
 # AppClimb
 
-> AppClimb is a free App Store keyword explorer. The lead feature is official Apple Ads popularity (1–100), labeled on every score — not a black-box search volume.
+> AppClimb is an App Store keyword explorer with a free plan and an optional Pro plan ($8/month). The lead feature is official Apple Ads popularity (1–100), labeled on every score — not a black-box search volume.
 
-AppClimb searches any App Store keyword and shows Apple's official Ads popularity when the term is in that storefront and genre, an estimated difficulty score, a 30-day trend chart, related keywords, and the top 10 apps ranking for the term. Difficulty and evidence come from Apple's public iTunes Search API. No account, no billing, no tracking.
+AppClimb searches any App Store keyword and shows Apple's official Ads popularity when the term is in that storefront and genre, an estimated difficulty score, a 30-day trend chart, related keywords, and the top 10 apps ranking for the term. Difficulty and evidence come from Apple's public iTunes Search API. The free plan has honest daily limits (8 keyword checks, 5 assistant messages, 1 tracked app); Pro lifts the limits and adds cloud sync. Anonymous keyword data never leaves the visitor's browser. No tracking scripts.
 
 ## Data honesty
 
 - Popularity is Apple Ads official (`searchPopularity1to100`) when Apple has the term; otherwise a labeled iTunes estimate. It is **not** monthly search volume.
 - Difficulty is always an estimate from public signals (competition, top-result ratings, mega-brand presence).
 - Every score is labeled with its source (`Apple Ads` vs `Est.`) and shown alongside evidence (result count, saturation, top apps, ratings).
-- Keyword history is stored in the visitor's browser (localStorage), one daily snapshot per keyword per country. The first check seeds an estimated 30-day baseline, clearly flagged; later checks record real measurements.
+- Without an account, keyword history is stored in the visitor's browser (localStorage), one daily snapshot per keyword per country. The first check seeds an estimated 30-day baseline, clearly flagged; later checks record real measurements.
 - AppClimb is not affiliated with Apple. Competitors that sell unexplained “search volume” are the thing we refuse to copy.
+
+## Plans
+
+- Free ($0): 8 keyword checks/day, 30 official popularity lookups/day, 1 tracked app with 25 keywords, 30-day history, AI assistant 5 messages/day, data stays local.
+- Pro ($8/month or $64/year): unlimited checks and tracked apps, 500 popularity lookups/day, 90-day history, AI assistant 200 messages/day, cloud sync across devices. Billing via Paddle (merchant of record); cancel anytime.
 
 ## Key pages
 
@@ -18,14 +23,15 @@ AppClimb searches any App Store keyword and shows Apple's official Ads popularit
 - Keyword research: https://appclimb.app/app-store-keywords
 - ASO guide: https://appclimb.app/guides/keyword-research
 - Field notes: https://appclimb.app/blog
-- Pricing (free): https://appclimb.app/pricing
+- Pricing: https://appclimb.app/pricing
 - About: https://appclimb.app/about
 - Privacy: https://appclimb.app/privacy
 - Terms: https://appclimb.app/terms
+- Refunds: https://appclimb.app/refunds
 - GitHub: https://github.com/skverall/Appclimb
 
 ## Preferred short description
 
-AppClimb is a free App Store keyword tool that shows official Apple Ads popularity (1–100), estimates difficulty from public data, tracks trends in your browser, and never claims search volume it cannot verify.
+AppClimb is an App Store keyword tool that shows official Apple Ads popularity (1–100), estimates difficulty from public data, tracks trends in your browser (or in the cloud on Pro), and never claims search volume it cannot verify.
 
 Last updated: 2026-08-16

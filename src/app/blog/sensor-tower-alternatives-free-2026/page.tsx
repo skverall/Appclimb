@@ -89,8 +89,8 @@ export default function SensorTowerAlternativesArticle() {
           <tbody>
             <tr>
               <td><strong>AppClimb</strong></td>
-              <td>Fully free</td>
-              <td>✅ Unlimited</td>
+              <td>Free plan (8 checks/day) · Pro $8/mo</td>
+              <td>✅ 8/day free · unlimited Pro</td>
               <td>✅ Charts</td>
               <td>Web</td>
               <td>Indie keyword research</td>
@@ -147,27 +147,29 @@ export default function SensorTowerAlternativesArticle() {
         </table>
       </div>
 
-      <h2>1. AppClimb — Native macOS Keyword &amp; Rank Tracker</h2>
+      <h2>1. AppClimb — Free-Tier Keyword &amp; Rank Tracker</h2>
       <p>
-        <Link href="/">AppClimb</Link> is a free, open-source macOS app that
-        tracks your App Store keyword rankings over time. It queries Apple&apos;s
-        public iTunes Search API from your browser — no account, no API keys,
-        no server. Your keyword list and history stay in your browser.
+        <Link href="/">AppClimb</Link> is an open-source App Store keyword tool
+        that tracks your keyword rankings over time. It queries Apple&apos;s
+        public iTunes Search API from your browser — no API keys, and by
+        default nothing is stored on a server. Your keyword list and history
+        stay in your browser on the free plan; Pro ($8/month) adds cloud sync.
       </p>
       <p>What you get:</p>
       <ul>
-        <li>Unlimited keyword searches across six storefronts</li>
-        <li>Estimated popularity and difficulty on a 0–100 scale</li>
-        <li>30-day trend charts that grow with daily snapshots</li>
+        <li>8 keyword checks per day free, unlimited on Pro, across 16 storefronts</li>
+        <li>Official Apple Ads popularity (1–100) plus estimated difficulty</li>
+        <li>30-day trend charts that grow with daily snapshots (90 days on Pro)</li>
         <li>Related keywords and top-app breakdowns from public data</li>
       </ul>
       <p>
-        The tradeoff: popularity and difficulty are estimates built from public
-        signals (competition pressure and top-result strength) — not Apple Ads
-        search volume, which only Apple can see. For an indie dev optimizing
-        ASO week-to-week, that&apos;s exactly the right scope. Pair it with App
-        Store Connect Analytics for impressions and you&apos;ve covered 90% of
-        what Sensor Tower&apos;s Starter plan used to offer.
+        The tradeoff: popularity is Apple&apos;s official Ads score (1–100)
+        when the term is in that storefront and genre; otherwise a labeled
+        estimate from public signals. Difficulty is always an estimate — never
+        a claim of search volume, which only Apple can see. For an indie dev
+        optimizing ASO week-to-week, that&apos;s exactly the right scope. Pair
+        it with App Store Connect Analytics for impressions and you&apos;ve
+        covered 90% of what Sensor Tower&apos;s Starter plan used to offer.
       </p>
 
       <h2>2. App Store Connect Analytics — Apple&apos;s Free First-Party Data</h2>
@@ -302,9 +304,11 @@ export default function SensorTowerAlternativesArticle() {
       <h3>What is the best free Sensor Tower alternative for keyword tracking?</h3>
       <p>
         AppClimb is a strong free option for keyword research in the browser:
-        estimated popularity and difficulty from public data, no account, and
-        trend charts built from daily snapshots. For review monitoring,
-        AppFollow offers a free tier across App Store and Google Play.
+        official Apple Ads popularity when available, estimated difficulty from
+        public data, and trend charts built from daily snapshots — with honest
+        daily limits on the free plan and Pro at $8/month. For review
+        monitoring, AppFollow offers a free tier across App Store and Google
+        Play.
       </p>
 
       <h3>Can I track App Store rankings without paying for Sensor Tower?</h3>

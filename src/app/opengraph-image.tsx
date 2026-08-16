@@ -92,7 +92,7 @@ export default function OpenGraphImage() {
               }}
             >
               Official Apple Ads popularity (1–100), labeled on every score.
-              Free, no account.
+              Free plan with honest limits · Pro $8/month.
             </p>
           </div>
           <span style={{ color: "#6b7c80", fontSize: 18 }}>

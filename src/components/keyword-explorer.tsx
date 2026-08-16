@@ -495,8 +495,8 @@ export function KeywordExplorer() {
         <p className="keyword-hero-deck">
           Competitors sell “search volume” and never say where it comes from.
           AppClimb shows Apple&apos;s official Ads popularity (1–100) for the
-          keyword — labeled, free, no account. Difficulty is still an estimate
-          from public results.
+          keyword — labeled on every score, free to try. Difficulty is still an
+          estimate from public results.
         </p>
         <div className="keyword-estimate-note">
           <Info size={15} aria-hidden="true" />

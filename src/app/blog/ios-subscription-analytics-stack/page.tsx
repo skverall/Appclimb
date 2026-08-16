@@ -216,11 +216,11 @@ export default function AnalyticsStackArticle() {
 
       <h2>Where AppClimb fits</h2>
       <p>
-        AppClimb is a free keyword explorer built entirely on public data. It
-        shows estimated popularity and difficulty with the evidence behind
+        AppClimb is a keyword explorer built on public data. It shows official
+        Apple Ads popularity and estimated difficulty with the evidence behind
         them, stores one daily snapshot per keyword in your browser, and labels
-        estimated history as estimated. No accounts, no billing, no invented
-        volumes.
+        estimated history as estimated. The free plan has honest daily limits;
+        Pro ($8/month) adds cloud sync — and no plan ever invents volumes.
       </p>
       <p>
         <Link href="/">

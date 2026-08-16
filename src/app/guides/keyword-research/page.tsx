@@ -366,7 +366,7 @@ export default function KeywordResearchGuide() {
             <div className="marketing-final-cta">
               <h2>Start with one search.</h2>
               <p>
-                Free, no account, estimates labeled honestly.
+                Free plan with honest limits, estimates labeled honestly.
               </p>
               <Link href="/" className="marketing-primary-action large">
                 <Search size={17} aria-hidden="true" /> Open the keyword explorer

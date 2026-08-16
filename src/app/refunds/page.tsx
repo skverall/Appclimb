@@ -3,7 +3,7 @@ import { MarketingShell } from "@/components/marketing-shell";
 export const metadata = {
   title: "Refund policy",
   description:
-    "AppClimb is free — there is nothing to refund. This page explains why no payment is ever required.",
+    "AppClimb refund policy: how refunds for the Pro subscription work via Paddle.",
   alternates: { canonical: "/refunds" },
 };
 
@@ -13,27 +13,40 @@ export default function RefundPolicyPage() {
       <main className="legal-page">
         <span className="eyebrow">Legal</span>
         <h1>Refund policy</h1>
-        <p className="legal-updated">Last updated August 2, 2026</p>
+        <p className="legal-updated">Last updated August 16, 2026</p>
         <section>
-          <h2>There is nothing to pay for</h2>
+          <h2>The free plan costs nothing</h2>
           <p>
-            AppClimb is completely free. There is no subscription, no trial,
-            no in-app purchase, and no payment processing on this site.
+            The free plan has no subscription and collects no payment
+            information, so no refund is ever needed for it.
           </p>
         </section>
         <section>
-          <h2>Why this page exists</h2>
+          <h2>Pro subscriptions</h2>
           <p>
-            Refund policies are a standard part of app and service websites.
-            Because AppClimb never charges you anything, no refund can ever be
-            owed or requested — and no payment information is ever collected.
+            Pro subscriptions are billed by Paddle, the merchant of record.
+            You can cancel at any time from your account menu; Pro stays active
+            until the end of the period you paid for. We do not offer automatic
+            refunds on cancelation.
           </p>
         </section>
         <section>
-          <h2>If you believe you were charged</h2>
+          <h2>How to request a refund</h2>
           <p>
-            Any charge you do not recognize is not from AppClimb. Do not enter
-            payment details anywhere claiming to be AppClimb; report the
+            If you believe you are entitled to a refund — for example, a
+            duplicate charge or an upgrade taken by mistake — contact us via
+            the GitHub repository linked on this site within 14 days of the
+            charge, with your receipt details. We will review each case and
+            issue approved refunds through Paddle. Paddle&apos;s buyer
+            protections and any applicable statutory rights remain unaffected.
+          </p>
+        </section>
+        <section>
+          <h2>If you were charged and do not recognize it</h2>
+          <p>
+            Charges from AppClimb appear on your statement as Paddle or
+            Paddle.net. If you see a charge claiming to be AppClimb on any
+            other processor, do not enter payment details there; report the
             unauthorized charge to your bank or payment provider.
           </p>
         </section>

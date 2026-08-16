@@ -3,7 +3,7 @@ import { MarketingShell } from "@/components/marketing-shell";
 export const metadata = {
   title: "Privacy",
   description:
-    "AppClimb privacy principles: no account, no tracking, no server-side storage of your keyword data.",
+    "AppClimb privacy principles: local-first keyword data, minimal optional account data, no tracking.",
   alternates: { canonical: "/privacy" },
 };
 
@@ -13,23 +13,24 @@ export default function PrivacyPage() {
       <main className="legal-page">
         <span className="eyebrow">Legal</span>
         <h1>Privacy principles</h1>
-        <p className="legal-updated">Last updated August 2, 2026</p>
+        <p className="legal-updated">Last updated August 16, 2026</p>
         <section>
-          <h2>No account, no personal data</h2>
+          <h2>Local-first by default</h2>
           <p>
-            AppClimb is a public tool. There is no registration, no login, and
-            no server-side user profile. We have nothing to associate with an
-            individual.
+            You do not need an account to use AppClimb. Without one, your
+            keyword list, history, and trend charts are stored in your
+            browser&apos;s localStorage and never uploaded to AppClimb servers.
+            Clearing your browser data removes them permanently.
           </p>
         </section>
         <section>
-          <h2>Keyword data stays in your browser</h2>
+          <h2>Account data is minimal and optional</h2>
           <p>
-            The keyword explorer queries Apple&apos;s public iTunes Search API
-            directly from your browser. Your keyword list, history, and trend
-            charts are stored in your browser&apos;s localStorage and never
-            uploaded to AppClimb servers. Clearing your browser data removes
-            them permanently.
+            Signing in is optional. An account stores only: your email address,
+            an optional display name, a Google subject id when you use Google
+            sign-in, hashed session tokens, your subscription status, and — if
+            you enable Pro cloud sync — your own synced keyword data. We store
+            nothing else about you.
           </p>
         </section>
         <section>
@@ -37,9 +38,19 @@ export default function PrivacyPage() {
           <p>
             This site does not run third-party analytics, advertising, or
             fingerprinting scripts. We do not use cookies for marketing or
-            measurement purposes. The hosting provider may keep standard
-            infrastructure logs (for example, for abuse prevention), which are
-            not used to profile visitors.
+            measurement. One HttpOnly session cookie keeps you signed in; it
+            contains no personal data itself. The hosting provider may keep
+            standard infrastructure logs (for example, for abuse prevention),
+            which are not used to profile visitors.
+          </p>
+        </section>
+        <section>
+          <h2>Payments</h2>
+          <p>
+            Subscriptions are processed by Paddle, the merchant of record.
+            When you upgrade, Paddle collects your payment details; AppClimb
+            never sees or stores your card information. Paddle&apos;s handling
+            of payment data is governed by Paddle&apos;s own privacy policy.
           </p>
         </section>
         <section>
@@ -47,7 +58,8 @@ export default function PrivacyPage() {
           <p>
             When you search a keyword, your browser sends the query directly to
             Apple&apos;s iTunes Search API. Apple&apos;s handling of those
-            requests is governed by Apple&apos;s own privacy policy.
+            requests is governed by Apple&apos;s own privacy policy. Google
+            processes sign-ins only when you choose to sign in with Google.
           </p>
         </section>
         <p className="legal-note">

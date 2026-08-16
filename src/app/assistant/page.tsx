@@ -4,9 +4,9 @@ import { AiChatConversation } from "@/components/ai-chat-conversation";
 import { MarketingShell } from "@/components/marketing-shell";
 
 export const metadata: Metadata = {
-  title: "ASO Assistant — free App Store keyword chat",
+  title: "ASO Assistant — App Store keyword chat",
   description:
-    "Chat with AppClimb’s ASO assistant (DeepSeek V4 Flash): keyword ideas, estimated popularity/difficulty guidance, and listing tips — free, with local context only.",
+    "Chat with AppClimb’s ASO assistant (DeepSeek V4 Flash): keyword ideas, estimated popularity/difficulty guidance, and listing tips — 5 messages/day on the free plan, 200 on Pro.",
   alternates: {
     canonical: "/assistant",
   },

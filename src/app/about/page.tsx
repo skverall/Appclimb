@@ -9,7 +9,7 @@ import { absoluteUrl } from "@/lib/site";
 export const metadata: Metadata = {
   title: "About AppClimb",
   description:
-    "Why AppClimb leads with official Apple Ads popularity instead of unexplained search volume — free, labeled, no account.",
+    "Why AppClimb leads with official Apple Ads popularity instead of unexplained search volume — labeled source, honest limits, Pro under $10/month.",
   alternates: {
     canonical: "/about",
   },
@@ -31,7 +31,7 @@ export default function AboutPage() {
           name: "About AppClimb",
           url: absoluteUrl("/about"),
           description:
-            "AppClimb is a free App Store keyword explorer that leads with official Apple Ads popularity.",
+            "AppClimb is an App Store keyword explorer that leads with official Apple Ads popularity, on a free plan with honest limits and a Pro plan under $10/month.",
           mainEntity: {
             "@id": "https://appclimb.app/#organization",
           },
@@ -45,8 +45,8 @@ export default function AboutPage() {
             Paid ASO tools sell &ldquo;search volume&rdquo; with no source. AppClimb
             leads with Apple&apos;s official Ads popularity (relative 1–100)
             when the term is in that storefront and genre — labeled on every
-            row. Difficulty stays an estimate from public iTunes results. Free,
-            no account.
+            row. Difficulty stays an estimate from public iTunes results. A free
+            plan with honest daily limits; Pro costs $8/month.
           </p>
         </section>
 
@@ -55,12 +55,13 @@ export default function AboutPage() {
             <div className="about-card-icon">
               <Eye aria-hidden="true" size={22} />
             </div>
-            <h2>No visitor account</h2>
+            <h2>Public data first</h2>
             <p>
               Difficulty and top apps come from the public iTunes Search API,
               queried from your browser. Official popularity uses a
               founder-owned Apple Ads Insights key on the server. You never
-              connect Ads or create an AppClimb account.
+              connect Ads — AppClimb is the only account involved, and it&apos;s
+              optional.
             </p>
           </article>
           <article className="about-principle-card">
@@ -79,10 +80,12 @@ export default function AboutPage() {
             <div className="about-card-icon">
               <Sparkles aria-hidden="true" size={22} />
             </div>
-            <h2>No account, no tracking</h2>
+            <h2>Your data, your choice</h2>
             <p>
-              Your keyword list and history live in your browser. There is no
-              login, no billing, and no analytics collection on this site.
+              Without an account, your keyword list and history live only in
+              your browser. Signing in is optional — Pro subscribers can sync
+              their own data across devices. There are no analytics scripts or
+              tracking pixels on this site.
             </p>
           </article>
         </section>
@@ -111,11 +114,12 @@ export default function AboutPage() {
         <section className="about-status-section">
           <div className="marketing-container about-status-inner">
             <span className="marketing-eyebrow">Current status</span>
-            <h2>The keyword explorer is live and free.</h2>
+            <h2>The keyword explorer is live.</h2>
             <p>
               Official Apple Ads popularity when Apple has the term, estimated
               difficulty, 30-day trend charts, related keywords, and top-app
-              breakdowns. No visitor accounts, no billing, no tracking.
+              breakdowns. Free plan with honest daily limits; optional Pro at
+              $8/month with cloud sync. No tracking scripts, ever.
             </p>
             <div className="marketing-hero-actions">
               <Link href="/" className="marketing-primary-action large">
