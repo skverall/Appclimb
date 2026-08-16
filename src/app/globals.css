@@ -2778,6 +2778,7 @@ img {
   height: 100%;
 }
 
+.ai-chat-history-sidebar,
 .ai-chat-history--sidebar {
   display: flex !important;
   flex-direction: column;
@@ -2787,6 +2788,8 @@ img {
   overflow: hidden;
   padding: 16px 12px;
   gap: 12px;
+  width: 280px;
+  box-sizing: border-box;
 }
 
 .ai-chat-history {

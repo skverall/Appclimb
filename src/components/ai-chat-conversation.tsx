@@ -306,30 +306,19 @@ export function AiChatConversation({
       }
     >
       {variant === "page" && (
-        <>
-          <button
-            type="button"
-            className={`ai-chat-history-scrim${historyOpen ? " is-open" : ""}`}
-            onClick={() => setHistoryOpen(false)}
-            aria-label="Close chat history"
-            tabIndex={-1}
+        <aside
+          className={`ai-chat-history-sidebar${historyOpen ? " is-open" : ""}`}
+          aria-label="Chat history"
+        >
+          <AiChatHistory
+            conversations={conversations}
+            activeId={activeId}
+            disabled={busy}
+            onSelect={switchTo}
+            onNew={startNewChat}
+            onDelete={deleteChat}
           />
-          <aside
-            className={`ai-chat-history ai-chat-history--sidebar${
-              historyOpen ? " is-open" : ""
-            }`}
-            aria-label="Chat history"
-          >
-            <AiChatHistory
-              conversations={conversations}
-              activeId={activeId}
-              disabled={busy}
-              onSelect={switchTo}
-              onNew={startNewChat}
-              onDelete={deleteChat}
-            />
-          </aside>
-        </>
+        </aside>
       )}
 
       <div className="ai-chat-shell-main">
