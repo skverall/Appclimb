@@ -13,34 +13,32 @@ export function AiChatPanel() {
       <button
         type="button"
         className="ai-chat-fab"
-        onClick={() => setOpen(true)}
+        onClick={() => setOpen((prev) => !prev)}
         aria-label="Open ASO assistant"
       >
-        <MessageCircle size={20} aria-hidden="true" />
+        <MessageCircle size={18} aria-hidden="true" />
         <span>ASO AI</span>
       </button>
 
       {open && (
-        <button
-          type="button"
-          className="ai-chat-backdrop"
-          aria-label="Close assistant"
-          onClick={() => setOpen(false)}
-        />
-      )}
-
-      <section
-        className={`ai-chat-panel${open ? " is-open" : ""}`}
-        aria-hidden={!open}
-        aria-label="AppClimb ASO assistant popup"
-      >
-        {open && (
-          <AiChatConversation
-            variant="panel"
-            onClose={() => setOpen(false)}
+        <>
+          <button
+            type="button"
+            className="ai-chat-backdrop"
+            aria-label="Close assistant"
+            onClick={() => setOpen(false)}
           />
-        )}
-      </section>
+          <section
+            className="ai-chat-panel is-open"
+            aria-label="AppClimb ASO assistant popup"
+          >
+            <AiChatConversation
+              variant="panel"
+              onClose={() => setOpen(false)}
+            />
+          </section>
+        </>
+      )}
     </>
   );
 }

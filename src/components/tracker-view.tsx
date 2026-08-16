@@ -603,120 +603,124 @@ export function TrackerView({
       </header>
 
       <div className="tracker-toolbar" role="toolbar" aria-label="Keyword actions">
-        <span className="tracker-store-pill" title="Active storefront for this app">
-          {SUPPORTED_COUNTRIES.find((c) => c.code === app.country)?.flag}{" "}
-          {app.country}
-        </span>
+        <div className="tracker-toolbar-actions">
+          <span className="tracker-store-pill" title="Active storefront for this app">
+            {SUPPORTED_COUNTRIES.find((c) => c.code === app.country)?.flag}{" "}
+            {app.country}
+          </span>
 
-        <button
-          type="button"
-          className="tracker-button-primary"
-          onClick={() => setAddKeywordsOpen(true)}
-        >
-          <Plus size={15} aria-hidden="true" />
-          Add Keywords
-        </button>
-        <button
-          type="button"
-          className="tracker-button-accent"
-          onClick={() => void openSuggestions()}
-          disabled={suggestionsBusy}
-        >
-          {suggestionsBusy ? (
-            <Loader2 className="spin" size={15} aria-hidden="true" />
-          ) : (
-            <Lightbulb size={15} aria-hidden="true" />
-          )}
-          Get Suggestions
-        </button>
-        <button
-          type="button"
-          className="refresh-all-button"
-          onClick={() => void refreshKeywords(keywords.map((row) => row.keyword))}
-          disabled={keywords.length === 0 || busyKeys.size > 0}
-        >
-          <RefreshCw
-            className={busyKeys.size > 0 ? "spin" : ""}
-            size={15}
-            aria-hidden="true"
-          />
-          Refresh All
-        </button>
-        <button
-          type="button"
-          className="refresh-all-button"
-          onClick={exportCsv}
-          disabled={keywords.length === 0}
-          aria-label="Export keywords as CSV"
-        >
-          <Download size={15} aria-hidden="true" />
-          Export CSV
-        </button>
-        <button
-          type="button"
-          className="refresh-all-button"
-          onClick={async () => {
-            const formatted = formatAsoKeywordField(keywords.map((k) => k.keyword));
-            try {
-              if (navigator.clipboard?.writeText) {
-                await navigator.clipboard.writeText(formatted);
+          <button
+            type="button"
+            className="tracker-button-primary"
+            onClick={() => setAddKeywordsOpen(true)}
+          >
+            <Plus size={15} aria-hidden="true" />
+            Add Keywords
+          </button>
+          <button
+            type="button"
+            className="tracker-button-accent"
+            onClick={() => void openSuggestions()}
+            disabled={suggestionsBusy}
+          >
+            {suggestionsBusy ? (
+              <Loader2 className="spin" size={15} aria-hidden="true" />
+            ) : (
+              <Lightbulb size={15} aria-hidden="true" />
+            )}
+            Get Suggestions
+          </button>
+          <button
+            type="button"
+            className="refresh-all-button"
+            onClick={() => void refreshKeywords(keywords.map((row) => row.keyword))}
+            disabled={keywords.length === 0 || busyKeys.size > 0}
+          >
+            <RefreshCw
+              className={busyKeys.size > 0 ? "spin" : ""}
+              size={15}
+              aria-hidden="true"
+            />
+            Refresh All
+          </button>
+          <button
+            type="button"
+            className="refresh-all-button"
+            onClick={exportCsv}
+            disabled={keywords.length === 0}
+            aria-label="Export keywords as CSV"
+          >
+            <Download size={15} aria-hidden="true" />
+            Export CSV
+          </button>
+          <button
+            type="button"
+            className="refresh-all-button"
+            onClick={async () => {
+              const formatted = formatAsoKeywordField(keywords.map((k) => k.keyword));
+              try {
+                if (navigator.clipboard?.writeText) {
+                  await navigator.clipboard.writeText(formatted);
+                }
+                setCopiedAsoField(true);
+                setTimeout(() => setCopiedAsoField(false), 2000);
+              } catch {
+                // Ignore clipboard failure
               }
-              setCopiedAsoField(true);
-              setTimeout(() => setCopiedAsoField(false), 2000);
-            } catch {
-              // Ignore clipboard failure
-            }
-          }}
-          disabled={keywords.length === 0}
-          title="Copies up to 100 characters of comma-separated keywords for Apple App Store Connect"
-        >
-          {copiedAsoField ? (
-            <Check size={15} aria-hidden="true" />
-          ) : (
-            <Copy size={15} aria-hidden="true" />
-          )}
-          {copiedAsoField ? "Copied 100ch" : "Copy ASO 100ch"}
-        </button>
-
-        <label className="tracker-filter">
-          <Search size={14} aria-hidden="true" />
-          <input
-            value={filter}
-            onChange={(event) => setFilter(event.target.value)}
-            placeholder="Filter keywords…"
-            aria-label="Filter keywords"
-          />
-        </label>
-
-        <label className="country-select">
-          <span>History</span>
-          <select
-            value={historyDays}
-            onChange={(event) =>
-              setHistoryDays(Number(event.target.value) === 7 ? 7 : 30)
-            }
-            aria-label="History period"
+            }}
+            disabled={keywords.length === 0}
+            title="Copies up to 100 characters of comma-separated keywords for Apple App Store Connect"
           >
-            <option value={7}>7 days</option>
-            <option value={30}>30 days</option>
-          </select>
-        </label>
+            {copiedAsoField ? (
+              <Check size={15} aria-hidden="true" />
+            ) : (
+              <Copy size={15} aria-hidden="true" />
+            )}
+            {copiedAsoField ? "Copied 100ch" : "Copy ASO 100ch"}
+          </button>
+        </div>
 
-        <label className="country-select">
-          <span>Density</span>
-          <select
-            value={density}
-            onChange={(event) =>
-              setDensity(
-                event.target.value === "compact" ? "compact" : "comfortable",
-              )
-            }
-            aria-label="Table density"
-          >
-            <option value="comfortable">Comfortable</option>
-            <option value="compact">Compact</option>
-          </select>
-        </label>
+        <div className="tracker-toolbar-controls">
+          <label className="tracker-filter">
+            <Search size={14} aria-hidden="true" />
+            <input
+              value={filter}
+              onChange={(event) => setFilter(event.target.value)}
+              placeholder="Filter keywords…"
+              aria-label="Filter keywords"
+            />
+          </label>
+
+          <label className="country-select">
+            <span>History</span>
+            <select
+              value={historyDays}
+              onChange={(event) =>
+                setHistoryDays(Number(event.target.value) === 7 ? 7 : 30)
+              }
+              aria-label="History period"
+            >
+              <option value={7}>7 days</option>
+              <option value={30}>30 days</option>
+            </select>
+          </label>
+
+          <label className="country-select">
+            <span>Density</span>
+            <select
+              value={density}
+              onChange={(event) =>
+                setDensity(
+                  event.target.value === "compact" ? "compact" : "comfortable",
+                )
+              }
+              aria-label="Table density"
+            >
+              <option value="comfortable">Comfortable</option>
+              <option value="compact">Compact</option>
+            </select>
+          </label>
+        </div>
       </div>
 
       {progress && (
