@@ -9,6 +9,14 @@
     "binding": "ASSETS",
     "run_worker_first": true
   },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "appclimb-db",
+      "database_id": "2b7a1018-9156-4a25-acce-22b6bdd51e71",
+      "migrations_dir": "migrations"
+    }
+  ],
   "observability": {
     "enabled": true,
     "logs": {
@@ -19,7 +27,15 @@
   },
   "env": {
     "staging": {
-      "name": "appclimb-web-staging"
+      "name": "appclimb-web-staging",
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "appclimb-db-staging",
+          "database_id": "f9fe269f-ac56-4dd7-aba2-62bb5bedb5dc",
+          "migrations_dir": "migrations"
+        }
+      ]
     }
   }
 }
