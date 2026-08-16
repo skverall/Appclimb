@@ -15,6 +15,7 @@ import { AddAppModal } from "@/components/add-app-modal";
 import { KeywordExplorer } from "@/components/keyword-explorer";
 import { SuggestionsModal } from "@/components/suggestions-modal";
 import { TrackerView } from "@/components/tracker-view";
+import { useAccount } from "@/components/account-provider";
 import type { CatalogApp } from "@/lib/itunes";
 import { enrichAnalysisResult } from "@/lib/popularity";
 import {
@@ -74,6 +75,13 @@ export function AppWorkspace() {
   } | null>(null);
   const [banner, setBanner] = useState<string | null>(null);
   const storeRef = useRef(store);
+
+  const { account, isPro, openAuth, openUpgrade, signOut } = useAccount();
+  const appLimit = account.limits.trackedApps;
+  const keywordLimit = account.limits.keywordsPerApp;
+
+  const atAppLimit = () =>
+    appLimit !== null && storeRef.current.apps.length >= appLimit;
 
   useEffect(() => {
     storeRef.current = store;
@@ -193,6 +201,11 @@ export function AppWorkspace() {
   };
 
   const handleSelectCatalogApp = async (catalog: CatalogApp, country: string) => {
+    if (atAppLimit()) {
+      setAddAppOpen(false);
+      openUpgrade();
+      return;
+    }
     setAddAppOpen(false);
     setBootstrapping(true);
     setBootstrapLabel("Loading app metadata from the App Store…");
@@ -253,6 +266,11 @@ export function AppWorkspace() {
    * curated keyword set, so a fresh visitor sees the whole flow working.
    */
   const handleQuickStart = async (country: string) => {
+    if (atAppLimit()) {
+      setAddAppOpen(false);
+      openUpgrade();
+      return;
+    }
     setAddAppOpen(false);
     setBootstrapping(true);
     setBootstrapLabel(`Loading ${STARTER_APP_NAME} from the App Store…`);
@@ -299,13 +317,19 @@ export function AppWorkspace() {
     setBanner(null);
 
     // Always read the latest store so we don't drop the newly added app.
-    const { store: withKeys, added } = addKeywordsToStore(
+    const { store: withKeys, added, capped } = addKeywordsToStore(
       storeRef.current,
       app.appStoreId,
       app.country,
       keywords,
+      keywordLimit,
     );
     persist(withKeys);
+    if (capped) {
+      setBanner(
+        `Free plan tracks up to ${keywordLimit} keywords per app. Upgrade to Pro for unlimited keywords.`,
+      );
+    }
     if (added.length === 0) return;
 
     setBootstrapping(true);
@@ -531,9 +555,38 @@ export function AppWorkspace() {
             <Plus size={16} aria-hidden="true" />
             Add App
           </button>
-          <p className="tracker-sidebar-footnote">
-            Free · local only · no account
-          </p>
+          <div className="tracker-sidebar-account">
+            {account.user ? (
+              <>
+                <span className={`account-plan-chip ${isPro ? "is-pro" : "is-free"}`}>
+                  {isPro ? "Pro" : "Free"}
+                </span>
+                <span className="tracker-sidebar-footnote">{account.user.email}</span>
+                <button
+                  type="button"
+                  className="tracker-sidebar-link"
+                  onClick={() => void signOut()}
+                >
+                  Sign out
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" className="tracker-sidebar-link" onClick={openAuth}>
+                  Sign in to sync keywords
+                </button>
+                {!isPro && (
+                  <button
+                    type="button"
+                    className="tracker-sidebar-link tracker-sidebar-link-cta"
+                    onClick={openUpgrade}
+                  >
+                    Upgrade to Pro
+                  </button>
+                )}
+              </>
+            )}
+          </div>
         </div>
       </aside>
 

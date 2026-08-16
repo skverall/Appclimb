@@ -430,7 +430,33 @@ describe("requestAssistantReply", () => {
     writeClientDayCount(AI_LIMITS.maxMessagesPerDay);
     await expect(
       requestAssistantReply({ message: "suggest keywords", history: [], context: null }),
-    ).rejects.toThrow(/local assistant limit/u);
+    ).rejects.toThrow(/assistant limit/u);
+  });
+
+  it("applies a plan-aware daily cap and allows unlimited plans", async () => {
+    const storage = makeStorage();
+    vi.stubGlobal("window", { localStorage: storage });
+    writeClientDayCount(5);
+    await expect(
+      requestAssistantReply({
+        message: "suggest keywords",
+        history: [],
+        context: null,
+        maxPerDay: 5,
+      }),
+    ).rejects.toThrow(/assistant limit/u);
+
+    // An unlimited (null) cap skips the client-side pre-check entirely.
+    const fetchImpl = vi.fn(async () => Response.json({ message: "hi" }, { status: 200 }));
+    vi.stubGlobal("fetch", fetchImpl);
+    await expect(
+      requestAssistantReply({
+        message: "suggest keywords",
+        history: [],
+        context: null,
+        maxPerDay: null,
+      }),
+    ).resolves.toMatchObject({ message: "hi" });
   });
 
   it("posts trimmed content and history without the welcome, then persists", async () => {

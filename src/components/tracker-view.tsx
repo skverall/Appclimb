@@ -19,6 +19,7 @@ import { RankingOverview } from "@/components/ranking-overview";
 import { SuggestionsModal } from "@/components/suggestions-modal";
 import { TrackerDetail } from "@/components/tracker-detail";
 import { Sparkline } from "@/components/keyword-charts";
+import { useAccount } from "@/components/account-provider";
 import { SUPPORTED_COUNTRIES, formatAsoKeywordField } from "@/lib/aso";
 import {
   enrichAnalysisResult,
@@ -170,6 +171,9 @@ export function TrackerView({
   const abortRef = useRef<AbortController | null>(null);
   const autoRefreshDone = useRef<string | null>(null);
   const storeRef = useRef(store);
+
+  const { account } = useAccount();
+  const keywordLimit = account.limits.keywordsPerApp;
 
   useEffect(() => {
     storeRef.current = store;
@@ -1185,14 +1189,20 @@ export function TrackerView({
         existingNormalized={existingNormalized}
         onClose={() => setAddKeywordsOpen(false)}
         onConfirm={(list) => {
-          const { store: next, added } = addKeywordsToStore(
+          const { store: next, added, capped } = addKeywordsToStore(
             store,
             app.appStoreId,
             app.country,
             list,
+            keywordLimit,
           );
           onStoreChange(next);
           setAddKeywordsOpen(false);
+          if (capped) {
+            setError(
+              `Free plan tracks up to ${keywordLimit} keywords per app. Upgrade to Pro for unlimited keywords.`,
+            );
+          }
           if (added.length > 0) {
             void refreshKeywords(added.map((row) => row.keyword));
           }
@@ -1205,14 +1215,20 @@ export function TrackerView({
         suggestions={suggestions}
         onClose={() => setSuggestionsOpen(false)}
         onConfirm={(list) => {
-          const { store: next, added } = addKeywordsToStore(
+          const { store: next, added, capped } = addKeywordsToStore(
             store,
             app.appStoreId,
             app.country,
             list,
+            keywordLimit,
           );
           onStoreChange(next);
           setSuggestionsOpen(false);
+          if (capped) {
+            setError(
+              `Free plan tracks up to ${keywordLimit} keywords per app. Upgrade to Pro for unlimited keywords.`,
+            );
+          }
           if (added.length > 0) {
             void refreshKeywords(added.map((row) => row.keyword));
           }

@@ -417,17 +417,26 @@ export async function requestAssistantReply(options: {
   message: string;
   history: UiMessage[];
   context: AppChatContext | null;
+  /**
+   * Plan-aware daily cap. Falls back to the shared AI_LIMITS when omitted.
+   * `null` means unlimited (Pro).
+   */
+  maxPerDay?: number | null;
 }): Promise<{ message: string; remainingDay?: number; remainingHour?: number }> {
   const content = options.message.trim().slice(0, AI_LIMITS.maxMessageChars);
   if (content.length < 2) {
     throw new Error("Message is too short.");
   }
 
-  const day = readClientDayCount();
-  if (day.count >= AI_LIMITS.maxMessagesPerDay) {
-    throw new Error(
-      "You’ve reached today’s local assistant limit. Limits reset every 24 hours.",
-    );
+  const effectiveMax =
+    options.maxPerDay === undefined ? AI_LIMITS.maxMessagesPerDay : options.maxPerDay;
+  if (effectiveMax !== null) {
+    const day = readClientDayCount();
+    if (day.count >= effectiveMax) {
+      throw new Error(
+        "You’ve reached today’s assistant limit. Limits reset every 24 hours — upgrade to Pro for more.",
+      );
+    }
   }
 
   const history = options.history
@@ -464,7 +473,7 @@ export async function requestAssistantReply(options: {
   const reply = (data.message ?? "").trim();
   if (!reply) throw new Error("Empty assistant response.");
 
-  writeClientDayCount(day.count + 1);
+  writeClientDayCount(readClientDayCount().count + 1);
   return {
     message: reply,
     remainingDay: data.remainingDay,

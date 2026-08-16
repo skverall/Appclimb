@@ -8,6 +8,7 @@ import {
   applyAnalysisToStore,
   buildKeywordSuggestions,
   classifyAppQuery,
+  countTrackedKeywords,
   describeRankTrend,
   emptyStore,
   filterNewSuggestions,
@@ -225,6 +226,54 @@ describe("keyword batch parsing and dedupe", () => {
     ).toBe("primary");
     store = removeKeywordFromStore(store, "123456789", "US", "yoga");
     expect(Object.keys(store.keywords)).toHaveLength(1);
+  });
+});
+
+describe("plan caps (per-app keywords)", () => {
+  it("countTrackedKeywords counts rows for one app + storefront only", () => {
+    let store = addTrackedApp(emptyStore(), sampleApp).store;
+    store = addKeywordsToStore(store, "123456789", "US", ["a1", "b2"]).store;
+    store = addKeywordsToStore(store, "123456789", "DE", ["c3"]).store;
+    store = addTrackedApp(store, { ...sampleApp, appStoreId: "987654321" }).store;
+    store = addKeywordsToStore(store, "987654321", "US", ["d4"]).store;
+    expect(countTrackedKeywords(store, "123456789", "US")).toBe(2);
+    expect(countTrackedKeywords(store, "123456789", "DE")).toBe(1);
+    expect(countTrackedKeywords(store, "987654321", "US")).toBe(1);
+    expect(countTrackedKeywords(store, "123456789", "GB")).toBe(0);
+  });
+
+  it("caps additions at maxPerApp and flags the overflow", () => {
+    let store = addTrackedApp(emptyStore(), sampleApp).store;
+    const { store: withKeys, added, capped } = addKeywordsToStore(
+      store,
+      "123456789",
+      "US",
+      ["k1", "k2", "k3", "k4"],
+      2,
+    );
+    expect(added.map((row) => row.normalizedKeyword)).toEqual(["k1", "k2"]);
+    expect(capped).toBe(true);
+    store = withKeys;
+    expect(countTrackedKeywords(store, "123456789", "US")).toBe(2);
+  });
+
+  it("does not cap when the limit is null or omitted", () => {
+    let store = addTrackedApp(emptyStore(), sampleApp).store;
+    const unlimited = addKeywordsToStore(store, "123456789", "US", ["k1", "k2", "k3"], null);
+    expect(unlimited.capped).toBe(false);
+    expect(unlimited.added).toHaveLength(3);
+    store = addTrackedApp(emptyStore(), sampleApp).store;
+    const omitted = addKeywordsToStore(store, "123456789", "US", ["k1", "k2", "k3"]);
+    expect(omitted.capped).toBe(false);
+    expect(omitted.added).toHaveLength(3);
+  });
+
+  it("does not cap duplicates and invalid entries", () => {
+    let store = addTrackedApp(emptyStore(), sampleApp).store;
+    store = addKeywordsToStore(store, "123456789", "US", ["k1", "k2"], 2).store;
+    const { added, capped } = addKeywordsToStore(store, "123456789", "US", ["k1", "x"], 2);
+    expect(added).toHaveLength(0);
+    expect(capped).toBe(false);
   });
 });
 

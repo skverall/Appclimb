@@ -9,9 +9,13 @@ import {
   Loader2,
   RefreshCw,
   Search,
+  Sparkles,
   Trash2,
   Upload,
 } from "lucide-react";
+
+import { useAccount } from "@/components/account-provider";
+import { consumeDayUsage, EXPLORER_DAY_KEY, peekDayUsage } from "@/lib/usage";
 
 import {
   SUPPORTED_COUNTRIES,
@@ -101,6 +105,25 @@ export function KeywordExplorer() {
   const undoTimeoutRef = useRef<number | null>(null);
   const shareInitRef = useRef(false);
 
+  const { account, openUpgrade } = useAccount();
+  const explorerLimit = account.limits.explorerChecksPerDay;
+  const [limitHit, setLimitHit] = useState(false);
+
+  // A successful upgrade lifts the cap; clear any stale limit banner.
+  useEffect(() => {
+    if (explorerLimit === null) {
+      let cancelled = false;
+      void (async () => {
+        await Promise.resolve();
+        if (cancelled) return;
+        setLimitHit(false);
+      })();
+      return () => {
+        cancelled = true;
+      };
+    }
+  }, [explorerLimit]);
+
   const countryLabel = SUPPORTED_COUNTRIES.find(
     (item) => item.code === country,
   )?.label ?? country;
@@ -150,6 +173,21 @@ export function KeywordExplorer() {
       const key = clean.toLocaleLowerCase();
       if (!clean || busy.has(key)) return;
       const targetCountry = options.country ?? country;
+
+      // Daily check cap (free tier). Only a keyword not already in the list
+      // consumes a check; refreshing tracked keywords stays free.
+      const alreadyTracked = loadKeywordList(window.localStorage, targetCountry).some(
+        (item) => item.toLocaleLowerCase() === key,
+      );
+      if (!alreadyTracked) {
+        const gate = consumeDayUsage(window.localStorage, EXPLORER_DAY_KEY, explorerLimit);
+        if (!gate.allowed) {
+          setLimitHit(true);
+          return;
+        }
+        setLimitHit(false);
+      }
+
       setBusy((previous) => new Set(previous).add(key));
       setError(null);
       try {
@@ -182,7 +220,7 @@ export function KeywordExplorer() {
         setSuggestionsOpen(false);
       }
     },
-    [busy, country],
+    [busy, country, explorerLimit],
   );
 
   /* Shareable deep link: ?kw=meditation&country=DE analyzes on load, then the
@@ -547,6 +585,26 @@ export function KeywordExplorer() {
             Refresh all
           </button>
         </div>
+
+        {limitHit && (
+          <div className="explorer-limit-banner" role="status">
+            <Sparkles size={16} aria-hidden="true" />
+            <span>
+              You&apos;ve used your <strong>{explorerLimit} free keyword checks</strong> for
+              today. Upgrade to Pro for unlimited checks, sync, and 90-day history.
+            </span>
+            <button type="button" className="tracker-button-primary" onClick={openUpgrade}>
+              Upgrade to Pro
+            </button>
+          </div>
+        )}
+
+        {!limitHit && explorerLimit !== null && (
+          <p className="explorer-checks-remaining">
+            {Math.max(0, explorerLimit - peekDayUsage(window.localStorage, EXPLORER_DAY_KEY))} of{" "}
+            {explorerLimit} free checks left today
+          </p>
+        )}
 
         {batchProgress && (
           <div className="keyword-batch-banner" role="status">

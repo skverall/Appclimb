@@ -16,6 +16,7 @@ import {
 
 import { AiChatHistory } from "@/components/ai-chat-history";
 import { ChatMarkdown } from "@/components/chat-markdown";
+import { useAccount } from "@/components/account-provider";
 import { AI_LIMITS } from "@/lib/ai-chat";
 import {
   AI_CONVERSATIONS_KEY,
@@ -59,6 +60,9 @@ export function AiChatConversation({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const stickToBottom = useRef(true);
   const messagesRef = useRef(messages);
+
+  const { account, openUpgrade } = useAccount();
+  const aiLimit = account.limits.aiMessagesPerDay;
 
   // On wide screens the history sidebar starts open; smaller screens start
   // with it closed so it never covers the chat on first visit.
@@ -197,6 +201,7 @@ export function AiChatConversation({
           message: content,
           history,
           context: loadTrackerContext(),
+          maxPerDay: aiLimit,
         });
         if (typeof result.remainingDay === "number") {
           setRemainingDay(result.remainingDay);
@@ -220,7 +225,7 @@ export function AiChatConversation({
         setBusy(false);
       }
     },
-    [busy],
+    [busy, aiLimit],
   );
 
   const clearChat = () => {
@@ -512,11 +517,21 @@ export function AiChatConversation({
           />
           <div className="ai-chat-composer-bar">
             <small>
-              {remainingDay != null
-                ? `${remainingDay} server msgs left today`
-                : `${AI_LIMITS.maxMessagesPerDay}/day limit`}
+              {aiLimit === null
+                ? "Pro · unlimited assistant today"
+                : remainingDay != null
+                  ? `${remainingDay} of ${aiLimit} messages left today`
+                  : `${aiLimit}/day free limit`}
               {" · "}
               saved in this browser
+              {aiLimit !== null && remainingDay === 0 && (
+                <>
+                  {" · "}
+                  <button type="button" className="ai-chat-upgrade-link" onClick={openUpgrade}>
+                    Upgrade for more
+                  </button>
+                </>
+              )}
               {variant === "panel" && (
                 <>
                   {" · "}

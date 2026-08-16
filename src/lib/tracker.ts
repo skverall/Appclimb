@@ -460,12 +460,28 @@ export function parseKeywordBatch(
   return { accepted, duplicates, invalid, alreadyTracked };
 }
 
+/** Count tracked keywords for one app + storefront. */
+export function countTrackedKeywords(
+  store: TrackerStore,
+  appStoreId: string,
+  country: string,
+): number {
+  const countryCode = country.trim().toUpperCase();
+  let count = 0;
+  for (const row of Object.values(store.keywords)) {
+    if (row.appStoreId === appStoreId && row.country === countryCode) count += 1;
+  }
+  return count;
+}
+
 export function addKeywordsToStore(
   store: TrackerStore,
   appStoreId: string,
   country: string,
   keywords: string[],
-): { store: TrackerStore; added: TrackedKeyword[] } {
+  /** Per-app keyword cap for the current plan; `null`/omitted = unlimited. */
+  maxPerApp?: number | null,
+): { store: TrackerStore; added: TrackedKeyword[]; capped: boolean } {
   const next: TrackerStore = {
     ...store,
     keywords: { ...store.keywords },
@@ -473,11 +489,20 @@ export function addKeywordsToStore(
   };
   const added: TrackedKeyword[] = [];
   const countryCode = country.trim().toUpperCase();
+  const capacity =
+    maxPerApp === null || maxPerApp === undefined
+      ? Number.POSITIVE_INFINITY
+      : Math.max(0, maxPerApp - countTrackedKeywords(store, appStoreId, countryCode));
+  let capped = false;
   for (const keyword of keywords) {
     const normalized = normalizeKeyword(keyword);
     if (normalized.length < 2 || normalized.length > 80) continue;
     const key = keywordKey(appStoreId, countryCode, normalized);
     if (next.keywords[key]) continue;
+    if (added.length >= capacity) {
+      capped = true;
+      continue;
+    }
     const row: TrackedKeyword = {
       appStoreId,
       country: countryCode,
@@ -491,7 +516,7 @@ export function addKeywordsToStore(
     next.keywords[key] = row;
     added.push(row);
   }
-  return { store: next, added };
+  return { store: next, added, capped };
 }
 
 export function updateKeywordNote(

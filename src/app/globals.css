@@ -3788,3 +3788,84 @@ img {
     display: none;
   }
 }
+
+/* Explorer daily-check limit (free tier) */
+.explorer-limit-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--amber-300);
+  border-radius: var(--radius-lg);
+  background: var(--amber-50);
+  color: var(--ink);
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
+}
+
+.explorer-limit-banner svg {
+  color: var(--amber-700);
+  flex-shrink: 0;
+}
+
+.explorer-limit-banner span {
+  flex: 1;
+}
+
+.explorer-limit-banner .tracker-button-primary {
+  flex-shrink: 0;
+}
+
+.explorer-checks-remaining {
+  margin: 0;
+  font-size: var(--text-3xs);
+  color: var(--ink-muted);
+}
+
+.ai-chat-upgrade-link {
+  color: var(--teal-600);
+  font-weight: 600;
+  font-size: inherit;
+  padding: 0;
+}
+
+.ai-chat-upgrade-link:hover {
+  text-decoration: underline;
+}
+
+/* Sidebar account block (My Apps footer) */
+.tracker-sidebar-account {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.tracker-sidebar-link {
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: var(--ink-secondary);
+  padding: 2px 4px;
+}
+
+.tracker-sidebar-link:hover {
+  color: var(--teal-600);
+  text-decoration: underline;
+}
+
+.tracker-sidebar-link-cta {
+  color: var(--teal-600);
+}
+
+@media (max-width: 640px) {
+  .explorer-limit-banner {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .explorer-limit-banner .tracker-button-primary {
+    width: 100%;
+    justify-content: center;
+  }
+}
