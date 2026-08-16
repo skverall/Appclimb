@@ -9,7 +9,7 @@ import { absoluteUrl } from "@/lib/site";
 export const metadata: Metadata = {
   title: "About AppClimb",
   description:
-    "Why AppClimb is building a free, honest App Store keyword tool on public data — no invented volumes, no dark patterns.",
+    "Why AppClimb leads with official Apple Ads popularity instead of unexplained search volume — free, labeled, no account.",
   alternates: {
     canonical: "/about",
   },
@@ -31,7 +31,7 @@ export default function AboutPage() {
           name: "About AppClimb",
           url: absoluteUrl("/about"),
           description:
-            "AppClimb is a free App Store keyword explorer built on public data.",
+            "AppClimb is a free App Store keyword explorer that leads with official Apple Ads popularity.",
           mainEntity: {
             "@id": "https://appclimb.app/#organization",
           },
@@ -40,13 +40,13 @@ export default function AboutPage() {
       <main className="about-page">
         <section className="about-hero marketing-container">
           <span className="marketing-eyebrow">Why AppClimb exists</span>
-          <h1>Keyword tools hide their data. We show ours.</h1>
+          <h1>Keyword tools hide their data. We show Apple&apos;s.</h1>
           <p>
-            Every serious ASO tool sells &ldquo;search volume&rdquo; — but true App Store
-            query counts stay inside Apple Ads. AppClimb is a free keyword
-            explorer: official Apple Ads popularity (relative 1–100) when the
-            term is in that storefront and genre, estimated difficulty from
-            public iTunes data, and a source label on every score.
+            Paid ASO tools sell &ldquo;search volume&rdquo; with no source. AppClimb
+            leads with Apple&apos;s official Ads popularity (relative 1–100)
+            when the term is in that storefront and genre — labeled on every
+            row. Difficulty stays an estimate from public iTunes results. Free,
+            no account.
           </p>
         </section>
 
@@ -63,11 +63,12 @@ export default function AboutPage() {
           </article>
           <article>
             <ShieldCheck aria-hidden="true" />
-            <h2>Estimates, never invented volumes</h2>
+            <h2>Apple Ads popularity, labeled</h2>
             <p>
-              Popularity and difficulty are derived from competition pressure
-              and top-result strength. They are clearly labeled as estimates and
-              never presented as Apple Ads data.
+              Popularity is Apple&apos;s official relative 1–100 score when
+              Apple has the term. Otherwise we show a labeled iTunes estimate.
+              Difficulty is always estimated. We never invent monthly search
+              volume.
             </p>
           </article>
           <article>
@@ -104,7 +105,7 @@ export default function AboutPage() {
             <span className="marketing-eyebrow">Current status</span>
             <h2>The keyword explorer is live and free.</h2>
             <p>
-              Keyword search, Apple Ads popularity when available, estimated
+              Official Apple Ads popularity when Apple has the term, estimated
               difficulty, 30-day trend charts, related keywords, and top-app
               breakdowns. No visitor accounts, no billing, no tracking.
             </p>

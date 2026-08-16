@@ -7,16 +7,16 @@ import { MarketingShell } from "@/components/marketing-shell";
 import { SITE_DESCRIPTION, absoluteUrl } from "@/lib/site";
 
 export const metadata: Metadata = {
-  title: "App Store Keyword Research: Popularity and Difficulty Estimates",
+  title: "App Store Keyword Research: Official Apple Ads Popularity",
   description:
-    "How AppClimb estimates keyword popularity and difficulty from public App Store data, and how to use bulk analysis, the golden-keyword filter, CSV export, and local backup to pick keywords worth ranking for.",
+    "Official Apple Ads popularity (1–100) plus estimated difficulty. Competitors hide the source. AppClimb labels every score — free, no account.",
   alternates: {
     canonical: "/app-store-keywords",
   },
   openGraph: {
-    title: "App Store Keyword Research · AppClimb",
+    title: "Official Apple Ads popularity · AppClimb",
     description:
-      "Estimated popularity, difficulty, and trends for any App Store keyword — bulk list analysis, golden-keyword filtering, and CSV export from public data, free and without an account.",
+      "Apple’s official Ads popularity (1–100) for any App Store keyword — labeled source, not a black-box volume. Free, no account.",
     url: "/app-store-keywords",
   },
 };
@@ -28,8 +28,8 @@ const steps = [
     icon: Search,
   },
   {
-    title: "Read the estimates",
-    text: "Popularity (estimated demand) and difficulty (barrier to rank) are scored 0–100, with the evidence — result count, top apps, ratings — shown right next to them.",
+    title: "Read Apple’s score",
+    text: "Popularity is Apple Ads official (1–100) when Apple has the term — labeled on the row. Difficulty stays an estimate of the barrier, with result count, top apps, and ratings next to it.",
     icon: Eye,
   },
   {
@@ -99,12 +99,13 @@ export default function KeywordResearchPage() {
       <main className="marketing-page">
         <section className="marketing-hero marketing-container">
           <div className="marketing-hero-copy">
-            <span className="marketing-eyebrow">App Store keyword research</span>
-            <h1>Pick keywords worth ranking for.</h1>
+            <span className="marketing-eyebrow">Official Apple Ads data</span>
+            <h1>Popularity from Apple. Not a black box.</h1>
             <p>
-              Every keyword gets an Apple Ads popularity score when available,
-              an estimated difficulty score, and a 30-day trend. Free, no
-              account, no invented volumes.
+              Paid tools invent search volume and hide the model. AppClimb
+              shows Apple&apos;s official Ads popularity (1–100) when the term
+              is in that storefront and genre — labeled on every score. Free,
+              no account.
             </p>
             <div className="marketing-hero-actions">
               <Link href="/" className="marketing-primary-action large">
@@ -118,8 +119,8 @@ export default function KeywordResearchPage() {
               </Link>
             </div>
             <div className="marketing-trust-row">
-              <span>✅ Official Ads popularity when Apple has the term</span>
-              <span>✅ Estimates labeled honestly</span>
+              <span>✅ Official Apple Ads popularity</span>
+              <span>✅ Source labeled on every score</span>
               <span>✅ Bulk lists, CSV export & backup</span>
               <span>✅ No account or tracking</span>
             </div>
@@ -163,17 +164,17 @@ export default function KeywordResearchPage() {
 
         <section className="marketing-section marketing-section-tint">
           <div className="marketing-container">
-            <span className="marketing-eyebrow">Why not volume</span>
+            <span className="marketing-eyebrow">The difference</span>
             <h2 className="marketing-section-heading">
-              Official popularity is still not search volume. We say so.
+              They hide the source. We start with Apple.
             </h2>
             <p>
-              Apple Ads Platform API v1 returns a relative 1–100 popularity
-              score, not monthly query counts. Tools that show precise search
-              volumes without a stated source are showing a model. AppClimb
-              uses the official relative score when Apple has the term, falls
-              back to a labeled iTunes estimate otherwise, and still shows the
-              result count, top apps, and ratings behind difficulty.
+              Sensor Tower, AppTweak, and similar tools show a volume number
+              with no public source. AppClimb uses Apple Ads Platform API v1
+              — Apple&apos;s own relative popularity (1–100), not monthly
+              query counts. If Apple has no row that week, we fall back to a
+              labeled iTunes estimate and say so. Difficulty still shows the
+              result count, top apps, and ratings behind it.
             </p>
             <div className="marketing-hero-actions">
               <Link href="/" className="marketing-primary-action">

@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 export const alt =
-  "AppClimb — App Store keyword explorer with estimated popularity and difficulty";
+  "AppClimb — official Apple Ads keyword popularity, not a black box";
 export const size = {
   width: 1200,
   height: 630,
@@ -80,7 +80,7 @@ export default function OpenGraphImage() {
                 lineHeight: 1.04,
               }}
             >
-              Find keywords worth ranking for.
+              Popularity from Apple. Not a black box.
             </div>
             <p
               style={{
@@ -91,12 +91,12 @@ export default function OpenGraphImage() {
                 lineHeight: 1.45,
               }}
             >
-              Estimated popularity, difficulty, and 30-day trends — built from
-              public App Store data. Free, no account.
+              Official Apple Ads popularity (1–100), labeled on every score.
+              Free, no account.
             </p>
           </div>
           <span style={{ color: "#6b7c80", fontSize: 18 }}>
-            appclimb.app · honest estimates, never invented volumes
+            appclimb.app · Apple data, not a mystery model
           </span>
         </div>
         <div
@@ -231,8 +231,8 @@ export default function OpenGraphImage() {
                 fontSize: 13,
               }}
             >
-              <span>Popularity &amp; difficulty are estimates</span>
-              <strong>from public data</strong>
+              <span>Popularity is Apple Ads official</span>
+              <strong>source labeled</strong>
             </div>
           </div>
         </div>

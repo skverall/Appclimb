@@ -43,10 +43,10 @@ export function MarketingFooter() {
         <div>
           <BrandMark />
           <p>
-            Free App Store keyword research and local app tracking: Apple Ads
-            popularity, estimated difficulty, and observed position.
+            Official Apple Ads popularity (1–100), estimated difficulty, and
+            observed App Store position — source labeled on every score.
           </p>
-          <span>No account. No tracking. Estimates, never invented volumes.</span>
+          <span>No account. No tracking. Apple data, not a mystery model.</span>
         </div>
         <div>
           <strong>Explore</strong>

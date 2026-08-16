@@ -1,15 +1,15 @@
 export const SITE_URL = "https://appclimb.app";
 export const SITE_NAME = "AppClimb";
 export const SITE_DESCRIPTION =
-  "Free App Store keyword research: Apple Ads popularity when available, estimated difficulty, bulk list analysis, golden-keyword filtering, CSV export, and 30-day trends — no account required.";
+  "App Store keyword popularity from Apple Ads — official 1–100 scores, labeled source, not a black-box volume. Estimated difficulty, bulk lists, and 30-day trends. Free, no account.";
 export const SITE_UPDATED = "2026-08-16";
 
 export const PUBLIC_PAGES = [
   {
     path: "/",
-    title: "AppClimb — App Store keyword explorer",
+    title: "AppClimb — Apple Ads keyword popularity",
     description:
-      "Search any App Store keyword for Apple Ads popularity and estimated difficulty, analyze lists in bulk, filter golden opportunities, and export or back up — free, without an account.",
+      "Official Apple Ads popularity (1–100) for any App Store keyword — not a mystery volume. Estimated difficulty, bulk lists, and local trends. Free, no account.",
     changeFrequency: "weekly" as const,
     priority: 1,
     lastModified: SITE_UPDATED,
@@ -25,9 +25,9 @@ export const PUBLIC_PAGES = [
   },
   {
     path: "/app-store-keywords",
-    title: "App Store Keyword Research: Popularity and Difficulty Estimates",
+    title: "App Store Keyword Research: Official Apple Ads Popularity",
     description:
-      "How AppClimb estimates keyword popularity and difficulty from public App Store data, and how to use the estimates to pick keywords worth ranking for.",
+      "How AppClimb shows official Apple Ads popularity (1–100) plus estimated difficulty — and why the source is labeled, unlike black-box ASO tools.",
     changeFrequency: "weekly" as const,
     priority: 0.95,
     lastModified: SITE_UPDATED,
@@ -99,7 +99,7 @@ export const PUBLIC_PAGES = [
     path: "/about",
     title: "About AppClimb",
     description:
-      "Why AppClimb is building a free, honest App Store keyword tool on public data — no invented volumes, no dark patterns.",
+      "Why AppClimb leads with official Apple Ads popularity instead of unexplained search volume — free, labeled, no account.",
     changeFrequency: "monthly" as const,
     priority: 0.65,
     lastModified: SITE_UPDATED,

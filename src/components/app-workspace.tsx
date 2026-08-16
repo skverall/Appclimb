@@ -599,8 +599,9 @@ export function AppWorkspace() {
                   <li>
                     <strong>3. Watch position</strong>
                     <span>
-                      See estimated popularity/difficulty and rank in the public
-                      iTunes results (first 200).
+                      See Apple Ads popularity (or a labeled estimate),
+                      difficulty, and rank in the public iTunes results (first
+                      200).
                     </span>
                   </li>
                 </ol>

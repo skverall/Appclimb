@@ -4,9 +4,9 @@ import { AppWorkspace } from "@/components/app-workspace";
 import { MarketingShell } from "@/components/marketing-shell";
 
 export const metadata: Metadata = {
-  title: "AppClimb — free App Store keyword tracker & explorer",
+  title: "AppClimb — official Apple Ads keyword popularity",
   description:
-    "Explore App Store keywords: Apple Ads popularity when available, estimated difficulty, bulk list analysis, golden-keyword filter, CSV export, and local backup — plus observed position tracking for your app. Free, no account.",
+    "See Apple’s official Ads popularity (1–100) for any App Store keyword. Competitors hide the source. We label it. Estimated difficulty, bulk lists, local trends. Free, no account.",
   alternates: {
     canonical: "/",
   },

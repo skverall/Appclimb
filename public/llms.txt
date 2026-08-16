@@ -1,15 +1,16 @@
 # AppClimb
 
-> AppClimb is a free App Store keyword explorer: estimated keyword popularity and difficulty with 30-day trend charts, built from public App Store data.
+> AppClimb is a free App Store keyword explorer. The lead feature is official Apple Ads popularity (1–100), labeled on every score — not a black-box search volume.
 
-AppClimb searches any App Store keyword and shows an estimated popularity score (0–100), an estimated difficulty score (0–100), a 30-day trend chart, related keywords, and the top 10 apps ranking for the term. Everything comes from Apple's public iTunes Search API, queried directly from the browser. No account, no billing, no tracking.
+AppClimb searches any App Store keyword and shows Apple's official Ads popularity when the term is in that storefront and genre, an estimated difficulty score, a 30-day trend chart, related keywords, and the top 10 apps ranking for the term. Difficulty and evidence come from Apple's public iTunes Search API. No account, no billing, no tracking.
 
 ## Data honesty
 
-- Popularity and difficulty are **estimates** derived from public signals (competition pressure, top-result ratings, mega-brand presence), not Apple Search Ads volume — which is not publicly available.
-- Every score is labeled as an estimate and shown alongside its evidence (result count, saturation, top apps, ratings).
+- Popularity is Apple Ads official (`searchPopularity1to100`) when Apple has the term; otherwise a labeled iTunes estimate. It is **not** monthly search volume.
+- Difficulty is always an estimate from public signals (competition, top-result ratings, mega-brand presence).
+- Every score is labeled with its source (`Apple Ads` vs `Est.`) and shown alongside evidence (result count, saturation, top apps, ratings).
 - Keyword history is stored in the visitor's browser (localStorage), one daily snapshot per keyword per country. The first check seeds an estimated 30-day baseline, clearly flagged; later checks record real measurements.
-- AppClimb is not affiliated with Apple.
+- AppClimb is not affiliated with Apple. Competitors that sell unexplained “search volume” are the thing we refuse to copy.
 
 ## Key pages
 
@@ -25,6 +26,6 @@ AppClimb searches any App Store keyword and shows an estimated popularity score 
 
 ## Preferred short description
 
-AppClimb is a free App Store keyword tool that estimates keyword popularity and difficulty from public data, tracks trends in your browser, and never claims search volume it cannot verify.
+AppClimb is a free App Store keyword tool that shows official Apple Ads popularity (1–100), estimates difficulty from public data, tracks trends in your browser, and never claims search volume it cannot verify.
 
-Last updated: 2026-08-02
+Last updated: 2026-08-16

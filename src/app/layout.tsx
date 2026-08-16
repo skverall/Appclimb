@@ -45,7 +45,7 @@ const fontMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "AppClimb — App Store keyword explorer",
+    default: "AppClimb — official Apple Ads popularity",
     template: "%s · AppClimb",
   },
   description: SITE_DESCRIPTION,
@@ -57,6 +57,7 @@ export const metadata: Metadata = {
   keywords: [
     "App Store keyword research",
     "ASO keywords",
+    "Apple Ads popularity",
     "keyword popularity",
     "keyword difficulty",
     "App Store search",
@@ -95,7 +96,7 @@ export const metadata: Metadata = {
     },
   },
   openGraph: {
-    title: "AppClimb — App Store keyword explorer",
+    title: "AppClimb — official Apple Ads popularity",
     description: SITE_DESCRIPTION,
     type: "website",
     url: "/",
@@ -112,7 +113,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "AppClimb — Find keywords worth ranking for",
+    title: "AppClimb — Popularity from Apple, not a black box",
     description: SITE_DESCRIPTION,
     images: ["/opengraph-image"],
   },

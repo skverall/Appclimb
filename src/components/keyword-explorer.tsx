@@ -448,23 +448,21 @@ export function KeywordExplorer() {
   return (
     <main className="tool-page">
       <section className="keyword-hero marketing-container">
-        <span className="marketing-eyebrow">App Store keyword intelligence</span>
-        <h1>Find keywords worth ranking for</h1>
+        <span className="marketing-eyebrow">Official Apple Ads data</span>
+        <h1>Popularity from Apple. Not a black box.</h1>
         <p className="keyword-hero-deck">
-          Search keywords for Apple Ads popularity and estimated difficulty,
-          analyze a whole list at once, and filter for{" "}
-          <strong>golden</strong> opportunities — or use <strong>My Apps</strong>{" "}
-          in the sidebar to track your app’s position on public App Store
-          search. Free, local, no account.
+          Competitors sell “search volume” and never say where it comes from.
+          AppClimb shows Apple&apos;s official Ads popularity (1–100) for the
+          keyword — labeled, free, no account. Difficulty is still an estimate
+          from public results.
         </p>
         <div className="keyword-estimate-note">
           <Info size={15} aria-hidden="true" />
           <span>
-            Popularity is Apple&apos;s official relative Ads score (1–100)
-            when the term appears in that storefront and genre; otherwise an{" "}
-            <strong>estimate</strong> from public iTunes signals. Difficulty is
-            always estimated. Neither is search volume. Position in My Apps is
-            the observed rank in the first 200 public results.
+            Apple Ads popularity is a <strong>relative 1–100 score</strong>, not
+            monthly searches. If Apple has no row for that storefront and genre
+            this week, we fall back to a labeled iTunes estimate. Position in My
+            Apps is the observed rank in the first 200 public results.
           </span>
         </div>
       </section>

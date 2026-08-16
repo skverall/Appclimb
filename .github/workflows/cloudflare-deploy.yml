@@ -50,7 +50,7 @@ jobs:
       - name: Verify canonical homepage
         run: |
           curl --fail --silent --show-error https://appclimb.app/ \
-            | grep -q "Find keywords worth ranking for"
+            | grep -q "Popularity from Apple"
 
       - name: Wait for the canonical sitemap
         run: |

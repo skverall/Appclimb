@@ -115,7 +115,7 @@ export function ArticleLayout({
             <span className="marketing-eyebrow">Try the tool</span>
             <h2>See keyword data yourself.</h2>
             <p>
-              Search any App Store keyword for Apple Ads popularity, estimated difficulty,
+              Official Apple Ads popularity and estimated difficulty for any App Store keyword
               and a 30-day trend — free, without an account.
             </p>
             <Link href="/">

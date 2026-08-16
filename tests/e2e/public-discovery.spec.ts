@@ -6,15 +6,15 @@ test("keyword research landing page is indexable and mobile-safe", async ({
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/app-store-keywords");
 
-  await expect(page).toHaveTitle(/App Store Keyword Research/);
+  await expect(page).toHaveTitle(/Official Apple Ads Popularity/);
   await expect(
     page.getByRole("heading", {
       level: 1,
-      name: /Pick keywords worth ranking for/,
+      name: /Popularity from Apple/,
     }),
   ).toBeVisible();
   await expect(
-    page.getByText("✅ Estimates labeled honestly"),
+    page.getByText("✅ Official Apple Ads popularity"),
   ).toBeVisible();
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
     "href",
@@ -39,14 +39,14 @@ test("home page renders the keyword explorer without an account", async ({
   await expect(
     page.getByRole("heading", {
       level: 1,
-      name: /Find keywords worth ranking for/,
+      name: /Popularity from Apple/,
     }),
   ).toBeVisible();
   await expect(
     page.getByPlaceholder(/meditation/),
   ).toBeVisible();
   await expect(
-    page.getByText(/Estimates, never invented volumes/i),
+    page.getByText(/Apple data, not a mystery model/i),
   ).toBeVisible();
 });
 

@@ -201,7 +201,7 @@ test("keyword explorer works without adding an app", async ({ page }) => {
   await expect(
     page.getByRole("heading", {
       level: 1,
-      name: /Find keywords worth ranking for/,
+      name: /Popularity from Apple/,
     }),
   ).toBeVisible();
   await expect(page.getByPlaceholder(/meditation/)).toBeVisible();

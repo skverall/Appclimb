@@ -8,12 +8,12 @@ import { absoluteUrl } from "@/lib/site";
 export const metadata = {
   title: "Pricing",
   description:
-    "AppClimb is free: App Store keyword popularity and difficulty estimates from public data, no account or payment required.",
+    "AppClimb is free: official Apple Ads popularity (1–100) plus estimated difficulty. No account or payment.",
   alternates: { canonical: "/pricing" },
   openGraph: {
     title: "AppClimb Pricing",
     description:
-      "Free. No accounts. No billing. Estimated keyword popularity and difficulty from public App Store data.",
+      "Free. No accounts. No billing. Official Apple Ads popularity, estimated difficulty.",
     url: "/pricing",
   },
 };
@@ -32,9 +32,9 @@ const accessDetails = [
     inDevelopment: false,
   },
   {
-    status: "Public data",
+    status: "Apple source",
     detail:
-      "everything is derived from the public iTunes Search API — no Apple Ads volume claims",
+      "popularity is Apple Ads official (relative 1–100) when Apple has the term — not invented volume",
     inDevelopment: false,
   },
   {

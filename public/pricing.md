@@ -15,8 +15,8 @@ Last updated: 2026-08-16
 
 ## Current product status
 
-- Product promise: free App Store keyword research on public data
-- Shipped: keyword explorer, estimation heuristics, localStorage history with estimated 30-day baseline, marketing pages
+- Product promise: official Apple Ads popularity, not a black-box volume
+- Shipped: keyword explorer, Apple Ads popularity overlay, iTunes difficulty, localStorage history with estimated 30-day baseline, marketing pages
 - Honest limits: popularity is Apple Ads official (relative 1–100) or an iTunes estimate; difficulty is always estimated; neither is search volume
 
 Human-readable pricing: https://appclimb.app/pricing

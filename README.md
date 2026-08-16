@@ -1,15 +1,17 @@
 # AppClimb — Free App Store keyword explorer
 
-AppClimb is a **free App Store keyword tool**: search any keyword and get a
-popularity score (0–100), an estimated difficulty score (0–100), and a 30-day
-trend chart. Difficulty and evidence come from Apple's public iTunes Search
-API. Popularity is Apple Ads official (`searchPopularity1to100`) when the
-founder-owned Platform API v1 lookup hits; otherwise the iTunes estimate.
-No visitor account and no tracking.
+AppClimb is a **free App Store keyword tool**. The lead feature is official
+Apple Ads popularity — not a competitor model with no source.
+
+Search any keyword and get Apple's official Ads score (`searchPopularity1to100`,
+1–100) when the term is in that storefront and genre; otherwise a labeled
+iTunes estimate. Difficulty and evidence still come from the public iTunes
+Search API. No visitor account and no tracking.
 
 > Popularity is either Apple Ads official (relative 1–100) or an estimate
 > from public signals. Difficulty is always an estimate. Neither is search
-> volume. Both are labeled in the UI.
+> volume. Both are labeled in the UI. Competitors that sell unexplained
+> “search volume” are the thing we refuse to copy.
 
 The canonical product north star lives in
 [PRODUCT_DIRECTION.md](./PRODUCT_DIRECTION.md). Read it before changing product
