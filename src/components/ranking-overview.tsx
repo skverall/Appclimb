@@ -17,49 +17,82 @@ import {
  * only measured days are plotted — gaps are never filled in.
  */
 function BestPositionChart({ points }: { points: BestPositionPoint[] }) {
-  const width = 320;
-  const height = 88;
+  const width = 300;
+  const height = 80;
+  const paddingX = 10;
+  const paddingY = 8;
   const positions = points.map((point) => point.position);
   const worst = Math.max(...positions);
   const best = Math.min(...positions);
   const span = worst - best || 1;
-  const stepX = points.length > 1 ? width / (points.length - 1) : width;
-  const path = points
-    .map((point, index) => {
-      const x = index * stepX;
-      const y = 3 + ((point.position - best) / span) * (height - 6);
-      return `${index === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`;
-    })
+  const availableWidth = width - 2 * paddingX;
+  const availableHeight = height - 2 * paddingY - 14; // room for bottom text
+
+  const stepX = points.length > 1 ? availableWidth / (points.length - 1) : availableWidth;
+  const coords = points.map((point, index) => {
+    const x = paddingX + index * stepX;
+    const y = paddingY + ((point.position - best) / span) * availableHeight;
+    return { x, y };
+  });
+
+  const pathD = coords
+    .map((pt, index) => `${index === 0 ? "M" : "L"}${pt.x.toFixed(1)},${pt.y.toFixed(1)}`)
     .join(" ");
+
+  const areaD = coords.length > 1
+    ? `${pathD} L${coords[coords.length - 1].x.toFixed(1)},${(height - 16).toFixed(1)} L${coords[0].x.toFixed(1)},${(height - 16).toFixed(1)} Z`
+    : "";
+
   const first = points[0]?.date.slice(5) ?? "";
   const last = points[points.length - 1]?.date.slice(5) ?? "";
 
   return (
-    <svg
-      className="tracker-overview-chart"
-      viewBox={`0 0 ${width} ${height}`}
-      role="img"
-      aria-label="Best observed App Store position per day over the last 7 days"
-    >
-      <path
-        d={path}
-        fill="none"
-        stroke="var(--teal-500)"
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <text x="0" y={height - 2} className="trend-chart-label">
-        {first}
-      </text>
-      <text
-        x={width}
-        y={height - 2}
-        className="trend-chart-label trend-chart-label-end"
+    <div className="tracker-chart-container">
+      <svg
+        className="tracker-overview-chart"
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label="Best observed App Store position per day over the last 7 days"
       >
-        {last}
-      </text>
-    </svg>
+        <defs>
+          <linearGradient id="bestPosGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--teal-500)" stopOpacity="0.25" />
+            <stop offset="100%" stopColor="var(--teal-500)" stopOpacity="0.0" />
+          </linearGradient>
+        </defs>
+        {areaD && <path d={areaD} fill="url(#bestPosGrad)" />}
+        <path
+          d={pathD}
+          fill="none"
+          stroke="var(--teal-500)"
+          strokeWidth={2.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {coords.map((pt, i) => (
+          <circle
+            key={i}
+            cx={pt.x}
+            cy={pt.y}
+            r={2.5}
+            fill="#fff"
+            stroke="var(--teal-600)"
+            strokeWidth={1.5}
+          />
+        ))}
+        <text x={paddingX} y={height - 2} className="trend-chart-label">
+          {first}
+        </text>
+        <text
+          x={width - paddingX}
+          y={height - 2}
+          textAnchor="end"
+          className="trend-chart-label"
+        >
+          {last}
+        </text>
+      </svg>
+    </div>
   );
 }
 
@@ -96,8 +129,10 @@ export function RankingOverview({
       aria-label={`Ranking overview for ${app.name}`}
     >
       <section className="tracker-overview-section">
-        <h3>Best Position History</h3>
-        <span className="tracker-overview-sub">7 days · measured</span>
+        <div className="tracker-overview-section-header">
+          <h3>Best Position History</h3>
+          <span className="tracker-overview-sub">7 days · measured</span>
+        </div>
         {bestSeries.length >= 2 ? (
           <BestPositionChart points={bestSeries} />
         ) : (
@@ -108,15 +143,15 @@ export function RankingOverview({
       </section>
 
       <section className="tracker-overview-section">
-        <h3>My Rankings</h3>
-        <span className="tracker-overview-sub">
-          {rankings.length} ranked keyword{rankings.length === 1 ? "" : "s"} ·
-          click for details
-        </span>
+        <div className="tracker-overview-section-header">
+          <h3>My Rankings</h3>
+          <span className="tracker-overview-sub">
+            {rankings.length} ranked {rankings.length === 1 ? "keyword" : "keywords"}
+          </span>
+        </div>
         {rankings.length === 0 ? (
           <p className="tracker-overview-empty">
-            The app is not in the first 200 results for any tracked keyword
-            yet.
+            The app is not in the first 200 results for any tracked keyword yet.
           </p>
         ) : (
           <ul className="tracker-overview-list">
@@ -124,7 +159,9 @@ export function RankingOverview({
               <li key={row.normalizedKeyword}>
                 <button
                   type="button"
+                  className="tracker-overview-kw-btn"
                   onClick={() => onSelectKeyword(row.normalizedKeyword)}
+                  title={`View details for ${row.keyword}`}
                 >
                   <span className="tracker-overview-kw" title={row.keyword}>
                     {row.keyword}
@@ -155,10 +192,10 @@ export function RankingOverview({
       </section>
 
       <section className="tracker-overview-section">
-        <h3>All Ranked Apps</h3>
-        <span className="tracker-overview-sub">
-          Top results across your keywords
-        </span>
+        <div className="tracker-overview-section-header">
+          <h3>All Ranked Apps</h3>
+          <span className="tracker-overview-sub">Top competitors</span>
+        </div>
         {rankedApps.length === 0 ? (
           <p className="tracker-overview-empty">
             No competitor apps observed yet — add keywords and check them.
@@ -168,22 +205,21 @@ export function RankingOverview({
             {rankedApps.map((item) => (
               <li
                 key={item.appStoreId}
+                className="tracker-overview-app-item"
                 title={`${item.name} — ${item.developer}`}
               >
                 {item.iconUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={item.iconUrl} alt="" width={30} height={30} loading="lazy" />
+                  <img src={item.iconUrl} alt="" width={28} height={28} loading="lazy" />
                 ) : (
                   <span className="tracker-app-icon-fallback" aria-hidden="true">
                     {item.name.charAt(0).toUpperCase()}
                   </span>
                 )}
                 <span className="tracker-overview-app-meta">
-                  <strong>{item.name}</strong>
+                  <strong title={item.name}>{item.name}</strong>
                   <small>
-                    {item.keywordCount} keyword
-                    {item.keywordCount === 1 ? "" : "s"} · best{" "}
-                    {formatPosition(item.bestPosition)}
+                    {item.keywordCount} {item.keywordCount === 1 ? "keyword" : "keywords"}
                   </small>
                 </span>
                 <span className="tracker-overview-app-pos">
@@ -197,8 +233,7 @@ export function RankingOverview({
 
       <p className="tracker-overview-note">
         Position = observed iTunes Search rank (first 200) from real daily
-        checks. History is never backfilled; popularity and difficulty remain
-        estimates.
+        checks. History is never backfilled.
       </p>
     </aside>
   );

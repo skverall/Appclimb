@@ -51,8 +51,10 @@ export default function AboutPage() {
         </section>
 
         <section className="about-principles marketing-container">
-          <article>
-            <Eye aria-hidden="true" />
+          <article className="about-principle-card">
+            <div className="about-card-icon">
+              <Eye aria-hidden="true" size={22} />
+            </div>
             <h2>No visitor account</h2>
             <p>
               Difficulty and top apps come from the public iTunes Search API,
@@ -61,8 +63,10 @@ export default function AboutPage() {
               connect Ads or create an AppClimb account.
             </p>
           </article>
-          <article>
-            <ShieldCheck aria-hidden="true" />
+          <article className="about-principle-card">
+            <div className="about-card-icon">
+              <ShieldCheck aria-hidden="true" size={22} />
+            </div>
             <h2>Apple Ads popularity, labeled</h2>
             <p>
               Popularity is Apple&apos;s official relative 1–100 score when
@@ -71,8 +75,10 @@ export default function AboutPage() {
               volume.
             </p>
           </article>
-          <article>
-            <Sparkles aria-hidden="true" />
+          <article className="about-principle-card">
+            <div className="about-card-icon">
+              <Sparkles aria-hidden="true" size={22} />
+            </div>
             <h2>No account, no tracking</h2>
             <p>
               Your keyword list and history live in your browser. There is no
@@ -81,27 +87,29 @@ export default function AboutPage() {
           </article>
         </section>
 
-        <section className="about-story marketing-container">
-          <div>
-            <span className="marketing-eyebrow">Initial focus</span>
-            <h2>One honest App Store keyword tool first.</h2>
-          </div>
-          <div>
-            <p>
-              AppClimb starts with independent developers and micro-teams who
-              publish iOS apps and need to pick keywords without paying for a
-              data subscription they can&apos;t verify.
-            </p>
-            <p>
-              The tool records one daily snapshot per keyword in your browser,
-              so a 30-day trend builds itself over time — and the first check
-              gets an estimated baseline so the chart is useful immediately.
-            </p>
+        <section className="marketing-container">
+          <div className="about-story-card">
+            <div className="about-story-header">
+              <span className="marketing-eyebrow">Initial focus</span>
+              <h2>One honest App Store keyword tool first.</h2>
+            </div>
+            <div className="about-story-content">
+              <p>
+                AppClimb starts with independent developers and micro-teams who
+                publish iOS apps and need to pick keywords without paying for a
+                data subscription they can&apos;t verify.
+              </p>
+              <p>
+                The tool records one daily snapshot per keyword in your browser,
+                so a 30-day trend builds itself over time — and the first check
+                gets an estimated baseline so the chart is useful immediately.
+              </p>
+            </div>
           </div>
         </section>
 
-        <section className="about-status">
-          <div className="marketing-container">
+        <section className="about-status-section">
+          <div className="marketing-container about-status-inner">
             <span className="marketing-eyebrow">Current status</span>
             <h2>The keyword explorer is live and free.</h2>
             <p>
@@ -117,9 +125,9 @@ export default function AboutPage() {
                 href="https://github.com/skverall/Appclimb"
                 target="_blank"
                 rel="noreferrer"
-                className="marketing-secondary-action"
+                className="marketing-secondary-action large"
               >
-                View the technical foundation
+                View GitHub
               </a>
             </div>
           </div>
