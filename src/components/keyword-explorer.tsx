@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { useAccount } from "@/components/account-provider";
+import { proEnabled } from "@/lib/flags";
 import { notifySyncChange } from "@/lib/sync-client";
 import { consumeDayUsage, EXPLORER_DAY_KEY, peekDayUsage } from "@/lib/usage";
 
@@ -107,7 +108,7 @@ export function KeywordExplorer() {
   const shareInitRef = useRef(false);
 
   const { account, openUpgrade, syncVersion } = useAccount();
-  const explorerLimit = account.limits.explorerChecksPerDay;
+  const explorerLimit = proEnabled() ? account.limits.explorerChecksPerDay : null;
   const [limitHit, setLimitHit] = useState(false);
 
   // A successful upgrade lifts the cap; clear any stale limit banner.

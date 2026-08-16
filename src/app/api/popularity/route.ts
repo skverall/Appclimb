@@ -9,7 +9,12 @@ import { isAppleAdsGenre, mapItunesGenre } from "@/lib/apple-ads-genres";
 import { SUPPORTED_COUNTRIES } from "@/lib/aso";
 import { getDb } from "@/lib/db";
 import type { OfficialPopularity } from "@/lib/popularity";
-import { popularityDailyLimit, resolveQuotaSubject } from "@/lib/quota";
+import {
+  LEGACY_POPULARITY_DAILY,
+  popularityDailyLimit,
+  proQuotasEnabled,
+  resolveQuotaSubject,
+} from "@/lib/quota";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -136,7 +141,9 @@ export async function POST(request: NextRequest) {
 
   const now = Date.now();
   const subject = await resolveQuotaSubject(request, getDb());
-  const maxPerDay = popularityDailyLimit(subject.plan);
+  const maxPerDay = proQuotasEnabled()
+    ? popularityDailyLimit(subject.plan)
+    : LEGACY_POPULARITY_DAILY;
   const existing = rateBuckets.get(subject.key) ?? emptyBucket(now);
   const rate = consumeRate(existing, now, maxPerDay);
   rateBuckets.set(subject.key, rate.bucket);

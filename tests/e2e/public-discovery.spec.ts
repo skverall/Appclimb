@@ -46,7 +46,7 @@ test("home page renders the keyword explorer without an account", async ({
     page.getByPlaceholder(/meditation/),
   ).toBeVisible();
   await expect(
-    page.getByText(/Apple data, not a mystery model/i),
+    page.getByText(/Official Apple Ads scores, labeled/i),
   ).toBeVisible();
 });
 

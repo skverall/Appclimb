@@ -37,7 +37,7 @@ test("assistant replies to a message and persists the thread", async ({
 
   // The markdown reply renders and the server-reported quota is shown.
   await expect(page.getByText(/Start with/i)).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText(/19 server msgs left today/i)).toBeVisible();
+  await expect(page.getByText(/19 of 60 messages left today/i)).toBeVisible();
   await expect(page.getByText(SUGGESTION)).toBeVisible();
 
   // The thread survives a reload (stored in localStorage).
@@ -76,7 +76,7 @@ test("conversation history: new chat, switch back, delete", async ({
   await expect(page.getByText(/reply 1/i)).toBeVisible({ timeout: 15_000 });
 
   // A new chat shows the welcome state; the old thread stays in history.
-  await page.getByRole("button", { name: "New chat", exact: true }).click();
+  await page.locator(".ai-chat-new-button").click();
   await expect(page.getByText(/reply 1/i)).toHaveCount(0);
   await expect(page.getByRole("button", { name: SUGGESTION })).toBeVisible();
 
@@ -128,7 +128,7 @@ test("assistant surfaces rate-limit and local-limit errors", async ({
   });
   await page.getByLabel("Message the ASO assistant").fill("more keywords");
   await page.getByRole("button", { name: "Send" }).click();
-  await expect(page.locator(".ai-chat-error")).toContainText(/local assistant limit/i, {
+  await expect(page.locator(".ai-chat-error")).toContainText(/assistant limit/i, {
     timeout: 15_000,
   });
 });

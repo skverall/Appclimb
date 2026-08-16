@@ -5,6 +5,7 @@ import { CreditCard, LogIn, LogOut, Sparkles } from "lucide-react";
 
 import { useAccount } from "@/components/account-provider";
 import { fetchPortalLinks } from "@/lib/account";
+import { proEnabled } from "@/lib/flags";
 
 /** Compact initial for the signed-in avatar chip. */
 function initialOf(email: string, name: string | null): string {
@@ -36,6 +37,9 @@ export function AccountMenu() {
       document.removeEventListener("keydown", onKey);
     };
   }, [open]);
+
+  // Rollout flag: no account chrome until the founder enables billing.
+  if (!proEnabled()) return null;
 
   if (loading) {
     return <span className="account-menu-placeholder" aria-hidden="true" />;

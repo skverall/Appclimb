@@ -17,6 +17,7 @@ import { OnboardingModal } from "@/components/onboarding-modal";
 import { SuggestionsModal } from "@/components/suggestions-modal";
 import { TrackerView } from "@/components/tracker-view";
 import { useAccount } from "@/components/account-provider";
+import { proEnabled } from "@/lib/flags";
 import type { CatalogApp } from "@/lib/itunes";
 import { notifySyncChange } from "@/lib/sync-client";
 import { enrichAnalysisResult } from "@/lib/popularity";
@@ -82,8 +83,9 @@ export function AppWorkspace() {
   const storeRef = useRef(store);
 
   const { account, isPro, openAuth, openUpgrade, signOut, syncVersion } = useAccount();
-  const appLimit = account.limits.trackedApps;
-  const keywordLimit = account.limits.keywordsPerApp;
+  const proOn = proEnabled();
+  const appLimit = proOn ? account.limits.trackedApps : null;
+  const keywordLimit = proOn ? account.limits.keywordsPerApp : null;
 
   const atAppLimit = () =>
     appLimit !== null && storeRef.current.apps.length >= appLimit;
@@ -606,38 +608,40 @@ export function AppWorkspace() {
             <Plus size={16} aria-hidden="true" />
             Add App
           </button>
-          <div className="tracker-sidebar-account">
-            {account.user ? (
-              <>
-                <span className={`account-plan-chip ${isPro ? "is-pro" : "is-free"}`}>
-                  {isPro ? "Pro" : "Free"}
-                </span>
-                <span className="tracker-sidebar-footnote">{account.user.email}</span>
-                <button
-                  type="button"
-                  className="tracker-sidebar-link"
-                  onClick={() => void signOut()}
-                >
-                  Sign out
-                </button>
-              </>
-            ) : (
-              <>
-                <button type="button" className="tracker-sidebar-link" onClick={openAuth}>
-                  Sign in to sync keywords
-                </button>
-                {!isPro && (
+          {proOn && (
+            <div className="tracker-sidebar-account">
+              {account.user ? (
+                <>
+                  <span className={`account-plan-chip ${isPro ? "is-pro" : "is-free"}`}>
+                    {isPro ? "Pro" : "Free"}
+                  </span>
+                  <span className="tracker-sidebar-footnote">{account.user.email}</span>
                   <button
                     type="button"
-                    className="tracker-sidebar-link tracker-sidebar-link-cta"
-                    onClick={openUpgrade}
+                    className="tracker-sidebar-link"
+                    onClick={() => void signOut()}
                   >
-                    Upgrade to Pro
+                    Sign out
                   </button>
-                )}
-              </>
-            )}
-          </div>
+                </>
+              ) : (
+                <>
+                  <button type="button" className="tracker-sidebar-link" onClick={openAuth}>
+                    Sign in to sync keywords
+                  </button>
+                  {!isPro && (
+                    <button
+                      type="button"
+                      className="tracker-sidebar-link tracker-sidebar-link-cta"
+                      onClick={openUpgrade}
+                    >
+                      Upgrade to Pro
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
       </aside>
 

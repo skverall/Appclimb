@@ -18,6 +18,17 @@ export interface QuotaSubject {
   isSignedIn: boolean;
 }
 
+/**
+ * Server-side rollout gate: plan quotas apply only when the founder flips
+ * `PRO_ENABLED=1`; otherwise the legacy lenient limits stay in effect.
+ */
+export function proQuotasEnabled(): boolean {
+  return process.env.PRO_ENABLED === "1";
+}
+
+/** Pre-monetization daily popularity budget, kept for the flag-off mode. */
+export const LEGACY_POPULARITY_DAILY = 300;
+
 export async function resolveQuotaSubject(
   request: NextRequest,
   db: D1Database | null,

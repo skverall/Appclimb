@@ -23,6 +23,13 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       NEXT_TELEMETRY_DISABLED: "1"
+      # Public build-time vars (inlined into the client bundle). Configure them
+      # under GitHub → Settings → Secrets and variables → Actions → Variables.
+      NEXT_PUBLIC_PRO_ENABLED: ${{ vars.NEXT_PUBLIC_PRO_ENABLED || '0' }}
+      NEXT_PUBLIC_PADDLE_CLIENT_TOKEN: ${{ vars.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN || '' }}
+      NEXT_PUBLIC_PADDLE_ENV: ${{ vars.NEXT_PUBLIC_PADDLE_ENV || 'sandbox' }}
+      NEXT_PUBLIC_PADDLE_PRICE_PRO_MONTHLY: ${{ vars.NEXT_PUBLIC_PADDLE_PRICE_PRO_MONTHLY || '' }}
+      NEXT_PUBLIC_PADDLE_PRICE_PRO_YEARLY: ${{ vars.NEXT_PUBLIC_PADDLE_PRICE_PRO_YEARLY || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -43,6 +50,9 @@ jobs:
 
       - name: Build for Cloudflare Workers
         run: npm run build:cloudflare
+
+      - name: Apply D1 migrations
+        run: npx wrangler d1 migrations apply appclimb-db --remote
 
       - name: Deploy web Worker
         run: npx opennextjs-cloudflare deploy --env=''

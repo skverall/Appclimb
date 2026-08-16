@@ -18,6 +18,7 @@ import { AiChatHistory } from "@/components/ai-chat-history";
 import { ChatMarkdown } from "@/components/chat-markdown";
 import { useAccount } from "@/components/account-provider";
 import { AI_LIMITS } from "@/lib/ai-chat";
+import { proEnabled } from "@/lib/flags";
 import {
   AI_CONVERSATIONS_KEY,
   AI_MESSAGES_KEY,
@@ -62,7 +63,8 @@ export function AiChatConversation({
   const messagesRef = useRef(messages);
 
   const { account, openUpgrade } = useAccount();
-  const aiLimit = account.limits.aiMessagesPerDay;
+  const proOn = proEnabled();
+  const aiLimit = proOn ? account.limits.aiMessagesPerDay : AI_LIMITS.maxMessagesPerDay;
 
   // On wide screens the history sidebar starts open; smaller screens start
   // with it closed so it never covers the chat on first visit.
@@ -521,10 +523,10 @@ export function AiChatConversation({
                 ? "Pro · unlimited assistant today"
                 : remainingDay != null
                   ? `${remainingDay} of ${aiLimit} messages left today`
-                  : `${aiLimit}/day free limit`}
+                  : `${aiLimit}/day ${proOn ? "free " : ""}limit`}
               {" · "}
               saved in this browser
-              {aiLimit !== null && remainingDay === 0 && (
+              {proOn && aiLimit !== null && remainingDay === 0 && (
                 <>
                   {" · "}
                   <button type="button" className="ai-chat-upgrade-link" onClick={openUpgrade}>

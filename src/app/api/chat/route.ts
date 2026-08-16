@@ -15,7 +15,7 @@ import {
   type RateBucket,
 } from "@/lib/ai-chat";
 import { getDb } from "@/lib/db";
-import { aiDailyLimit, resolveQuotaSubject } from "@/lib/quota";
+import { aiDailyLimit, proQuotasEnabled, resolveQuotaSubject } from "@/lib/quota";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -79,10 +79,11 @@ export async function POST(request: NextRequest) {
   // Signed-in users are keyed by account (quota follows them); anonymous
   // visitors fall back to the IP+UA hash key.
   const key = subject.isSignedIn ? subject.key : clientRateKey(ip, ua);
-  const maxPerDay = aiDailyLimit(subject.plan);
+  const quotasOn = proQuotasEnabled();
+  const maxPerDay = quotasOn ? aiDailyLimit(subject.plan) : AI_LIMITS.maxMessagesPerDay;
   const existing = rateBuckets.get(key) ?? emptyRateBucket();
   const rate = checkAndConsumeRateLimit(existing, Date.now(), {
-    maxPerHour: maxPerDay,
+    maxPerHour: quotasOn ? maxPerDay : AI_LIMITS.maxMessagesPerHour,
     maxPerDay,
   });
   rateBuckets.set(key, rate.bucket);
