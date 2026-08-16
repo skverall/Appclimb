@@ -1,37 +1,105 @@
-import { ArrowRight, Code2 } from "lucide-react";
+"use client";
+
+import { useState } from "react";
+import { ArrowRight, Code2, Menu, Sparkles, X } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import { AiChatPanel } from "@/components/ai-chat-panel";
 import { BrandMark } from "@/components/brand-mark";
 
 const navigation = [
+  { href: "/", label: "Keyword Explorer" },
   { href: "/assistant", label: "ASO Assistant" },
-  { href: "/app-store-keywords", label: "Keyword research" },
-  { href: "/guides/keyword-research", label: "ASO guide" },
-  { href: "/blog", label: "Field notes" },
+  { href: "/guides/keyword-research", label: "ASO Guide" },
+  { href: "/blog", label: "Field Notes" },
   { href: "/about", label: "About" },
 ] as const;
 
 export function MarketingHeader() {
+  const pathname = usePathname();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const isHome = pathname === "/";
+
   return (
     <header className="marketing-header">
       <div className="marketing-container marketing-header-inner">
-        <Link href="/" aria-label="AppClimb home">
+        <Link href="/" aria-label="AppClimb home" className="marketing-brand-link">
           <BrandMark />
         </Link>
+
         <nav className="marketing-nav" aria-label="Main navigation">
-          {navigation.map((item) => (
-            <Link key={item.href} href={item.href}>
-              {item.label}
-            </Link>
-          ))}
+          {navigation.map((item) => {
+            const active =
+              item.href === "/"
+                ? isHome
+                : pathname.startsWith(item.href);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={active ? "is-active" : undefined}
+                aria-current={active ? "page" : undefined}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
         </nav>
+
         <div className="marketing-actions">
-          <Link href="/" className="marketing-primary-action">
-            Track keywords <ArrowRight size={15} aria-hidden="true" />
-          </Link>
+          {!isHome ? (
+            <Link href="/" className="marketing-primary-action">
+              Open Explorer <ArrowRight size={15} aria-hidden="true" />
+            </Link>
+          ) : (
+            <span className="marketing-status-badge">
+              <Sparkles size={13} aria-hidden="true" />
+              <span>Free · No Account</span>
+            </span>
+          )}
+
+          <button
+            type="button"
+            className="marketing-mobile-toggle"
+            aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
+            aria-expanded={mobileOpen}
+            onClick={() => setMobileOpen((prev) => !prev)}
+          >
+            {mobileOpen ? <X size={20} aria-hidden="true" /> : <Menu size={20} aria-hidden="true" />}
+          </button>
         </div>
       </div>
+
+      {mobileOpen && (
+        <div className="marketing-mobile-drawer">
+          <nav className="marketing-mobile-nav" aria-label="Mobile navigation">
+            {navigation.map((item) => {
+              const active =
+                item.href === "/"
+                  ? isHome
+                  : pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={active ? "is-active" : undefined}
+                  onClick={() => setMobileOpen(false)}
+                >
+                  {item.label}
+                </Link>
+              );
+            })}
+            <Link
+              href="/"
+              className="marketing-mobile-cta"
+              onClick={() => setMobileOpen(false)}
+            >
+              Open Keyword Explorer <ArrowRight size={15} aria-hidden="true" />
+            </Link>
+          </nav>
+        </div>
+      )}
     </header>
   );
 }
@@ -40,7 +108,7 @@ export function MarketingFooter() {
   return (
     <footer className="marketing-footer">
       <div className="marketing-container marketing-footer-grid">
-        <div>
+        <div className="marketing-footer-brand">
           <BrandMark />
           <p>
             Official Apple Ads popularity (1–100), estimated difficulty, and
@@ -50,11 +118,10 @@ export function MarketingFooter() {
         </div>
         <div>
           <strong>Explore</strong>
-          <Link href="/">Keyword explorer</Link>
+          <Link href="/">Keyword Explorer</Link>
           <Link href="/assistant">ASO Assistant</Link>
-          <Link href="/app-store-keywords">Keyword research</Link>
-          <Link href="/guides/keyword-research">ASO guide</Link>
-          <Link href="/blog">Field notes</Link>
+          <Link href="/guides/keyword-research">ASO Guide</Link>
+          <Link href="/blog">Field Notes</Link>
         </div>
         <div>
           <strong>Company</strong>
