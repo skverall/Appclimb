@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { useAccount } from "@/components/account-provider";
+import { notifySyncChange } from "@/lib/sync-client";
 import { consumeDayUsage, EXPLORER_DAY_KEY, peekDayUsage } from "@/lib/usage";
 
 import {
@@ -105,7 +106,7 @@ export function KeywordExplorer() {
   const undoTimeoutRef = useRef<number | null>(null);
   const shareInitRef = useRef(false);
 
-  const { account, openUpgrade } = useAccount();
+  const { account, openUpgrade, syncVersion } = useAccount();
   const explorerLimit = account.limits.explorerChecksPerDay;
   const [limitHit, setLimitHit] = useState(false);
 
@@ -150,7 +151,7 @@ export function KeywordExplorer() {
     return () => {
       cancelled = true;
     };
-  }, [country, refreshVersion]);
+  }, [country, refreshVersion, syncVersion]);
 
   const analyze = useCallback(
     async (
@@ -199,6 +200,7 @@ export function KeywordExplorer() {
           setKeywords(
             addKeywordToList(window.localStorage, targetCountry, clean),
           );
+          notifySyncChange("explorer");
         }
         setMetrics((previous) => new Map(previous).set(clean, nextMetrics));
         setRecords((previous) => new Map(previous).set(clean, record));
@@ -301,6 +303,7 @@ export function KeywordExplorer() {
       }, 6000);
       setKeywords(removeKeywordFromList(window.localStorage, country, keyword));
       deleteRecord(window.localStorage, keyword, country);
+      notifySyncChange("explorer");
       setMetrics((previous) => {
         const next = new Map(previous);
         next.delete(keyword);
@@ -327,6 +330,7 @@ export function KeywordExplorer() {
       saveRecord(window.localStorage, stashedRecord);
     }
     setKeywords(addKeywordToList(window.localStorage, country, keyword));
+    notifySyncChange("explorer");
     if (stashedMetrics) {
       setMetrics((previous) => new Map(previous).set(keyword, stashedMetrics));
     }

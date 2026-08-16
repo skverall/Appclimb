@@ -17,6 +17,7 @@ import { SuggestionsModal } from "@/components/suggestions-modal";
 import { TrackerView } from "@/components/tracker-view";
 import { useAccount } from "@/components/account-provider";
 import type { CatalogApp } from "@/lib/itunes";
+import { notifySyncChange } from "@/lib/sync-client";
 import { enrichAnalysisResult } from "@/lib/popularity";
 import {
   addKeywordsToStore,
@@ -76,7 +77,7 @@ export function AppWorkspace() {
   const [banner, setBanner] = useState<string | null>(null);
   const storeRef = useRef(store);
 
-  const { account, isPro, openAuth, openUpgrade, signOut } = useAccount();
+  const { account, isPro, openAuth, openUpgrade, signOut, syncVersion } = useAccount();
   const appLimit = account.limits.trackedApps;
   const keywordLimit = account.limits.keywordsPerApp;
 
@@ -104,10 +105,29 @@ export function AppWorkspace() {
     };
   }, []);
 
+  // A cloud-sync pull rewrote the local store — reload it into the workspace.
+  useEffect(() => {
+    if (syncVersion === 0) return;
+    let cancelled = false;
+    void (async () => {
+      await Promise.resolve();
+      if (cancelled) return;
+      const loaded = loadTrackerStore(window.localStorage);
+      setStore(loaded);
+      if (loaded.activeAppKey && loaded.apps.length > 0) {
+        setView("app");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [syncVersion]);
+
   const persist = useCallback((next: TrackerStore) => {
     storeRef.current = next;
     setStore(next);
     saveTrackerStore(window.localStorage, next);
+    notifySyncChange("tracker");
   }, []);
 
   const activeApp = useMemo(() => {
