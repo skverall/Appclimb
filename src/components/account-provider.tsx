@@ -21,6 +21,7 @@ import {
   type AccountState,
 } from "@/lib/account";
 import {
+  clearLocalWorkspaceData,
   explorerHasData,
   explorerLocalJson,
   pushSyncBlob,
@@ -218,11 +219,57 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     };
   }, [refresh]);
 
+  /**
+   * Sign out and remove account-scoped workspace data from this device.
+   * Pro data is flushed to the cloud first, so it returns on the next
+   * sign-in; free-plan data exists only locally, so its removal is confirmed.
+   */
   const signOut = useCallback(async () => {
+    const wasPro = account.plan === "pro";
+    const hadUser = account.user !== null;
+    if (hadUser && !wasPro) {
+      const ok = window.confirm(
+        "Sign out and clear this browser's tracked apps, keywords, and history? " +
+          "Free-plan data is not synced — it cannot be recovered after this.",
+      );
+      if (!ok) return;
+    }
+
+    if (hadUser && wasPro) {
+      // Flush pending local changes so nothing lives only on this device.
+      const storage = window.localStorage;
+      let flushOk = true;
+      if (trackerHasData(storage)) {
+        flushOk = (await pushSyncBlob(storage, "tracker", trackerLocalJson(storage))) !== null && flushOk;
+      }
+      if (explorerHasData(storage)) {
+        flushOk = (await pushSyncBlob(storage, "explorer", explorerLocalJson(storage))) !== null && flushOk;
+      }
+      if (!flushOk) {
+        // Never destroy the only copy: sign out but keep this device's data.
+        await signOutRequest();
+        setNotice(
+          "Signed out. Cloud sync was unreachable, so this browser's data was kept — clear it from My Apps if others use this device.",
+        );
+        setSyncVersion((previous) => previous + 1);
+        await refresh();
+        return;
+      }
+    }
+
+    clearLocalWorkspaceData(window.localStorage);
     await signOutRequest();
-    setNotice("Signed out.");
+    setNotice(
+      hadUser
+        ? wasPro
+          ? "Signed out. Your synced data was cleared from this device — it will be restored when you sign back in."
+          : "Signed out. Local tracking data was cleared from this device."
+        : "Signed out.",
+    );
+    // Force every consumer to reload from the (now empty) local storage.
+    setSyncVersion((previous) => previous + 1);
     await refresh();
-  }, [refresh]);
+  }, [account.plan, account.user, refresh]);
 
   const value = useMemo<AccountContextValue>(
     () => ({

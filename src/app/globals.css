@@ -1288,12 +1288,40 @@ img {
   background: var(--teal-50);
 }
 
+/* Compact density (Density control in the tracker toolbar) */
+.tracker-view--compact .keyword-table td {
+  height: 40px;
+  padding-block: 4px;
+}
+
+.tracker-view--compact .keyword-name {
+  font-size: var(--text-xs);
+}
+
+.tracker-view--compact .metric-bar-track {
+  width: 44px;
+}
+
+/* Sticky keyword column must stay opaque: row backgrounds are transparent, so
+   `background: inherit` lets scrolled cells bleed through and overlap. */
 .tracker-col-sticky {
   position: sticky;
   left: 0;
-  background: inherit;
+  background: var(--card);
   z-index: 2;
-  box-shadow: 2px 0 6px rgba(0, 0, 0, 0.02);
+  box-shadow: inset -1px 0 0 var(--line), 2px 0 6px rgba(23, 39, 45, 0.06);
+}
+
+.keyword-table thead .tracker-col-sticky {
+  background: var(--n-25);
+}
+
+.keyword-table tbody tr:hover .tracker-col-sticky {
+  background: var(--teal-25);
+}
+
+.keyword-table tbody tr.is-selected .tracker-col-sticky {
+  background: var(--teal-50);
 }
 
 .keyword-name {
@@ -1318,7 +1346,8 @@ img {
   padding: 0 8px;
   font-size: var(--text-xs);
   color: var(--ink);
-  width: 120px;
+  width: 100%;
+  min-width: 0;
   transition: all 0.12s ease;
 }
 
@@ -1350,19 +1379,24 @@ img {
   font-variant-numeric: tabular-nums;
 }
 
-/* Metric Bars */
+/* Metric Bars: fixed-width track + numeric value side by side, never overlapped */
 .metric-bar {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  width: 80px;
+  gap: 7px;
+}
+
+.metric-bar-track {
+  display: block;
+  width: 56px;
   height: 6px;
   border-radius: var(--radius-pill);
   background: var(--n-150);
-  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
 }
 
-.metric-bar i {
+.metric-bar-track i {
   display: block;
   height: 100%;
   border-radius: inherit;
@@ -1383,6 +1417,7 @@ img {
   color: var(--ink);
   min-width: 18px;
   text-align: right;
+  line-height: 1;
 }
 
 .metric-with-source {
@@ -1494,7 +1529,7 @@ img {
 }
 
 .tracker-col-notes {
-  min-width: 130px;
+  min-width: 104px;
 }
 
 .tracker-col-spark {
@@ -2725,7 +2760,7 @@ img {
 }
 
 .tracker-col-keyword {
-  min-width: 220px;
+  min-width: 180px;
 }
 
 .keyword-name {
@@ -3287,9 +3322,31 @@ img {
    Responsive Breakpoints & Polish
    ========================================================================== */
 
-@media (max-width: 1024px) {
+/* The keyword table needs ~900px to breathe. Below this width the right
+   inspector drops under the table instead of crushing it into a sliver. */
+@media (max-width: 1419px) {
   .tracker-main-split {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Progressive disclosure for wide-but-optional table columns. Sparklines are
+   decorative; competitor icons and timestamps are nice-to-have context. */
+@media (max-width: 1560px) {
+  .tracker-col-spark {
+    display: none;
+  }
+}
+
+@media (max-width: 1419px) {
+  .tracker-col-apps {
+    display: none;
+  }
+}
+
+@media (max-width: 1024px) {
+  .tracker-col-updated {
+    display: none;
   }
 
   .tracker-detail {
@@ -3393,6 +3450,12 @@ img {
 
   .tracker-view {
     padding: 16px 12px 0;
+  }
+
+  .keyword-table th,
+  .keyword-table td {
+    padding-left: 8px;
+    padding-right: 8px;
   }
 
   .marketing-footer-grid {

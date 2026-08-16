@@ -61,7 +61,9 @@ function MetricBar({
 }) {
   return (
     <span className={`metric-bar metric-bar--${tone}`} aria-hidden="true">
-      <i style={{ width: `${value}%` }} />
+      <span className="metric-bar-track">
+        <i style={{ width: `${value}%` }} />
+      </span>
       <b>{value}</b>
     </span>
   );

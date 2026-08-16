@@ -87,7 +87,9 @@ function MetricBar({
 }) {
   return (
     <span className={`metric-bar metric-bar--${tone}`} aria-hidden="true">
-      <i style={{ width: `${value}%` }} />
+      <span className="metric-bar-track">
+        <i style={{ width: `${value}%` }} />
+      </span>
       <b>{value}</b>
     </span>
   );
@@ -775,12 +777,12 @@ export function TrackerView({
           aria-label="Keyword status filters"
         >
           {STATUS_FILTERS.map((item) => {
-            const filterTitles: Record<string, string> = {
+            const filterTitles: Record<KeywordStatusFilter, string> = {
               all: "Show all tracked keywords",
-              top200: "Keywords where this app is currently ranked in the top 200",
-              out200: "Keywords where this app ranks below 200 or is not found",
+              ranked: "Keywords where this app is currently ranked in the top 200",
+              out: "Keywords where this app ranks below 200 or is not found",
               new: "Newly added keywords without a previous snapshot baseline",
-              stale: "Keywords that have not been checked today",
+              unchecked: "Keywords that have not been checked today",
               opportunity: "Promising keywords with strong popularity and lower difficulty",
             };
             return (

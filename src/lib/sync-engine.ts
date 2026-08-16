@@ -8,8 +8,9 @@
  * - Otherwise last-write-wins by revision, with remote winning ties.
  */
 import { SUPPORTED_COUNTRIES, saveKeywordList, type KeywordStorage } from "./aso";
-import { loadTrackerStore, saveTrackerStore } from "./tracker";
+import { TRACKER_STORAGE_KEY, loadTrackerStore, saveTrackerStore } from "./tracker";
 import {
+  SYNC_META_KEY,
   collectExplorerLists,
   fetchSyncBlob,
   readSyncMeta,
@@ -138,5 +139,22 @@ export async function pushSyncBlob(
   const result = await uploadSyncBlob(blobKey, localJson, nextRev);
   if (!result) return null;
   writeSyncMeta(storage, { ...meta, [blobKey]: result.revision });
-  return { applied: result.applied, revision: result.revision };
+  return result;
+}
+
+/**
+ * Remove account-scoped workspace data from this device: the tracker store,
+ * every Explorer keyword list/history record, and the sync revisions. Called
+ * on sign-out so the browser returns to a clean anonymous state — Pro users
+ * get everything back from the cloud on the next sign-in.
+ */
+export function clearLocalWorkspaceData(storage: Storage): void {
+  storage.removeItem(TRACKER_STORAGE_KEY);
+  storage.removeItem(SYNC_META_KEY);
+  const doomed: string[] = [];
+  for (let index = 0; index < storage.length; index += 1) {
+    const key = storage.key(index);
+    if (key && key.startsWith("appclimb:kw:v1:")) doomed.push(key);
+  }
+  for (const key of doomed) storage.removeItem(key);
 }

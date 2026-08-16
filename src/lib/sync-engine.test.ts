@@ -4,6 +4,7 @@ import { addKeywordToList } from "@/lib/aso";
 import {
   applyExplorerJson,
   applyTrackerJson,
+  clearLocalWorkspaceData,
   explorerHasData,
   explorerLocalJson,
   pushSyncBlob,
@@ -78,6 +79,26 @@ describe("local shape helpers", () => {
     const lists = JSON.parse(explorerLocalJson(storage)) as Record<string, string[]>;
     expect(lists.US).toEqual(["meditation"]);
     expect(lists.DE).toEqual(["achtsamkeit"]);
+  });
+
+  it("clearLocalWorkspaceData removes tracker, explorer history, and sync meta", () => {
+    const storage = seedTrackerStorage();
+    addKeywordToList(storage, "US", "meditation");
+    storage.setItem("appclimb:kw:v1:US:meditation", "{}");
+    storage.setItem("appclimb:sync:v1", JSON.stringify({ tracker: 3, explorer: 2 }));
+    storage.setItem("appclimb:onboarded:v1", "user-1");
+    storage.setItem("appclimb:ai:conversations:v1", "[]");
+
+    clearLocalWorkspaceData(storage);
+
+    expect(trackerHasData(storage)).toBe(false);
+    expect(explorerHasData(storage)).toBe(false);
+    expect(storage.getItem("appclimb:kw:v1:US:meditation")).toBeNull();
+    expect(storage.getItem("appclimb:sync:v1")).toBeNull();
+    expect(readSyncMeta(storage).tracker).toBe(0);
+    // Unrelated keys survive (device-level settings, not account data).
+    expect(storage.getItem("appclimb:onboarded:v1")).toBe("user-1");
+    expect(storage.getItem("appclimb:ai:conversations:v1")).toBe("[]");
   });
 });
 
