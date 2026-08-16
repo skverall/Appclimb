@@ -23,8 +23,9 @@ changes it.
 
 ## 1. What AppClimb is
 
-AppClimb is a **free App Store keyword tool**. The lead feature is official
-Apple Ads popularity — not a competitor model with no source.
+AppClimb is a **freemium App Store keyword tool**: a genuinely useful free
+tier plus an optional Pro plan capped at $10/month. The lead feature is
+official Apple Ads popularity — not a competitor model with no source.
 
 ### Plain-language promise
 
@@ -34,8 +35,11 @@ Apple Ads popularity — not a competitor model with no source.
 
 > AppClimb searches any App Store keyword and shows Apple's official Ads
 > popularity (relative 1–100) when the term is in that storefront and genre,
-> estimates difficulty from public iTunes data, and tracks a 30-day trend
-> locally in the visitor's browser. No visitor account, no billing, no tracking.
+> and estimates difficulty from public iTunes data. Everything works without
+> an account, on generous daily limits, with all data staying in the visitor's
+> browser. The optional Pro plan ($8/month, $64/year) lifts the limits,
+> extends history to 90 days, and syncs the user's own keyword data between
+> devices. No login wall, no tracking.
 
 ### One-sentence customer answer
 
@@ -59,7 +63,8 @@ Anyone who ships an iOS app and cares about App Store search:
 - a user who refuses to pay $100+/month for data they cannot verify.
 
 The tool must remain usable with zero setup: open the site, type a keyword,
-read the scores.
+read the scores. Accounts are offered lazily — when a visitor hits a free-tier
+limit or wants cloud sync — never as a gate in front of the core loop.
 
 ---
 
@@ -81,8 +86,9 @@ Daily snapshot recorded in localStorage
 Trend grows into real history over time
 ```
 
-Visitors still have no account. The only server hop is the Worker popularity
-overlay (and the optional ASO assistant).
+The loop works with no account. The only server hops are the Worker
+popularity overlay, the optional ASO assistant, and — for signed-in users —
+the account, entitlement, and sync endpoints added by ADR 0004.
 
 ### Scores
 
@@ -106,18 +112,22 @@ or `Est.` — never unlabeled, never "search volume".
 
 Do not build:
 
-- accounts, authentication, workspaces, or team features;
-- billing or paid tiers — the tool is free, full stop;
+- login walls or any gate in front of the free core loop — sign-in stays
+  lazy, offered only when a limit is hit or sync is requested;
+- paid pricing above **$10/month** (founder cap, ADR 0004);
 - visitor-facing connectors (App Store Connect, RevenueCat, PostHog, Superwall,
   or a user-connected Apple Ads account);
-- a separate backend, database, queues, or cron — Worker route handlers for
-  `/api/chat` and `/api/popularity` are the only server code;
+- queues, cron pipelines, or a separate API worker — server code stays in the
+  single OpenNext Worker's route handlers;
 - claims of real Apple Search Ads *volume* — official popularity is a relative
   1–100 score, not impression or query counts;
 - synthetic data presented as real (demo values are only acceptable when
   clearly labeled, and there is currently no demo mode);
-- user tracking, analytics cookies, or fingerprinting of any kind;
-- server-side storage of visitor keyword history — it lives in localStorage;
+- user tracking, analytics cookies, advertising scripts, or fingerprinting of
+  any kind — Paddle is the only third party, confined to the billing flow;
+- server-side storage of anonymous or free-tier keyword history — it lives in
+  localStorage; only signed-in users may sync their own data;
+- team features or shared workspaces (one account = one workspace in v1);
 - an API product or public data endpoints.
 
 ### Retired from the active product
@@ -131,7 +141,39 @@ the active product. Git history is the recovery path:
 
 ---
 
-## 5. Data truth and verification levels
+## 5. Plans, billing, and accounts (ADR 0004)
+
+AppClimb is freemium. The free tier is a real product, not a demo; Pro is a
+convenience upgrade under the founder's $10/month cap.
+
+| | Free ($0) | Pro ($8/month, $64/year) |
+| --- | --- | --- |
+| Keyword Explorer checks | 8 per day | unlimited |
+| AI assistant messages | 5 per day | 200 per day |
+| Official popularity lookups | 30 per day | 500 per day |
+| My Apps | 1 app, 25 keywords | unlimited |
+| History and charts | 30 days | 90 days |
+| Data location | browser localStorage only | cloud sync across devices |
+
+Rules:
+
+- **Zero-setup first.** The first screen is the tool. Accounts (Google OAuth
+  or email magic link) are offered lazily and never block the free loop.
+- **Local-first privacy.** Anonymous and free users keep 100% of keyword data
+  in localStorage. Cloud sync stores only a signed-in user's own data in our
+  D1 database (`sync_blobs`), last-write-wins by revision.
+- **Paddle is the merchant of record.** Checkout uses the Paddle.js overlay;
+  a signed webhook maintains subscription state. Cancelling keeps Pro active
+  until the period ends, then limits revert to Free and synced data stays
+  available to the account.
+- **Minimal account data.** Email, display name, Google subject id, session
+  hashes, subscription state. Nothing else; no marketing tracking.
+- **Honest copy.** Every marketing page must state the free limits truthfully
+  ("8 checks/day free", not "unlimited") and keep all data-honesty labels.
+
+---
+
+## 6. Data truth and verification levels
 
 Always distinguish:
 
@@ -157,46 +199,54 @@ logic runs in the browser and depends on Apple's public API behavior.
 
 ---
 
-## 6. Rollout and deployment
+## 7. Rollout and deployment
 
 - Single web Worker (`appclimb-web`) via OpenNext; production at
-  `https://appclimb.app`.
-- Pushes to `main` deploy production automatically after typecheck/build.
-- No feature flags, no backend environment, no rollout matrix — the product is
-  one public page plus marketing.
+  `https://appclimb.app`. Account/entitlement/sync/billing route handlers run
+  in the same Worker; a D1 database (`appclimb-db`) backs them.
+- Pushes to `main` deploy production automatically after typecheck/build. D1
+  migrations are applied in the deploy pipeline before the Worker is swapped.
+- A `NEXT_PUBLIC_PRO_ENABLED` flag gates billing UI so phases can ship
+  incrementally; the staging Worker (`appclimb-web-staging`) has its own D1
+  database.
 
 ---
 
-## 7. Agent safety rules
+## 8. Agent safety rules
 
-- Never introduce code that collects, stores, or transmits visitor data to a
-  server.
+- Never introduce code that collects, stores, or transmits the keyword data of
+  anonymous or free-tier visitors to a server; only a signed-in user's own
+  sync data and minimal account records may live in D1 (ADR 0004).
+- Never place an account or payment wall in front of the free core loop.
 - Never relabel estimates as real metrics, and never remove the "estimated"
   labeling from the UI.
+- Never raise Pro pricing above the $10/month founder cap.
 - Agents may prepare changes; the founder remains the approval gate for push,
   deploy, and any marketing copy changes.
 
 ---
 
-## 8. Documentation map
+## 9. Documentation map
 
 - [README.md](./README.md) — repository, verification, deployment map
 - [docs/adr/0002-aso-tool-pivot.md](./docs/adr/0002-aso-tool-pivot.md) — pivot ADR
 - [docs/adr/0003-apple-ads-popularity.md](./docs/adr/0003-apple-ads-popularity.md) — official popularity
+- [docs/adr/0004-monetization-accounts-billing.md](./docs/adr/0004-monetization-accounts-billing.md) — accounts, Paddle billing, Pro plan
 - [ops/README.md](./ops/README.md) — production operations
 
 ---
 
-## 9. Current delivery order
+## 10. Current delivery order
 
 1. Keyword explorer UI + iTunes estimation (shipped).
 2. LocalStorage history + estimated trend baseline (shipped).
 3. Marketing rewrite for the ASO positioning (shipped).
-4. Broader storefront coverage and localized suggestions.
-5. Official Apple Ads popularity via founder-owned Platform API v1 (this ADR
-   0003). Suggestions / impression share are out of scope until asked.
-6. Optional: per-app keyword tracking against App Store Connect API (requires
-   founder decision; not an account system).
+4. Official Apple Ads popularity via founder-owned Platform API v1 (ADR 0003,
+   shipped). Suggestions / impression share are out of scope until asked.
+5. Monetization (ADR 0004, in progress): optional accounts (Google OAuth +
+   email magic link), Paddle billing with the Free/Pro plans above, Pro
+   limits and cloud sync, and an onboarding flow.
+6. Broader storefront coverage and localized suggestions.
 
-Do not expand into visitor accounts, billing, user-connected Ads, or web
-analytics until the founder explicitly reverses this direction.
+User-connected Ads, team workspaces, and web analytics remain out of scope;
+reintroducing any of them needs a new founder decision and ADR.
