@@ -174,10 +174,19 @@ export type RateLimitResult =
   | { ok: true; bucket: RateBucket; remainingHour: number; remainingDay: number }
   | { ok: false; bucket: RateBucket; reason: string; retryAfterSec: number };
 
+/** Per-plan caps; defaults to the shared AI_LIMITS when omitted. */
+export interface RateLimitCaps {
+  maxPerHour: number;
+  maxPerDay: number;
+}
+
 export function checkAndConsumeRateLimit(
   bucket: RateBucket,
   now = Date.now(),
+  caps?: RateLimitCaps,
 ): RateLimitResult {
+  const maxPerHour = caps?.maxPerHour ?? AI_LIMITS.maxMessagesPerHour;
+  const maxPerDay = caps?.maxPerDay ?? AI_LIMITS.maxMessagesPerDay;
   let next = { ...bucket };
   if (now >= next.hourReset) {
     next.hourCount = 0;
@@ -197,7 +206,7 @@ export function checkAndConsumeRateLimit(
       retryAfterSec: Math.ceil((AI_LIMITS.minIntervalMs - sinceLast) / 1000),
     };
   }
-  if (next.hourCount >= AI_LIMITS.maxMessagesPerHour) {
+  if (next.hourCount >= maxPerHour) {
     return {
       ok: false,
       bucket: next,
@@ -205,7 +214,7 @@ export function checkAndConsumeRateLimit(
       retryAfterSec: Math.max(1, Math.ceil((next.hourReset - now) / 1000)),
     };
   }
-  if (next.dayCount >= AI_LIMITS.maxMessagesPerDay) {
+  if (next.dayCount >= maxPerDay) {
     return {
       ok: false,
       bucket: next,
@@ -223,8 +232,8 @@ export function checkAndConsumeRateLimit(
   return {
     ok: true,
     bucket: next,
-    remainingHour: AI_LIMITS.maxMessagesPerHour - next.hourCount,
-    remainingDay: AI_LIMITS.maxMessagesPerDay - next.dayCount,
+    remainingHour: Math.max(0, maxPerHour - next.hourCount),
+    remainingDay: Math.max(0, maxPerDay - next.dayCount),
   };
 }
 

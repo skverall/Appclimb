@@ -7,20 +7,18 @@ import {
 } from "@/lib/apple-ads";
 import { isAppleAdsGenre, mapItunesGenre } from "@/lib/apple-ads-genres";
 import { SUPPORTED_COUNTRIES } from "@/lib/aso";
+import { getDb } from "@/lib/db";
 import type { OfficialPopularity } from "@/lib/popularity";
+import { popularityDailyLimit, resolveQuotaSubject } from "@/lib/quota";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const MAX_ITEMS = 25;
 const MAX_TERM_CHARS = 80;
-const MAX_PER_HOUR = 80;
-const MAX_PER_DAY = 300;
 const MIN_INTERVAL_MS = 80;
 
 interface RateBucket {
-  hourCount: number;
-  hourReset: number;
   dayCount: number;
   dayReset: number;
   lastAt: number;
@@ -29,36 +27,25 @@ interface RateBucket {
 const rateBuckets = new Map<string, RateBucket>();
 const supported = new Set(SUPPORTED_COUNTRIES.map((item) => item.code));
 
-function getClientIp(request: NextRequest): string {
-  const forwarded =
-    request.headers.get("cf-connecting-ip") ||
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip") ||
-    "unknown";
-  return forwarded.slice(0, 64);
-}
-
 function emptyBucket(now: number): RateBucket {
   return {
-    hourCount: 0,
-    hourReset: now + 60 * 60 * 1000,
     dayCount: 0,
     dayReset: now + 24 * 60 * 60 * 1000,
     lastAt: 0,
   };
 }
 
-function consumeRate(bucket: RateBucket, now: number): {
+function consumeRate(
+  bucket: RateBucket,
+  now: number,
+  maxPerDay: number,
+): {
   ok: boolean;
   reason?: string;
   retryAfterSec?: number;
   bucket: RateBucket;
 } {
   const next = { ...bucket };
-  if (now >= next.hourReset) {
-    next.hourCount = 0;
-    next.hourReset = now + 60 * 60 * 1000;
-  }
   if (now >= next.dayReset) {
     next.dayCount = 0;
     next.dayReset = now + 24 * 60 * 60 * 1000;
@@ -71,15 +58,7 @@ function consumeRate(bucket: RateBucket, now: number): {
       bucket: next,
     };
   }
-  if (next.hourCount >= MAX_PER_HOUR) {
-    return {
-      ok: false,
-      reason: "Hourly popularity lookup limit reached.",
-      retryAfterSec: Math.max(1, Math.ceil((next.hourReset - now) / 1000)),
-      bucket: next,
-    };
-  }
-  if (next.dayCount >= MAX_PER_DAY) {
+  if (Number.isFinite(maxPerDay) && next.dayCount >= maxPerDay) {
     return {
       ok: false,
       reason: "Daily popularity lookup limit reached.",
@@ -87,7 +66,6 @@ function consumeRate(bucket: RateBucket, now: number): {
       bucket: next,
     };
   }
-  next.hourCount += 1;
   next.dayCount += 1;
   next.lastAt = now;
   return { ok: true, bucket: next };
@@ -157,10 +135,11 @@ export async function POST(request: NextRequest) {
   }
 
   const now = Date.now();
-  const ip = getClientIp(request);
-  const existing = rateBuckets.get(ip) ?? emptyBucket(now);
-  const rate = consumeRate(existing, now);
-  rateBuckets.set(ip, rate.bucket);
+  const subject = await resolveQuotaSubject(request, getDb());
+  const maxPerDay = popularityDailyLimit(subject.plan);
+  const existing = rateBuckets.get(subject.key) ?? emptyBucket(now);
+  const rate = consumeRate(existing, now, maxPerDay);
+  rateBuckets.set(subject.key, rate.bucket);
   if (rateBuckets.size > 5_000) {
     const first = rateBuckets.keys().next().value;
     if (first) rateBuckets.delete(first);

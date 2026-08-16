@@ -14,6 +14,8 @@ import {
   sanitizeUserText,
   type RateBucket,
 } from "@/lib/ai-chat";
+import { getDb } from "@/lib/db";
+import { aiDailyLimit, resolveQuotaSubject } from "@/lib/quota";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -73,9 +75,16 @@ export async function POST(request: NextRequest) {
 
   const ip = getClientIp(request);
   const ua = request.headers.get("user-agent") ?? "";
-  const key = clientRateKey(ip, ua);
+  const subject = await resolveQuotaSubject(request, getDb());
+  // Signed-in users are keyed by account (quota follows them); anonymous
+  // visitors fall back to the IP+UA hash key.
+  const key = subject.isSignedIn ? subject.key : clientRateKey(ip, ua);
+  const maxPerDay = aiDailyLimit(subject.plan);
   const existing = rateBuckets.get(key) ?? emptyRateBucket();
-  const rate = checkAndConsumeRateLimit(existing);
+  const rate = checkAndConsumeRateLimit(existing, Date.now(), {
+    maxPerHour: maxPerDay,
+    maxPerDay,
+  });
   rateBuckets.set(key, rate.bucket);
 
   // Prevent unbounded map growth in long-lived isolates.
