@@ -13,6 +13,7 @@ import {
 
 import { AddAppModal } from "@/components/add-app-modal";
 import { KeywordExplorer } from "@/components/keyword-explorer";
+import { OnboardingModal } from "@/components/onboarding-modal";
 import { SuggestionsModal } from "@/components/suggestions-modal";
 import { TrackerView } from "@/components/tracker-view";
 import { useAccount } from "@/components/account-provider";
@@ -48,12 +49,15 @@ import {
 
 type ViewMode = "explorer" | "app";
 
+const ONBOARDED_KEY = "appclimb:onboarded:v1";
+
 export function AppWorkspace() {
   const [hydrated, setHydrated] = useState(false);
   const [store, setStore] = useState<TrackerStore>(emptyStore);
   const [view, setView] = useState<ViewMode>("explorer");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [addAppOpen, setAddAppOpen] = useState(false);
+  const [onboardingOpen, setOnboardingOpen] = useState(false);
   const [pendingSuggestions, setPendingSuggestions] = useState<{
     app: TrackedApp;
     suggestions: Array<{
@@ -122,6 +126,33 @@ export function AppWorkspace() {
       cancelled = true;
     };
   }, [syncVersion]);
+
+  // First sign-in: show the welcome wizard once per account.
+  const userId = account.user?.id ?? null;
+  useEffect(() => {
+    if (!userId) return;
+    if (window.localStorage.getItem(ONBOARDED_KEY) === userId) return;
+    let cancelled = false;
+    void (async () => {
+      await Promise.resolve();
+      if (cancelled) return;
+      setOnboardingOpen(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  const dismissOnboarding = useCallback(() => {
+    if (userId) {
+      try {
+        window.localStorage.setItem(ONBOARDED_KEY, userId);
+      } catch {
+        // Non-fatal: the wizard may simply re-appear next visit.
+      }
+    }
+    setOnboardingOpen(false);
+  }, [userId]);
 
   const persist = useCallback((next: TrackerStore) => {
     storeRef.current = next;
@@ -654,7 +685,7 @@ export function AppWorkspace() {
                   <p>
                     Add an iOS app, pick relevant keywords from public App Store
                     metadata, and watch estimated scores plus observed position —
-                    all stored only in this browser.
+                    stored locally, with cloud sync on Pro.
                   </p>
                 </div>
                 <ol className="tracker-onboarding-steps">
@@ -710,6 +741,16 @@ export function AppWorkspace() {
           />
         )}
       </div>
+
+      <OnboardingModal
+        open={onboardingOpen}
+        isPro={isPro}
+        onAddApp={() => {
+          dismissOnboarding();
+          setAddAppOpen(true);
+        }}
+        onClose={dismissOnboarding}
+      />
 
       <AddAppModal
         open={addAppOpen}
