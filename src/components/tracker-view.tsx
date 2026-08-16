@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
+  Compass,
   Copy,
   Download,
   Lightbulb,
@@ -577,34 +578,36 @@ export function TrackerView({
           </div>
         </div>
         {onTrackInStorefront && otherStorefronts.length > 0 && (
-          <label className="country-select tracker-track-storefront">
-            <span>Also track in</span>
-            <select
-              defaultValue=""
-              aria-label="Track this app in another storefront"
-              onChange={(event) => {
-                const code = event.target.value;
-                if (!code) return;
-                onTrackInStorefront(code);
-                event.target.value = "";
-              }}
-            >
-              <option value="" disabled>
-                Choose storefront…
-              </option>
-              {otherStorefronts.map((item) => (
-                <option key={item.code} value={item.code}>
-                  {item.flag} {item.label}
+          <div className="tracker-track-storefront-wrap">
+            <span className="tracker-track-storefront-label">Also track in</span>
+            <label className="country-select tracker-track-storefront" title="Track this app in another country storefront">
+              <select
+                defaultValue=""
+                aria-label="Track this app in another storefront"
+                onChange={(event) => {
+                  const code = event.target.value;
+                  if (!code) return;
+                  onTrackInStorefront(code);
+                  event.target.value = "";
+                }}
+              >
+                <option value="" disabled>
+                  Choose storefront…
                 </option>
-              ))}
-            </select>
-          </label>
+                {otherStorefronts.map((item) => (
+                  <option key={item.code} value={item.code}>
+                    {item.flag} {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         )}
       </header>
 
       <div className="tracker-toolbar" role="toolbar" aria-label="Keyword actions">
         <div className="tracker-toolbar-actions">
-          <span className="tracker-store-pill" title="Active storefront for this app">
+          <span className="tracker-store-pill" title={`Active storefront: ${countryLabel}`}>
             {SUPPORTED_COUNTRIES.find((c) => c.code === app.country)?.flag}{" "}
             {app.country}
           </span>
@@ -613,6 +616,7 @@ export function TrackerView({
             type="button"
             className="tracker-button-primary"
             onClick={() => setAddKeywordsOpen(true)}
+            title="Add new keywords to track for this app (or bulk paste)"
           >
             <Plus size={15} aria-hidden="true" />
             Add Keywords
@@ -622,6 +626,7 @@ export function TrackerView({
             className="tracker-button-accent"
             onClick={() => void openSuggestions()}
             disabled={suggestionsBusy}
+            title="Generate keyword suggestions from App Store metadata and competitors"
           >
             {suggestionsBusy ? (
               <Loader2 className="spin" size={15} aria-hidden="true" />
@@ -635,6 +640,7 @@ export function TrackerView({
             className="refresh-all-button"
             onClick={() => void refreshKeywords(keywords.map((row) => row.keyword))}
             disabled={keywords.length === 0 || busyKeys.size > 0}
+            title="Re-check search position and estimates for all keywords"
           >
             <RefreshCw
               className={busyKeys.size > 0 ? "spin" : ""}
@@ -649,6 +655,7 @@ export function TrackerView({
             onClick={exportCsv}
             disabled={keywords.length === 0}
             aria-label="Export keywords as CSV"
+            title="Export all tracked keywords, scores, and positions to a CSV file"
           >
             <Download size={15} aria-hidden="true" />
             Export CSV
@@ -669,7 +676,7 @@ export function TrackerView({
               }
             }}
             disabled={keywords.length === 0}
-            title="Copies up to 100 characters of comma-separated keywords for Apple App Store Connect"
+            title="Copies up to 100 characters of comma-separated keywords for Apple App Store Connect keyword field"
           >
             {copiedAsoField ? (
               <Check size={15} aria-hidden="true" />
@@ -681,7 +688,7 @@ export function TrackerView({
         </div>
 
         <div className="tracker-toolbar-controls">
-          <label className="tracker-filter">
+          <label className="tracker-filter" title="Filter keywords by search text">
             <Search size={14} aria-hidden="true" />
             <input
               value={filter}
@@ -691,7 +698,7 @@ export function TrackerView({
             />
           </label>
 
-          <label className="country-select">
+          <label className="country-select" title="Select historical chart trend period">
             <span>History</span>
             <select
               value={historyDays}
@@ -705,7 +712,7 @@ export function TrackerView({
             </select>
           </label>
 
-          <label className="country-select">
+          <label className="country-select" title="Change table row density">
             <span>Density</span>
             <select
               value={density}
@@ -763,23 +770,34 @@ export function TrackerView({
           role="tablist"
           aria-label="Keyword status filters"
         >
-          {STATUS_FILTERS.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              role="tab"
-              aria-selected={statusFilter === item.id}
-              className={
-                statusFilter === item.id
-                  ? "tracker-status-chip is-active"
-                  : "tracker-status-chip"
-              }
-              onClick={() => setStatusFilter(item.id)}
-            >
-              {item.label}
-              <span>{statusCounts[item.id]}</span>
-            </button>
-          ))}
+          {STATUS_FILTERS.map((item) => {
+            const filterTitles: Record<string, string> = {
+              all: "Show all tracked keywords",
+              top200: "Keywords where this app is currently ranked in the top 200",
+              out200: "Keywords where this app ranks below 200 or is not found",
+              new: "Newly added keywords without a previous snapshot baseline",
+              stale: "Keywords that have not been checked today",
+              opportunity: "Promising keywords with strong popularity and lower difficulty",
+            };
+            return (
+              <button
+                key={item.id}
+                type="button"
+                role="tab"
+                aria-selected={statusFilter === item.id}
+                className={
+                  statusFilter === item.id
+                    ? "tracker-status-chip is-active"
+                    : "tracker-status-chip"
+                }
+                onClick={() => setStatusFilter(item.id)}
+                title={filterTitles[item.id] || item.label}
+              >
+                {item.label}
+                <span>{statusCounts[item.id]}</span>
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -796,47 +814,67 @@ export function TrackerView({
         </div>
       )}
 
-      {keywords.length === 0 ? (
-        <div className="keyword-empty">
-          <Lightbulb size={24} aria-hidden="true" />
-          <strong>No keywords for this app yet</strong>
-          <span>
-            Get suggestions from public App Store metadata, or add keywords
-            manually. Metrics fill in automatically after you add them.
-          </span>
-          <div className="keyword-examples">
-            <button type="button" onClick={() => void openSuggestions()}>
-              Get Suggestions
-            </button>
-            <button type="button" onClick={() => setAddKeywordsOpen(true)}>
-              Add Keywords
-            </button>
-          </div>
-        </div>
-      ) : filteredSorted.length === 0 ? (
-        <div className="keyword-empty">
-          <strong>No keywords match this filter</strong>
-          <span>Try another status chip or clear the text filter.</span>
-          <div className="keyword-examples">
-            <button type="button" onClick={() => setStatusFilter("all")}>
-              Show all
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="tracker-main-split">
-          <div className="keyword-table-wrap tracker-table-wrap">
-            <div className="tracker-table-scroll">
+      <div className="tracker-main-split">
+        <div className="tracker-table-wrap">
+          {keywords.length === 0 ? (
+            <div className="tracker-empty">
+              <Compass size={36} aria-hidden="true" />
+              <h3>No keywords tracked yet</h3>
+              <p>
+                Add keywords to start tracking daily App Store rank snapshots,
+                estimated popularity, and difficulty for <strong>{app.name}</strong>.
+              </p>
+              <div className="tracker-empty-actions">
+                <button
+                  type="button"
+                  className="tracker-button-primary"
+                  onClick={() => setAddKeywordsOpen(true)}
+                  title="Add keywords to track"
+                >
+                  <Plus size={15} aria-hidden="true" />
+                  Add Keywords
+                </button>
+                <button
+                  type="button"
+                  className="tracker-button-accent"
+                  onClick={() => void openSuggestions()}
+                  disabled={suggestionsBusy}
+                  title="Get AI keyword suggestions"
+                >
+                  <Lightbulb size={15} aria-hidden="true" />
+                  Get Suggestions
+                </button>
+              </div>
+            </div>
+          ) : filteredSorted.length === 0 ? (
+            <div className="tracker-empty">
+              <Search size={32} aria-hidden="true" />
+              <h3>No keywords match this filter</h3>
+              <p>Try clearing the search text or selecting the &quot;All&quot; filter tab.</p>
+              <button
+                type="button"
+                className="refresh-all-button"
+                onClick={() => {
+                  setFilter("");
+                  setStatusFilter("all");
+                }}
+              >
+                Clear filter
+              </button>
+            </div>
+          ) : (
+            <>
+              <div className="tracker-table-scroll">
               <table className="keyword-table tracker-table">
                 <thead>
                   <tr>
-                    <th className="tracker-col-sticky">
+                    <th className="tracker-col-sticky" title="Keyword phrase (click to sort by alphabetical order)">
                       <button type="button" onClick={() => toggleSort("keyword")}>
                         Keyword
                       </button>
                     </th>
-                    <th className="tracker-col-optional">Notes</th>
-                    <th>
+                    <th className="tracker-col-optional tracker-col-notes" title="Private notes saved locally for this keyword">Notes</th>
+                    <th title="Opportunity Score (0–100): High popularity + low difficulty">
                       <button
                         type="button"
                         onClick={() => toggleSort("opportunity")}
@@ -844,7 +882,7 @@ export function TrackerView({
                         Opp. · Est.
                       </button>
                     </th>
-                    <th>
+                    <th title="Relative popularity score (1–100) from official Apple Ads or public search signals">
                       <button
                         type="button"
                         onClick={() => toggleSort("popularity")}
@@ -852,7 +890,7 @@ export function TrackerView({
                         Popularity
                       </button>
                     </th>
-                    <th>
+                    <th title="Estimated difficulty score (1–100) based on competitor strength in top results">
                       <button
                         type="button"
                         onClick={() => toggleSort("difficulty")}
@@ -860,7 +898,7 @@ export function TrackerView({
                         Difficulty · Est.
                       </button>
                     </th>
-                    <th>
+                    <th title="Observed rank position in the App Store search results">
                       <button
                         type="button"
                         onClick={() => toggleSort("position")}
@@ -868,11 +906,12 @@ export function TrackerView({
                         Position
                       </button>
                     </th>
-                    <th>Rank trend</th>
-                    <th className="tracker-col-optional">Spark</th>
-                    <th className="tracker-col-optional">Apps</th>
+                    <th title="Rank movement compared to previous day snapshot">Rank trend</th>
+                    <th className="tracker-col-optional tracker-col-spark" title="7-day position trend mini-chart (top is #1)">Spark</th>
+                    <th className="tracker-col-optional tracker-col-apps" title="Top 5 ranking competitor apps on Page 1">Apps</th>
                     <th
-                      className="tracker-col-optional"
+                      className="tracker-col-optional tracker-col-updated"
+                      title="Timestamp of the most recent keyword check"
                     >
                       <button
                         type="button"
@@ -881,7 +920,7 @@ export function TrackerView({
                         Updated
                       </button>
                     </th>
-                    <th aria-label="Actions" />
+                    <th className="tracker-col-actions" aria-label="Actions" />
                   </tr>
                 </thead>
                 <tbody>
@@ -932,7 +971,7 @@ export function TrackerView({
                           </small>
                         </td>
                         <td
-                          className="tracker-col-optional"
+                          className="tracker-col-optional tracker-col-notes"
                           onClick={(event) => event.stopPropagation()}
                         >
                           <input
@@ -940,6 +979,7 @@ export function TrackerView({
                             value={row.note}
                             placeholder="Note…"
                             aria-label={`Note for ${row.keyword}`}
+                            title={`Edit note for "${row.keyword}"`}
                             onChange={(event) => {
                               onStoreChange(
                                 updateKeywordNote(
@@ -959,7 +999,7 @@ export function TrackerView({
                           ) : (
                             <span
                               className="tracker-opp-score"
-                              title="Estimated opportunity heuristic from public signals"
+                              title="Estimated opportunity heuristic (0–100)"
                             >
                               {opp}
                             </span>
@@ -979,6 +1019,11 @@ export function TrackerView({
                                   popularitySourceOf(metrics) === "official"
                                     ? "source-pill source-pill--official"
                                     : "source-pill"
+                                }
+                                title={
+                                  popularitySourceOf(metrics) === "official"
+                                    ? "Official Apple Ads relative popularity (1–100)"
+                                    : "Estimated popularity derived from public search signals"
                                 }
                               >
                                 {popularityShortLabel(popularitySourceOf(metrics))}
@@ -1014,6 +1059,7 @@ export function TrackerView({
                         <td>
                           <span
                             className={`rank-trend rank-trend--${trend.kind}`}
+                            title={`Rank movement: ${trend.label}`}
                           >
                             {metrics?.unavailable && metrics.popularity === 0
                               ? "Unavailable"
@@ -1022,30 +1068,31 @@ export function TrackerView({
                                 : trend.label}
                           </span>
                         </td>
-                        <td className="tracker-col-optional keyword-trend-cell">
+                        <td className="tracker-col-optional tracker-col-spark keyword-trend-cell">
                           {spark.length >= 2 ? (
                             <Sparkline values={spark} width={72} height={24} />
                           ) : (
                             <em className="keyword-pending">—</em>
                           )}
                         </td>
-                        <td className="tracker-col-optional">
+                        <td className="tracker-col-optional tracker-col-apps">
                           {metrics?.topApps ? (
                             <TopAppIcons apps={metrics.topApps} />
                           ) : (
                             <em className="keyword-pending">—</em>
                           )}
                         </td>
-                        <td className="tracker-col-optional">
-                          <small>{lastUpdate}</small>
+                        <td className="tracker-col-optional tracker-col-updated">
+                          <span className="tracker-updated-time">{lastUpdate}</span>
                         </td>
                         <td
-                          className="keyword-row-actions"
+                          className="keyword-row-actions tracker-col-actions"
                           onClick={(event) => event.stopPropagation()}
                         >
                           <button
                             type="button"
                             aria-label={`Refresh ${row.keyword}`}
+                            title={`Refresh rankings and estimates for "${row.keyword}"`}
                             disabled={isBusy}
                             onClick={() => void refreshKeywords([row.keyword])}
                           >
@@ -1063,6 +1110,7 @@ export function TrackerView({
                             type="button"
                             className="keyword-remove"
                             aria-label={`Delete ${row.keyword}`}
+                            title={`Remove "${row.keyword}" from tracker`}
                             onClick={() =>
                               confirmDelete(row.normalizedKeyword, row.keyword)
                             }
@@ -1091,7 +1139,9 @@ export function TrackerView({
                 {keywords.length === 1 ? "" : "s"} · {countryLabel}
               </span>
             </footer>
-          </div>
+          </>
+          )}
+        </div>
 
           {selectedRow ? (
             <TrackerDetail
@@ -1128,7 +1178,6 @@ export function TrackerView({
             />
           )}
         </div>
-      )}
 
       <AddKeywordsModal
         open={addKeywordsOpen}
