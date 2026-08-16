@@ -43,8 +43,8 @@ export function MarketingFooter() {
         <div>
           <BrandMark />
           <p>
-            Free App Store keyword research and local app tracking: estimated
-            popularity, difficulty, and observed position from public data.
+            Free App Store keyword research and local app tracking: Apple Ads
+            popularity, estimated difficulty, and observed position.
           </p>
           <span>No account. No tracking. Estimates, never invented volumes.</span>
         </div>

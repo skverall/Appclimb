@@ -40,9 +40,16 @@ estimation logic runs client-side, so verify against the deployed site.
 
 ## Secrets
 
-The web Worker requires no secrets. GitHub Actions requires the restricted
-repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` for
-deploys.
+GitHub Actions requires the restricted repository secrets
+`CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` for deploys.
+
+Optional Worker secrets (never commit; `npx wrangler secret put`):
+
+- `DEEPSEEK_API_KEY` — ASO Assistant (`POST /api/chat`)
+- `APPLE_ADS_CLIENT_ID`, `APPLE_ADS_TEAM_ID`, `APPLE_ADS_KEY_ID`,
+  `APPLE_ADS_PRIVATE_KEY`, `APPLE_ADS_ACCOUNT_ID` — official popularity
+  overlay (`POST /api/popularity`). Without them the UI falls back to the
+  iTunes estimate. Use the founder Ads account only; visitors never connect.
 
 ## Backup and rollback
 

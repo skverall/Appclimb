@@ -9,6 +9,11 @@ import {
   type KeywordMetrics,
   type KeywordRecord,
 } from "@/lib/aso";
+import {
+  popularityCaption,
+  popularityShortLabel,
+  popularitySourceOf,
+} from "@/lib/popularity";
 import { TrendChart } from "@/components/keyword-charts";
 
 function formatCount(value: number): string {
@@ -146,7 +151,7 @@ export function KeywordDetail({
               <i className="stat-bar stat-bar--popularity">
                 <b style={{ width: `${metrics.popularity}%` }} />
               </i>
-              <small>Estimated demand</small>
+              <small>{popularityCaption(popularitySourceOf(metrics))}</small>
             </div>
             <div className="keyword-stat">
               <span>Difficulty</span>
@@ -182,7 +187,10 @@ export function KeywordDetail({
             <figure className="keyword-chart-card">
               <figcaption>
                 <span>Popularity trend</span>
-                <small>{history.length} days · estimated</small>
+                <small>
+                  {history.length} days · {popularityShortLabel(popularitySourceOf(metrics))}
+                  {record?.backfilled ? " + estimated baseline" : ""}
+                </small>
               </figcaption>
               <TrendChart
                 points={history}
@@ -205,8 +213,11 @@ export function KeywordDetail({
 
           {record?.backfilled && (
             <p className="keyword-estimate-note keyword-estimate-note--detail">
-              The trend starts with an estimated baseline from public data. Each
-              day you check this keyword, a real measurement is recorded.
+              The trend starts with an estimated baseline. Each day you check
+              this keyword, a real measurement is recorded
+              {popularitySourceOf(metrics) === "official"
+                ? " — today's popularity is Apple Ads official."
+                : " — today's popularity is the iTunes estimate."}
             </p>
           )}
 

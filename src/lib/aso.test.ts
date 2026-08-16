@@ -485,7 +485,7 @@ describe("buildExplorerCsv", () => {
       },
     ]);
     expect(csv.split("\n")[0]).toBe(
-      "keyword,store,popularity_estimated,difficulty_estimated,results,saturated,trend_delta,last_checked_at",
+      "keyword,store,popularity,popularity_source,difficulty_estimated,results,saturated,trend_delta,last_checked_at",
     );
     expect(csv).toContain("meditation,US");
     expect(csv).toContain(metrics.sampledAt);
@@ -500,7 +500,7 @@ describe("buildExplorerCsv", () => {
         record: null,
       },
     ]);
-    expect(csv).toContain('"habit, tracker",US,,,,,,');
+    expect(csv).toContain('"habit, tracker",US,,,,,,,');
   });
 });
 

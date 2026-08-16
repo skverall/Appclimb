@@ -1,10 +1,10 @@
 // App Store keyword estimation, entirely client-side.
 //
 // Apple's public iTunes Search API is the only free source that works from a
-// browser (CORS *). It does NOT expose search volume, so "popularity" is an
-// honest estimate derived from competition pressure and top-result strength,
-// and "difficulty" is an estimate of how hard it is to rank for the keyword.
-// The UI labels both as estimates and never presents them as Apple Ads data.
+// browser (CORS *). Difficulty is always an estimate from competition pressure
+// and top-result strength. Popularity is Apple Ads official relative 1–100
+// when POST /api/popularity returns a hit, otherwise the same iTunes estimate.
+// The UI labels the source. Neither number is search volume.
 //
 // History is kept in localStorage: one daily snapshot per keyword per country,
 // plus an estimated backfill so the 30-day trend chart is useful on first
@@ -56,11 +56,20 @@ export interface TopApp {
   position: number;
 }
 
+export type PopularitySource = "official" | "estimated";
+
 export interface KeywordMetrics {
   keyword: string;
   country: string;
-  /** Estimated 0–100 popularity (competition + top-result strength). */
+  /** 1–100. Official Apple Ads score, or the iTunes estimate. */
   popularity: number;
+  /** official = Apple Ads Platform API; estimated = iTunes heuristic. */
+  popularitySource?: PopularitySource;
+  /** Apple Ads genre token used for the official lookup, if any. */
+  appleGenre?: string;
+  searchPopularityInGenre?: number;
+  searchPopularity1to5?: number;
+  rankInGenre?: number;
   /** Estimated 0–100 difficulty (barrier to rank in top results). */
   difficulty: number;
   /** Number of apps returned by the search (capped at 200 by iTunes). */
@@ -76,6 +85,7 @@ export interface KeywordHistoryPoint {
   date: string;
   popularity: number;
   difficulty: number;
+  popularitySource?: PopularitySource;
 }
 
 export interface KeywordRecord {
@@ -276,6 +286,7 @@ export function estimateMetrics(
     keyword: keyword.trim(),
     country,
     popularity,
+    popularitySource: "estimated",
     difficulty,
     results: resultCount,
     saturated,
@@ -383,6 +394,7 @@ export function backfillHistory(
     date: today,
     popularity: metrics.popularity,
     difficulty: metrics.difficulty,
+    popularitySource: metrics.popularitySource,
   });
   return points;
 }
@@ -427,12 +439,14 @@ export function recordSnapshot(
       date: today,
       popularity: metrics.popularity,
       difficulty: metrics.difficulty,
+      popularitySource: metrics.popularitySource,
     };
   } else {
     history.push({
       date: today,
       popularity: metrics.popularity,
       difficulty: metrics.difficulty,
+      popularitySource: metrics.popularitySource,
     });
   }
   const record: KeywordRecord = {
@@ -707,7 +721,8 @@ export function buildExplorerCsv(rows: readonly ExplorerCsvRow[]): string {
   const header = [
     "keyword",
     "store",
-    "popularity_estimated",
+    "popularity",
+    "popularity_source",
     "difficulty_estimated",
     "results",
     "saturated",
@@ -731,6 +746,7 @@ export function buildExplorerCsv(rows: readonly ExplorerCsvRow[]): string {
         csvEscape(row.keyword),
         csvEscape(row.country),
         metrics ? String(metrics.popularity) : "",
+        metrics ? (metrics.popularitySource ?? "estimated") : "",
         metrics ? String(metrics.difficulty) : "",
         metrics ? String(metrics.results) : "",
         metrics ? String(metrics.saturated) : "",

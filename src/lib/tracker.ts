@@ -5,8 +5,9 @@
 // `appclimb:kw:v1:*` keys — never deletes or migrates explorer data away.
 //
 // Position is measured from a single public iTunes Search response (up to 200
-// apps). Popularity and difficulty reuse the existing estimateMetrics heuristics
-// and are always estimates. Rank history is never backfilled.
+// apps). Difficulty reuses estimateMetrics. Popularity is Apple Ads official
+// when the Worker overlay hits, otherwise the iTunes estimate. Rank history
+// is never backfilled.
 
 import {
   estimateMetrics,
@@ -14,6 +15,7 @@ import {
   toLocalDate,
   type KeywordMetrics,
   type KeywordStorage,
+  type PopularitySource,
   type TopApp,
 } from "@/lib/aso";
 import {
@@ -81,6 +83,8 @@ export interface TrackedApp {
 
 export interface TrackedKeywordMetrics {
   popularity: number;
+  popularitySource?: PopularitySource;
+  appleGenre?: string;
   difficulty: number;
   results: number;
   saturated: boolean;
@@ -833,6 +837,8 @@ export function applyAnalysisToStore(
   const sampledAt = analysis.metrics.sampledAt;
   const currentMetrics: TrackedKeywordMetrics = {
     popularity: analysis.metrics.popularity,
+    popularitySource: analysis.metrics.popularitySource,
+    appleGenre: analysis.metrics.appleGenre,
     difficulty: analysis.metrics.difficulty,
     results: analysis.metrics.results,
     saturated: analysis.metrics.saturated,
@@ -1165,7 +1171,8 @@ export function buildKeywordsCsv(
     "keyword",
     "store",
     "note",
-    "popularity_estimated",
+    "popularity",
+    "popularity_source",
     "difficulty_estimated",
     "position",
     "results",
@@ -1200,6 +1207,9 @@ export function buildKeywordsCsv(
         csvEscape(row.country),
         csvEscape(row.note),
         metrics && !metrics.unavailable ? String(metrics.popularity) : "",
+        metrics && !metrics.unavailable
+          ? (metrics.popularitySource ?? "estimated")
+          : "",
         metrics && !metrics.unavailable ? String(metrics.difficulty) : "",
         csvEscape(positionLabel),
         metrics ? String(metrics.results) : "",

@@ -907,6 +907,30 @@ img {
   color: var(--coral-600);
 }
 
+.metric-with-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.source-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: var(--radius-pill);
+  background: var(--n-150);
+  color: var(--n-600);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.source-pill--official {
+  background: color-mix(in srgb, var(--teal-300) 35%, white);
+  color: var(--teal-600);
+}
+
 /* Trend column */
 
 .keyword-trend-cell {

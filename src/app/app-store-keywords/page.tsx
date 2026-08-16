@@ -48,12 +48,12 @@ const faq = [
   {
     question: "Where does the keyword data come from?",
     answer:
-      "Exclusively from Apple's public iTunes Search API, queried from your browser. AppClimb has no hidden data sources and no third-party data brokers in the middle.",
+      "Difficulty, top apps, and observed position come from Apple's public iTunes Search API, queried from your browser. Popularity is Apple Ads official (relative 1–100) when the term appears in that storefront and genre, via a founder-owned Platform API v1 lookup — visitors never connect an Ads account. If Apple has no row, AppClimb falls back to the iTunes estimate.",
   },
   {
     question: "Is popularity the same as search volume?",
     answer:
-      "No. True App Store search volume only exists inside Apple's paid Search Ads API. AppClimb's popularity is an estimate derived from competition pressure and top-result strength, and it is always labeled as an estimate.",
+      "No. Search volume (query counts) is still private. AppClimb shows Apple's official relative popularity (1–100) when available, or an iTunes estimate otherwise. The UI labels the source. Neither number is volume.",
   },
   {
     question: "Do I need an account?",
@@ -102,9 +102,9 @@ export default function KeywordResearchPage() {
             <span className="marketing-eyebrow">App Store keyword research</span>
             <h1>Pick keywords worth ranking for.</h1>
             <p>
-              Every keyword gets an estimated popularity score, an estimated
-              difficulty score, and a 30-day trend — built from public App Store
-              data. Free, no account, no invented volumes.
+              Every keyword gets an Apple Ads popularity score when available,
+              an estimated difficulty score, and a 30-day trend. Free, no
+              account, no invented volumes.
             </p>
             <div className="marketing-hero-actions">
               <Link href="/" className="marketing-primary-action large">
@@ -118,7 +118,7 @@ export default function KeywordResearchPage() {
               </Link>
             </div>
             <div className="marketing-trust-row">
-              <span>✅ Public iTunes data only</span>
+              <span>✅ Official Ads popularity when Apple has the term</span>
               <span>✅ Estimates labeled honestly</span>
               <span>✅ Bulk lists, CSV export & backup</span>
               <span>✅ No account or tracking</span>
@@ -131,13 +131,13 @@ export default function KeywordResearchPage() {
             <h2>What the scores mean</h2>
             <div>
               <p>
-                <strong>Popularity</strong> is an estimate of demand: how much
-                competition pressure and top-result strength suggest a term is
-                actively searched. <strong>Difficulty</strong> is an estimate of
+                <strong>Popularity</strong> is Apple&apos;s official relative
+                Ads score (1–100) when the term appears in that storefront and
+                genre; otherwise an estimate from competition and top-result
+                strength. <strong>Difficulty</strong> is always an estimate of
                 the barrier: how many apps compete, how many ratings the
                 incumbents hold, and whether mega-brands dominate the first
-                page. Both are directional, and both come with the underlying
-                evidence instead of a mysterious single number.
+                page. Neither is search volume.
               </p>
             </div>
           </div>
@@ -163,18 +163,17 @@ export default function KeywordResearchPage() {
 
         <section className="marketing-section marketing-section-tint">
           <div className="marketing-container">
-            <span className="marketing-eyebrow">Why estimates, not volume</span>
+            <span className="marketing-eyebrow">Why not volume</span>
             <h2 className="marketing-section-heading">
-              Nobody free can show you real search volume. We say so.
+              Official popularity is still not search volume. We say so.
             </h2>
             <p>
-              True App Store search volume is Apple&apos;s business data,
-              available only through the paid Search Ads API. Tools that show
-              precise monthly searches without a stated source are showing a
-              model — often without admitting it. AppClimb estimates from public
-              signals, labels every number, and shows you the result count, top
-              apps, and ratings behind each score. You can judge the estimate
-              instead of trusting a black box.
+              Apple Ads Platform API v1 returns a relative 1–100 popularity
+              score, not monthly query counts. Tools that show precise search
+              volumes without a stated source are showing a model. AppClimb
+              uses the official relative score when Apple has the term, falls
+              back to a labeled iTunes estimate otherwise, and still shows the
+              result count, top apps, and ratings behind difficulty.
             </p>
             <div className="marketing-hero-actions">
               <Link href="/" className="marketing-primary-action">

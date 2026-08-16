@@ -17,19 +17,21 @@ export default function TermsPage() {
         <section>
           <h2>The service</h2>
           <p>
-            AppClimb provides a free browser tool that estimates App Store
-            keyword popularity and difficulty from Apple&apos;s public iTunes
-            Search API. There is no account, no billing, and no paid tier.
+            AppClimb provides a free browser tool for App Store keyword
+            research. Difficulty comes from Apple&apos;s public iTunes Search
+            API. Popularity is Apple Ads official (relative 1–100) when
+            available, otherwise an iTunes estimate. There is no visitor
+            account, no billing, and no paid tier.
           </p>
         </section>
         <section>
           <h2>Estimates, not guarantees</h2>
           <p>
-            Popularity and difficulty are estimates derived from public signals
-            and are labeled as such. AppClimb does not claim to show real Apple
-            Search Ads volume and is not affiliated with Apple. Rankings and
-            results shown are snapshots of public data and may change at any
-            time.
+            Difficulty is always an estimate. Popularity is either Apple Ads
+            official (relative 1–100) or an estimate, and is labeled with its
+            source. AppClimb does not claim to show search volume and is not
+            affiliated with Apple. Rankings and results are snapshots and may
+            change at any time.
           </p>
         </section>
         <section>

@@ -20,6 +20,7 @@ import {
   type TrackedApp,
   type TrackedKeyword,
 } from "@/lib/tracker";
+import { popularityCaption, popularitySourceOf } from "@/lib/popularity";
 
 function formatCount(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
@@ -140,7 +141,11 @@ export function TrackerDetail({
               <b style={{ width: `${metrics.popularity}%` }} />
             </i>
           )}
-          <small>Estimated demand</small>
+          <small>
+            {metrics
+              ? popularityCaption(popularitySourceOf(metrics))
+              : "Demand score"}
+          </small>
         </div>
         <div className="keyword-stat">
           <span>Difficulty</span>
@@ -156,8 +161,11 @@ export function TrackerDetail({
 
       {metrics && (
         <p className="keyword-estimate-note keyword-estimate-note--detail">
-          Popularity and difficulty are estimates from competition and top-result
-          strength in public iTunes data — not Apple Search Ads volume.
+          {popularitySourceOf(metrics) === "official"
+            ? "Popularity is Apple Ads official (relative 1–100, not search volume). "
+            : "Popularity is an estimate from public iTunes signals. "}
+          Difficulty is always estimated from competition and top-result
+          strength.
           {metrics.saturated
             ? " Results hit the 200-app cap (heavy competition)."
             : ` ${metrics.results} apps observed in results.`}

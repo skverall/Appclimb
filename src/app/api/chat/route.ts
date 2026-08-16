@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
   if (fishing) {
     return NextResponse.json({
       message:
-        "I can’t help with API keys, secrets, or internal credentials. I can help with App Store keywords, estimated popularity/difficulty, and positioning for your app.",
+        "I can’t help with API keys, secrets, or internal credentials. I can help with App Store keywords, popularity/difficulty, and positioning for your app.",
       remainingHour: rate.remainingHour,
       remainingDay: rate.remainingDay,
     });

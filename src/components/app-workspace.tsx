@@ -16,6 +16,7 @@ import { KeywordExplorer } from "@/components/keyword-explorer";
 import { SuggestionsModal } from "@/components/suggestions-modal";
 import { TrackerView } from "@/components/tracker-view";
 import type { CatalogApp } from "@/lib/itunes";
+import { enrichAnalysisResult } from "@/lib/popularity";
 import {
   addKeywordsToStore,
   addTrackedApp,
@@ -320,7 +321,9 @@ export function AppWorkspace() {
         added.map((row) => row.keyword),
         REFRESH_CONCURRENCY,
         async (keyword) =>
-          analyzeWithRetry(keyword, app.country, app.appStoreId),
+          enrichAnalysisResult(
+            await analyzeWithRetry(keyword, app.country, app.appStoreId),
+          ),
         { gapMs: REFRESH_GAP_MS },
       );
       // Merge onto latest store (notes / other tabs may have changed).

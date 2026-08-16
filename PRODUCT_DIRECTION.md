@@ -2,7 +2,7 @@
 
 **Status:** Canonical product north star
 
-**Last updated:** August 2, 2026
+**Last updated:** August 16, 2026
 
 **Owner:** AppClimb founder
 
@@ -31,9 +31,10 @@ AppClimb is a **free App Store keyword tool** built on public data.
 
 ### Complete product sentence
 
-> AppClimb searches any App Store keyword, estimates its popularity and
-> difficulty on a 0–100 scale from public iTunes data, and tracks a 30-day
-> trend locally in the visitor's browser. No account, no billing, no tracking.
+> AppClimb searches any App Store keyword, shows official Apple Ads
+> popularity (relative 1–100) when the term is in that storefront and genre,
+> estimates difficulty from public iTunes data, and tracks a 30-day trend
+> locally in the visitor's browser. No visitor account, no billing, no tracking.
 
 ### One-sentence customer answer
 
@@ -65,9 +66,11 @@ read the scores.
 ```text
 Visitor types a keyword
         ↓
-Browser queries public iTunes Search API
+Browser queries public iTunes Search API (difficulty, top apps, position)
         ↓
-Estimates computed from competition + top-result strength
+Browser asks POST /api/popularity (founder-owned Apple Ads Insights)
+        ↓
+Official searchPopularity1to100 when Apple has the term; else iTunes estimate
         ↓
 Row added: popularity / difficulty / trend / results
         ↓
@@ -76,20 +79,24 @@ Daily snapshot recorded in localStorage
 Trend grows into real history over time
 ```
 
-There is no server in this loop. The tool is the site.
+Visitors still have no account. The only server hop is the Worker popularity
+overlay (and the optional ASO assistant).
 
-### Estimates
+### Scores
 
-- **Popularity (0–100)** — estimated demand: competition pressure and
-  top-result strength suggest how actively a term is searched. Not search
-  volume.
+- **Popularity (1–100)** — Apple Ads official relative score
+  (`searchPopularity1to100`) when Platform API v1 returns the term for that
+  country + inferred genre. Otherwise the existing iTunes estimate
+  (competition + top-result strength). Always labeled with its source. Not
+  search volume.
 - **Difficulty (0–100)** — estimated barrier: how many apps compete, how many
   ratings the incumbents hold, and whether mega-brands dominate the first page.
+  Always an estimate.
 - **Trend** — 30-day chart built from daily snapshots; the first check seeds an
   estimated baseline flagged `backfilled: true`.
 
-Both estimates are deterministic, derived from public signals, and MUST be
-labeled as estimates in the UI.
+Difficulty MUST stay labeled as an estimate. Popularity MUST say `Apple Ads`
+or `Est.` — never unlabeled, never "search volume".
 
 ---
 
@@ -99,10 +106,12 @@ Do not build:
 
 - accounts, authentication, workspaces, or team features;
 - billing or paid tiers — the tool is free, full stop;
-- any third-party connector (App Store Connect, RevenueCat, PostHog, Superwall,
-  Apple Ads, or others);
-- a server-side backend, database, queues, or cron;
-- claims of real Apple Search Ads volume — it is Apple's private data;
+- visitor-facing connectors (App Store Connect, RevenueCat, PostHog, Superwall,
+  or a user-connected Apple Ads account);
+- a separate backend, database, queues, or cron — Worker route handlers for
+  `/api/chat` and `/api/popularity` are the only server code;
+- claims of real Apple Search Ads *volume* — official popularity is a relative
+  1–100 score, not impression or query counts;
 - synthetic data presented as real (demo values are only acceptable when
   clearly labeled, and there is currently no demo mode);
 - user tracking, analytics cookies, or fingerprinting of any kind;
@@ -137,11 +146,12 @@ logic runs in the browser and depends on Apple's public API behavior.
 
 ### Data honesty rules
 
-- Popularity and difficulty are estimates and MUST be visibly labeled.
+- Popularity is official Apple Ads (relative 1–100) or an estimate, and MUST
+  be visibly labeled as such. Difficulty is always an estimate.
 - The UI shows the evidence behind every score (result count, saturation, top
   apps, ratings) — no black-box numbers.
 - Trend charts that include estimated backfill MUST say so.
-- Never claim "search volume", "downloads", or other Apple-private metrics.
+- Never claim "search volume", "downloads", or other Apple-private counts.
 
 ---
 
@@ -170,6 +180,7 @@ logic runs in the browser and depends on Apple's public API behavior.
 
 - [README.md](./README.md) — repository, verification, deployment map
 - [docs/adr/0002-aso-tool-pivot.md](./docs/adr/0002-aso-tool-pivot.md) — pivot ADR
+- [docs/adr/0003-apple-ads-popularity.md](./docs/adr/0003-apple-ads-popularity.md) — official popularity
 - [ops/README.md](./ops/README.md) — production operations
 
 ---
@@ -180,8 +191,10 @@ logic runs in the browser and depends on Apple's public API behavior.
 2. LocalStorage history + estimated trend baseline (shipped).
 3. Marketing rewrite for the ASO positioning (shipped).
 4. Broader storefront coverage and localized suggestions.
-5. Optional: per-app keyword tracking against App Store Connect API (requires
+5. Official Apple Ads popularity via founder-owned Platform API v1 (this ADR
+   0003). Suggestions / impression share are out of scope until asked.
+6. Optional: per-app keyword tracking against App Store Connect API (requires
    founder decision; not an account system).
 
-Do not expand into accounts, billing, connectors, or web analytics until the
-founder explicitly reverses this direction.
+Do not expand into visitor accounts, billing, user-connected Ads, or web
+analytics until the founder explicitly reverses this direction.

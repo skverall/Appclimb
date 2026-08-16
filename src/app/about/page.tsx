@@ -43,21 +43,22 @@ export default function AboutPage() {
           <h1>Keyword tools hide their data. We show ours.</h1>
           <p>
             Every serious ASO tool sells &ldquo;search volume&rdquo; — but true App Store
-            search volume only exists inside Apple&apos;s paid Search Ads API.
-            AppClimb is a free keyword explorer that estimates popularity and
-            difficulty from public data instead, and labels every number as an
-            estimate.
+            query counts stay inside Apple Ads. AppClimb is a free keyword
+            explorer: official Apple Ads popularity (relative 1–100) when the
+            term is in that storefront and genre, estimated difficulty from
+            public iTunes data, and a source label on every score.
           </p>
         </section>
 
         <section className="about-principles marketing-container">
           <article>
             <Eye aria-hidden="true" />
-            <h2>Public data only</h2>
+            <h2>No visitor account</h2>
             <p>
-              Everything comes from the public iTunes Search API, queried
-              directly from your browser. No accounts, no API keys, no
-              third-party data brokers in the middle.
+              Difficulty and top apps come from the public iTunes Search API,
+              queried from your browser. Official popularity uses a
+              founder-owned Apple Ads Insights key on the server. You never
+              connect Ads or create an AppClimb account.
             </p>
           </article>
           <article>
@@ -103,9 +104,9 @@ export default function AboutPage() {
             <span className="marketing-eyebrow">Current status</span>
             <h2>The keyword explorer is live and free.</h2>
             <p>
-              Keyword search, estimated popularity and difficulty, 30-day trend
-              charts, related keywords, and top-app breakdowns all work from
-              public App Store data. No accounts, no billing, no tracking.
+              Keyword search, Apple Ads popularity when available, estimated
+              difficulty, 30-day trend charts, related keywords, and top-app
+              breakdowns. No visitor accounts, no billing, no tracking.
             </p>
             <div className="marketing-hero-actions">
               <Link href="/" className="marketing-primary-action large">

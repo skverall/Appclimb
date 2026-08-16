@@ -355,7 +355,7 @@ test("add app by search, accept suggestions, persist after reload", async ({
   await expect(page.getByRole("heading", { name: "Calm Focus" })).toBeVisible({
     timeout: 20_000,
   });
-  await expect(page.getByText(/Popularity · Est\./i).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Popularity$/i }).first()).toBeVisible();
   await expect(page.locator(".tracker-position").first()).toHaveText(/#\d+|>200/);
 
   // Reload — data must survive in localStorage.

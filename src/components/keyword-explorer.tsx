@@ -35,6 +35,11 @@ import {
   type KeywordMetrics,
   type KeywordRecord,
 } from "@/lib/aso";
+import {
+  enrichMetricsWithOfficialPopularity,
+  popularityShortLabel,
+  popularitySourceOf,
+} from "@/lib/popularity";
 import { downloadTextFile } from "@/lib/file";
 import { searchAppStoreCatalog } from "@/lib/itunes";
 import { Sparkline } from "@/components/keyword-charts";
@@ -148,7 +153,9 @@ export function KeywordExplorer() {
       setBusy((previous) => new Set(previous).add(key));
       setError(null);
       try {
-        const nextMetrics = await estimateKeyword(clean, targetCountry);
+        const nextMetrics = await enrichMetricsWithOfficialPopularity(
+          await estimateKeyword(clean, targetCountry),
+        );
         const record = recordSnapshot(window.localStorage, nextMetrics);
         if (options.reorder !== false) {
           setKeywords(
@@ -444,8 +451,8 @@ export function KeywordExplorer() {
         <span className="marketing-eyebrow">App Store keyword intelligence</span>
         <h1>Find keywords worth ranking for</h1>
         <p className="keyword-hero-deck">
-          Search keywords for estimated popularity and difficulty, analyze a
-          whole list at once, and filter for{" "}
+          Search keywords for Apple Ads popularity and estimated difficulty,
+          analyze a whole list at once, and filter for{" "}
           <strong>golden</strong> opportunities — or use <strong>My Apps</strong>{" "}
           in the sidebar to track your app’s position on public App Store
           search. Free, local, no account.
@@ -453,10 +460,11 @@ export function KeywordExplorer() {
         <div className="keyword-estimate-note">
           <Info size={15} aria-hidden="true" />
           <span>
-            Popularity and difficulty are <strong>estimates</strong> from public
-            iTunes data (competition and top-result strength). They are not
-            Apple Ads search volume. Position in My Apps is the observed rank in
-            the first 200 public results.
+            Popularity is Apple&apos;s official relative Ads score (1–100)
+            when the term appears in that storefront and genre; otherwise an{" "}
+            <strong>estimate</strong> from public iTunes signals. Difficulty is
+            always estimated. Neither is search volume. Position in My Apps is
+            the observed rank in the first 200 public results.
           </span>
         </div>
       </section>
@@ -640,7 +648,7 @@ export function KeywordExplorer() {
             </div>
             {goldenOnly && (
               <p className="keyword-heuristic-note">
-                “Golden” means estimated popularity ≥ 55 and difficulty ≤ 40 —
+                “Golden” means popularity ≥ 55 and estimated difficulty ≤ 40 —
                 terms with solid demand and a low barrier, worth fighting for.
               </p>
             )}
@@ -746,7 +754,18 @@ export function KeywordExplorer() {
                       </td>
                       <td>
                         {metric ? (
-                          <MetricBar value={metric.popularity} tone="popularity" />
+                          <span className="metric-with-source">
+                            <MetricBar value={metric.popularity} tone="popularity" />
+                            <span
+                              className={
+                                popularitySourceOf(metric) === "official"
+                                  ? "source-pill source-pill--official"
+                                  : "source-pill"
+                              }
+                            >
+                              {popularityShortLabel(popularitySourceOf(metric))}
+                            </span>
+                          </span>
                         ) : (
                           <em className="keyword-pending">
                             {isBusy ? "Analyzing…" : "Pending"}

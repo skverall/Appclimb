@@ -1,14 +1,15 @@
 # AppClimb — Free App Store keyword explorer
 
-AppClimb is a **free App Store keyword tool**: search any keyword and get an
-estimated popularity score (0–100), an estimated difficulty score (0–100), and
-a 30-day trend chart — built entirely from Apple's public iTunes Search API,
-with no account and no tracking.
+AppClimb is a **free App Store keyword tool**: search any keyword and get a
+popularity score (0–100), an estimated difficulty score (0–100), and a 30-day
+trend chart. Difficulty and evidence come from Apple's public iTunes Search
+API. Popularity is Apple Ads official (`searchPopularity1to100`) when the
+founder-owned Platform API v1 lookup hits; otherwise the iTunes estimate.
+No visitor account and no tracking.
 
-> Popularity and difficulty are estimates derived from public signals
-> (competition pressure and top-result strength). They are always labeled as
-> estimates and never presented as Apple Search Ads volume, which is not
-> publicly available.
+> Popularity is either Apple Ads official (relative 1–100) or an estimate
+> from public signals. Difficulty is always an estimate. Neither is search
+> volume. Both are labeled in the UI.
 
 The canonical product north star lives in
 [PRODUCT_DIRECTION.md](./PRODUCT_DIRECTION.md). Read it before changing product
@@ -35,10 +36,12 @@ direction or expanding the feature set.
 
 ## Architecture
 
-A single Next.js app deployed as a Cloudflare Worker (OpenNext). There is **no
-backend API**: the tool queries `itunes.apple.com` directly from the browser
-(Apple allows CORS `*` but blocks Cloudflare Worker IPs), and keyword history
-never leaves the visitor's browser.
+A single Next.js app deployed as a Cloudflare Worker (OpenNext). The browser
+queries `itunes.apple.com` directly (Apple allows CORS `*` but blocks
+Cloudflare Worker IPs). Official popularity is the only server hop besides
+the optional assistant: `POST /api/popularity` calls Apple Ads Platform API
+v1 with founder credentials. Keyword history never leaves the visitor's
+browser.
 
 - `src/app` — pages, layout, sitemap/robots/feed/manifest
 - `src/components` — `app-workspace`, `tracker-view`, `keyword-explorer`,
@@ -58,7 +61,25 @@ npm install
 npm run dev
 ```
 
-No environment variables are required for Keyword Explorer / My Apps.
+Keyword Explorer / My Apps work without env vars (iTunes estimate fallback).
+
+Official Apple Ads popularity needs **server-only** founder credentials:
+
+```bash
+# local — see .env.example
+APPLE_ADS_CLIENT_ID=...
+APPLE_ADS_TEAM_ID=...
+APPLE_ADS_KEY_ID=...
+APPLE_ADS_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----"
+APPLE_ADS_ACCOUNT_ID=...
+
+# production Worker secrets (never commit)
+npx wrangler secret put APPLE_ADS_CLIENT_ID
+npx wrangler secret put APPLE_ADS_TEAM_ID
+npx wrangler secret put APPLE_ADS_KEY_ID
+npx wrangler secret put APPLE_ADS_PRIVATE_KEY
+npx wrangler secret put APPLE_ADS_ACCOUNT_ID
+```
 
 Optional **ASO Assistant** (DeepSeek V4 Flash) needs a **server-only** key:
 

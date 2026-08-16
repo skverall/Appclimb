@@ -701,7 +701,7 @@ describe("CSV export and storefront clone", () => {
     });
     const rows = listKeywordsForApp(store, "123456789", "US");
     const csv = buildKeywordsCsv(store.apps[0], rows);
-    expect(csv.split("\n")[0]).toContain("popularity_estimated");
+    expect(csv.split("\n")[0]).toContain("popularity,popularity_source,difficulty_estimated");
     expect(csv).toContain("meditation");
     expect(csv).toContain("55");
     expect(csv).toContain("14");

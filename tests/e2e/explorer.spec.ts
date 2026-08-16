@@ -153,7 +153,7 @@ test("explorer exports CSV, backs up, and restores history", async ({
   expect(csvDownload.suggestedFilename()).toBe("appclimb-keywords-us.csv");
   const csvText = readFileSync(await csvDownload.path(), "utf8");
   expect(csvText).toContain(
-    "keyword,store,popularity_estimated,difficulty_estimated,results,saturated,trend_delta,last_checked_at",
+    "keyword,store,popularity,popularity_source,difficulty_estimated,results,saturated,trend_delta,last_checked_at",
   );
   expect(csvText).toContain("meditation,US,");
 

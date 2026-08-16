@@ -19,6 +19,11 @@ import { SuggestionsModal } from "@/components/suggestions-modal";
 import { TrackerDetail } from "@/components/tracker-detail";
 import { Sparkline } from "@/components/keyword-charts";
 import { SUPPORTED_COUNTRIES, formatAsoKeywordField } from "@/lib/aso";
+import {
+  enrichAnalysisResult,
+  popularityShortLabel,
+  popularitySourceOf,
+} from "@/lib/popularity";
 import type { CatalogApp, KeywordSuggestion } from "@/lib/itunes";
 import {
   RATE_LIMIT_COOLDOWN_MS,
@@ -223,11 +228,8 @@ export function TrackerView({
                 : prev,
             );
             try {
-              return await analyzeWithRetry(
-                keyword,
-                app.country,
-                app.appStoreId,
-                {
+              return enrichAnalysisResult(
+                await analyzeWithRetry(keyword, app.country, app.appStoreId, {
                   signal: controller.signal,
                   onRetry: ({ attempt, maxAttempts, error }) => {
                     if (isRateLimitError(error)) {
@@ -242,7 +244,7 @@ export function TrackerView({
                       );
                     }
                   },
-                },
+                }),
               );
             } catch (error) {
               if (isRateLimitError(error)) {
@@ -779,9 +781,8 @@ export function TrackerView({
 
       {statusFilter === "opportunity" && (
         <p className="tracker-heuristic-note">
-          Opportunity is an <strong>estimated heuristic</strong> (public
-          popularity vs difficulty signals) — not Apple search volume or
-          downloads.
+          Opportunity is an <strong>estimated heuristic</strong> (popularity vs
+          difficulty) — not Apple search volume or downloads.
         </p>
       )}
 
@@ -844,7 +845,7 @@ export function TrackerView({
                         type="button"
                         onClick={() => toggleSort("popularity")}
                       >
-                        Popularity · Est.
+                        Popularity
                       </button>
                     </th>
                     <th>
@@ -964,10 +965,21 @@ export function TrackerView({
                           {isBusy && !metrics ? (
                             <em className="keyword-pending">Checking…</em>
                           ) : metrics && metrics.popularity > 0 ? (
-                            <MetricBar
-                              value={metrics.popularity}
-                              tone="popularity"
-                            />
+                            <span className="metric-with-source">
+                              <MetricBar
+                                value={metrics.popularity}
+                                tone="popularity"
+                              />
+                              <span
+                                className={
+                                  popularitySourceOf(metrics) === "official"
+                                    ? "source-pill source-pill--official"
+                                    : "source-pill"
+                                }
+                              >
+                                {popularityShortLabel(popularitySourceOf(metrics))}
+                              </span>
+                            </span>
                           ) : (
                             <em className="keyword-pending">—</em>
                           )}

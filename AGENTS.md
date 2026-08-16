@@ -26,10 +26,11 @@ changing direction.
 - Production is Cloudflare Workers (web only) at `https://appclimb.app`.
   `worker/` (Go), `deploy/`, and `compose.yml` are frozen rollback artifacts
   from earlier architectures; never treat them as the current backend.
-- Keyword data honesty rules: popularity and difficulty are estimates derived
-  from public signals and MUST be labeled as estimates in the UI. Never claim
-  real Apple Search Ads volume. History lives in localStorage
-  (`appclimb:kw:v1:*`) with an estimated backfill flagged `backfilled: true`.
+- Keyword data honesty rules: popularity is Apple Ads official relative 1–100
+  when `POST /api/popularity` hits, otherwise an iTunes estimate. Difficulty
+  is always an estimate. Both MUST be labeled with their source. Never claim
+  search volume. History lives in localStorage (`appclimb:kw:v1:*`) with an
+  estimated backfill flagged `backfilled: true`.
 - For any live-data claim, verify repository code and the deployed site
   separately; the site runs client-side logic that unit tests do not execute.
 - A push to `main` deploys to production immediately, so run `npm run check`

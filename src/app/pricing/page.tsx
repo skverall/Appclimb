@@ -22,7 +22,7 @@ const accessDetails = [
   {
     status: "Free",
     detail:
-      "unlimited keyword searches, estimated popularity and difficulty, 30-day trends",
+      "unlimited keyword searches, Apple Ads popularity, estimated difficulty, 30-day trends",
     inDevelopment: false,
   },
   {
@@ -54,7 +54,7 @@ export default function PricingPage() {
           "@type": "Product",
           name: "AppClimb Keyword Explorer",
           description:
-            "Free App Store keyword research: estimated popularity, difficulty, and 30-day trends from public data.",
+            "Free App Store keyword research: Apple Ads popularity, estimated difficulty, and 30-day trends.",
           brand: { "@type": "Brand", name: "AppClimb" },
           offers: [
             {
