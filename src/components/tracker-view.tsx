@@ -868,12 +868,11 @@ export function TrackerView({
               <table className="keyword-table tracker-table">
                 <thead>
                   <tr>
-                    <th className="tracker-col-sticky" title="Keyword phrase (click to sort by alphabetical order)">
+                    <th className="tracker-col-sticky tracker-col-keyword" title="Keyword phrase (click to sort by alphabetical order)">
                       <button type="button" onClick={() => toggleSort("keyword")}>
                         Keyword
                       </button>
                     </th>
-                    <th className="tracker-col-optional tracker-col-notes" title="Private notes saved locally for this keyword">Notes</th>
                     <th title="Opportunity Score (0–100): High popularity + low difficulty">
                       <button
                         type="button"
@@ -920,6 +919,7 @@ export function TrackerView({
                         Updated
                       </button>
                     </th>
+                    <th className="tracker-col-optional tracker-col-notes" title="Private notes saved locally for this keyword">Notes</th>
                     <th className="tracker-col-actions" aria-label="Actions" />
                   </tr>
                 </thead>
@@ -964,34 +964,11 @@ export function TrackerView({
                           }
                         }}
                       >
-                        <td className="tracker-col-sticky">
+                        <td className="tracker-col-sticky tracker-col-keyword">
                           <strong className="keyword-name">{row.keyword}</strong>
                           <small className="tracker-row-store">
                             {row.country}
                           </small>
-                        </td>
-                        <td
-                          className="tracker-col-optional tracker-col-notes"
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          <input
-                            className="tracker-note-input"
-                            value={row.note}
-                            placeholder="Note…"
-                            aria-label={`Note for ${row.keyword}`}
-                            title={`Edit note for "${row.keyword}"`}
-                            onChange={(event) => {
-                              onStoreChange(
-                                updateKeywordNote(
-                                  store,
-                                  app.appStoreId,
-                                  app.country,
-                                  key,
-                                  event.target.value,
-                                ),
-                              );
-                            }}
-                          />
                         </td>
                         <td>
                           {opp === null ? (
@@ -1084,6 +1061,29 @@ export function TrackerView({
                         </td>
                         <td className="tracker-col-optional tracker-col-updated">
                           <span className="tracker-updated-time">{lastUpdate}</span>
+                        </td>
+                        <td
+                          className="tracker-col-optional tracker-col-notes"
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          <input
+                            className="tracker-note-input"
+                            value={row.note}
+                            placeholder="Add note…"
+                            aria-label={`Note for ${row.keyword}`}
+                            title={`Edit note for "${row.keyword}"`}
+                            onChange={(event) => {
+                              onStoreChange(
+                                updateKeywordNote(
+                                  store,
+                                  app.appStoreId,
+                                  app.country,
+                                  key,
+                                  event.target.value,
+                                ),
+                              );
+                            }}
+                          />
                         </td>
                         <td
                           className="keyword-row-actions tracker-col-actions"

@@ -1,6 +1,6 @@
 "use client";
 
-import { History, SquarePen, Trash2 } from "lucide-react";
+import { MessageSquare, Plus, Trash2 } from "lucide-react";
 
 import type { AiConversationSummary } from "@/lib/ai-chat-client";
 
@@ -39,21 +39,21 @@ export function AiChatHistory({
 }) {
   return (
     <div className="ai-chat-history">
-      <div className="ai-chat-history-head">
-        <strong>
-          <History size={13} aria-hidden="true" /> History
-        </strong>
-        <button
-          type="button"
-          className="ai-chat-icon-link"
-          onClick={onNew}
-          disabled={disabled}
-          aria-label="Start a new chat"
-          title="New chat"
-        >
-          <SquarePen size={15} aria-hidden="true" />
-        </button>
+      <button
+        type="button"
+        className="ai-chat-new-button"
+        onClick={onNew}
+        disabled={disabled}
+        title="Start a new chat session"
+      >
+        <Plus size={16} aria-hidden="true" />
+        <span>New chat</span>
+      </button>
+
+      <div className="ai-chat-history-header-label">
+        <span>Recent chats</span>
       </div>
+
       {conversations.length === 0 ? (
         <p className="ai-chat-history-empty">No past chats yet.</p>
       ) : (
@@ -70,21 +70,28 @@ export function AiChatHistory({
                 aria-current={
                   conversation.id === activeId ? "true" : undefined
                 }
+                title={conversation.title}
               >
-                <span className="ai-chat-history-title">
-                  {conversation.title}
-                </span>
-                <span className="ai-chat-history-meta">
-                  {formatWhen(conversation.updatedAt)}
-                  {conversation.messageCount > 0
-                    ? ` · ${conversation.messageCount} msgs`
-                    : ""}
-                </span>
+                <MessageSquare size={14} className="ai-chat-row-icon" aria-hidden="true" />
+                <div className="ai-chat-history-info">
+                  <span className="ai-chat-history-title">
+                    {conversation.title}
+                  </span>
+                  <span className="ai-chat-history-meta">
+                    {formatWhen(conversation.updatedAt)}
+                    {conversation.messageCount > 0
+                      ? ` · ${conversation.messageCount} msgs`
+                      : ""}
+                  </span>
+                </div>
               </button>
               <button
                 type="button"
                 className="ai-chat-history-delete"
-                onClick={() => onDelete(conversation.id)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(conversation.id);
+                }}
                 disabled={disabled}
                 aria-label={`Delete conversation: ${conversation.title}`}
                 title="Delete conversation"
