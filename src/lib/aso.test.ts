@@ -19,6 +19,7 @@ import {
   parseKeywordBatch,
   recentHistory,
   recordSnapshot,
+  restoreMetricsFromRecord,
   relatedKeywords,
   removeKeywordFromList,
   restoreExplorerBackup,
@@ -69,7 +70,13 @@ function metricsFor(
   apps: TopApp[],
   saturated = false,
 ): KeywordMetrics {
-  return estimateMetrics(keyword, "US", apps, saturated, "2026-08-02T12:00:00Z");
+  return estimateMetrics(
+    keyword,
+    "US",
+    apps,
+    saturated,
+    "2026-08-02T12:00:00Z",
+  );
 }
 
 describe("estimateMetrics", () => {
@@ -159,7 +166,12 @@ describe("fetchKeywordResults", () => {
         return new Response(
           JSON.stringify({
             results: [
-              { trackId: 1, trackName: "Calm", userRatingCount: 50, averageUserRating: 4.5 },
+              {
+                trackId: 1,
+                trackName: "Calm",
+                userRatingCount: 50,
+                averageUserRating: 4.5,
+              },
               { trackId: 2, trackName: "Headspace" },
             ],
           }),
@@ -184,7 +196,9 @@ describe("fetchKeywordResults", () => {
     }));
     const { saturated, apps } = await fetchKeywordResults("big", "US", {
       fetchImpl: (async () =>
-        new Response(JSON.stringify({ results }), { status: 200 })) as typeof fetch,
+        new Response(JSON.stringify({ results }), {
+          status: 200,
+        })) as typeof fetch,
     });
     expect(saturated).toBe(true);
     expect(apps).toHaveLength(SEARCH_LIMIT);
@@ -251,6 +265,33 @@ describe("record persistence", () => {
     );
   });
 
+  it("persists lastCheck and restores metrics for a reload", () => {
+    const storage = makeStorage();
+    const metrics = metricsFor("meditation", [makeApp()]);
+    recordSnapshot(storage, metrics);
+    const record = loadRecord(storage, "meditation", "US");
+    expect(record?.lastCheck?.results).toBe(metrics.results);
+    expect(record?.lastCheck?.saturated).toBe(metrics.saturated);
+    const restored = restoreMetricsFromRecord(record!);
+    expect(restored?.popularity).toBe(metrics.popularity);
+    expect(restored?.difficulty).toBe(metrics.difficulty);
+    expect(restored?.popularitySource).toBe(metrics.popularitySource);
+    expect(restored?.results).toBe(metrics.results);
+    expect(restored?.topApps).toEqual([]);
+    expect(restored?.restored).toBe(true);
+  });
+
+  it("restores legacy records without lastCheck with an unknown results count", () => {
+    const storage = makeStorage();
+    const metrics = metricsFor("meditation", [makeApp()]);
+    recordSnapshot(storage, metrics);
+    const legacy = loadRecord(storage, "meditation", "US")!;
+    delete legacy.lastCheck;
+    const restored = restoreMetricsFromRecord(legacy);
+    expect(restored?.popularity).toBe(metrics.popularity);
+    expect(restored?.results).toBe(0);
+  });
+
   it("ignores corrupt records", () => {
     const storage = makeStorage({
       "appclimb:kw:v1:US:broken": "{not json",
@@ -286,7 +327,9 @@ describe("keyword list", () => {
 
 describe("trendDelta", () => {
   it("returns null with fewer than two points", () => {
-    expect(trendDelta([{ date: "2026-08-01", popularity: 50, difficulty: 40 }])).toBeNull();
+    expect(
+      trendDelta([{ date: "2026-08-01", popularity: 50, difficulty: 40 }]),
+    ).toBeNull();
   });
 
   it("returns the popularity change between the last two points", () => {
@@ -380,16 +423,16 @@ describe("estimateKeyword and list corruption", () => {
 
   it("rejects invalid keyword lengths before fetch", async () => {
     await expect(
-      fetchKeywordResults("x", "US", { fetchImpl: (async () => new Response()) as typeof fetch }),
+      fetchKeywordResults("x", "US", {
+        fetchImpl: (async () => new Response()) as typeof fetch,
+      }),
     ).rejects.toThrow(/invalid_keyword_search/);
   });
 });
 
 describe("isGoldenKeyword", () => {
   it("flags solid demand with a low barrier", () => {
-    expect(
-      isGoldenKeyword({ popularity: 60, difficulty: 30 }),
-    ).toBe(true);
+    expect(isGoldenKeyword({ popularity: 60, difficulty: 30 })).toBe(true);
   });
 
   it("rejects weak demand or a high barrier", () => {
@@ -534,14 +577,11 @@ describe("backup / restore", () => {
     const storage = makeStorage();
     expect(restoreExplorerBackup(storage, "{not json")).toBe(0);
     expect(
-      restoreExplorerBackup(
-        storage,
-        JSON.stringify({ version: 99, data: {} }),
-      ),
+      restoreExplorerBackup(storage, JSON.stringify({ version: 99, data: {} })),
     ).toBe(0);
-    expect(
-      restoreExplorerBackup(storage, JSON.stringify({ version: 1 })),
-    ).toBe(0);
+    expect(restoreExplorerBackup(storage, JSON.stringify({ version: 1 }))).toBe(
+      0,
+    );
   });
 
   it("skips malformed records inside a valid backup", () => {
@@ -566,7 +606,11 @@ describe("backup / restore", () => {
 
 describe("formatAsoKeywordField", () => {
   it("joins keywords with commas and removes extra spaces", () => {
-    const result = formatAsoKeywordField(["  meditation ", "habit tracker", "mindfulness"]);
+    const result = formatAsoKeywordField([
+      "  meditation ",
+      "habit tracker",
+      "mindfulness",
+    ]);
     expect(result).toBe("meditation,habit tracker,mindfulness");
   });
 
@@ -580,7 +624,8 @@ describe("formatAsoKeywordField", () => {
     ];
     const result = formatAsoKeywordField(keywords);
     expect(result.length).toBeLessThanOrEqual(100);
-    expect(result).toBe("meditation,habit tracker for daily routines and goals,mindfulness practice app for stress relief");
+    expect(result).toBe(
+      "meditation,habit tracker for daily routines and goals,mindfulness practice app for stress relief",
+    );
   });
 });
-

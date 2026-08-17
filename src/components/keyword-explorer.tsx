@@ -31,6 +31,7 @@ import {
   recordSnapshot,
   recentHistory,
   removeKeywordFromList,
+  restoreMetricsFromRecord,
   restoreExplorerBackup,
   runBatched,
   saveRecord,
@@ -146,11 +147,16 @@ export function KeywordExplorer() {
       const list = loadKeywordList(window.localStorage, country);
       setKeywords(list);
       const nextRecords = new Map<string, KeywordRecord>();
+      const nextMetrics = new Map<string, KeywordMetrics>();
       for (const keyword of list) {
         const record = loadRecord(window.localStorage, keyword, country);
-        if (record) nextRecords.set(keyword, record);
+        if (!record) continue;
+        nextRecords.set(keyword, record);
+        const restored = restoreMetricsFromRecord(record);
+        if (restored) nextMetrics.set(keyword, restored);
       }
       setRecords(nextRecords);
+      setMetrics(nextMetrics);
       setSelected(null);
       setError(null);
     })();
@@ -979,14 +985,19 @@ export function KeywordExplorer() {
                             )}
                           </td>
                           <td className="keyword-results-cell">
-                            {metric ? (
+                            {metric &&
+                            !(
+                              metric.restored &&
+                              record &&
+                              !record.lastCheck
+                            ) ? (
                               <span>
                                 <b>{metric.results}</b>
                                 <small>
                                   {metric.saturated ? "200+ found" : "apps"}
                                 </small>
                               </span>
-                            ) : isBusy ? (
+                            ) : metric && isBusy ? (
                               <span className="metric-skeleton">
                                 <i className="skeleton-num" />
                               </span>

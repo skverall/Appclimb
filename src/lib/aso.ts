@@ -78,6 +78,12 @@ export interface KeywordMetrics {
   saturated: boolean;
   topApps: TopApp[];
   sampledAt: string;
+  /**
+   * True when rebuilt from a stored snapshot after a reload instead of a
+   * live check: topApps is empty (and results is 0 when the legacy record
+   * predates lastCheck persistence).
+   */
+  restored?: boolean;
 }
 
 export interface KeywordHistoryPoint {
@@ -96,6 +102,15 @@ export interface KeywordRecord {
   backfilled: boolean;
   /** Sorted ascending by date; the last point is a real measurement. */
   history: KeywordHistoryPoint[];
+  /**
+   * Results/saturated of the most recent check. Kept alongside the history
+   * point (which already has popularity/difficulty/source) so the table can
+   * be restored fully after a reload. Absent on legacy records.
+   */
+  lastCheck?: {
+    results: number;
+    saturated: boolean;
+  };
 }
 
 export const HISTORY_DAYS = 30;
@@ -122,13 +137,16 @@ export function toTopApp(
   position: number,
 ): TopApp | null {
   const appStoreId = Number(result.trackId);
-  const name = typeof result.trackName === "string" ? result.trackName.trim() : "";
+  const name =
+    typeof result.trackName === "string" ? result.trackName.trim() : "";
   if (!Number.isInteger(appStoreId) || appStoreId <= 0 || !name) return null;
   return {
     appStoreId: String(appStoreId),
     name: name.slice(0, 120),
     developer:
-      typeof result.sellerName === "string" ? result.sellerName.slice(0, 160) : "",
+      typeof result.sellerName === "string"
+        ? result.sellerName.slice(0, 160)
+        : "",
     genre:
       typeof result.primaryGenreName === "string"
         ? result.primaryGenreName.slice(0, 80)
@@ -138,7 +156,10 @@ export function toTopApp(
     storeUrl:
       typeof result.trackViewUrl === "string" ? result.trackViewUrl : "",
     ratingsCount: Math.max(0, Number(result.userRatingCount) || 0),
-    ratingAverage: Math.min(5, Math.max(0, Number(result.averageUserRating) || 0)),
+    ratingAverage: Math.min(
+      5,
+      Math.max(0, Number(result.averageUserRating) || 0),
+    ),
     position,
   };
 }
@@ -252,15 +273,17 @@ export function estimateMetrics(
   const averageRatings =
     topApps.length === 0
       ? 0
-      : topApps.reduce((sum, app) => sum + app.ratingsCount, 0) / topApps.length;
+      : topApps.reduce((sum, app) => sum + app.ratingsCount, 0) /
+        topApps.length;
   const topStrength = Math.min(1, Math.log10(1 + averageRatings) / 5);
 
   // How many of the top 10 are known mega-brands (hard to displace).
   const brandShare =
     topApps.length === 0
       ? 0
-      : topApps.filter((app) => MEGA_BRANDS.has(app.developer.toLocaleLowerCase())).length /
-        topApps.length;
+      : topApps.filter((app) =>
+          MEGA_BRANDS.has(app.developer.toLocaleLowerCase()),
+        ).length / topApps.length;
 
   // Relevance: how many top apps carry the keyword in their title.
   const tokens = keyword.toLocaleLowerCase().split(/\s+/u);
@@ -274,12 +297,19 @@ export function estimateMetrics(
   const popularity = noResults
     ? 2
     : clampScore(
-        competition * 70 + topStrength * 20 + relevance * 10 + keywordJitter(keyword) * 0.6,
+        competition * 70 +
+          topStrength * 20 +
+          relevance * 10 +
+          keywordJitter(keyword) * 0.6,
       );
   const difficulty = noResults
     ? 2
     : clampScore(
-        competition * 40 + topStrength * 35 + brandShare * 15 + relevance * 10 + keywordJitter(keyword) * 0.4,
+        competition * 40 +
+          topStrength * 35 +
+          brandShare * 15 +
+          relevance * 10 +
+          keywordJitter(keyword) * 0.4,
       );
 
   return {
@@ -301,7 +331,11 @@ export async function estimateKeyword(
   country: string,
   options: { fetchImpl?: typeof fetch; signal?: AbortSignal } = {},
 ): Promise<KeywordMetrics> {
-  const { apps, saturated } = await fetchKeywordResults(keyword, country, options);
+  const { apps, saturated } = await fetchKeywordResults(
+    keyword,
+    country,
+    options,
+  );
   return estimateMetrics(keyword, country, apps, saturated);
 }
 
@@ -455,6 +489,10 @@ export function recordSnapshot(
     firstSeen: existing?.firstSeen ?? today,
     backfilled: existing?.backfilled ?? history.length <= 2,
     history,
+    lastCheck: {
+      results: metrics.results,
+      saturated: metrics.saturated,
+    },
   };
   if (record.backfilled && history.length === 1) {
     record.history = backfillHistory(metrics);
@@ -464,7 +502,34 @@ export function recordSnapshot(
 }
 
 /** Trim history to the trailing window, newest last. */
-export function recentHistory(record: KeywordRecord, days = HISTORY_DAYS): KeywordHistoryPoint[] {
+/**
+ * Rebuild display metrics from a stored record's latest snapshot so the
+ * table survives a page reload. Top apps are not persisted: they come back
+ * on the next check. Returns null when the record has no history yet.
+ */
+export function restoreMetricsFromRecord(
+  record: KeywordRecord,
+): KeywordMetrics | null {
+  const last = record.history[record.history.length - 1];
+  if (!last) return null;
+  return {
+    keyword: record.keyword,
+    country: record.country,
+    popularity: last.popularity,
+    difficulty: last.difficulty,
+    popularitySource: last.popularitySource,
+    results: record.lastCheck?.results ?? 0,
+    saturated: record.lastCheck?.saturated ?? false,
+    topApps: [],
+    sampledAt: last.date,
+    restored: true,
+  };
+}
+
+export function recentHistory(
+  record: KeywordRecord,
+  days = HISTORY_DAYS,
+): KeywordHistoryPoint[] {
   return record.history.slice(-days);
 }
 
@@ -511,7 +576,8 @@ export function addKeywordToList(
   const next = [
     keyword.trim(),
     ...current.filter(
-      (value) => value.toLocaleLowerCase() !== keyword.trim().toLocaleLowerCase(),
+      (value) =>
+        value.toLocaleLowerCase() !== keyword.trim().toLocaleLowerCase(),
     ),
   ];
   saveKeywordList(storage, country, next);
@@ -560,7 +626,9 @@ export function relatedKeywords(topApps: TopApp[], keyword: string): string[] {
     const title = app.name.toLocaleLowerCase();
     const genre = app.genre.toLocaleLowerCase();
     const words =
-      title.match(/[\p{L}\p{N}]{3,}/gu)?.filter((word) => !SUGGESTION_STOP_WORDS.has(word)) ?? [];
+      title
+        .match(/[\p{L}\p{N}]{3,}/gu)
+        ?.filter((word) => !SUGGESTION_STOP_WORDS.has(word)) ?? [];
     const candidates = [title, genre, `${seed} ${genre}`.trim(), ...words];
     for (const candidate of candidates) {
       const clean = candidate.replace(/\s+/gu, " ").trim();
@@ -860,4 +928,3 @@ export function formatAsoKeywordField(keywords: string[]): string {
 
   return parts.join(",");
 }
-

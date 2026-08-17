@@ -1,7 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, ExternalLink, Link2, Loader2, RefreshCw, Star, X } from "lucide-react";
+import {
+  Check,
+  ExternalLink,
+  Link2,
+  Loader2,
+  RefreshCw,
+  Star,
+  X,
+} from "lucide-react";
 
 import {
   recentHistory,
@@ -44,20 +52,22 @@ export function KeywordDetail({
   onAnalyze: (keyword: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
-  const history = useMemo(() => (record ? recentHistory(record) : []), [record]);
+  const history = useMemo(
+    () => (record ? recentHistory(record) : []),
+    [record],
+  );
   const related = useMemo(
     () => (metrics ? relatedKeywords(metrics.topApps, keyword) : []),
     [metrics, keyword],
   );
 
-  const competition =
-    !metrics
-      ? "—"
-      : metrics.saturated
-        ? "Heavy"
-        : metrics.results > 60
-          ? "Moderate"
-          : "Light";
+  const competition = !metrics
+    ? "—"
+    : metrics.saturated
+      ? "Heavy"
+      : metrics.results > 60
+        ? "Moderate"
+        : "Light";
 
   const shareUrl = `${window.location.origin}${window.location.pathname}?kw=${encodeURIComponent(keyword)}&country=${encodeURIComponent(countryCode)}`;
 
@@ -94,9 +104,7 @@ export function KeywordDetail({
     <section className="keyword-detail" aria-labelledby="keyword-detail-title">
       <header className="keyword-detail-header">
         <div>
-          <span className="eyebrow">
-            {countryLabel} · App Store
-          </span>
+          <span className="eyebrow">{countryLabel} · App Store</span>
           <h2 id="keyword-detail-title">{keyword}</h2>
         </div>
         <div className="keyword-detail-actions">
@@ -165,9 +173,13 @@ export function KeywordDetail({
               <span>Results</span>
               <strong>{metrics.results}</strong>
               <i className="stat-bar stat-bar--neutral">
-                <b style={{ width: `${Math.min(100, metrics.results / 2)}%` }} />
+                <b
+                  style={{ width: `${Math.min(100, metrics.results / 2)}%` }}
+                />
               </i>
-              <small>{metrics.saturated ? "Hit the 200-app cap" : "Apps in results"}</small>
+              <small>
+                {metrics.saturated ? "Hit the 200-app cap" : "Apps in results"}
+              </small>
             </div>
             <div className="keyword-stat">
               <span>Competition</span>
@@ -175,7 +187,9 @@ export function KeywordDetail({
               <i className="stat-bar stat-bar--neutral">
                 <b
                   style={{
-                    width: metrics.saturated ? "100%" : `${Math.min(100, metrics.results / 2)}%`,
+                    width: metrics.saturated
+                      ? "100%"
+                      : `${Math.min(100, metrics.results / 2)}%`,
                   }}
                 />
               </i>
@@ -188,7 +202,8 @@ export function KeywordDetail({
               <figcaption>
                 <span>Popularity trend</span>
                 <small>
-                  {history.length} days · {popularityShortLabel(popularitySourceOf(metrics))}
+                  {history.length} days ·{" "}
+                  {popularityShortLabel(popularitySourceOf(metrics))}
                   {record?.backfilled ? " + estimated baseline" : ""}
                 </small>
               </figcaption>
@@ -239,54 +254,56 @@ export function KeywordDetail({
             </section>
           )}
 
-          <section className="keyword-top-apps">
-            <h3>Top apps for this keyword</h3>
-            <ol>
-              {metrics.topApps.slice(0, 10).map((app) => (
-                <li key={app.appStoreId}>
-                  <span className="top-app-rank">{app.position}</span>
-                  {app.iconUrl ? (
-                    <>
-                      {/* Remote iTunes artwork varies by storefront; next/image
+          {metrics.topApps.length > 0 && (
+            <section className="keyword-top-apps">
+              <h3>Top apps for this keyword</h3>
+              <ol>
+                {metrics.topApps.slice(0, 10).map((app) => (
+                  <li key={app.appStoreId}>
+                    <span className="top-app-rank">{app.position}</span>
+                    {app.iconUrl ? (
+                      <>
+                        {/* Remote iTunes artwork varies by storefront; next/image
                           would require per-origin remote patterns for no gain. */}
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={app.iconUrl}
-                        alt=""
-                        width={40}
-                        height={40}
-                        loading="lazy"
-                      />
-                    </>
-                  ) : (
-                    <span className="top-app-fallback" aria-hidden="true">
-                      {app.name.charAt(0).toUpperCase()}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={app.iconUrl}
+                          alt=""
+                          width={40}
+                          height={40}
+                          loading="lazy"
+                        />
+                      </>
+                    ) : (
+                      <span className="top-app-fallback" aria-hidden="true">
+                        {app.name.charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                    <div className="top-app-meta">
+                      <a href={app.storeUrl} target="_blank" rel="noreferrer">
+                        {app.name}
+                        <ExternalLink size={12} aria-hidden="true" />
+                      </a>
+                      <small>
+                        {app.developer} · {app.genre}
+                      </small>
+                    </div>
+                    <span className="top-app-ratings">
+                      <Star size={13} aria-hidden="true" />
+                      {app.ratingAverage > 0
+                        ? app.ratingAverage.toFixed(1)
+                        : "—"}
+                      <small>
+                        {app.ratingsCount > 0
+                          ? formatCount(app.ratingsCount)
+                          : "no ratings"}
+                      </small>
                     </span>
-                  )}
-                  <div className="top-app-meta">
-                    <a
-                      href={app.storeUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      {app.name}
-                      <ExternalLink size={12} aria-hidden="true" />
-                    </a>
-                    <small>
-                      {app.developer} · {app.genre}
-                    </small>
-                  </div>
-                  <span className="top-app-ratings">
-                    <Star size={13} aria-hidden="true" />
-                    {app.ratingAverage > 0 ? app.ratingAverage.toFixed(1) : "—"}
-                    <small>
-                      {app.ratingsCount > 0 ? formatCount(app.ratingsCount) : "no ratings"}
-                    </small>
-                  </span>
-                </li>
-              ))}
-            </ol>
-          </section>
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
         </>
       )}
     </section>
