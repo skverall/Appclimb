@@ -480,190 +480,85 @@ export function AppWorkspace() {
 
   return (
     <div className="app-workspace">
-      <button
-        type="button"
-        className="tracker-sidebar-toggle"
-        onClick={() => setSidebarOpen(true)}
-        aria-label="Open navigation"
-      >
-        <Menu size={18} aria-hidden="true" />
-        Menu
-      </button>
-
-      {sidebarOpen && (
-        <button
-          type="button"
-          className="tracker-sidebar-scrim"
-          aria-label="Close navigation"
-          onClick={() => setSidebarOpen(false)}
-        />
-      )}
-
-      <aside
-        className={`tracker-sidebar${sidebarOpen ? " is-open" : ""}`}
-        aria-label="AppClimb navigation"
-      >
-        <div className="tracker-sidebar-top">
-          <button
-            type="button"
-            className="tracker-sidebar-close"
-            onClick={() => setSidebarOpen(false)}
-            aria-label="Close navigation"
-          >
-            <X size={18} aria-hidden="true" />
-          </button>
-        </div>
-
-        <nav className="tracker-sidebar-nav">
-          <button
-            type="button"
-            className={
-              view === "explorer"
-                ? "tracker-nav-item is-active"
-                : "tracker-nav-item"
-            }
-            onClick={selectExplorer}
-          >
-            <Compass size={16} aria-hidden="true" />
-            Keyword Explorer
-          </button>
-        </nav>
-
-        <div
-          className={`tracker-sidebar-section${
-            store.apps.length === 0 ? " is-empty" : ""
-          }`}
-        >
-          <div className="tracker-sidebar-section-label">My Apps</div>
-          {store.apps.length === 0 ? (
-            <p className="tracker-sidebar-empty">
-              No apps yet — add one to track its keywords and rank.
-            </p>
-          ) : (
-            <ul className="tracker-app-list">
-              {store.apps.map((app) => {
-                const key = appKey(app.appStoreId, app.country);
-                const active = view === "app" && store.activeAppKey === key;
-                const count = listKeywordsForApp(
-                  store,
-                  app.appStoreId,
-                  app.country,
-                ).length;
-                return (
-                  <li
-                    key={key}
-                    className={
-                      active ? "tracker-app-row is-active" : "tracker-app-row"
-                    }
-                  >
-                    <button
-                      type="button"
-                      className="tracker-app-card"
-                      onClick={() => selectApp(app)}
-                      aria-current={active ? "true" : undefined}
-                    >
-                      {app.iconUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={app.iconUrl}
-                          alt=""
-                          width={36}
-                          height={36}
-                          loading="lazy"
-                        />
-                      ) : (
-                        <span
-                          className="tracker-app-icon-fallback"
-                          aria-hidden="true"
-                        >
-                          {app.name.charAt(0)}
-                        </span>
-                      )}
-                      <span className="tracker-app-card-meta">
-                        <strong title={app.name}>{app.name}</strong>
-                        <small>
-                          <span className="tracker-app-store-badge">
-                            {app.country}
-                          </span>
-                          <span>
-                            {count} keyword{count === 1 ? "" : "s"}
-                          </span>
-                        </small>
-                      </span>
-                    </button>
-                    <button
-                      type="button"
-                      className="tracker-app-delete"
-                      aria-label={`Remove ${app.name}`}
-                      title={`Remove ${app.name}`}
-                      onClick={() => handleDeleteApp(app)}
-                    >
-                      <Trash2 size={14} aria-hidden="true" />
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </div>
-
-        <div className="tracker-sidebar-footer">
-          <button
-            type="button"
-            className="tracker-button-primary tracker-button-block"
-            onClick={() => setAddAppOpen(true)}
-          >
-            <Plus size={16} aria-hidden="true" />
-            Add App
-          </button>
-          {proOn && (
-            <div className="tracker-sidebar-account">
-              {account.user ? (
-                <>
-                  <span
-                    className={`account-plan-chip ${isPro ? "is-pro" : "is-free"}`}
-                  >
-                    {isPro ? "Pro" : "Free"}
-                  </span>
-                  <span className="tracker-sidebar-footnote">
-                    {account.user.email}
-                  </span>
-                  <button
-                    type="button"
-                    className="tracker-sidebar-link"
-                    onClick={() => void signOut()}
-                  >
-                    Sign out
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    className="tracker-sidebar-link"
-                    onClick={openAuth}
-                  >
-                    Sign in to sync keywords
-                  </button>
-                  {!isPro && (
-                    <button
-                      type="button"
-                      className="tracker-sidebar-link tracker-sidebar-link-cta"
-                      onClick={openUpgrade}
-                    >
-                      Upgrade to Pro
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-        </div>
-      </aside>
-
       <div className="tracker-workspace-main">
+        {/* Sleek, Centralized Workspace Sub-Header */}
+        <div className="tracker-workspace-topbar marketing-container">
+          <div className="tracker-mode-switcher" aria-label="Workspace views">
+            <button
+              type="button"
+              className={`tracker-mode-tab ${view === "explorer" ? "is-active" : ""}`}
+              onClick={selectExplorer}
+            >
+              <Compass size={15} aria-hidden="true" />
+              Keyword Explorer
+            </button>
+            <button
+              type="button"
+              className={`tracker-mode-tab ${view === "app" ? "is-active" : ""}`}
+              onClick={() => {
+                if (store.apps.length > 0) {
+                  selectApp(activeApp || store.apps[0]);
+                } else {
+                  setAddAppOpen(true);
+                }
+              }}
+            >
+              <span>Tracked Apps</span>
+              {store.apps.length > 0 && (
+                <span className="tracker-count-badge">{store.apps.length}</span>
+              )}
+            </button>
+          </div>
+
+          <div className="tracker-workspace-topbar-actions">
+            {view === "app" && store.apps.length > 0 && (
+              <div className="tracker-app-pill-list" role="tablist" aria-label="Tracked apps">
+                {store.apps.map((a) => {
+                  const active = store.activeAppKey === appKey(a.appStoreId, a.country);
+                  return (
+                    <button
+                      key={appKey(a.appStoreId, a.country)}
+                      type="button"
+                      role="button"
+                      aria-label={`Select ${a.name}`}
+                      className={`tracker-app-pill ${active ? "is-active" : ""}`}
+                      onClick={() => selectApp(a)}
+                    >
+                      {a.iconUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={a.iconUrl} alt="" width={16} height={16} />
+                      )}
+                      <span>{a.name}</span>
+                      <span className="tracker-app-store-badge">{a.country}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            <button
+              type="button"
+              className="tracker-button-primary tracker-topbar-add-btn"
+              onClick={() => setAddAppOpen(true)}
+            >
+              <Plus size={15} aria-hidden="true" />
+              Add App
+            </button>
+
+            <button
+              type="button"
+              className="tracker-sidebar-toggle"
+              onClick={() => setSidebarOpen(true)}
+              aria-label="Open navigation"
+            >
+              <Menu size={16} aria-hidden="true" />
+              Apps
+            </button>
+          </div>
+        </div>
+
         {banner && (
-          <div className="keyword-error tracker-banner" role="status">
+          <div className="keyword-error tracker-banner marketing-container" role="status">
             {banner}
             <button
               type="button"
@@ -676,7 +571,7 @@ export function AppWorkspace() {
         )}
 
         {bootstrapping && (
-          <div className="tracker-bootstrap" role="status" aria-live="polite">
+          <div className="tracker-bootstrap marketing-container" role="status" aria-live="polite">
             <Loader2 className="spin" size={15} aria-hidden="true" />
             <span>
               {bootstrapLabel}
@@ -734,15 +629,198 @@ export function AppWorkspace() {
             )}
           </>
         ) : (
-          <TrackerView
-            app={activeApp}
-            store={store}
-            onStoreChange={persist}
-            suspendAutoRefresh={bootstrapping}
-            onTrackInStorefront={handleTrackInStorefront}
-          />
+          <div className="marketing-container">
+            <TrackerView
+              app={activeApp}
+              store={store}
+              onStoreChange={persist}
+              suspendAutoRefresh={bootstrapping}
+              onTrackInStorefront={handleTrackInStorefront}
+            />
+          </div>
         )}
       </div>
+
+      {sidebarOpen && (
+        <button
+          type="button"
+          className="tracker-sidebar-scrim"
+          aria-label="Close navigation"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Slide-out drawer (used on mobile or when toggled) */}
+      <aside
+        className={`tracker-sidebar${sidebarOpen ? " is-open" : ""}`}
+        aria-label="AppClimb navigation"
+      >
+        <div className="tracker-sidebar-top">
+          <button
+            type="button"
+            className="tracker-sidebar-close"
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Close navigation"
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+        </div>
+
+        <nav className="tracker-sidebar-nav">
+          <button
+            type="button"
+            className={
+              view === "explorer"
+                ? "tracker-nav-item is-active"
+                : "tracker-nav-item"
+            }
+            onClick={() => {
+              selectExplorer();
+              setSidebarOpen(false);
+            }}
+          >
+            <Compass size={16} aria-hidden="true" />
+            Keyword Explorer
+          </button>
+        </nav>
+
+        <div
+          className={`tracker-sidebar-section${
+            store.apps.length === 0 ? " is-empty" : ""
+          }`}
+        >
+          <div className="tracker-sidebar-section-label">My Apps</div>
+          {store.apps.length === 0 ? (
+            <p className="tracker-sidebar-empty">
+              No apps yet — add one to track its keywords and rank.
+            </p>
+          ) : (
+            <ul className="tracker-app-list">
+              {store.apps.map((app) => {
+                const key = appKey(app.appStoreId, app.country);
+                const active = view === "app" && store.activeAppKey === key;
+                const count = listKeywordsForApp(
+                  store,
+                  app.appStoreId,
+                  app.country,
+                ).length;
+                return (
+                  <li
+                    key={key}
+                    className={
+                      active ? "tracker-app-row is-active" : "tracker-app-row"
+                    }
+                  >
+                    <button
+                      type="button"
+                      className="tracker-app-card"
+                      onClick={() => {
+                        selectApp(app);
+                        setSidebarOpen(false);
+                      }}
+                      aria-current={active ? "true" : undefined}
+                    >
+                      {app.iconUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={app.iconUrl}
+                          alt=""
+                          width={36}
+                          height={36}
+                          loading="lazy"
+                        />
+                      ) : (
+                        <span
+                          className="tracker-app-icon-fallback"
+                          aria-hidden="true"
+                        >
+                          {app.name.charAt(0)}
+                        </span>
+                      )}
+                      <span className="tracker-app-card-meta">
+                        <strong title={app.name}>{app.name}</strong>
+                        <small>
+                          <span className="tracker-app-store-badge">
+                            {app.country}
+                          </span>
+                          <span>
+                            {count} keyword{count === 1 ? "" : "s"}
+                          </span>
+                        </small>
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="tracker-app-delete"
+                      aria-label={`Remove ${app.name}`}
+                      title={`Remove ${app.name}`}
+                      onClick={() => handleDeleteApp(app)}
+                    >
+                      <Trash2 size={14} aria-hidden="true" />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+
+        <div className="tracker-sidebar-footer">
+          <button
+            type="button"
+            className="tracker-button-primary tracker-button-block"
+            onClick={() => {
+              setAddAppOpen(true);
+              setSidebarOpen(false);
+            }}
+          >
+            <Plus size={16} aria-hidden="true" />
+            Add App
+          </button>
+          {proOn && (
+            <div className="tracker-sidebar-account">
+              {account.user ? (
+                <>
+                  <span
+                    className={`account-plan-chip ${isPro ? "is-pro" : "is-free"}`}
+                  >
+                    {isPro ? "Pro" : "Free"}
+                  </span>
+                  <span className="tracker-sidebar-footnote">
+                    {account.user.email}
+                  </span>
+                  <button
+                    type="button"
+                    className="tracker-sidebar-link"
+                    onClick={() => void signOut()}
+                  >
+                    Sign out
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="tracker-sidebar-link"
+                    onClick={openAuth}
+                  >
+                    Sign in to sync keywords
+                  </button>
+                  {!isPro && (
+                    <button
+                      type="button"
+                      className="tracker-sidebar-link tracker-sidebar-link-cta"
+                      onClick={openUpgrade}
+                    >
+                      Upgrade to Pro
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </aside>
 
       <OnboardingModal
         open={onboardingOpen}

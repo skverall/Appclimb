@@ -811,40 +811,41 @@ img {
    ========================================================================== */
 
 .app-workspace {
-  display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
+  display: block;
+  width: 100%;
   min-height: calc(100vh - 64px);
   background: var(--canvas);
   position: relative;
 }
 
-.app-workspace::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 260px;
-  background: var(--n-0);
-  border-right: 1px solid var(--line);
-  pointer-events: none;
-  z-index: 1;
-}
-
 .tracker-sidebar {
-  position: sticky;
-  top: 64px;
-  height: calc(100vh - 64px);
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 75;
+  width: min(300px, 86vw);
+  height: 100vh;
   display: flex;
   flex-direction: column;
-  background: var(--n-0);
+  background: var(--card);
   border-right: 1px solid var(--line);
-  z-index: 2;
+  box-shadow: var(--shadow-lg);
+  transform: translateX(-105%);
+  visibility: hidden;
+  pointer-events: none;
+  transition: transform 0.2s ease, visibility 0.2s ease;
   overflow-y: auto;
 }
 
+.tracker-sidebar.is-open {
+  transform: translateX(0);
+  visibility: visible;
+  pointer-events: auto;
+}
+
 .tracker-sidebar-top {
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: flex-end;
   padding: 12px 14px 4px;
@@ -1037,10 +1038,33 @@ img {
 
 .tracker-sidebar-toggle {
   display: none;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-md);
+  background: var(--card);
+  color: var(--ink);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  box-shadow: var(--shadow-xs);
+  transition: all 0.12s ease;
+}
+
+.tracker-sidebar-toggle:hover {
+  background: var(--n-50);
+  border-color: var(--teal-300);
+  color: var(--teal-700);
 }
 
 .tracker-sidebar-scrim {
-  display: none;
+  display: block;
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: rgba(23, 39, 45, 0.35);
 }
 
 /* ==========================================================================
@@ -1050,6 +1074,126 @@ img {
 .tracker-workspace-main {
   min-width: 0;
   padding: 0 0 40px;
+}
+
+.tracker-workspace-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 20px;
+  padding-bottom: 8px;
+  flex-wrap: wrap;
+}
+
+.tracker-mode-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  background: var(--n-100);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+}
+
+.tracker-mode-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: var(--radius-pill);
+  border: none;
+  background: transparent;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--ink-secondary);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.tracker-mode-tab:hover {
+  color: var(--ink);
+}
+
+.tracker-mode-tab.is-active {
+  background: var(--card);
+  color: var(--teal-700);
+  font-weight: var(--weight-semibold);
+  box-shadow: var(--shadow-xs);
+}
+
+.tracker-count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--teal-100);
+  color: var(--teal-800);
+  font-size: 11px;
+  font-weight: var(--weight-bold);
+  line-height: 1;
+}
+
+.tracker-workspace-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.tracker-app-pill-list {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.tracker-app-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--card);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--ink-secondary);
+  cursor: pointer;
+  box-shadow: var(--shadow-xs);
+  transition: all 0.12s ease;
+}
+
+.tracker-app-pill img {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.tracker-app-pill:hover {
+  border-color: var(--teal-300);
+  color: var(--ink);
+}
+
+.tracker-app-pill.is-active {
+  background: var(--teal-50);
+  border-color: var(--teal-300);
+  color: var(--teal-800);
+  font-weight: var(--weight-semibold);
+}
+
+.tracker-topbar-add-btn {
+  height: 34px;
+  padding: 0 14px;
+  font-size: var(--text-xs);
+  border-radius: var(--radius-md);
 }
 
 .tracker-view {
@@ -3374,56 +3518,12 @@ img {
 }
 
 @media (max-width: 860px) {
-  .app-workspace {
-    grid-template-columns: 1fr;
-  }
-
-  .app-workspace::before {
+  .tracker-topbar-add-btn {
     display: none;
-  }
-
-  .tracker-sidebar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    z-index: 75;
-    width: min(300px, 86vw);
-    height: 100vh;
-    transform: translateX(-105%);
-    transition: transform 0.2s ease;
-    box-shadow: var(--shadow-lg);
-  }
-
-  .tracker-sidebar.is-open {
-    transform: translateX(0);
-  }
-
-  .tracker-sidebar-top {
-    display: flex;
   }
 
   .tracker-sidebar-toggle {
     display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    margin: 16px 20px 0;
-    height: var(--control-h-md);
-    padding: 0 14px;
-    border: 1px solid var(--line-strong);
-    border-radius: var(--radius-md);
-    background: var(--card);
-    font-size: var(--text-xs);
-    font-weight: var(--weight-semibold);
-    box-shadow: var(--shadow-xs);
-  }
-
-  .tracker-sidebar-scrim {
-    display: block;
-    position: fixed;
-    inset: 0;
-    z-index: 70;
-    background: rgba(23, 39, 45, 0.35);
   }
 
   .marketing-footer-grid {

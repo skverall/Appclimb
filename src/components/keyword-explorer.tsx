@@ -933,10 +933,20 @@ export function KeywordExplorer() {
                                       ? "source-pill source-pill--official"
                                       : "source-pill"
                                   }
+                                  title={
+                                    popularitySourceOf(metric) === "official"
+                                      ? "Official Apple Ads data"
+                                      : "Estimated from iTunes"
+                                  }
                                 >
                                   {popularityShortLabel(
                                     popularitySourceOf(metric),
                                   )}
+                                  <span className="sr-only">
+                                    {popularitySourceOf(metric) === "official"
+                                      ? "Apple Ads"
+                                      : "Estimated"}
+                                  </span>
                                 </span>
                               </span>
                             ) : isBusy ? (

@@ -145,6 +145,9 @@ test("explorer exports CSV, backs up, and restores history", async ({
   await page.getByPlaceholder(/meditation/).fill("meditation");
   await page.getByRole("button", { name: "Analyze", exact: true }).click();
   await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
+  await expect(page.locator(".metric-bar--popularity")).toBeVisible({
+    timeout: 15_000,
+  });
 
   // CSV export: header plus the analyzed row.
   const csvPromise = page.waitForEvent("download");
