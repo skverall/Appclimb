@@ -55,7 +55,9 @@ function AssistantBubble({ content }: { content: string }) {
 
   return (
     <div className="ai-chat-bubble ai-chat-bubble--assistant">
-      <ChatMarkdown text={content} />
+      <div className="ai-chat-bubble-content">
+        <ChatMarkdown text={content} />
+      </div>
       <div className="ai-chat-bubble-actions">
         <button
           type="button"
@@ -66,12 +68,12 @@ function AssistantBubble({ content }: { content: string }) {
         >
           {copied ? (
             <>
-              <Check size={12} aria-hidden="true" />
+              <Check size={13} aria-hidden="true" />
               <span>Copied</span>
             </>
           ) : (
             <>
-              <Copy size={12} aria-hidden="true" />
+              <Copy size={13} aria-hidden="true" />
               <span>Copy</span>
             </>
           )}
@@ -109,6 +111,19 @@ export function AiChatConversation({
   const { account, openUpgrade } = useAccount();
   const proOn = proEnabled();
   const aiLimit = proOn ? account.limits.aiMessagesPerDay : AI_LIMITS.maxMessagesPerDay;
+
+  // Auto-resize textarea height dynamically as user types
+  const adjustTextareaHeight = useCallback(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const nextHeight = Math.min(Math.max(el.scrollHeight, 24), 160);
+    el.style.height = `${nextHeight}px`;
+  }, []);
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [input, adjustTextareaHeight]);
 
   // On wide screens the history sidebar starts open; smaller screens start
   // with it closed so it never covers the chat on first visit.
@@ -230,6 +245,10 @@ export function AiChatConversation({
 
       setError(null);
       setInput("");
+      if (inputRef.current) {
+        inputRef.current.style.height = "auto";
+      }
+
       const userMsg: UiMessage = {
         id: `u-${Date.now()}`,
         role: "user",
@@ -345,8 +364,7 @@ export function AiChatConversation({
     refreshHistory();
   };
 
-  const showSuggestions =
-    messages.filter((m) => m.id !== "welcome").length === 0;
+  const isThreadEmpty = messages.filter((m) => m.id !== "welcome").length === 0;
 
   return (
     <div
@@ -374,20 +392,11 @@ export function AiChatConversation({
 
       <div className="ai-chat-shell-main">
         <header className="ai-chat-header">
-          <div>
-            <strong>
-              <Sparkles size={15} aria-hidden="true" /> ASO Assistant
-            </strong>
-            <span>
-              DeepSeek V4 Flash · estimates only · no secrets
-              {contextLabel ? ` · ${contextLabel}` : ""}
-            </span>
-          </div>
-          <div className="ai-chat-header-actions">
+          <div className="ai-chat-header-left">
             {variant === "page" && (
               <button
                 type="button"
-                className={`ai-chat-icon-link${
+                className={`ai-chat-icon-link ai-chat-history-btn${
                   historyOpen ? " is-active" : ""
                 }`}
                 onClick={() => setHistoryOpen((open) => !open)}
@@ -398,6 +407,21 @@ export function AiChatConversation({
                 <History size={16} aria-hidden="true" />
               </button>
             )}
+            <div className="ai-chat-title-group">
+              <strong className="ai-chat-title">
+                <Sparkles size={15} className="ai-chat-title-icon" aria-hidden="true" />
+                <span>ASO Assistant</span>
+              </strong>
+              <span className="ai-chat-model-tag">DeepSeek V4 Flash</span>
+              {contextLabel && (
+                <span className="ai-chat-context-tag" title={`Tracked context: ${contextLabel}`}>
+                  {contextLabel}
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="ai-chat-header-actions">
             <button
               type="button"
               className="ai-chat-icon-link"
@@ -460,22 +484,6 @@ export function AiChatConversation({
           </div>
         </header>
 
-        {variant === "page" && (
-          <div className="ai-chat-page-banner">
-            <p>
-              This chat and your history are saved in this browser only and stay
-              in sync with the popup. Context comes from your active{" "}
-              <strong>My Apps</strong> tracker when present.
-            </p>
-            {!contextLabel && (
-              <p className="ai-chat-page-banner-hint">
-                Tip: add an app on the home page so the assistant can see your
-                keywords and positions.
-              </p>
-            )}
-          </div>
-        )}
-
         <div className="ai-chat-messages-wrap">
           <div
             className="ai-chat-messages"
@@ -485,6 +493,23 @@ export function AiChatConversation({
             aria-live="polite"
             aria-relevant="additions"
           >
+            {isThreadEmpty && (
+              <div className="ai-chat-welcome-hero">
+                <div className="ai-chat-hero-badge">
+                  <Sparkles size={20} aria-hidden="true" />
+                </div>
+                <h1 className="ai-chat-hero-title">How can I help with your ASO today?</h1>
+                <p className="ai-chat-hero-subtitle">
+                  Ask for keyword ideas, listing copy rewrites, or advice on your tracked app.
+                </p>
+                {variant === "page" && !contextLabel && (
+                  <p className="ai-chat-hero-tip">
+                    Tip: add an app on the home page so the assistant can see your keywords and positions.
+                  </p>
+                )}
+              </div>
+            )}
+
             {messages.map((message) => (
               message.role === "assistant" ? (
                 <AssistantBubble key={message.id} content={message.content} />
@@ -500,10 +525,30 @@ export function AiChatConversation({
             {busy && (
               <div className="ai-chat-bubble ai-chat-bubble--assistant is-typing">
                 <Loader2 className="spin" size={14} aria-hidden="true" />
-                Thinking…
+                <span>Thinking…</span>
+              </div>
+            )}
+
+            {isThreadEmpty && (
+              <div className="ai-chat-suggestions-section">
+                <span className="ai-chat-suggestions-label">Suggested prompts</span>
+                <div className="ai-chat-suggestions-grid">
+                  {AI_SUGGESTIONS.slice(0, variant === "page" ? 6 : 4).map((item) => (
+                    <button
+                      key={item}
+                      type="button"
+                      className="ai-chat-suggestion-card"
+                      disabled={busy}
+                      onClick={() => void send(item)}
+                    >
+                      <span>{item}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
+
           {showJump && (
             <button
               type="button"
@@ -517,104 +562,101 @@ export function AiChatConversation({
           )}
         </div>
 
-        {showSuggestions ? (
-          <div className="ai-chat-suggestions">
-            {AI_SUGGESTIONS.slice(0, variant === "page" ? 6 : 4).map((item) => (
-              <button
-                key={item}
-                type="button"
-                disabled={busy}
-                onClick={() => void send(item)}
-              >
-                {item}
-              </button>
-            ))}
-          </div>
-        ) : (
-          <div className="ai-chat-followups" aria-label="Suggested follow-up actions">
-            {AI_FOLLOWUPS.slice(0, variant === "page" ? 6 : 4).map((item) => (
-              <button
-                key={item}
-                type="button"
-                disabled={busy}
-                onClick={() => void send(item)}
-                className="ai-chat-followup-chip"
-              >
-                {item}
-              </button>
-            ))}
+        {!isThreadEmpty && (
+          <div className="ai-chat-followups-container">
+            <div className="ai-chat-followups" aria-label="Suggested follow-up actions">
+              {AI_FOLLOWUPS.slice(0, variant === "page" ? 6 : 4).map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  disabled={busy}
+                  onClick={() => void send(item)}
+                  className="ai-chat-followup-chip"
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
           </div>
         )}
 
         {error && (
-          <div className="ai-chat-error" role="alert">
-            {error}
+          <div className="ai-chat-error-container">
+            <div className="ai-chat-error" role="alert">
+              {error}
+            </div>
           </div>
         )}
 
-        <form
-          className="ai-chat-composer"
-          onSubmit={(event) => {
-            event.preventDefault();
-            void send(input);
-          }}
-        >
-          <textarea
-            ref={inputRef}
-            value={input}
-            onChange={(event) => setInput(event.target.value)}
-            placeholder="Ask about keywords, positions, listing copy, or a research plan…"
-            rows={variant === "page" ? 3 : 2}
-            maxLength={AI_LIMITS.maxMessageChars}
-            disabled={busy}
-            aria-label="Message the ASO assistant"
-            onKeyDown={(event) => {
-              if (event.key === "Enter" && !event.shiftKey) {
-                event.preventDefault();
-                void send(input);
-              }
+        <div className="ai-chat-composer-container">
+          <form
+            className="ai-chat-composer"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void send(input);
             }}
-          />
-          <div className="ai-chat-composer-bar">
-            <small>
-              {aiLimit === null
-                ? "Pro · unlimited assistant today"
-                : remainingDay != null
-                  ? `${remainingDay} of ${aiLimit} messages left today`
-                  : `${aiLimit}/day ${proOn ? "free " : ""}limit`}
-              {" · "}
-              saved in this browser
-              {proOn && aiLimit !== null && remainingDay === 0 && (
-                <>
-                  {" · "}
-                  <button type="button" className="ai-chat-upgrade-link" onClick={openUpgrade}>
-                    Upgrade for more
-                  </button>
-                </>
-              )}
-              {variant === "panel" && (
-                <>
-                  {" · "}
-                  <Link href="/assistant" onClick={onClose}>
-                    Full page <ExternalLink size={11} aria-hidden="true" />
-                  </Link>
-                </>
-              )}
-            </small>
-            <button
-              type="submit"
-              className="tracker-button-primary"
-              disabled={busy || input.trim().length < 2}
-            >
-              {busy ? (
-                <Loader2 className="spin" size={15} aria-hidden="true" />
-              ) : (
-                <Send size={15} aria-hidden="true" />
-              )}
-              Send
-            </button>
-          </div>
-        </form>
+          >
+            <div className="ai-chat-composer-box">
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(event) => setInput(event.target.value)}
+                placeholder="Ask about keywords, positions, listing copy, or a research plan…"
+                rows={1}
+                maxLength={AI_LIMITS.maxMessageChars}
+                disabled={busy}
+                aria-label="Message the ASO assistant"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    void send(input);
+                  }
+                }}
+              />
+              <button
+                type="submit"
+                className="ai-chat-send-btn"
+                disabled={busy || input.trim().length < 2}
+                aria-label="Send"
+                title="Send"
+              >
+                {busy ? (
+                  <Loader2 className="spin" size={15} aria-hidden="true" />
+                ) : (
+                  <Send size={15} aria-hidden="true" />
+                )}
+                <span className="sr-only">Send</span>
+              </button>
+            </div>
+            <div className="ai-chat-composer-bar">
+              <small>
+                {aiLimit === null
+                  ? "Pro · unlimited assistant today"
+                  : remainingDay != null
+                    ? `${remainingDay} of ${aiLimit} messages left today`
+                    : `${aiLimit}/day ${proOn ? "free " : ""}limit`}
+                {" · "}
+                saved in this browser
+                {proOn && aiLimit !== null && remainingDay === 0 && (
+                  <>
+                    {" · "}
+                    <button type="button" className="ai-chat-upgrade-link" onClick={openUpgrade}>
+                      Upgrade for more
+                    </button>
+                  </>
+                )}
+                {variant === "panel" && (
+                  <>
+                    {" · "}
+                    <Link href="/assistant" onClick={onClose}>
+                      Full page <ExternalLink size={11} aria-hidden="true" />
+                    </Link>
+                  </>
+                )}
+              </small>
+            </div>
+          </form>
+        </div>
       </div>
 
       {variant === "panel" && historyOpen && (

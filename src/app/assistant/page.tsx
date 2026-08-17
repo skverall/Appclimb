@@ -16,9 +16,7 @@ export default function AssistantPage() {
   return (
     <MarketingShell hideAiFab hideFooter>
       <main className="ai-chat-page">
-        <div className="ai-chat-page-frame">
-          <AiChatConversation variant="page" />
-        </div>
+        <AiChatConversation variant="page" />
       </main>
     </MarketingShell>
   );
