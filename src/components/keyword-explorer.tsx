@@ -202,6 +202,14 @@ export function KeywordExplorer() {
 
       setBusy((previous) => new Set(previous).add(key));
       setError(null);
+      // Show the row immediately: the keyword lands in the table as a
+      // shimmering "Analyzing" row and fills in when the data arrives.
+      if (!alreadyTracked) {
+        setKeywords(
+          addKeywordToList(window.localStorage, targetCountry, clean),
+        );
+        notifySyncChange("explorer");
+      }
       try {
         const nextMetrics = await enrichMetricsWithOfficialPopularity(
           await estimateKeyword(clean, targetCountry),
@@ -217,6 +225,13 @@ export function KeywordExplorer() {
         setRecords((previous) => new Map(previous).set(clean, record));
         if (options.open !== false) setSelected(clean);
       } catch (error) {
+        // A failed first check leaves no half-empty row behind.
+        if (!alreadyTracked) {
+          setKeywords(
+            removeKeywordFromList(window.localStorage, targetCountry, clean),
+          );
+          notifySyncChange("explorer");
+        }
         if (options.throwOnError) throw error;
         setError(
           `Could not analyze “${clean}”. The App Store may be rate-limiting requests — try again in a moment.`,
@@ -569,6 +584,9 @@ export function KeywordExplorer() {
               "Analyze"
             )}
           </button>
+          {busy.size > 0 && (
+            <i className="keyword-busy-line" aria-hidden="true" />
+          )}
           {suggestionsOpen && suggestions.length > 0 && (
             <div className="keyword-suggestions" role="listbox">
               {suggestions.map((suggestion) => (
@@ -878,6 +896,16 @@ export function KeywordExplorer() {
                               <strong className="keyword-name">
                                 {keyword}
                               </strong>
+                              {isBusy && (
+                                <span className="keyword-busy-chip">
+                                  <Loader2
+                                    className="spin"
+                                    size={11}
+                                    aria-hidden="true"
+                                  />
+                                  {metric ? "Re-checking" : "Analyzing"}
+                                </span>
+                              )}
                               {metric && isGoldenKeyword(metric) && (
                                 <span className="keyword-golden-badge">
                                   Golden
@@ -905,10 +933,13 @@ export function KeywordExplorer() {
                                   )}
                                 </span>
                               </span>
+                            ) : isBusy ? (
+                              <span className="metric-skeleton">
+                                <i className="skeleton-bar" />
+                                <i className="skeleton-pill" />
+                              </span>
                             ) : (
-                              <em className="keyword-pending">
-                                {isBusy ? "Analyzing…" : "Pending"}
-                              </em>
+                              <em className="keyword-pending">Pending</em>
                             )}
                           </td>
                           <td>
@@ -917,6 +948,10 @@ export function KeywordExplorer() {
                                 value={metric.difficulty}
                                 tone="difficulty"
                               />
+                            ) : isBusy ? (
+                              <span className="metric-skeleton">
+                                <i className="skeleton-bar" />
+                              </span>
                             ) : (
                               <em className="keyword-pending">—</em>
                             )}
@@ -935,6 +970,10 @@ export function KeywordExplorer() {
                                   </span>
                                 )}
                               </>
+                            ) : isBusy ? (
+                              <span className="metric-skeleton">
+                                <i className="skeleton-spark" />
+                              </span>
                             ) : (
                               <em className="keyword-pending">—</em>
                             )}
@@ -946,6 +985,10 @@ export function KeywordExplorer() {
                                 <small>
                                   {metric.saturated ? "200+ found" : "apps"}
                                 </small>
+                              </span>
+                            ) : isBusy ? (
+                              <span className="metric-skeleton">
+                                <i className="skeleton-num" />
                               </span>
                             ) : (
                               <em className="keyword-pending">—</em>

@@ -6013,3 +6013,134 @@ img {
     align-items: flex-start;
   }
 }
+
+/* ==========================================================================
+   Analysis loading states (2026-08) — instant pending row with shimmer
+   skeletons, busy chip, and an indeterminate line under the search bar.
+   ========================================================================== */
+
+.keyword-busy-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--teal-50);
+  border: 1px solid var(--teal-200);
+  color: var(--teal-700);
+  font-size: 10px;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.keyword-busy-chip svg {
+  color: var(--teal-500);
+}
+
+.metric-skeleton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  vertical-align: middle;
+}
+
+.skeleton-bar,
+.skeleton-pill,
+.skeleton-num,
+.skeleton-spark {
+  display: inline-block;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(
+    100deg,
+    var(--n-100) 40%,
+    var(--n-50) 50%,
+    var(--n-100) 60%
+  );
+  background-size: 200% 100%;
+  animation: trackerShimmer 1.4s ease-in-out infinite;
+}
+
+.skeleton-bar {
+  width: 64px;
+  height: 6px;
+}
+
+.skeleton-pill {
+  width: 46px;
+  height: 13px;
+  border-radius: 4px;
+}
+
+.skeleton-num {
+  width: 36px;
+  height: 14px;
+  border-radius: 5px;
+}
+
+.skeleton-spark {
+  width: 72px;
+  height: 16px;
+  border-radius: 6px;
+}
+
+/* Metric bars grow in once when a pending row receives its data */
+.metric-bar-track i {
+  transform-origin: left center;
+  animation: metricBarIn 0.45s ease;
+}
+
+@keyframes metricBarIn {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+/* Thin indeterminate progress line along the bottom of the search card */
+.keyword-busy-line {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 0;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.keyword-busy-line::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 38%;
+  border-radius: inherit;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--teal-500),
+    transparent
+  );
+  animation: busyLineSlide 1.1s ease-in-out infinite;
+}
+
+@keyframes busyLineSlide {
+  from {
+    left: -38%;
+  }
+  to {
+    left: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton-bar,
+  .skeleton-pill,
+  .skeleton-num,
+  .skeleton-spark,
+  .keyword-busy-line::after,
+  .metric-bar-track i {
+    animation: none;
+  }
+}
