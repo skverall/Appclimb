@@ -347,6 +347,19 @@ img {
   color: var(--ink);
 }
 
+/* Screen reader only utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
 /* Country / Select dropdowns */
 .country-select {
   height: var(--control-h-md);
@@ -5795,11 +5808,11 @@ img {
 /* --- Responsive -------------------------------------------------------------- */
 
 @media (min-width: 1180px) {
-  .explorer-split {
+  .explorer-split.has-detail {
     grid-template-columns: minmax(0, 1fr) 384px;
   }
 
-  .explorer-split .keyword-detail {
+  .explorer-split.has-detail .keyword-detail {
     position: sticky;
     top: 84px;
     max-height: calc(100vh - 108px);

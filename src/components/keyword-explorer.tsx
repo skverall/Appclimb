@@ -730,7 +730,7 @@ export function KeywordExplorer() {
             </button>
           </div>
         ) : (
-          <div className="explorer-split">
+          <div className={`explorer-split${selected ? " has-detail" : ""}`}>
             <div className="keyword-table-wrap">
               <div className="keyword-table-topbar">
                 <div
