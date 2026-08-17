@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
+  Check,
   ChevronDown,
+  Copy,
   ExternalLink,
   History,
   Loader2,
@@ -21,6 +23,7 @@ import { AI_LIMITS } from "@/lib/ai-chat";
 import { proEnabled } from "@/lib/flags";
 import {
   AI_CONVERSATIONS_KEY,
+  AI_FOLLOWUPS,
   AI_MESSAGES_KEY,
   AI_SUGGESTIONS,
   AI_WELCOME,
@@ -36,6 +39,47 @@ import {
   type AiConversationSummary,
   type UiMessage,
 } from "@/lib/ai-chat-client";
+
+function AssistantBubble({ content }: { content: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const onCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Ignore clipboard write failures in non-secure context
+    }
+  };
+
+  return (
+    <div className="ai-chat-bubble ai-chat-bubble--assistant">
+      <ChatMarkdown text={content} />
+      <div className="ai-chat-bubble-actions">
+        <button
+          type="button"
+          className={`ai-chat-bubble-action-btn${copied ? " is-copied" : ""}`}
+          onClick={onCopy}
+          title={copied ? "Copied to clipboard" : "Copy response"}
+          aria-label={copied ? "Copied to clipboard" : "Copy response"}
+        >
+          {copied ? (
+            <>
+              <Check size={12} aria-hidden="true" />
+              <span>Copied</span>
+            </>
+          ) : (
+            <>
+              <Copy size={12} aria-hidden="true" />
+              <span>Copy</span>
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 export function AiChatConversation({
   variant,
@@ -308,13 +352,13 @@ export function AiChatConversation({
     <div
       className={
         variant === "page"
-          ? "ai-chat-shell ai-chat-shell--page"
+          ? `ai-chat-shell ai-chat-shell--page${historyOpen ? " has-sidebar-open" : " has-sidebar-closed"}`
           : "ai-chat-shell ai-chat-shell--panel"
       }
     >
-      {variant === "page" && (
+      {variant === "page" && historyOpen && (
         <aside
-          className={`ai-chat-history-sidebar${historyOpen ? " is-open" : ""}`}
+          className="ai-chat-history-sidebar is-open"
           aria-label="Chat history"
         >
           <AiChatHistory
@@ -442,16 +486,16 @@ export function AiChatConversation({
             aria-relevant="additions"
           >
             {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`ai-chat-bubble ai-chat-bubble--${message.role}`}
-              >
-                {message.role === "assistant" ? (
-                  <ChatMarkdown text={message.content} />
-                ) : (
-                  message.content
-                )}
-              </div>
+              message.role === "assistant" ? (
+                <AssistantBubble key={message.id} content={message.content} />
+              ) : (
+                <div
+                  key={message.id}
+                  className="ai-chat-bubble ai-chat-bubble--user"
+                >
+                  {message.content}
+                </div>
+              )
             ))}
             {busy && (
               <div className="ai-chat-bubble ai-chat-bubble--assistant is-typing">
@@ -473,7 +517,7 @@ export function AiChatConversation({
           )}
         </div>
 
-        {showSuggestions && (
+        {showSuggestions ? (
           <div className="ai-chat-suggestions">
             {AI_SUGGESTIONS.slice(0, variant === "page" ? 6 : 4).map((item) => (
               <button
@@ -481,6 +525,20 @@ export function AiChatConversation({
                 type="button"
                 disabled={busy}
                 onClick={() => void send(item)}
+              >
+                {item}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="ai-chat-followups" aria-label="Suggested follow-up actions">
+            {AI_FOLLOWUPS.slice(0, variant === "page" ? 6 : 4).map((item) => (
+              <button
+                key={item}
+                type="button"
+                disabled={busy}
+                onClick={() => void send(item)}
+                className="ai-chat-followup-chip"
               >
                 {item}
               </button>

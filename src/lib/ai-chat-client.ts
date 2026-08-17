@@ -59,6 +59,15 @@ export const AI_SUGGESTIONS = [
   "Give me a 7-day keyword research plan for my app.",
 ] as const;
 
+export const AI_FOLLOWUPS = [
+  "Suggest 5 more related keywords",
+  "Generate 100-character keyword field",
+  "Rewrite subtitle for better reach",
+  "How do I improve conversion rate?",
+  "Analyze competitor keyword gaps",
+  "Give me next action steps",
+] as const;
+
 export function readClientDayCount(): { day: string; count: number } {
   if (typeof window === "undefined") {
     return { day: "", count: 0 };
