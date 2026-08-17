@@ -131,23 +131,6 @@ export function AddAppModal({
         </header>
 
         <div className="tracker-modal-body">
-          <div className="tracker-form-row">
-            <label className="country-select">
-              <span>Store country</span>
-              <select
-                value={country}
-                onChange={(event) => setCountry(event.target.value)}
-                aria-label="Store country for app lookup"
-              >
-                {SUPPORTED_COUNTRIES.map((item) => (
-                  <option key={item.code} value={item.code}>
-                    {item.flag} {item.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
           <form
             className="tracker-search-form"
             onSubmit={(event) => {
@@ -160,12 +143,28 @@ export function AddAppModal({
               ref={inputRef}
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="App name, URL, or ID…"
+              placeholder="App name, App Store URL, or ID…"
               aria-label="Search for an app"
               maxLength={200}
               autoComplete="off"
               spellCheck={false}
             />
+            <label
+              className="tracker-modal-country-chip"
+              title="Store country"
+            >
+              <select
+                value={country}
+                onChange={(event) => setCountry(event.target.value)}
+                aria-label="Store country for app lookup"
+              >
+                {SUPPORTED_COUNTRIES.map((item) => (
+                  <option key={item.code} value={item.code}>
+                    {item.flag} {item.code}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button type="submit" disabled={busy || query.trim().length < 2}>
               {busy ? (
                 <Loader2 className="spin" size={15} aria-hidden="true" />
@@ -211,8 +210,8 @@ export function AddAppModal({
                         <img
                           src={app.iconUrl}
                           alt=""
-                          width={44}
-                          height={44}
+                          width={46}
+                          height={46}
                           loading="lazy"
                         />
                       ) : (
@@ -229,7 +228,7 @@ export function AddAppModal({
                         <small className="tracker-app-id">ID {app.appStoreId}</small>
                       </span>
                       <span className="tracker-app-result-action">
-                        {already ? "Added" : "Select"}
+                        {already ? "Added" : "+ Add"}
                       </span>
                     </button>
                   </li>
@@ -241,7 +240,10 @@ export function AddAppModal({
           {onQuickStart && (
             <div className="tracker-quick-start">
               <div className="tracker-quick-start-copy">
-                <strong>Just exploring?</strong>
+                <strong>
+                  <Sparkles size={14} aria-hidden="true" />
+                  Just exploring?
+                </strong>
                 <span>
                   One click adds <b>{STARTER_APP_NAME}</b> with{" "}
                   {STARTER_KEYWORDS.length} starter keywords and checks them
@@ -250,14 +252,14 @@ export function AddAppModal({
               </div>
               <button
                 type="button"
-                className="tracker-button-accent"
+                className="tracker-button-secondary tracker-quick-start-btn"
                 disabled={quickStartBusy || starterTracked}
                 onClick={() => onQuickStart(country)}
               >
                 {quickStartBusy ? (
-                  <Loader2 className="spin" size={15} aria-hidden="true" />
+                  <Loader2 className="spin" size={14} aria-hidden="true" />
                 ) : (
-                  <Sparkles size={15} aria-hidden="true" />
+                  <Sparkles size={14} aria-hidden="true" />
                 )}
                 {quickStartBusy
                   ? "Adding…"
