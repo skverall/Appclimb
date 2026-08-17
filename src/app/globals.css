@@ -2934,9 +2934,11 @@ img {
 }
 
 /* AI Chat Page & Shell (ChatGPT/Claude Style) */
+/* Header is 64px tall + 1px border-bottom = 65px; subtract it exactly so the
+   page never produces a 1px scroll and the composer can't slip below the fold. */
 .ai-chat-page {
-  height: calc(100dvh - 64px);
-  max-height: calc(100dvh - 64px);
+  height: calc(100dvh - 65px);
+  max-height: calc(100dvh - 65px);
   background: var(--n-25);
   display: flex;
   justify-content: center;
@@ -2965,9 +2967,13 @@ img {
   position: relative;
 }
 
+/* minmax(0, 1fr) on the single row is essential: without it the implicit auto
+   row grows to content height and pushes the composer out of the clipped
+   frame instead of letting the message list shrink. */
 .ai-chat-shell--page {
   display: grid;
   grid-template-columns: 1fr;
+  grid-template-rows: minmax(0, 1fr);
   height: 100%;
   width: 100%;
 }
@@ -3173,6 +3179,7 @@ img {
   flex-direction: column;
   height: 100%;
   min-width: 0;
+  min-height: 0;
   background: #ffffff;
 }
 
@@ -3400,6 +3407,7 @@ img {
   flex-wrap: wrap;
   gap: 8px;
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .ai-chat-suggestions button {
@@ -3435,6 +3443,7 @@ img {
   flex-wrap: wrap;
   gap: 6px;
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .ai-chat-followup-chip {
@@ -3477,6 +3486,7 @@ img {
   color: var(--coral-700);
   font-size: var(--text-xs);
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .ai-chat-composer {
@@ -3489,6 +3499,7 @@ img {
   gap: 8px;
   background: transparent;
   box-sizing: border-box;
+  flex-shrink: 0;
 }
 
 .ai-chat-composer textarea {
@@ -3531,6 +3542,147 @@ img {
   height: 38px;
   padding: 0 18px;
   border-radius: 10px;
+}
+
+/* Narrow screens: wrap-stacked chips would eat 250px+ of height and push the
+   composer below the fold, so they become a single horizontally scrollable
+   row (ChatGPT-style) and inner paddings tighten up. */
+@media (max-width: 860px) {
+  .ai-chat-suggestions,
+  .ai-chat-followups {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 6px 16px 10px;
+  }
+
+  .ai-chat-suggestions::-webkit-scrollbar,
+  .ai-chat-followups::-webkit-scrollbar {
+    display: none;
+  }
+
+  .ai-chat-suggestions button,
+  .ai-chat-followup-chip {
+    flex: 0 0 auto;
+  }
+}
+
+/* Below 900px the history sidebar must not take a grid column (it would crush
+   the chat into a sliver); it overlays the chat instead, mirroring the JS
+   threshold in ai-chat-conversation.tsx. Escape or picking a chat closes it. */
+@media (max-width: 899px) {
+  .ai-chat-shell--page.has-sidebar-open {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-chat-shell--page .ai-chat-history-sidebar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 30;
+    width: min(300px, calc(100vw - 56px));
+    background: #ffffff;
+    border-right: 1px solid var(--line-strong);
+    box-shadow: 8px 0 32px rgba(23, 39, 45, 0.14);
+    border-radius: 0;
+  }
+}
+
+/* Short desktop windows (small laptops, non-maximized browsers): same single
+   scrollable chip row to keep the composer fully on screen. */
+@media (max-height: 720px) and (min-width: 861px) {
+  .ai-chat-suggestions,
+  .ai-chat-followups {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding: 6px 24px 8px;
+  }
+
+  .ai-chat-suggestions::-webkit-scrollbar,
+  .ai-chat-followups::-webkit-scrollbar {
+    display: none;
+  }
+
+  .ai-chat-suggestions button,
+  .ai-chat-followup-chip {
+    flex: 0 0 auto;
+  }
+
+  .ai-chat-page-banner {
+    padding: 6px 24px;
+  }
+}
+
+@media (max-width: 640px) {
+  .ai-chat-page {
+    padding: 8px 8px 10px;
+  }
+
+  .ai-chat-page-frame {
+    border-radius: var(--radius-xl);
+  }
+
+  .ai-chat-header {
+    height: 52px;
+    padding: 0 12px;
+  }
+
+  .ai-chat-header-actions {
+    gap: 4px;
+  }
+
+  .ai-chat-page-banner {
+    padding: 8px 12px;
+    font-size: 11px;
+  }
+
+  .ai-chat-messages {
+    padding: 14px 12px;
+    gap: 14px;
+  }
+
+  .ai-chat-bubble--assistant {
+    max-width: 100%;
+    padding: 14px 14px 10px;
+  }
+
+  .ai-chat-bubble--user {
+    max-width: 88%;
+  }
+
+  .ai-chat-jump {
+    right: 12px;
+    bottom: 10px;
+  }
+
+  .ai-chat-suggestions,
+  .ai-chat-followups {
+    padding: 4px 12px 8px;
+  }
+
+  .ai-chat-composer {
+    padding: 0 12px 10px;
+    gap: 6px;
+  }
+
+  .ai-chat-composer textarea {
+    min-height: 46px;
+    padding: 11px 14px;
+    font-size: 13px;
+  }
+
+  .ai-chat-composer-bar small {
+    font-size: 10px;
+  }
+
+  .ai-chat-composer-bar .tracker-button-primary {
+    height: 34px;
+    padding: 0 14px;
+  }
 }
 
 .chat-md p {
@@ -3620,6 +3772,20 @@ img {
 }
 
 @media (max-width: 860px) {
+  /* The full nav needs ~790px; below that "Open Explorer" pushed the header
+     past the viewport. Collapse to the hamburger drawer at tablet width. */
+  .marketing-nav {
+    display: none;
+  }
+
+  .marketing-mobile-toggle {
+    display: inline-flex;
+  }
+
+  .marketing-mobile-drawer {
+    display: block;
+  }
+
   .tracker-topbar-add-btn {
     display: none;
   }
@@ -3636,18 +3802,6 @@ img {
 @media (max-width: 640px) {
   .marketing-container {
     width: min(1120px, 100% - 2 * 16px);
-  }
-
-  .marketing-nav {
-    display: none;
-  }
-
-  .marketing-mobile-toggle {
-    display: inline-flex;
-  }
-
-  .marketing-mobile-drawer {
-    display: block;
   }
 
   .tracker-view {
@@ -4462,6 +4616,10 @@ img {
   position: relative;
   text-align: center;
   padding-block: 30px 34px;
+  /* The ::before glow bleeds ±80px sideways; on narrow viewports that
+     right-side bleed created a horizontal page scrollbar. Clip only the x
+     axis so the top bleed stays visible. */
+  overflow-x: clip;
 }
 
 .keyword-hero::before {
