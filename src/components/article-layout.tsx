@@ -116,7 +116,7 @@ export function ArticleLayout({
             <h2>See keyword data yourself.</h2>
             <p>
               Official Apple Ads popularity and estimated difficulty for any App Store keyword
-              and a 30-day trend — free, without an account.
+              and a 30-day trend. Search as a guest; sign in free to track an app.
             </p>
             <Link href="/">
               Open the keyword explorer <ArrowRight size={15} aria-hidden="true" />

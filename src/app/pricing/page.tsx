@@ -18,9 +18,14 @@ export const metadata = {
 
 const FAQ = [
   {
+    question: "Do I need an account?",
+    answer:
+      "Not to search keywords — Keyword Explorer is open as a guest (8 checks/day). Tracking an app and the ASO assistant need a free sign-in. Pro is optional after that.",
+  },
+  {
     question: "Is the free plan real or a demo?",
     answer:
-      "It's the real tool with honest daily limits: 8 keyword checks, 5 AI messages, 30 official popularity lookups, and one tracked app per day. Your keyword data stays in your browser — nothing is ever uploaded.",
+      "It's the real tool with honest daily limits: 8 keyword checks, 5 AI messages after you sign in, 30 official popularity lookups, and one tracked app. Your keyword data stays in your browser unless you upgrade to Pro sync.",
   },
   {
     question: "What does Pro unlock?",

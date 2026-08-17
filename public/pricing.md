@@ -1,13 +1,22 @@
 # AppClimb Pricing
 
-Last updated: 2026-08-16
+Last updated: 2026-08-17
 
-## Free plan
+## Guest (no account)
 
 - Price: USD 0
 - Card required: No
 - Account required: No
-- Includes: 8 keyword checks per day, official Apple Ads popularity when available (1–100, 30 lookups/day), estimated difficulty (0–100), 30-day trend charts, related keywords, top-app breakdowns, 16 storefronts, 1 tracked app with 25 keywords, AI assistant (5 messages/day)
+- Includes: Keyword Explorer (8 checks/day), official Apple Ads popularity when available (1–100, 30 lookups/day), estimated difficulty (0–100), 30-day trend charts, related keywords, top-app breakdowns, 16 storefronts
+- Does not include: tracked apps, ASO assistant
+- Data location: your browser only
+
+## Free account
+
+- Price: USD 0
+- Card required: No
+- Account required: Yes (Google or email magic link)
+- Includes: everything in Guest, plus 1 tracked app with 25 keywords and the AI assistant (5 messages/day)
 - Data location: your browser only
 
 ## Pro

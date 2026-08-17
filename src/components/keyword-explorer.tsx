@@ -112,10 +112,11 @@ export function KeywordExplorer() {
   const undoTimeoutRef = useRef<number | null>(null);
   const shareInitRef = useRef(false);
 
-  const { account, openUpgrade, syncVersion } = useAccount();
-  const explorerLimit = proEnabled()
-    ? account.limits.explorerChecksPerDay
-    : null;
+  const { account, signedIn, accountsLive, loading, openAuth, openUpgrade, syncVersion } =
+    useAccount();
+  const explorerLimit =
+    proEnabled() || accountsLive ? account.limits.explorerChecksPerDay : null;
+  const isGuest = accountsLive && !signedIn && !loading;
   const [limitHit, setLimitHit] = useState(false);
 
   // A successful upgrade lifts the cap; clear any stale limit banner.
@@ -537,6 +538,23 @@ export function KeywordExplorer() {
           Type a keyword to see Apple&apos;s official Ads popularity (1–100) and
           an estimated difficulty — every score labeled with its source.
         </p>
+        {isGuest && (
+          <p className="guest-access-banner" role="status">
+            <span>
+              You&apos;re using AppClimb as a <strong>guest</strong>. Search is
+              open
+              {explorerLimit !== null ? ` — ${explorerLimit} checks/day` : ""}.
+              Sign in free to track an app or use the assistant.
+            </span>
+            <button
+              type="button"
+              className="tracker-button-secondary"
+              onClick={() => openAuth("default")}
+            >
+              Sign in
+            </button>
+          </p>
+        )}
       </section>
 
       <section className="keyword-tool marketing-container">

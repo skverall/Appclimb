@@ -17,16 +17,19 @@ export default function PrivacyPage() {
         <section>
           <h2>Local-first by default</h2>
           <p>
-            You do not need an account to use AppClimb. Without one, your
-            keyword list, history, and trend charts are stored in your
-            browser&apos;s localStorage and never uploaded to AppClimb servers.
-            Clearing your browser data removes them permanently.
+            You do not need an account to search keywords. Guest explorer
+            history stays in your browser&apos;s localStorage and is never
+            uploaded. Tracking an app and the ASO assistant require a free
+            sign-in; that data also stays in the browser unless you subscribe
+            to Pro cloud sync. Clearing your browser data removes local data
+            permanently.
           </p>
         </section>
         <section>
           <h2>Account data is minimal and optional</h2>
           <p>
-            Signing in is optional. An account stores only: your email address,
+            Signing in is required only for app tracking and the assistant. An
+            account stores only: your email address,
             an optional display name, a Google subject id when you use Google
             sign-in, hashed session tokens, your subscription status, and — if
             you enable Pro cloud sync — your own synced keyword data. We store

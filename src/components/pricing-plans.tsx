@@ -10,12 +10,12 @@ import { PRO_MONTHLY_USD, PRO_YEARLY_USD } from "@/lib/plan";
 type BillingCycle = "monthly" | "yearly";
 
 const FREE_FEATURES = [
-  "8 keyword checks per day",
+  "8 keyword checks per day as a guest",
   "Official Apple Ads popularity (30 lookups/day)",
-  "1 tracked app · 25 keywords",
-  "30-day trend history",
-  "AI assistant — 5 messages/day",
-  "Your data stays in your browser",
+  "Free sign-in: 1 tracked app · 25 keywords",
+  "ASO assistant after sign-in — 5 messages/day",
+  "30-day trend history in this browser",
+  "No card required",
 ];
 
 const PRO_FEATURES = [
@@ -65,8 +65,8 @@ export function PricingPlans() {
             $0 <span>forever</span>
           </p>
           <p className="pricing-card-deck">
-            A real tool, not a demo. Official popularity with honest daily
-            limits.
+            Search keywords as a guest. Sign in free to track one app and use
+            the assistant.
           </p>
           <ul className="pricing-features">
             {FREE_FEATURES.map((feature) => (

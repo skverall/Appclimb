@@ -473,9 +473,11 @@ export async function requestAssistantReply(options: {
   if (!response.ok) {
     throw new Error(
       data.error
-        || (response.status === 429
-          ? "Rate limit reached. Please wait and try again."
-          : "Assistant request failed."),
+        || (response.status === 401
+          ? "Sign in to use the ASO assistant."
+          : response.status === 429
+            ? "Rate limit reached. Please wait and try again."
+            : "Assistant request failed."),
     );
   }
 

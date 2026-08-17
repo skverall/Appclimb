@@ -5,7 +5,6 @@ import { CreditCard, LogIn, LogOut, Sparkles } from "lucide-react";
 
 import { useAccount } from "@/components/account-provider";
 import { fetchPortalLinks } from "@/lib/account";
-import { proEnabled } from "@/lib/flags";
 
 /** Compact initial for the signed-in avatar chip. */
 function initialOf(email: string, name: string | null): string {
@@ -14,7 +13,8 @@ function initialOf(email: string, name: string | null): string {
 }
 
 export function AccountMenu() {
-  const { account, loading, isPro, openAuth, openUpgrade, signOut } = useAccount();
+  const { account, loading, signedIn, isPro, accountsLive, openAuth, openUpgrade, signOut } =
+    useAccount();
   const [open, setOpen] = useState(false);
   const [manageBusy, setManageBusy] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -38,21 +38,24 @@ export function AccountMenu() {
     };
   }, [open]);
 
-  // Rollout flag: no account chrome until the founder enables billing.
-  if (!proEnabled()) return null;
+  // Hidden until accounts are a real surface (flag on or backend configured).
+  if (!accountsLive) return null;
 
   if (loading) {
     return <span className="account-menu-placeholder" aria-hidden="true" />;
   }
 
-  if (!account.user) {
+  const user = account.user;
+  if (!signedIn || !user) {
     return (
       <div className="account-menu-anonymous">
-        <button type="button" className="tracker-button-secondary" onClick={openAuth}>
+        <span className="account-plan-chip is-guest">Guest</span>
+        <button
+          type="button"
+          className="tracker-button-primary"
+          onClick={() => openAuth("default")}
+        >
           <LogIn size={15} aria-hidden="true" /> Sign in
-        </button>
-        <button type="button" className="tracker-button-primary" onClick={openUpgrade}>
-          <Sparkles size={15} aria-hidden="true" /> Go Pro
         </button>
       </div>
     );
@@ -79,7 +82,7 @@ export function AccountMenu() {
         aria-haspopup="menu"
       >
         <span className="account-menu-avatar" aria-hidden="true">
-          {initialOf(account.user.email, account.user.name)}
+          {initialOf(user.email, user.name)}
         </span>
         <span className={`account-plan-chip ${isPro ? "is-pro" : "is-free"}`}>
           {isPro ? "Pro" : "Free"}
@@ -89,8 +92,8 @@ export function AccountMenu() {
       {open && (
         <div className="account-menu-dropdown" role="menu">
           <div className="account-menu-identity">
-            <strong>{account.user.name ?? "AppClimb user"}</strong>
-            <span>{account.user.email}</span>
+            <strong>{user.name ?? "AppClimb user"}</strong>
+            <span>{user.email}</span>
             <span className={`account-plan-chip ${isPro ? "is-pro" : "is-free"}`}>
               {isPro ? "Pro plan" : "Free plan"}
             </span>

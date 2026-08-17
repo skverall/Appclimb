@@ -6,9 +6,9 @@ Apple Ads popularity — not a competitor model with no source.
 Search any keyword and get Apple's official Ads score (`searchPopularity1to100`,
 1–100) when the term is in that storefront and genre; otherwise a labeled
 iTunes estimate. Difficulty and evidence still come from the public iTunes
-Search API. Everything works without an account, on honest daily limits
-(8 keyword checks, 5 assistant messages, 1 tracked app); the optional Pro plan
-($8/month, $64/year) lifts the limits and adds cloud sync.
+Search API. Keyword Explorer works as a guest (8 checks/day). A free account
+unlocks 1 tracked app and the ASO assistant (5 messages/day). The optional
+Pro plan ($8/month, $64/year) lifts the limits and adds cloud sync.
 
 > Popularity is either Apple Ads official (relative 1–100) or an estimate
 > from public signals. Difficulty is always an estimate. Neither is search
@@ -34,9 +34,11 @@ direction or expanding the feature set.
   country in `appclimb:kw:v1:*` (first check seeds an estimated baseline with
   `backfilled: true`). My Apps: real position/metrics snapshots in
   `appclimb:tracker:v1` (rank history is never backfilled).
-- **Accounts & Pro (ADR 0004)** — optional sign-in (Google OAuth or email
-  magic link), Paddle billing, plan-aware quotas, and Pro cloud sync. Off by
-  default behind `NEXT_PUBLIC_PRO_ENABLED`.
+- **Accounts & Pro (ADR 0004)** — passwordless sign-in (Google OAuth or email
+  magic link), Paddle billing, plan-aware quotas, and Pro cloud sync. Guest
+  search stays open. Tracking and the assistant require a free account. The
+  account chrome appears when `NEXT_PUBLIC_PRO_ENABLED=1` or when
+  `GET /api/me` reports `configured: true`.
 - **Marketing pages** — `/app-store-keywords`, `/guides/keyword-research`,
   `/blog` (+ 4 notes), `/about`, `/pricing`, `/privacy`, `/terms`, `/refunds`.
 

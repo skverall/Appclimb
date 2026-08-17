@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Compass,
   Loader2,
+  Lock,
+  LogIn,
   Menu,
   Plus,
   Sparkles,
@@ -17,6 +19,7 @@ import { OnboardingModal } from "@/components/onboarding-modal";
 import { SuggestionsModal } from "@/components/suggestions-modal";
 import { TrackerView } from "@/components/tracker-view";
 import { useAccount } from "@/components/account-provider";
+import { canTrackApps } from "@/lib/access";
 import { proEnabled } from "@/lib/flags";
 import type { CatalogApp } from "@/lib/itunes";
 import { notifySyncChange } from "@/lib/sync-client";
@@ -82,11 +85,26 @@ export function AppWorkspace() {
   const [banner, setBanner] = useState<string | null>(null);
   const storeRef = useRef(store);
 
-  const { account, isPro, openAuth, openUpgrade, signOut, syncVersion } =
-    useAccount();
+  const {
+    account,
+    signedIn,
+    isPro,
+    accountsLive,
+    role,
+    loading: accountLoading,
+    openAuth,
+    requireAccount,
+    openUpgrade,
+    signOut,
+    syncVersion,
+  } = useAccount();
   const proOn = proEnabled();
-  const appLimit = proOn ? account.limits.trackedApps : null;
-  const keywordLimit = proOn ? account.limits.keywordsPerApp : null;
+  const limitsOn = proOn || accountsLive;
+  const appLimit = limitsOn ? account.limits.trackedApps : null;
+  const keywordLimit = limitsOn ? account.limits.keywordsPerApp : null;
+  const accessReady = !accountLoading;
+  const trackingAllowed = accessReady && canTrackApps(role, accountsLive);
+  const isGuest = accessReady && accountsLive && !signedIn;
 
   const atAppLimit = () =>
     appLimit !== null && storeRef.current.apps.length >= appLimit;
@@ -208,6 +226,7 @@ export function AppWorkspace() {
 
   const handleTrackInStorefront = (country: string) => {
     if (!activeApp) return;
+    if (!requireAccount("track")) return;
     const {
       store: next,
       added,
@@ -258,10 +277,19 @@ export function AppWorkspace() {
     });
   };
 
+  const requestAddApp = () => {
+    if (!requireAccount("track")) return;
+    setAddAppOpen(true);
+  };
+
   const handleSelectCatalogApp = async (
     catalog: CatalogApp,
     country: string,
   ) => {
+    if (!requireAccount("track")) {
+      setAddAppOpen(false);
+      return;
+    }
     if (atAppLimit()) {
       setAddAppOpen(false);
       openUpgrade();
@@ -327,6 +355,10 @@ export function AppWorkspace() {
    * curated keyword set, so a fresh visitor sees the whole flow working.
    */
   const handleQuickStart = async (country: string) => {
+    if (!requireAccount("track")) {
+      setAddAppOpen(false);
+      return;
+    }
     if (atAppLimit()) {
       setAddAppOpen(false);
       openUpgrade();
@@ -498,9 +530,14 @@ export function AppWorkspace() {
               onClick={() => {
                 if (store.apps.length > 0) {
                   selectApp(activeApp || store.apps[0]);
-                } else {
-                  setAddAppOpen(true);
+                  return;
                 }
+                if (!trackingAllowed) {
+                  setView("app");
+                  setSidebarOpen(false);
+                  return;
+                }
+                requestAddApp();
               }}
             >
               <span>Tracked Apps</span>
@@ -536,14 +573,25 @@ export function AppWorkspace() {
               </div>
             )}
 
-            <button
-              type="button"
-              className="tracker-button-primary tracker-topbar-add-btn"
-              onClick={() => setAddAppOpen(true)}
-            >
-              <Plus size={15} aria-hidden="true" />
-              Add App
-            </button>
+            {accessReady && trackingAllowed ? (
+              <button
+                type="button"
+                className="tracker-button-primary tracker-topbar-add-btn"
+                onClick={requestAddApp}
+              >
+                <Plus size={15} aria-hidden="true" />
+                Add App
+              </button>
+            ) : accessReady && isGuest ? (
+              <button
+                type="button"
+                className="tracker-button-primary tracker-topbar-add-btn"
+                onClick={() => openAuth("track")}
+              >
+                <LogIn size={15} aria-hidden="true" />
+                Sign in to track
+              </button>
+            ) : null}
 
             <button
               type="button"
@@ -591,39 +639,89 @@ export function AppWorkspace() {
           </div>
         )}
 
-        {view === "explorer" || !activeApp ? (
+        {view === "app" && !activeApp && isGuest && store.apps.length === 0 ? (
+          <section
+            className="guest-lock-panel marketing-container"
+            aria-label="Sign in to track apps"
+          >
+            <span className="guest-lock-icon" aria-hidden="true">
+              <Lock size={18} />
+            </span>
+            <div className="guest-lock-copy">
+              <h2>Tracking needs a free account</h2>
+              <p>
+                You&apos;re browsing as a guest. Keyword Explorer stays open —
+                add an app after you sign in. Free accounts can track 1 app and
+                25 keywords in this browser.
+              </p>
+            </div>
+            <div className="guest-lock-actions">
+              <button
+                type="button"
+                className="tracker-button-primary"
+                onClick={() => openAuth("track")}
+              >
+                <LogIn size={16} aria-hidden="true" />
+                Sign in free
+              </button>
+              <button
+                type="button"
+                className="tracker-button-secondary"
+                onClick={selectExplorer}
+              >
+                Keep searching keywords
+              </button>
+            </div>
+          </section>
+        ) : view === "explorer" || !activeApp ? (
           <>
             <KeywordExplorer />
-            {store.apps.length === 0 && (
+            {accessReady && store.apps.length === 0 && (
               <section
                 className="tracker-cta-strip marketing-container"
                 aria-label="Track your app"
               >
                 <div className="tracker-cta-copy">
-                  <h2>Track your own app</h2>
+                  <h2>
+                    {isGuest ? "Sign in to track your app" : "Track your own app"}
+                  </h2>
                   <p>
-                    Add an app to watch its keywords — popularity, difficulty,
-                    and rank in the public App Store results.
+                    {isGuest
+                      ? "Keyword search is open as a guest. A free account unlocks one tracked app, rank history, and the ASO assistant."
+                      : "Add an app to watch its keywords — popularity, difficulty, and rank in the public App Store results."}
                   </p>
                 </div>
                 <div className="tracker-cta-actions">
-                  <button
-                    type="button"
-                    className="tracker-button-primary"
-                    onClick={() => setAddAppOpen(true)}
-                  >
-                    <Plus size={16} aria-hidden="true" />
-                    Add your first app
-                  </button>
-                  <button
-                    type="button"
-                    className="tracker-button-secondary"
-                    disabled={bootstrapping}
-                    onClick={() => void handleQuickStart("US")}
-                  >
-                    <Sparkles size={16} aria-hidden="true" />
-                    Try a sample app
-                  </button>
+                  {isGuest ? (
+                    <button
+                      type="button"
+                      className="tracker-button-primary"
+                      onClick={() => openAuth("track")}
+                    >
+                      <LogIn size={16} aria-hidden="true" />
+                      Sign in free
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        type="button"
+                        className="tracker-button-primary"
+                        onClick={requestAddApp}
+                      >
+                        <Plus size={16} aria-hidden="true" />
+                        Add your first app
+                      </button>
+                      <button
+                        type="button"
+                        className="tracker-button-secondary"
+                        disabled={bootstrapping}
+                        onClick={() => void handleQuickStart("US")}
+                      >
+                        <Sparkles size={16} aria-hidden="true" />
+                        Try a sample app
+                      </button>
+                    </>
+                  )}
                 </div>
               </section>
             )}
@@ -766,20 +864,34 @@ export function AppWorkspace() {
         </div>
 
         <div className="tracker-sidebar-footer">
-          <button
-            type="button"
-            className="tracker-button-primary tracker-button-block"
-            onClick={() => {
-              setAddAppOpen(true);
-              setSidebarOpen(false);
-            }}
-          >
-            <Plus size={16} aria-hidden="true" />
-            Add App
-          </button>
-          {proOn && (
+          {accessReady && trackingAllowed ? (
+            <button
+              type="button"
+              className="tracker-button-primary tracker-button-block"
+              onClick={() => {
+                requestAddApp();
+                setSidebarOpen(false);
+              }}
+            >
+              <Plus size={16} aria-hidden="true" />
+              Add App
+            </button>
+          ) : accessReady && isGuest ? (
+            <button
+              type="button"
+              className="tracker-button-primary tracker-button-block"
+              onClick={() => {
+                openAuth("track");
+                setSidebarOpen(false);
+              }}
+            >
+              <LogIn size={16} aria-hidden="true" />
+              Sign in to track
+            </button>
+          ) : null}
+          {accountsLive && (
             <div className="tracker-sidebar-account">
-              {account.user ? (
+              {signedIn ? (
                 <>
                   <span
                     className={`account-plan-chip ${isPro ? "is-pro" : "is-free"}`}
@@ -787,7 +899,7 @@ export function AppWorkspace() {
                     {isPro ? "Pro" : "Free"}
                   </span>
                   <span className="tracker-sidebar-footnote">
-                    {account.user.email}
+                    {account.user?.email}
                   </span>
                   <button
                     type="button"
@@ -799,22 +911,17 @@ export function AppWorkspace() {
                 </>
               ) : (
                 <>
+                  <span className="account-plan-chip is-guest">Guest</span>
+                  <span className="tracker-sidebar-footnote">
+                    Search is open. Tracking and the assistant need a free account.
+                  </span>
                   <button
                     type="button"
                     className="tracker-sidebar-link"
-                    onClick={openAuth}
+                    onClick={() => openAuth("default")}
                   >
-                    Sign in to sync keywords
+                    Sign in free
                   </button>
-                  {!isPro && (
-                    <button
-                      type="button"
-                      className="tracker-sidebar-link tracker-sidebar-link-cta"
-                      onClick={openUpgrade}
-                    >
-                      Upgrade to Pro
-                    </button>
-                  )}
                 </>
               )}
             </div>

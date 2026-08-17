@@ -514,6 +514,14 @@ describe("requestAssistantReply", () => {
 
     vi.stubGlobal(
       "fetch",
+      vi.fn(async () => Response.json({}, { status: 401 })),
+    );
+    await expect(
+      requestAssistantReply({ message: "suggest", history: [], context: null }),
+    ).rejects.toThrow(/Sign in to use the ASO assistant/u);
+
+    vi.stubGlobal(
+      "fetch",
       vi.fn(async () => Response.json({ message: "   " }, { status: 200 })),
     );
     await expect(

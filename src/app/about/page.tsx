@@ -60,8 +60,8 @@ export default function AboutPage() {
               Difficulty and top apps come from the public iTunes Search API,
               queried from your browser. Official popularity uses a
               founder-owned Apple Ads Insights key on the server. You never
-              connect Ads — AppClimb is the only account involved, and it&apos;s
-              optional.
+              connect Ads — AppClimb is the only account involved. Search
+              works as a guest; tracking and the assistant need a free sign-in.
             </p>
           </article>
           <article className="about-principle-card">
@@ -82,10 +82,10 @@ export default function AboutPage() {
             </div>
             <h2>Your data, your choice</h2>
             <p>
-              Without an account, your keyword list and history live only in
-              your browser. Signing in is optional — Pro subscribers can sync
-              their own data across devices. There are no analytics scripts or
-              tracking pixels on this site.
+              Keyword search works as a guest; the list stays in this browser.
+              A free account unlocks app tracking and the assistant. Pro
+              subscribers can sync their own data across devices. There are no
+              analytics scripts or tracking pixels on this site.
             </p>
           </article>
         </section>

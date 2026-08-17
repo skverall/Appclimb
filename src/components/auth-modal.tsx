@@ -4,13 +4,16 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Loader2, Mail, X } from "lucide-react";
 
 import { requestMagicLink } from "@/lib/account";
+import { AUTH_COPY, type AuthIntent } from "@/lib/access";
 
 export function AuthModal({
   open,
+  intent = "default",
   onClose,
   onSuccess,
 }: {
   open: boolean;
+  intent?: AuthIntent;
   onClose: () => void;
   /** Called after a magic-link email is sent or Google redirect begins. */
   onSuccess?: () => void;
@@ -50,6 +53,7 @@ export function AuthModal({
 
   if (!open) return null;
 
+  const copy = AUTH_COPY[intent] ?? AUTH_COPY.default;
   const googleHref = "/api/auth/google";
 
   const sendMagicLink = async () => {
@@ -81,8 +85,8 @@ export function AuthModal({
       >
         <header className="tracker-modal-header">
           <div>
-            <h2 id={titleId}>Sign in to AppClimb</h2>
-            <p>Sync your keywords across devices and unlock Pro limits.</p>
+            <h2 id={titleId}>{copy.title}</h2>
+            <p>{copy.subtitle}</p>
           </div>
           <button
             type="button"
@@ -172,8 +176,9 @@ export function AuthModal({
               )}
 
               <p className="auth-footnote">
-                No password needed. We store only your email and subscription
-                status — your keyword data stays yours.
+                No password needed. Keyword Explorer works without an account.
+                Tracking an app and the assistant need a free sign-in. We store
+                only your email and subscription status.
               </p>
             </>
           )}

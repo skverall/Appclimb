@@ -5,7 +5,8 @@
  * server-only imports. A `null` limit means "unlimited".
  *
  * The free tier is a real product, not a demo; Pro is a convenience upgrade
- * under the founder's $10/month cap. See PRODUCT_DIRECTION.md §5.
+ * under the founder's $10/month cap. Guests can search; tracking and the
+ * assistant require a free account. See PRODUCT_DIRECTION.md.
  */
 
 export type PlanId = "free" | "pro";

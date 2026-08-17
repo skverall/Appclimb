@@ -10,11 +10,11 @@ Before any product, design, roadmap, positioning, data-model, integration, or
 architecture work, read `PRODUCT_DIRECTION.md` completely.
 
 Treat it as the product north star. AppClimb is a freemium App Store keyword
-tool: a free plan with honest daily limits (8 keyword checks, 5 assistant
-messages, 1 tracked app) plus an optional Pro plan at $8/month ($64/year) with
-cloud sync — not the Growth CI SaaS that preceded it, and never a tool with a
-login wall. If a request implies reintroducing user-connected connectors,
-team features, pricing above $10/month, or third-party analytics, surface the
+tool: guests can search keywords (8 checks/day) with no login wall; a free
+account unlocks 1 tracked app and the ASO assistant (5 messages/day); Pro is
+$8/month ($64/year) with cloud sync. Not the Growth CI SaaS that preceded it.
+If a request implies a login wall on search, user-connected connectors, team
+features, pricing above $10/month, or third-party analytics, surface the
 conflict instead of silently changing direction.
 
 # Current handoff map
@@ -31,9 +31,11 @@ conflict instead of silently changing direction.
   and `compose.yml` are frozen rollback artifacts from earlier architectures;
   never treat them as the current backend.
 - Monetization backend (ADR 0004) runs in the same Worker: auth routes,
-  `/api/me`, `/api/sync`, Paddle webhook — all inert until `PRO_ENABLED` /
-  `NEXT_PUBLIC_PRO_ENABLED` are turned on. Anonymous keyword data never leaves
-  the browser; only a signed-in Pro user's own data may be synced to D1.
+  `/api/me`, `/api/sync`, Paddle webhook. Account chrome and guest gates
+  turn on when `NEXT_PUBLIC_PRO_ENABLED=1` or `/api/me` reports
+  `configured:true`. Guest keyword data never leaves the browser; only a
+  signed-in Pro user's own data may be synced to D1. Tracking and the
+  assistant require a free sign-in once accounts are live.
 - Keyword data honesty rules: popularity is Apple Ads official relative 1–100
   when `POST /api/popularity` hits, otherwise an iTunes estimate. Difficulty
   is always an estimate. Both MUST be labeled with their source. Never claim

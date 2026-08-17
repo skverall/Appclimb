@@ -9,6 +9,8 @@ import {
   ExternalLink,
   History,
   Loader2,
+  Lock,
+  LogIn,
   Maximize2,
   Send,
   Sparkles,
@@ -19,6 +21,7 @@ import {
 import { AiChatHistory } from "@/components/ai-chat-history";
 import { ChatMarkdown } from "@/components/chat-markdown";
 import { useAccount } from "@/components/account-provider";
+import { canUseAssistant } from "@/lib/access";
 import { AI_LIMITS } from "@/lib/ai-chat";
 import { proEnabled } from "@/lib/flags";
 import {
@@ -108,9 +111,13 @@ export function AiChatConversation({
   const stickToBottom = useRef(true);
   const messagesRef = useRef(messages);
 
-  const { account, openUpgrade } = useAccount();
+  const { account, signedIn, accountsLive, role, loading, openAuth, openUpgrade } =
+    useAccount();
   const proOn = proEnabled();
-  const aiLimit = proOn ? account.limits.aiMessagesPerDay : AI_LIMITS.maxMessagesPerDay;
+  const limitsOn = proOn || accountsLive;
+  const aiLimit = limitsOn ? account.limits.aiMessagesPerDay : AI_LIMITS.maxMessagesPerDay;
+  const chatAllowed = canUseAssistant(role, accountsLive);
+  const isGuest = accountsLive && !signedIn && !loading;
 
   // Auto-resize textarea height dynamically as user types
   const adjustTextareaHeight = useCallback(() => {
@@ -240,6 +247,10 @@ export function AiChatConversation({
 
   const send = useCallback(
     async (text: string) => {
+      if (!canUseAssistant(role, accountsLive)) {
+        openAuth("assistant");
+        return;
+      }
       const content = text.trim().slice(0, AI_LIMITS.maxMessageChars);
       if (!content || busy) return;
 
@@ -290,7 +301,7 @@ export function AiChatConversation({
         setBusy(false);
       }
     },
-    [busy, aiLimit],
+    [busy, aiLimit, role, accountsLive, openAuth],
   );
 
   const clearChat = () => {
@@ -562,7 +573,7 @@ export function AiChatConversation({
           )}
         </div>
 
-        {!isThreadEmpty && (
+        {!isThreadEmpty && chatAllowed && (
           <div className="ai-chat-followups-container">
             <div className="ai-chat-followups" aria-label="Suggested follow-up actions">
               {AI_FOLLOWUPS.slice(0, variant === "page" ? 6 : 4).map((item) => (
@@ -589,6 +600,28 @@ export function AiChatConversation({
         )}
 
         <div className="ai-chat-composer-container">
+          {loading ? null : isGuest ? (
+            <div className="ai-chat-auth-gate" role="region" aria-label="Sign in required">
+              <span className="guest-lock-icon" aria-hidden="true">
+                <Lock size={16} />
+              </span>
+              <div>
+                <strong>Sign in to chat</strong>
+                <p>
+                  The ASO assistant is part of a free account (5 messages/day).
+                  Keyword search on the home page works without signing in.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="tracker-button-primary"
+                onClick={() => openAuth("assistant")}
+              >
+                <LogIn size={15} aria-hidden="true" />
+                Sign in free
+              </button>
+            </div>
+          ) : (
           <form
             className="ai-chat-composer"
             onSubmit={(event) => {
@@ -656,6 +689,7 @@ export function AiChatConversation({
               </small>
             </div>
           </form>
+          )}
         </div>
       </div>
 

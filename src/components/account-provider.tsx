@@ -21,6 +21,13 @@ import {
   type AccountState,
 } from "@/lib/account";
 import {
+  accountsAreLive,
+  type AccessRole,
+  type AuthIntent,
+  resolveAccessRole,
+} from "@/lib/access";
+import { proEnabled } from "@/lib/flags";
+import {
   clearLocalWorkspaceData,
   explorerHasData,
   explorerLocalJson,
@@ -33,16 +40,27 @@ import { SYNC_CHANGE_EVENT, type SyncBlobKey } from "@/lib/sync-client";
 
 export type SyncState = "off" | "syncing" | "synced" | "error";
 
+export type { AuthIntent, AccessRole };
+
 export interface AccountContextValue {
   account: AccountState;
   loading: boolean;
+  signedIn: boolean;
   isPro: boolean;
+  /** True when sign-in is a real product surface (flag on or backend configured). */
+  accountsLive: boolean;
+  role: AccessRole;
   /** Cloud sync availability and status (Pro only). */
   syncState: SyncState;
   /** Bumped whenever a remote pull rewrote local data. */
   syncVersion: number;
   refresh: () => Promise<void>;
-  openAuth: () => void;
+  openAuth: (intent?: AuthIntent) => void;
+  /**
+   * If the visitor may proceed, returns true. If a free account is required
+   * and they are a guest, opens sign-in and returns false.
+   */
+  requireAccount: (intent?: AuthIntent) => boolean;
   openUpgrade: () => void;
   signOut: () => Promise<void>;
 }
@@ -76,6 +94,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [account, setAccount] = useState<AccountState>(anonymousAccount());
   const [loading, setLoading] = useState(true);
   const [authOpen, setAuthOpen] = useState(false);
+  const [authIntent, setAuthIntent] = useState<AuthIntent>("default");
   const [upgradeOpen, setUpgradeOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [syncState, setSyncState] = useState<SyncState>("off");
@@ -271,19 +290,56 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     await refresh();
   }, [account.plan, account.user, refresh]);
 
+  const signedIn = account.user !== null;
+  const isPro = account.plan === "pro";
+  const live = accountsAreLive(proEnabled(), account.configured);
+  const role = resolveAccessRole({ signedIn, isPro });
+
+  const openAuth = useCallback((intent: AuthIntent = "default") => {
+    setAuthIntent(intent);
+    setAuthOpen(true);
+  }, []);
+
+  const requireAccount = useCallback(
+    (intent: AuthIntent = "default") => {
+      if (signedIn || !live) return true;
+      if (loading) return false;
+      openAuth(intent);
+      return false;
+    },
+    [signedIn, live, loading, openAuth],
+  );
+
   const value = useMemo<AccountContextValue>(
     () => ({
       account,
       loading,
-      isPro: account.plan === "pro",
+      signedIn,
+      isPro,
+      accountsLive: live,
+      role,
       syncState,
       syncVersion,
       refresh,
-      openAuth: () => setAuthOpen(true),
+      openAuth,
+      requireAccount,
       openUpgrade: () => setUpgradeOpen(true),
       signOut,
     }),
-    [account, loading, refresh, signOut, syncState, syncVersion],
+    [
+      account,
+      loading,
+      signedIn,
+      isPro,
+      live,
+      role,
+      refresh,
+      openAuth,
+      requireAccount,
+      signOut,
+      syncState,
+      syncVersion,
+    ],
   );
 
   return (
@@ -304,14 +360,21 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         </div>
       )}
 
-      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} />
+      <AuthModal
+        open={authOpen}
+        intent={authIntent}
+        onClose={() => {
+          setAuthOpen(false);
+          setAuthIntent("default");
+        }}
+      />
       <UpgradeModal
         open={upgradeOpen}
         user={account.user}
         onClose={() => setUpgradeOpen(false)}
         onRequireAuth={() => {
           setUpgradeOpen(false);
-          setAuthOpen(true);
+          openAuth("upgrade");
         }}
       />
     </AccountContext.Provider>

@@ -4036,6 +4036,11 @@ img {
   color: var(--ink-secondary);
 }
 
+.account-plan-chip.is-guest {
+  background: var(--n-100);
+  color: var(--ink-muted);
+}
+
 .account-plan-chip.is-pro {
   background: var(--teal-soft);
   color: var(--teal-dark);
@@ -4326,11 +4331,96 @@ img {
   text-align: center;
 }
 
-/* Small screens: stack anonymous header actions */
+/* Small screens: keep the guest Sign in CTA, drop the status chip if tight */
 @media (max-width: 640px) {
-  .account-menu-anonymous .tracker-button-secondary {
+  .account-menu-anonymous .account-plan-chip {
     display: none;
   }
+}
+
+/* Guest vs signed-in access chrome */
+.guest-access-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 16px 0 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  color: var(--ink-secondary);
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
+}
+
+.guest-access-banner strong {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.guest-lock-panel {
+  display: grid;
+  gap: 16px;
+  justify-items: start;
+  margin: 24px auto 48px;
+  padding: 28px 24px;
+  max-width: 640px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-sm);
+}
+
+.guest-lock-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--teal-50);
+  color: var(--teal-700);
+}
+
+.guest-lock-copy h2 {
+  font-size: var(--text-lg);
+  letter-spacing: var(--tracking-tight);
+}
+
+.guest-lock-copy p {
+  margin-top: 6px;
+  font-size: var(--text-xs);
+  color: var(--ink-secondary);
+  line-height: var(--leading-snug);
+  max-width: 52ch;
+}
+
+.guest-lock-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ai-chat-auth-gate {
+  display: grid;
+  gap: 10px;
+  padding: 14px 16px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--n-25);
+}
+
+.ai-chat-auth-gate p {
+  margin: 4px 0 0;
+  font-size: var(--text-2xs);
+  color: var(--ink-secondary);
+  line-height: var(--leading-snug);
+}
+
+.ai-chat-auth-gate .tracker-button-primary {
+  justify-content: center;
+  width: fit-content;
 }
 
 /* Explorer daily-check limit (free tier) */

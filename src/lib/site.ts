@@ -2,7 +2,7 @@ export const SITE_URL = "https://appclimb.app";
 export const SITE_NAME = "AppClimb";
 export const SITE_DESCRIPTION =
   "App Store keyword popularity from Apple Ads — official 1–100 scores, labeled source, not a black-box volume. Estimated difficulty, bulk lists, and 30-day trends. Free plan with honest daily limits; Pro at $8/month adds cloud sync.";
-export const SITE_UPDATED = "2026-08-16";
+export const SITE_UPDATED = "2026-08-17";
 
 export const PUBLIC_PAGES = [
   {

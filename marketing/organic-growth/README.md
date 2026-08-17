@@ -25,7 +25,8 @@ AppClimb is a **free App Store keyword tool** that:
 - estimates keyword popularity and difficulty (0–100) from public iTunes data;
 - tracks 30-day trends locally in the visitor's browser;
 - labels every score as an estimate and shows the evidence behind it;
-- requires no account and collects no data.
+- lets guests search without an account; tracking and the assistant need a free sign-in;
+- collects no analytics and never uploads guest keyword data.
 
 Do not describe AppClimb as a search-volume tool, a connector-based analytics
 platform, or anything from the retired Growth CI / River Atlas positioning.

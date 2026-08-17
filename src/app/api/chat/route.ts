@@ -14,6 +14,7 @@ import {
   sanitizeUserText,
   type RateBucket,
 } from "@/lib/ai-chat";
+import { assistantRequiresSignIn } from "@/lib/access";
 import { getDb } from "@/lib/db";
 import { aiDailyLimit, proQuotasEnabled, resolveQuotaSubject } from "@/lib/quota";
 
@@ -75,9 +76,13 @@ export async function POST(request: NextRequest) {
 
   const ip = getClientIp(request);
   const ua = request.headers.get("user-agent") ?? "";
-  const subject = await resolveQuotaSubject(request, getDb());
+  const db = getDb();
+  const subject = await resolveQuotaSubject(request, db);
+  if (assistantRequiresSignIn(Boolean(db), subject.isSignedIn)) {
+    return jsonError(401, "Sign in to use the ASO assistant.", { authRequired: true });
+  }
   // Signed-in users are keyed by account (quota follows them); anonymous
-  // visitors fall back to the IP+UA hash key.
+  // visitors fall back to the IP+UA hash key when accounts are not live.
   const key = subject.isSignedIn ? subject.key : clientRateKey(ip, ua);
   const quotasOn = proQuotasEnabled();
   const maxPerDay = quotasOn ? aiDailyLimit(subject.plan) : AI_LIMITS.maxMessagesPerDay;
