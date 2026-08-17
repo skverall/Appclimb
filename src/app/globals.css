@@ -3773,8 +3773,14 @@ img {
 
 @media (max-width: 860px) {
   /* The full nav needs ~790px; below that "Open Explorer" pushed the header
-     past the viewport. Collapse to the hamburger drawer at tablet width. */
+     past the viewport. Collapse to the hamburger drawer at tablet width —
+     the drawer repeats the "Open Keyword Explorer" CTA, and with the Pro
+     account buttons present the header link would not fit anyway. */
   .marketing-nav {
+    display: none;
+  }
+
+  .marketing-header .marketing-primary-action {
     display: none;
   }
 
