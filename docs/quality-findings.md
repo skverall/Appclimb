@@ -50,7 +50,23 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · My Apps (tracker) · design (token invariants)
+
+**Defect:** none found — numeric cells use tabular figures, the sticky keyword
+column carries a separation shadow, status chips fit the viewport, and the
+page has 0px horizontal overflow at both 375px and 1024px.
+**Repro:** e2e at 375×812 and 1024×768 (second pass per matrix rules): computed
+`fontVariantNumeric` on `.tracker-position`, `boxShadow` on
+`.tracker-col-sticky`, chip-row bounding box, page overflow.
+**Fix:** e2e `tracker design tokens hold at 375px and 1024px`
+(`tests/e2e/tracker-tokens.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Auth (sign out) · ui (flow coverage)
+
 
 **Defect:** none found — sign out asks for confirmation on the free plan,
 clears the local workspace (tracker store) after acceptance, and shows the
