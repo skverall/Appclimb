@@ -518,3 +518,66 @@ test("Pro sign out flushes local data to the cloud before clearing", async ({
     await page.evaluate(() => window.localStorage.getItem("appclimb:tracker:v1")),
   ).toBeNull();
 });
+
+test("a mid-session downgrade stops sync but preserves local data", async ({
+  page,
+}) => {
+  await mockItunesLike(page);
+  let plan = "pro";
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        user: { id: "u1", email: "pro@example.com", name: "Pro" },
+        plan,
+        subscription:
+          plan === "pro"
+            ? { status: "active", current_period_end: null, cancel_at_period_end: false }
+            : null,
+      }),
+    });
+  });
+  await page.route("**/api/sync?*", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ revision: 0, json: null, updated_at: null }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ revision: 1, applied: true }),
+    });
+  });
+
+  await page.goto("/");
+  const closeWelcome = page.getByRole("button", { name: /Close welcome dialog/i });
+  try {
+    await closeWelcome.waitFor({ state: "visible", timeout: 3_000 });
+    await closeWelcome.click();
+  } catch {
+    // no onboarding modal
+  }
+  await page.getByRole("button", { name: /Try a sample app/i }).click();
+  await expect(page.locator(".tracker-table tbody tr")).toHaveCount(7, {
+    timeout: 30_000,
+  });
+
+  // The subscription lapses mid-session: the account refresh reports free.
+  plan = "free";
+  await page.goto("/?checkout=success");
+  await expect(page.getByText(/Tracked Apps/i).first()).toBeVisible();
+
+  // The sync-status row disappears for a non-Pro plan and local data remains.
+  await page.getByRole("button", { name: /Free/i }).first().click();
+  await expect(page.getByText(/Cloud sync on/i)).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".tracker-table tbody tr")).toHaveCount(7, {
+    timeout: 10_000,
+  });
+});

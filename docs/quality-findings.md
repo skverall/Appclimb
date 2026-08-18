@@ -102,7 +102,21 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Cloud sync / plan change · logic (downgrade mid-session)
+
+**Defect:** none found — when the account refresh reports Free after Pro, the
+sync-status row disappears (non-Pro), sync no longer runs, and the local
+tracker data is fully preserved.
+**Repro:** e2e combo of lenses 1 × 2 (surface G).
+**Fix:** e2e `a mid-session downgrade stops sync but preserves local data`
+(`tests/e2e/account.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Upgrade/Paddle · ui (checker states)
+
 
 **Defect:** none found — the checkout states are all reachable and honest:
 busy shows "Opening checkout…" with a disabled CTA, an absent token surfaces
@@ -287,7 +301,21 @@ so a keyboard user can immediately keep typing.
 ---
 ---
 ---
+---
+## 2026-08-18 · Cloud sync / plan change · logic (downgrade mid-session)
+
+**Defect:** none found — when the account refresh reports Free after Pro, the
+sync-status row disappears (non-Pro), sync no longer runs, and the local
+tracker data is fully preserved.
+**Repro:** e2e combo of lenses 1 × 2 (surface G).
+**Fix:** e2e `a mid-session downgrade stops sync but preserves local data`
+(`tests/e2e/account.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Upgrade/Paddle · ui (checker states)
+
 
 **Defect:** none found — the checkout states are all reachable and honest:
 busy shows "Opening checkout…" with a disabled CTA, an absent token surfaces
