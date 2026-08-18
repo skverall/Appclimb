@@ -28,7 +28,34 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Keyword Explorer / My Apps · performance (localStorage growth)
+
+**Defect:** Keyword history grew without bound — `recordSnapshot` appended a
+daily snapshot forever (a 3-year-old keyword ≈ 1100 entries). With many
+keywords this exhausts the ~5MB localStorage quota, and the explorer's write
+paths (`saveKeywordList`, `saveRecord`, `saveTrackerStore`) did a bare
+`setItem` that throws on quota: `analyze()` calls `addKeywordToList` before
+its try block, so a quota error left the "Analyzing" chip spinning forever
+with an unhandled rejection.
+**Repro:** unit-level: seed a record with 120 history entries, snapshot today
+→ 121 entries stored (no cap). A storage whose `setItem` throws →
+`addKeywordToList`/`saveKeywordList`/`saveTrackerStore`/`recordSnapshot`
+propagate the exception.
+**Root cause:** no cap on stored history (`HISTORY_DAYS` was display-only) and
+no fail-open on the three persistence writes.
+**Fix:** new `MAX_STORED_HISTORY_DAYS = 92` cap (90-day Pro view + margin)
+applied in `recordSnapshot`; `saveRecord`, `saveKeywordList`, and
+`saveTrackerStore` now fail open (try/catch) exactly like `consumeDayUsage`.
+**Protection:** unit tests — history cap keeps ≤92 entries with today's point
+preserved; fail-open writes do not throw for quota-blocked storage
+(`src/lib/aso.test.ts`, `src/lib/tracker.test.ts`).
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — lint/typecheck/unit green (350 passed).
+
+---
 ## 2026-08-18 · Keyword Explorer · accessibility (suggestions dropdown)
+
 
 **Defect:** The live suggestions dropdown could not be dismissed by keyboard
 (Escape) or by clicking elsewhere — it stayed open over the page until the

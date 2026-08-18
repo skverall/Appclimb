@@ -114,6 +114,8 @@ export interface KeywordRecord {
 }
 
 export const HISTORY_DAYS = 30;
+/** Stored history cap: 90-day Pro view plus a margin. */
+export const MAX_STORED_HISTORY_DAYS = 92;
 export const SEARCH_LIMIT = 200;
 export const BACKFILL_DAYS = 29; // 29 estimated days + today's real snapshot.
 
@@ -452,10 +454,14 @@ export function saveRecord(
   storage: KeywordStorage,
   record: KeywordRecord,
 ): void {
-  storage.setItem(
-    historyStorageKey(record.keyword, record.country),
-    JSON.stringify(record),
-  );
+  try {
+    storage.setItem(
+      historyStorageKey(record.keyword, record.country),
+      JSON.stringify(record),
+    );
+  } catch {
+    // Storage full or unavailable — fail open rather than break the tool.
+  }
 }
 
 /** Append (or refresh) today's measured snapshot and persist the record. */
@@ -482,6 +488,12 @@ export function recordSnapshot(
       difficulty: metrics.difficulty,
       popularitySource: metrics.popularitySource,
     });
+  }
+  // Local history is capped (90-day Pro view + margin) so a long-lived
+  // keyword cannot grow without bound and eventually exhaust localStorage
+  // for every other keyword in the list.
+  if (history.length > MAX_STORED_HISTORY_DAYS) {
+    history.splice(0, history.length - MAX_STORED_HISTORY_DAYS);
   }
   const record: KeywordRecord = {
     keyword: metrics.keyword.trim(),
@@ -563,7 +575,11 @@ export function saveKeywordList(
   country: string,
   keywords: string[],
 ): void {
-  storage.setItem(listStorageKey(country), JSON.stringify(keywords));
+  try {
+    storage.setItem(listStorageKey(country), JSON.stringify(keywords));
+  } catch {
+    // Storage full or unavailable — fail open rather than break the tool.
+  }
 }
 
 /** Add a keyword to the persisted list without duplicates. */

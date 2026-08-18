@@ -1457,3 +1457,15 @@ describe("updateKeywordTags and calculateCompetitorOverlap", () => {
   });
 });
 
+
+describe("storage write resilience", () => {
+  it("fails open when localStorage writes are blocked (quota/private mode)", () => {
+    const throwing: TrackerStorage = {
+      ...makeStorage(),
+      setItem: () => {
+        throw new DOMException("Quota exceeded", "QuotaExceededError");
+      },
+    };
+    expect(() => saveTrackerStore(throwing, emptyStore())).not.toThrow();
+  });
+});

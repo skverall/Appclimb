@@ -294,7 +294,11 @@ export function saveTrackerStore(
   storage: TrackerStorage,
   store: TrackerStore,
 ): void {
-  storage.setItem(TRACKER_STORAGE_KEY, JSON.stringify(store));
+  try {
+    storage.setItem(TRACKER_STORAGE_KEY, JSON.stringify(store));
+  } catch {
+    // Storage full or unavailable — fail open rather than break the tool.
+  }
 }
 
 /* ------------------------------------------------------------------ */

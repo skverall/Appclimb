@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   BACKFILL_DAYS,
+  MAX_STORED_HISTORY_DAYS,
   SEARCH_LIMIT,
   addKeywordToList,
   backfillHistory,
@@ -25,10 +26,12 @@ import {
   restoreExplorerBackup,
   runBatched,
   saveKeywordList,
+  saveRecord,
   suggestKeywords,
   toLocalDate,
   trendDelta,
   type KeywordMetrics,
+  type KeywordRecord,
   type KeywordStorage,
   type TopApp,
 } from "@/lib/aso";
@@ -305,6 +308,44 @@ describe("record persistence", () => {
     recordSnapshot(storage, metrics);
     deleteRecord(storage, "meditation", "US");
     expect(loadRecord(storage, "meditation", "US")).toBeNull();
+  });
+
+  it("caps stored history so a long-lived keyword cannot grow unbounded", () => {
+    const storage = makeStorage();
+    const metrics = metricsFor("meditation", [makeApp()]);
+    const seed: KeywordRecord = {
+      keyword: "meditation",
+      country: "US",
+      firstSeen: "2025-12-31",
+      backfilled: false,
+      history: Array.from({ length: 120 }, () => ({
+        date: "2025-12-31",
+        popularity: 50,
+        difficulty: 40,
+        popularitySource: "estimated" as const,
+      })),
+      lastCheck: { results: 10, saturated: false },
+    };
+    saveRecord(storage, seed);
+
+    const record = recordSnapshot(storage, metrics);
+    expect(record.history).toHaveLength(MAX_STORED_HISTORY_DAYS);
+    expect(record.history[record.history.length - 1].date).toBe(toLocalDate());
+    expect(loadRecord(storage, "meditation", "US")?.history).toHaveLength(
+      MAX_STORED_HISTORY_DAYS,
+    );
+  });
+
+  it("fails open when localStorage writes are blocked (quota/private mode)", () => {
+    const throwing: KeywordStorage = {
+      ...makeStorage(),
+      setItem: () => {
+        throw new DOMException("Quota exceeded", "QuotaExceededError");
+      },
+    };
+    expect(() => addKeywordToList(throwing, "US", "meditation")).not.toThrow();
+    expect(() => saveKeywordList(throwing, "US", ["meditation"])).not.toThrow();
+    expect(() => recordSnapshot(throwing, metricsFor("meditation", [makeApp()]))).not.toThrow();
   });
 });
 
