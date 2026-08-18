@@ -159,6 +159,18 @@ describe("extractSubscriptionInfo", () => {
     expect(info?.userId).toBeNull();
   });
 
+  it("reads the price from the nested price entity used by webhooks (API v1)", () => {
+    const info = extractSubscriptionInfo({
+      id: "sub_3",
+      customer_id: "ctm_3",
+      status: "active",
+      items: [{ price: { id: "pri_monthly", product_id: "pro_1" }, quantity: 1 }],
+      current_billing_period: { starts_at: "2026-08-01", ends_at: "2026-09-01" },
+    });
+    expect(info?.priceId).toBe("pri_monthly");
+    expect(info?.currentPeriodEnd).toBe("2026-09-01");
+  });
+
   it("returns null without an id", () => {
     expect(extractSubscriptionInfo({ status: "active" })).toBeNull();
     expect(extractSubscriptionInfo(null as never)).toBeNull();

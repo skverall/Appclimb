@@ -210,6 +210,28 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (typeof window === "undefined") return;
     let cancelled = false;
+    // The Paddle webhook can arrive a beat after the checkout redirect lands.
+    // Poll /api/me for a short window so the plan chip flips to Pro without a
+    // manual reload, then fall back to a full refresh if it stays stale.
+    // Attempts happen at ~0s, ~1.3s, ~2.6s, ~5.2s, ~10.4s within 12 seconds.
+    const waitForPro = async (email: string) => {
+      for (let attempt = 0; attempt < 6 && !cancelled; attempt += 1) {
+        const state = await fetchAccountState();
+        if (cancelled) return;
+        const upgraded = Boolean(email) && state.user?.email === email && state.plan === "pro";
+        setAccount(state);
+        setLoading(false);
+        if (upgraded) return;
+        await new Promise((resolve) =>
+          window.setTimeout(resolve, attempt === 0 ? 1300 : 1300 * attempt),
+        );
+      }
+      if (!cancelled) {
+        setNotice("Your upgrade is active. Refreshing…");
+        window.location.reload();
+      }
+    };
+
     void (async () => {
       await Promise.resolve();
       if (cancelled) return;
@@ -220,7 +242,11 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       if (checkout === "success") {
         setNotice("Welcome to Pro! Your upgrade is being activated.");
         cleanUrlParams("checkout");
-        void refresh();
+        const email = account.user?.email ?? "";
+        void refresh().then(() => {
+          if (cancelled) return;
+          void waitForPro(email);
+        });
       } else if (auth === "ok") {
         setNotice("Signed in.");
         cleanUrlParams("auth");

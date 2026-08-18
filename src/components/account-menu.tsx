@@ -84,9 +84,13 @@ export function AccountMenu() {
         <span className="account-menu-avatar" aria-hidden="true">
           {initialOf(user.email, user.name)}
         </span>
-        <span className={`account-plan-chip ${isPro ? "is-pro" : "is-free"}`}>
-          {isPro ? "Pro" : "Free"}
-        </span>
+        {isPro ? (
+          <span className="account-plan-badge" title="Pro plan — unlimited checks, cloud sync">
+            <Sparkles size={12} aria-hidden="true" /> Pro
+          </span>
+        ) : (
+          <span className="account-plan-chip is-free">Free</span>
+        )}
       </button>
 
       {open && (

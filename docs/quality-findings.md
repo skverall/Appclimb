@@ -105,3 +105,63 @@ stays at 1. Failed before the fix, passed after.
 founder is the push gate).
 **Verification:** locally tested — `npm run check` green, `npm run test:e2e`
 green (24/24).
+
+## 2026-08-18 · Post-purchase header state (account menu) · UI/logic
+
+**Defect:** After completing a real Paddle checkout, the header plan chip kept
+showing "Free" until a manual page reload. The `?checkout=success` handler ran a
+single `refresh()`; if the Paddle webhook → D1 write had not landed yet, the
+client kept the stale `plan: free` state with no retry, so a paying customer saw
+no confirmation they were Pro.
+**Repro:** Live: bought Pro (100% discount) on `appclimb.app` → returned via
+`?checkout=success` → header still "Free" until F5.
+**Root cause:** `src/components/account-provider.tsx` `checkout=success` branch
+did one `fetchAccountState()` with no retry window; the webhook arrives a beat
+after the checkout redirect.
+**Fix:** Poll `/api/me` (6 attempts, backoff ~0s/1.3s/2.6s/5.2s/10.4s) updating
+the account state each time; stop as soon as the plan flips to Pro; fall back to
+`window.location.reload()` with a notice ("Your upgrade is active. Refreshing…")
+so the UI can never be stuck showing Free after a paid checkout.
+**Protection:** manual live verification on the founder's account (plan flipped
+to Pro via `/api/me` after purchase); component logic covered by existing
+account/access unit tests (`src/lib/access.test.ts`, 11 tests).
+**Status:** fixed (local branch `feat/pro-badge-and-checkout-refresh`, not
+pushed — founder is the push gate).
+**Verification:** locally tested — typecheck + lint clean, 344 unit tests pass.
+
+## 2026-08-18 · Webhook price extraction · logic
+
+**Defect:** The `subscriptions.price_id` column in production D1 stayed `NULL`
+for every Paddle webhook. The live subscription row showed `price_id: null`
+even though both price IDs were active and mapped to Pro correctly.
+**Repro:** Live: bought Pro monthly + yearly with the 100% test discount; read
+`subscriptions` from `appclimb-db` via `wrangler d1 execute` — `price_id` null.
+Predicted by unit test shape: `paddle.test.ts` only exercised
+`items[{ price_id }]`.
+**Root cause:** Paddle webhooks (API v1) send the price nested as
+`items[].price.id`; `extractSubscriptionInfo` (`src/lib/paddle.ts`) read
+`items[].price_id`, which only appears in the REST API surface, so the price was
+always dropped.
+**Fix:** Accept both shapes — `items[].price_id` (REST) and the nested
+`items[].price.id` (webhook).
+**Protection:** New unit test "reads the price from the nested price entity used
+by webhooks (API v1)" in `src/lib/paddle.test.ts`. Failed before the fix,
+passed after (28 tests in paddle+billing).
+**Status:** fixed (local branch `feat/pro-badge-and-checkout-refresh`, not
+pushed — founder is the push gate). Applies to the next deploy; D1 will start
+recording `price_id` on the next subscription event.
+**Verification:** locally tested — typecheck + lint clean, paddle/billing tests
+green. Note: existing production row stays `price_id: null` until the next
+webhook event touches that subscription.
+
+## 2026-08-18 · Pro badge in the header · design/polish
+
+**Defect (founder request):** Post-purchase, the header gave no positive signal
+that the account is now Pro beyond the plain text chip.
+**Fix:** Added a premium `.account-plan-badge` (gradient teal, white sparkle
+icon, subtle shadow) for `isPro` users in `src/components/account-menu.tsx`,
+replacing the flat chip; Free/Guest chips unchanged. Styled on existing design
+tokens (`--teal-500/600`, `--radius-pill`, `--text-3xs`).
+**Status:** fixed (local branch `feat/pro-badge-and-checkout-refresh`, not
+pushed).
+**Verification:** locally tested — typecheck + lint clean, 344 unit tests pass.
