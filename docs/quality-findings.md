@@ -72,7 +72,22 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · My Apps (tracker) · logic (abort + rate-limit interplay)
+
+**Defect:** none found — a 429 is retried with backoff, a non-transient error
+is surfaced, and an AbortError (user cancel or the 15s iTunes timeout) is
+rethrown without retrying, so a timeout cannot trigger a retry storm and a
+cancel never counts as a failure.
+**Repro:** unit-level second pass per matrix rules.
+**Fix:** unit test `analyzeWithRetry rethrows AbortError without retrying`
+(`src/lib/tracker.test.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — unit green (366 passed).
+
+---
 ## 2026-08-18 · Marketing shell · ui (interactive pass, 1920px)
+
 
 **Defect:** none found — at 1920×1080 the desktop nav links and "Open
 Explorer" CTA are reachable on the marketing pages, navigation via the links

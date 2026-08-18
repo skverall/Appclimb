@@ -919,6 +919,19 @@ describe("analyzeWithRetry and sleep", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
 
+  it("rethrows AbortError (cancel/timeout) without retrying", async () => {
+    const fetchImpl = vi.fn(async () => {
+      throw new DOMException("Aborted", "AbortError");
+    });
+    await expect(
+      analyzeWithRetry("kw", "US", "1", {
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        maxAttempts: 3,
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
   it("sleep resolves and aborts with signal", async () => {
     await expect(sleep(5)).resolves.toBeUndefined();
     const controller = new AbortController();
