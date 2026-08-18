@@ -76,7 +76,21 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Keyword Explorer · ui (modals at 1024px)
+
+**Defect:** none found — the bulk-analyze and auth dialogs fit the 1024×768
+viewport, the bulk modal is centered (midpoint within 24px), and both close
+cleanly.
+**Repro:** e2e second pass per matrix rules.
+**Fix:** e2e `explorer modals fit and stay centered at 1024px`
+(`tests/e2e/explorer.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · My Apps (add-app) · logic (double submit, second pass)
+
 
 **Defect:** none found — a re-search aborts the previous request via
 `abortRef`, the submit button is disabled while busy, and the skeleton list

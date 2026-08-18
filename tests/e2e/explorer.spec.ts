@@ -785,3 +785,41 @@ test("an upgrade mid-session lifts the explorer quota gate", async ({
   await page.getByRole("button", { name: "Analyze", exact: true }).click();
   await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
 });
+
+test("explorer modals fit and stay centered at 1024px", async ({ page }) => {
+  await mockExplorer(page);
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto("/");
+
+  // Bulk-analyze modal.
+  await page.getByRole("button", { name: /Analyze list/i }).click();
+  const bulk = page.getByRole("dialog", { name: "Analyze a list" });
+  await expect(bulk).toBeVisible();
+  const bulkBox = await bulk.boundingBox();
+  if (bulkBox) {
+    expect(bulkBox.x).toBeGreaterThanOrEqual(0);
+    expect(bulkBox.x + bulkBox.width).toBeLessThanOrEqual(1024);
+    expect(Math.abs(bulkBox.x + bulkBox.width / 2 - 512)).toBeLessThanOrEqual(24);
+  }
+  await page.getByRole("button", { name: /Cancel/i }).click();
+  await expect(bulk).toHaveCount(0);
+
+  // Auth modal via the sign-in action.
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ configured: true, user: null, plan: "free", subscription: null }),
+    });
+  });
+  await page.reload();
+  const signIn = page.getByRole("button", { name: /^Sign in$/i }).first();
+  await signIn.click();
+  const auth = page.getByRole("dialog", { name: /Sign in to AppClimb/i });
+  await expect(auth).toBeVisible();
+  const authBox = await auth.boundingBox();
+  if (authBox) {
+    expect(authBox.x).toBeGreaterThanOrEqual(0);
+    expect(authBox.x + authBox.width).toBeLessThanOrEqual(1024);
+  }
+});
