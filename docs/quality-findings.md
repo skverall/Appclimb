@@ -94,7 +94,27 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · ASO Assistant · logic (raw network error in UI)
+
+**Defect:** A network rejection in `requestAssistantReply`'s `fetch` itself
+leaked the browser's raw "Failed to fetch" into the composer error — cryptic
+for users and inconsistent with the clean status/parse handling.
+**Repro:** e2e: `route.abort()` on /api/chat → the composer showed "Failed to
+fetch"; unit: a `TypeError("Failed to fetch")` propagated verbatim.
+**Root cause:** the `fetch` call was outside the defensive handling (the
+cycle-81 fix covered only the body parse).
+**Fix:** the fetch is wrapped; a rejection throws "Could not reach the
+assistant. Check your connection." — the draft is still preserved (cycle-1).
+**Protection:** unit test `maps a network rejection to a clean connection
+error` (`src/lib/ai-chat-client.test.ts`) + e2e `an aborted chat request
+errors cleanly and keeps the draft`.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — unit green (382 passed), e2e green.
+
+---
 ## 2026-08-18 · My Apps (tracker) · performance (snapshot retention)
+
 
 **Defect:** none found — rank snapshots are already capped at the trailing 90
 days of real measurements, so a long-lived keyword cannot grow the local
@@ -148,7 +168,27 @@ so a keyboard user can immediately keep typing.
 ---
 ---
 ---
+---
+## 2026-08-18 · ASO Assistant · logic (raw network error in UI)
+
+**Defect:** A network rejection in `requestAssistantReply`'s `fetch` itself
+leaked the browser's raw "Failed to fetch" into the composer error — cryptic
+for users and inconsistent with the clean status/parse handling.
+**Repro:** e2e: `route.abort()` on /api/chat → the composer showed "Failed to
+fetch"; unit: a `TypeError("Failed to fetch")` propagated verbatim.
+**Root cause:** the `fetch` call was outside the defensive handling (the
+cycle-81 fix covered only the body parse).
+**Fix:** the fetch is wrapped; a rejection throws "Could not reach the
+assistant. Check your connection." — the draft is still preserved (cycle-1).
+**Protection:** unit test `maps a network rejection to a clean connection
+error` (`src/lib/ai-chat-client.test.ts`) + e2e `an aborted chat request
+errors cleanly and keeps the draft`.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — unit green (382 passed), e2e green.
+
+---
 ## 2026-08-18 · My Apps (tracker) · performance (snapshot retention)
+
 
 **Defect:** none found — rank snapshots are already capped at the trailing 90
 days of real measurements, so a long-lived keyword cannot grow the local

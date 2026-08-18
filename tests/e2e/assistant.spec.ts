@@ -1,4 +1,4 @@
-import { expect, test } from "./runtime-test";
+import { dismissExpectedConsoleErrors, expect, test } from "./runtime-test";
 
 const SUGGESTION =
   "Which of my tracked keywords are worth focusing on first?";
@@ -533,4 +533,23 @@ test("switching conversations refocuses the composer", async ({ page }) => {
     .click();
   await expect(page.getByText(/focus reply/i)).toBeVisible();
   await expect(page.getByLabel("Message the ASO assistant")).toBeFocused();
+});
+
+test("an aborted chat request errors cleanly and keeps the draft", async ({
+  page,
+}) => {
+  await page.route("**/api/chat", (route) => route.abort());
+  await page.goto("/assistant");
+
+  const input = page.getByLabel("Message the ASO assistant");
+  await input.fill("network gone");
+  await page.getByRole("button", { name: "Send" }).click();
+
+  await expect(page.locator(".ai-chat-error")).toContainText(
+    /Could not reach the assistant/i,
+    { timeout: 15_000 },
+  );
+  // The draft survives a broken connection.
+  await expect(input).toHaveValue("network gone");
+  dismissExpectedConsoleErrors(page, [/Failed to load resource/]);
 });

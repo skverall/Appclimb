@@ -545,6 +545,15 @@ describe("requestAssistantReply failure bodies", () => {
   };
   afterEach(() => vi.unstubAllGlobals());
 
+  it("maps a network rejection to a clean connection error", async () => {
+    stubFetch(async () => {
+      throw new TypeError("Failed to fetch");
+    });
+    await expect(
+      requestAssistantReply({ message: "hi", history: [], context: null }),
+    ).rejects.toThrow(/Could not reach the assistant/i);
+  });
+
   it("maps a non-JSON 500 body to a clean error, not a parse error", async () => {
     stubFetch(async () => new Response("<html>Bad Gateway</html>", { status: 500 }));
     await expect(

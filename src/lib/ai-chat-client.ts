@@ -453,15 +453,22 @@ export async function requestAssistantReply(options: {
     .slice(-AI_LIMITS.maxHistoryMessages)
     .map((m) => ({ role: m.role, content: m.content }));
 
-  const response = await fetch("/api/chat", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      message: content,
-      messages: history,
-      context: options.context,
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        message: content,
+        messages: history,
+        context: options.context,
+      }),
+    });
+  } catch {
+    // Network failure (offline, aborted connection) — never leak the
+    // browser's raw "Failed to fetch" into the composer.
+    throw new Error("Could not reach the assistant. Check your connection.");
+  }
 
   let data: {
     message?: string;
