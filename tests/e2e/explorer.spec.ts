@@ -207,6 +207,21 @@ test("explorer removal offers undo", async ({ page }) => {
 });
 
 test("failed iTunes lookups refund the guest daily check", async ({ page }) => {
+  // Accounts are live with a signed-out free user: this activates the guest
+  // daily quota (8 checks) so the counter is actually enforced and the 8/day
+  // limit wording appears.
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        user: null,
+        plan: "free",
+        subscription: null,
+      }),
+    });
+  });
   // Apple is temporarily down: every iTunes lookup fails (500 is tolerated by
   // the console-error filter), and official popularity is unconfigured.
   await page.route(`${ITUNES}/**`, async (route) => {
