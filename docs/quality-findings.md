@@ -77,7 +77,21 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · My Apps (tracker) + ASO Assistant · design/storage (second passes)
+
+**Defect:** none found — tracker status filters route unavailable keywords to
+"unchecked" (never lost), and the chat store caps the thread tail at 80
+messages and the conversation list at 50, sorted by recency.
+**Repro:** code + unit second pass per matrix rules (`matchesStatusFilter`,
+`ai-chat-client.test.ts`).
+**Fix:** n/a — recorded as checked.
+**Status:** checked (local branch, not pushed).
+**Verification:** locally tested.
+
+---
 ## 2026-08-18 · Keyword Explorer · ui (modals at 1024px)
+
 
 **Defect:** none found — the bulk-analyze and auth dialogs fit the 1024×768
 viewport, the bulk modal is centered (midpoint within 24px), and both close
