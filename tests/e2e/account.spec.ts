@@ -201,3 +201,67 @@ test("sign out clears free-plan workspace data after confirmation", async ({
     await page.evaluate(() => window.localStorage.getItem("appclimb:tracker:v1")),
   ).toBeNull();
 });
+
+test("manage subscription opens the portal links for a canceled Pro plan", async ({
+  page,
+}) => {
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        user: { id: "u1", email: "pro@example.com", name: "Pro" },
+        plan: "pro",
+        subscription: {
+          status: "active",
+          current_period_end: "2026-09-01T00:00:00Z",
+          cancel_at_period_end: true,
+        },
+      }),
+    });
+  });
+  await page.route("**/api/sync?*", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ revision: 0, json: null, updated_at: null }),
+    });
+  });
+  await page.route("**/api/billing/portal", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        updatePaymentMethod: "https://paddle.example/update",
+        cancel: "https://paddle.example/cancel",
+      }),
+    });
+  });
+
+  await page.goto("/");
+  const closeWelcome = page.getByRole("button", { name: /Close welcome dialog/i });
+  try {
+    await closeWelcome.waitFor({ state: "visible", timeout: 3_000 });
+    await closeWelcome.click();
+  } catch {
+    // No onboarding modal for this account state — proceed.
+  }
+  await page.getByRole("button", { name: /Pro/i }).first().click();
+
+  await page.evaluate(() => {
+    window.open = ((url?: string | URL | null) => {
+      (window as unknown as { __openedUrl?: string }).__openedUrl =
+        url === null || url === undefined ? "" : String(url);
+      return null;
+    }) as typeof window.open;
+  });
+
+  await page.getByRole("menuitem", { name: /Manage subscription/i }).click();
+  await expect(page.getByRole("menuitem", { name: /Manage subscription/i })).toHaveCount(0);
+
+  const opened = await page.evaluate(
+    () => (window as unknown as { __openedUrl?: string }).__openedUrl ?? "",
+  );
+  expect(opened).toBe("https://paddle.example/update");
+});

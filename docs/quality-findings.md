@@ -52,7 +52,22 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Upgrade/Paddle · logic (portal flow coverage)
+
+**Defect:** none found — for a canceled Pro plan (cancel_at_period_end),
+"Manage subscription" fetches the portal links and opens the update-payment-
+method URL; the menu closes.
+**Repro:** e2e: Pro user with a canceled subscription, mocked portal endpoint.
+**Fix:** e2e `manage subscription opens the portal links for a canceled Pro
+plan` (`tests/e2e/account.spec.ts`) — stubs window.open and asserts the
+opened URL.
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · ASO Assistant · design (CJK/cyrillic/emoji in markdown)
+
 
 **Defect:** none found — CJK, cyrillic, and emoji pass through the chat
 markdown renderer untouched, bold still applies to CJK spans, and unbalanced
