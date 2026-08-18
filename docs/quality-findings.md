@@ -40,7 +40,21 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Marketing shell · ui (viewport guard, mobile nav 375px)
+
+**Defect:** none found — the mobile navigation drawer at 375px opens without
+horizontal overflow, every link is reachable, and selecting one closes the
+drawer and navigates.
+**Repro:** e2e at 375×812 (second pass per matrix rules).
+**Fix:** e2e `marketing mobile nav drawer fits 375px without overflow`
+(`tests/e2e/public-discovery.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · ASO Assistant · ui (viewport guard, history drawer 375px)
+
 
 **Defect:** none found — the history drawer at 375px opens without horizontal
 overflow, and picking a chat closes the drawer with the composer reachable.

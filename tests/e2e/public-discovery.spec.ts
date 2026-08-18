@@ -234,3 +234,39 @@ test("every canonical sitemap page returns a successful document", async ({
     expect(response.headers()["content-type"]).toContain("text/html");
   }
 });
+
+test("marketing mobile nav drawer fits 375px without overflow", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/about");
+
+  await page.getByRole("button", { name: /Open navigation menu/i }).click();
+  await expect(
+    page.locator(".marketing-mobile-drawer"),
+  ).toBeVisible();
+
+  const overflow = await page.evaluate(
+    () =>
+      Math.max(
+        document.documentElement.scrollWidth,
+        document.body.scrollWidth,
+      ) - document.documentElement.clientWidth,
+  );
+  expect(overflow, `horizontal overflow: ${overflow}px`).toBeLessThanOrEqual(0);
+
+  // Every drawer link is reachable and the drawer closes on selection.
+  for (const label of ["Keyword Explorer", "Pricing", "ASO Guide"]) {
+    await expect(
+      page
+        .locator(".marketing-mobile-nav")
+        .getByRole("link", { name: label, exact: true }),
+    ).toBeVisible();
+  }
+  await page
+    .locator(".marketing-mobile-nav")
+    .getByRole("link", { name: "Pricing", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/pricing$/);
+  await expect(page.locator(".marketing-mobile-drawer")).toHaveCount(0);
+});
