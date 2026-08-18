@@ -98,7 +98,21 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Keyword Explorer · accessibility (focus trap + blocked storage)
+
+**Defect:** none found — the bulk-analyze modal keeps its focus trap even when
+localStorage is fully denied: Tab stays inside, Escape closes, and focus
+returns to the opener.
+**Repro:** e2e: Storage.prototype denied + the bulk modal at 375px (lens 5 × 2).
+**Fix:** e2e `bulk modal keeps the focus trap when localStorage is blocked`
+(`tests/e2e/explorer.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Keyword Explorer · accessibility (focus after restore)
+
 
 **Defect:** After the native backup/restore file picker, focus stayed on the
 hidden `type=file` input — invisible to a keyboard user, who then had to Tab
@@ -221,7 +235,21 @@ so a keyboard user can immediately keep typing.
 ---
 ---
 ---
+---
+## 2026-08-18 · Keyword Explorer · accessibility (focus trap + blocked storage)
+
+**Defect:** none found — the bulk-analyze modal keeps its focus trap even when
+localStorage is fully denied: Tab stays inside, Escape closes, and focus
+returns to the opener.
+**Repro:** e2e: Storage.prototype denied + the bulk modal at 375px (lens 5 × 2).
+**Fix:** e2e `bulk modal keeps the focus trap when localStorage is blocked`
+(`tests/e2e/explorer.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Keyword Explorer · accessibility (focus after restore)
+
 
 **Defect:** After the native backup/restore file picker, focus stayed on the
 hidden `type=file` input — invisible to a keyboard user, who then had to Tab

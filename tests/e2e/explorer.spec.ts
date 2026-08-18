@@ -903,3 +903,40 @@ test("bulk modal traps focus and fits at 375px", async ({ page }) => {
   await expect(dialog).toHaveCount(0);
   await expect(opener).toBeFocused();
 });
+
+test("bulk modal keeps the focus trap when localStorage is blocked", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const deny = () => {
+      throw new DOMException("storage disabled", "SecurityError");
+    };
+    Storage.prototype.getItem = deny;
+    Storage.prototype.setItem = deny;
+    Storage.prototype.removeItem = deny;
+    Storage.prototype.clear = deny;
+  });
+  await mockExplorer(page);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/");
+
+  const opener = page.getByRole("button", { name: /Analyze list/i });
+  await opener.focus();
+  await opener.click();
+  const dialog = page.getByRole("dialog", { name: "Analyze a list" });
+  await expect(dialog).toBeVisible();
+
+  // Tab stays inside even with storage denied.
+  for (let i = 0; i < 8; i += 1) {
+    await page.keyboard.press("Tab");
+    const inside = await page.evaluate(() => {
+      const el = document.activeElement;
+      return Boolean(el && el.closest('[role="dialog"]'));
+    });
+    if (!inside) throw new Error(`focus escaped on Tab #${i + 1}`);
+  }
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+});
