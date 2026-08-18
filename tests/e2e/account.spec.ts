@@ -320,3 +320,72 @@ test("auth modal surfaces server errors then the sent state", async ({
     timeout: 10_000,
   });
 });
+
+test("Pro sync pushes local changes and keeps data on backend failure", async ({
+  page,
+}) => {
+  await mockItunesLike(page);
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        user: { id: "u1", email: "pro@example.com", name: "Pro" },
+        plan: "pro",
+        subscription: { status: "active", current_period_end: null, cancel_at_period_end: false },
+      }),
+    });
+  });
+  let syncDown = false;
+  let puts = 0;
+  await page.route("**/api/sync?*", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ revision: 0, json: null, updated_at: null }),
+      });
+      return;
+    }
+    if (syncDown) {
+      await route.fulfill({ status: 503, body: "unavailable" });
+      return;
+    }
+    puts += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ revision: 1, applied: true }),
+    });
+  });
+
+  await page.goto("/");
+  const closeWelcome = page.getByRole("button", { name: /Close welcome dialog/i });
+  try {
+    await closeWelcome.waitFor({ state: "visible", timeout: 3_000 });
+    await closeWelcome.click();
+  } catch {
+    // no onboarding modal
+  }
+  await page.getByRole("button", { name: /Try a sample app/i }).click();
+  await expect(page.locator(".tracker-table tbody tr")).toHaveCount(7, {
+    timeout: 30_000,
+  });
+
+  // The debounced push uploads the local (sample) data.
+  await expect.poll(async () => puts, { timeout: 15_000 }).toBeGreaterThanOrEqual(1);
+
+  // Backend goes down; a local change must still succeed locally.
+  syncDown = true;
+  await page.getByRole("button", { name: /Add Keywords/i }).first().click();
+  await page.getByLabel("Keywords to add").fill("tracked locally");
+  await page.getByRole("button", { name: /Add 1 keyword/i }).click();
+  await expect(page.locator(".tracker-table tbody tr")).toHaveCount(8, {
+    timeout: 20_000,
+  });
+  await page.waitForTimeout(3_000);
+
+  // The failed push did not delete local data.
+  await expect(page.locator(".tracker-table tbody tr")).toHaveCount(8);
+});

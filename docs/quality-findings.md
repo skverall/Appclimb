@@ -57,7 +57,22 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · /api/sync (Pro) · logic (end-to-end coverage)
+
+**Defect:** none found — a Pro user's local tracker changes get pushed to
+/api/sync (debounced), and when the backend returns 503 the push fails
+gracefully without deleting local data.
+**Repro:** e2e: Pro mock, quick-start seeds the sample app, the push fires;
+then the sync endpoint 503s and a locally added keyword persists.
+**Fix:** e2e `Pro sync pushes local changes and keeps data on backend failure`
+(`tests/e2e/account.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Auth modal · ui (error and sent states)
+
 
 **Defect:** none found — a server-side magic-link failure surfaces in the
 dialog ("Email is not configured yet.") and the same form reaches the
