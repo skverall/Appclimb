@@ -1494,3 +1494,28 @@ describe("storage write resilience", () => {
     expect(() => saveTrackerStore(throwing, emptyStore())).not.toThrow();
   });
 });
+
+describe("rank snapshot retention", () => {
+  it("caps stored snapshots at the trailing 90 days", () => {
+    const past = (daysAgo: number) => {
+      const d = new Date();
+      d.setDate(d.getDate() - daysAgo);
+      return d.toISOString().slice(0, 10);
+    };
+    let store = addTrackedApp(emptyStore(), sampleApp).store;
+    for (let i = 100; i >= 0; i -= 1) {
+      store = recordRankSnapshot(store, "123456789", "US", "focus timer", {
+        date: past(i),
+        position: 10,
+        popularity: 50,
+        difficulty: 40,
+        resultsCount: 10,
+        saturated: false,
+        sampledAt: past(i),
+      });
+    }
+    const key = "123456789:US:focus timer";
+    expect(store.snapshots[key]).toBeDefined();
+    expect(store.snapshots[key]).toHaveLength(90);
+  });
+});

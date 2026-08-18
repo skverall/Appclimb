@@ -93,7 +93,22 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · My Apps (tracker) · performance (snapshot retention)
+
+**Defect:** none found — rank snapshots are already capped at the trailing 90
+days of real measurements, so a long-lived keyword cannot grow the local
+store without bound (paired with the explorer 92-day cap and the chat store
+caps).
+**Repro:** unit-level: 101 back-dated snapshots trim to exactly 90.
+**Fix:** unit test `rank snapshot retention caps stored snapshots at 90 days`
+(`src/lib/tracker.test.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — unit green (381 passed).
+
+---
 ## 2026-08-18 · Pre-monetization mode · ui (no gates without accounts)
+
 
 **Defect:** none found — with accounts unconfigured the header shows no sign-in
 chrome, the assistant composer is open (no auth gate), and the explorer renders.
@@ -132,7 +147,22 @@ so a keyboard user can immediately keep typing.
 ---
 ---
 ---
+---
+## 2026-08-18 · My Apps (tracker) · performance (snapshot retention)
+
+**Defect:** none found — rank snapshots are already capped at the trailing 90
+days of real measurements, so a long-lived keyword cannot grow the local
+store without bound (paired with the explorer 92-day cap and the chat store
+caps).
+**Repro:** unit-level: 101 back-dated snapshots trim to exactly 90.
+**Fix:** unit test `rank snapshot retention caps stored snapshots at 90 days`
+(`src/lib/tracker.test.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — unit green (381 passed).
+
+---
 ## 2026-08-18 · Pre-monetization mode · ui (no gates without accounts)
+
 
 **Defect:** none found — with accounts unconfigured the header shows no sign-in
 chrome, the assistant composer is open (no auth gate), and the explorer renders.
