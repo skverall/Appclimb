@@ -10,6 +10,7 @@ import {
   conversationTitleFromMessages,
   createConversation,
   deleteConversation,
+  loadAiChatStore,
   loadChatState,
   loadStoredMessages,
   loadTrackerContext,
@@ -592,5 +593,43 @@ describe("requestAssistantReply failure bodies", () => {
     await expect(
       requestAssistantReply({ message: "hi", history: [], context: null }),
     ).resolves.toMatchObject({ message: "ok" });
+  });
+});
+
+describe("long CJK history", () => {
+  it("caps a 100-message CJK thread to the trailing 80 and titles it", () => {
+    const cjk = Array.from({ length: 100 }, (_, i) => ({
+      id: `cjk-${i}`,
+      role: "user" as const,
+      content: `キーワード提案その${i + 1} —— 瞑想・習慣トラッカー`,
+    }));
+    const store = makeStorage({
+      "appclimb:ai:conversations:v1": JSON.stringify({
+        version: 1,
+        activeId: "c1",
+        conversations: [
+          {
+            id: "c1",
+            title: "旧いチャット",
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-02T00:00:00.000Z",
+            messages: cjk,
+          },
+        ],
+      }),
+    });
+    vi.stubGlobal("window", { localStorage: store });
+    const loaded = loadAiChatStore();
+    const conv = loaded.conversations[0];
+    expect(conv.messages).toHaveLength(80);
+    // The trailing 80 survive: first is message #21, last is #100.
+    expect(conv.messages[0].id).toBe("cjk-20");
+    expect(conv.messages[79].id).toBe("cjk-99");
+    // CJK content renders intact through the sanitizer.
+    expect(conv.messages[0].content).toContain("キーワード提案その21");
+    // Saving again keeps the cap and derives a CJK title.
+    saveStoredMessages(cjk);
+    const state = loadChatState();
+    expect(state.conversations[0].title).toContain("キーワード");
   });
 });

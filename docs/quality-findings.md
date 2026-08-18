@@ -104,7 +104,22 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · ASO Assistant · logic (long CJK history)
+
+**Defect:** none found — a 100-message CJK thread is capped to the trailing 80
+on load and on save, the tail survives intact (messages #21–#100), CJK content
+passes through the sanitizer unchanged, and the conversation title derives
+from the first CJK user message.
+**Repro:** unit-level combo of lenses 6 × 12 (surface C).
+**Fix:** test `long CJK history caps a 100-message thread`
+(`src/lib/ai-chat-client.test.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — unit green (385 passed).
+
+---
 ## 2026-08-18 · My Apps (tracker) · logic (60-char keyword + iTunes failure)
+
 
 **Defect:** none found — a 60-character keyword whose rank lookups are
 rate-limited is added, stays as a row, gets marked honestly (no fake
@@ -318,7 +333,22 @@ so a keyboard user can immediately keep typing.
 ---
 ---
 ---
+---
+## 2026-08-18 · ASO Assistant · logic (long CJK history)
+
+**Defect:** none found — a 100-message CJK thread is capped to the trailing 80
+on load and on save, the tail survives intact (messages #21–#100), CJK content
+passes through the sanitizer unchanged, and the conversation title derives
+from the first CJK user message.
+**Repro:** unit-level combo of lenses 6 × 12 (surface C).
+**Fix:** test `long CJK history caps a 100-message thread`
+(`src/lib/ai-chat-client.test.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — unit green (385 passed).
+
+---
 ## 2026-08-18 · My Apps (tracker) · logic (60-char keyword + iTunes failure)
+
 
 **Defect:** none found — a 60-character keyword whose rank lookups are
 rate-limited is added, stays as a row, gets marked honestly (no fake
