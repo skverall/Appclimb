@@ -63,7 +63,20 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · /api/popularity · logic (e2e note)
+
+**Note:** an attempted e2e asserting the unconfigured-overlay fallback against
+the real route was removed: this environment ships valid Apple Ads
+credentials, so the real `/api/popularity` performs live lookups and returns
+"Apple Ads" — the test flipped with the network. The fallback (configured:false
+→ estimates, never a fake official badge) is already covered by the mocked
+`/api/popularity` `configured:false` tests (refund, bulk, slow-network).
+**Verification:** n/a.
+
+---
 ## 2026-08-18 · ASO Assistant · logic (5th/6th message boundary)
+
 
 **Defect:** none found — with the free daily cap primed to 4, the 5th message
 reaches the server, and the 6th is rejected by the client pre-check before
