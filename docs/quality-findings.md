@@ -60,7 +60,21 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Performance (explorer + chat storage) · audit
+
+**Defect:** none found — storage writes are bounded (chat: 80 messages/thread,
+50 conversations, 48-char titles; explorer history: 92-day cap from the
+earlier fix) and every timer/subscription is cleaned up (suggestions debounce,
+undo timeout, tracker auto-refresh, refresh aborts, sync timers).
+**Repro:** code-level second pass per matrix rules (lens 12).
+**Fix:** n/a — recorded as checked.
+**Status:** checked (local branch, not pushed).
+**Verification:** locally tested.
+
+---
 ## 2026-08-18 · My Apps (tracker) · logic (localized date display)
+
 
 **Defect:** none found — the tracker's last-checked column renders the full
 ISO timestamp through toLocaleString (correct in every timezone), never a
