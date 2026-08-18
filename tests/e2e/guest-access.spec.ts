@@ -119,3 +119,26 @@ test("auth dialog traps keyboard focus and restores it on close", async ({
   await expect(dialog).toHaveCount(0);
   await expect(opener).toBeFocused();
 });
+
+test("auth dialog fits the 320px viewport", async ({ page }) => {
+  await mockGuestAccount(page);
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.goto("/");
+
+  await page.getByRole("button", { name: /^Sign in$/i }).first().click();
+  const dialog = page.getByRole("dialog", { name: /Sign in to AppClimb/i });
+  await expect(dialog).toBeVisible();
+
+  const box = await dialog.boundingBox();
+  expect(box).not.toBeNull();
+  if (box) {
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(320);
+  }
+
+  // The primary fields stay reachable at this width.
+  await expect(page.getByLabel("Email")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Email me a sign-in link/i }),
+  ).toBeVisible();
+});

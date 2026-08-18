@@ -35,7 +35,21 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Auth dialog · ui (viewport guard, 320px)
+
+**Defect:** none found — the sign-in dialog fits the 320px viewport with the
+email field and submit button reachable.
+**Repro:** e2e at 320×640 (second pass per matrix rules).
+**Fix:** e2e `auth dialog fits the 320px viewport`
+(`tests/e2e/guest-access.spec.ts`) — bounding box stays within the viewport
+and the primary fields are visible.
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · iTunes fetches (explorer, tracker, add-app) · logic (hang timeout)
+
 
 **Defect:** The iTunes catalog fetches had no request timeout. A hung request
 (network blackhole, proxy stall) left the explorer's "Analyzing" row and the
