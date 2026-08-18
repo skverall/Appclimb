@@ -73,7 +73,22 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Keyword Explorer · logic (upgrade mid-session, e2e)
+
+**Defect:** none found — an exhausted free quota shows the banner; after the
+mid-session upgrade to Pro (post-checkout refresh), the gate clears and
+analysis proceeds unlimited.
+**Repro:** e2e: prime the day counter to 8, banner shows; flip /api/me to Pro,
+navigate with ?checkout=success → banner gone, analyze works.
+**Fix:** e2e `an upgrade mid-session lifts the explorer quota gate`
+(`tests/e2e/explorer.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · My Apps (tracker) · logic (abort + rate-limit interplay)
+
 
 **Defect:** none found — a 429 is retried with backoff, a non-transient error
 is surfaced, and an AbortError (user cancel or the 15s iTunes timeout) is

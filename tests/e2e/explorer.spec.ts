@@ -714,3 +714,74 @@ test("CJK and cyrillic keywords analyze and render intact", async ({
   await expect(page.locator(ROW)).toHaveCount(2, { timeout: 15_000 });
   await expect(page.locator(ROW).filter({ hasText: "медитация" })).toHaveCount(1);
 });
+
+test("an upgrade mid-session lifts the explorer quota gate", async ({
+  page,
+}) => {
+  await mockExplorer(page);
+  await page.route("**/api/popularity", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ configured: false, results: [] }),
+    });
+  });
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        user: null,
+        plan: "free",
+        subscription: null,
+      }),
+    });
+  });
+
+  await page.goto("/");
+  await page.evaluate(() => {
+    const day = new Date().toISOString().slice(0, 10);
+    window.localStorage.setItem(
+      "appclimb:explorer:day",
+      JSON.stringify({ day, count: 8 }),
+    );
+  });
+  await page.reload();
+  await expect(page.getByText(/You've used your 8 free keyword checks/)).toBeVisible();
+
+  // The user upgrades: /api/me reports Pro after the post-checkout refresh.
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        user: { id: "u1", email: "pro@example.com", name: "Pro" },
+        plan: "pro",
+        subscription: { status: "active", current_period_end: null, cancel_at_period_end: false },
+      }),
+    });
+  });
+  await page.route("**/api/sync?*", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ revision: 0, json: null, updated_at: null }),
+    });
+  });
+  await page.goto("/?checkout=success");
+
+  // The gate banner clears and analysis works without limit.
+  await expect(page.getByText(/You've used your 8 free keyword checks/)).toHaveCount(0);
+  const closeWelcome = page.getByRole("button", { name: /Close welcome dialog/i });
+  try {
+    await closeWelcome.waitFor({ state: "visible", timeout: 3_000 });
+    await closeWelcome.click();
+  } catch {
+    // no onboarding modal
+  }
+  await page.getByPlaceholder(/meditation/).fill("yoga");
+  await page.getByRole("button", { name: "Analyze", exact: true }).click();
+  await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
+});
