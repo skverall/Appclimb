@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-import { expect, test } from "./runtime-test";
+import { dismissExpectedConsoleErrors, expect, test } from "./runtime-test";
 
 const ITUNES = "https://itunes.apple.com";
 
@@ -939,4 +939,39 @@ test("bulk modal keeps the focus trap when localStorage is blocked", async ({
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
   await expect(opener).toBeFocused();
+});
+
+test("exhausted quota plus an unavailable overlay degrades honestly", async ({
+  page,
+}) => {
+  await mockExplorer(page);
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ configured: true, user: null, plan: "free", subscription: null }),
+    });
+  });
+  // The official popularity overlay is down.
+  await page.route("**/api/popularity", async (route) => {
+    await route.fulfill({ status: 500, body: "overlay down" });
+  });
+
+  await page.goto("/");
+  await page.evaluate(() => {
+    const day = new Date().toISOString().slice(0, 10);
+    window.localStorage.setItem("appclimb:explorer:day", JSON.stringify({ day, count: 8 }));
+  });
+  await page.reload();
+  dismissExpectedConsoleErrors(page, [/Failed to load resource.*500/]);
+
+  // The quota banner shows; a further check stays blocked (no row, no fetch
+  // storm), and no Next.js error overlay appears from the failed popularity.
+  await expect(page.getByText(/You've used your 8 free keyword checks/)).toBeVisible();
+  await page.getByPlaceholder(/meditation/).fill("yoga");
+  await page.getByRole("button", { name: "Analyze", exact: true }).click();
+  await expect(page.locator(ROW)).toHaveCount(0);
+  await expect(
+    page.locator("nextjs-portal, [data-nextjs-dialog-overlay]"),
+  ).toHaveCount(0);
 });

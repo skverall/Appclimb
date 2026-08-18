@@ -99,7 +99,23 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Keyword Explorer · logic (quota + overlay combo)
+
+**Defect:** none found — with the guest quota exhausted AND the official
+popularity overlay returning 500, the limit banner still shows, a further
+check stays blocked (no rows, no fetch storm), and no Next.js error overlay
+appears; the overlay failure degrades to estimates cleanly (as covered by the
+configured:false tests).
+**Repro:** e2e combo of lenses 1 × 2.
+**Fix:** e2e `exhausted quota plus an unavailable overlay degrades honestly`
+(`tests/e2e/explorer.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Keyword Explorer · accessibility (focus trap + blocked storage)
+
 
 **Defect:** none found — the bulk-analyze modal keeps its focus trap even when
 localStorage is fully denied: Tab stays inside, Escape closes, and focus
@@ -236,7 +252,23 @@ so a keyboard user can immediately keep typing.
 ---
 ---
 ---
+---
+## 2026-08-18 · Keyword Explorer · logic (quota + overlay combo)
+
+**Defect:** none found — with the guest quota exhausted AND the official
+popularity overlay returning 500, the limit banner still shows, a further
+check stays blocked (no rows, no fetch storm), and no Next.js error overlay
+appears; the overlay failure degrades to estimates cleanly (as covered by the
+configured:false tests).
+**Repro:** e2e combo of lenses 1 × 2.
+**Fix:** e2e `exhausted quota plus an unavailable overlay degrades honestly`
+(`tests/e2e/explorer.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Keyword Explorer · accessibility (focus trap + blocked storage)
+
 
 **Defect:** none found — the bulk-analyze modal keeps its focus trap even when
 localStorage is fully denied: Tab stays inside, Escape closes, and focus
