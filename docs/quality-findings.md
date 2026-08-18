@@ -61,7 +61,22 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Auth (magic-link) · logic (rate-limit surface, second pass)
+
+**Defect:** none found — the client surfaces a server 429 ("Too many sign-in
+emails…") verbatim in the dialog and recovers to the sent state once the
+window passes. The server limiter (5/hour/IP, 10s min-interval, key eviction)
+is covered by unit tests (`rate-limit.test.ts`).
+**Repro:** e2e: mock /api/auth/magic-link 429 then 200.
+**Fix:** e2e `magic-link rate-limit error is surfaced and recovers`
+(`tests/e2e/account.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Performance (explorer + chat storage) · audit
+
 
 **Defect:** none found — storage writes are bounded (chat: 80 messages/thread,
 50 conversations, 48-char titles; explorer history: 92-day cap from the

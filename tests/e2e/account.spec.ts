@@ -390,3 +390,58 @@ test("Pro sync pushes local changes and keeps data on backend failure", async ({
   await expect(page.locator(".tracker-table tbody tr")).toHaveCount(8);
   dismissExpectedConsoleErrors(page, [/Failed to load resource.*503/]);
 });
+
+test("magic-link rate-limit error is surfaced and recovers", async ({
+  page,
+}) => {
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        user: null,
+        plan: "free",
+        subscription: null,
+      }),
+    });
+  });
+  let rateLimited = true;
+  await page.route("**/api/auth/magic-link", async (route) => {
+    if (rateLimited) {
+      await route.fulfill({
+        status: 429,
+        contentType: "application/json",
+        body: JSON.stringify({
+          error: "Too many sign-in emails. Try again later.",
+          retryAfterSec: 3600,
+        }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true, email: "dev@example.com" }),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: /^Sign in$/i }).first().click();
+  await page.getByLabel("Email").fill("dev@example.com");
+  await page.getByRole("button", { name: /Email me a sign-in link/i }).click();
+
+  // The rate-limit response is shown verbatim, not swallowed.
+  await expect(page.locator(".keyword-error")).toContainText(
+    /Too many sign-in emails/i,
+    { timeout: 10_000 },
+  );
+  dismissExpectedConsoleErrors(page, [/Failed to load resource.*429/]);
+
+  // Later (after the window), the same form reaches the sent state.
+  rateLimited = false;
+  await page.getByRole("button", { name: /Email me a sign-in link/i }).click();
+  await expect(page.getByText(/Check your inbox/i)).toBeVisible({
+    timeout: 10_000,
+  });
+});
