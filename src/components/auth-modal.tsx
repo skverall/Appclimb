@@ -60,6 +60,7 @@ export function AuthModal({
   const googleHref = "/api/auth/google";
 
   const sendMagicLink = async () => {
+    if (busy) return;
     const value = email.trim();
     if (!value) {
       setError("Enter your email address.");

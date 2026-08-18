@@ -32,7 +32,28 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Auth + Upgrade · logic (double submit)
+
+**Defect:** `sendMagicLink` (auth modal) and `startCheckout` (upgrade modal)
+had no busy guard: two submits in the same tick (Enter + click, or a forced
+form event before React re-renders the disabled state) sent two magic-link
+emails / opened checkout twice. The buttons' `disabled` state only applies
+after the re-render.
+**Repro:** e2e on `/`: fill the email, submit, then dispatch a second form
+`submit` event directly (bypassing the disabled button) — two
+`/api/auth/magic-link` requests fired before the fix.
+**Root cause:** handlers set `busy` but never checked it on re-entry.
+**Fix:** early `if (busy) return;` in both handlers — single-flight.
+**Protection:** e2e `magic-link submit is single-flight (no double email)`
+(`tests/e2e/account.spec.ts`) — forces a second form submit after the first
+click and asserts exactly one request reached the endpoint.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — lint/typecheck/unit green (352 passed), e2e green.
+
+---
 ## 2026-08-18 · /api/popularity · logic (quota day boundary)
+
 
 **Defect:** The popularity route kept its own rolling-24h daily window (a
 duplicate of the bug fixed in the chat route): a user who hit the 30/day cap

@@ -50,3 +50,49 @@ test("sign-up endpoints degrade gracefully without a backend", async ({
   const sync = await request.get("/api/sync?blob=tracker");
   expect(sync.status()).toBe(503);
 });
+
+test("magic-link submit is single-flight (no double email)", async ({
+  page,
+}) => {
+  let calls = 0;
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        user: null,
+        plan: "free",
+        subscription: null,
+      }),
+    });
+  });
+  await page.route("**/api/auth/magic-link", async (route) => {
+    calls += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true, email: "dev@example.com" }),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: /Sign in/i }).first().click();
+  await expect(page.getByRole("heading", { name: /Sign in/i }).first()).toBeVisible();
+
+  const emailInput = page.getByLabel("Email");
+  await emailInput.fill("dev@example.com");
+  await page.getByRole("button", { name: /Email me a sign-in link/i }).click();
+
+  // Force a second submit through the form event (the button is disabled
+  // after the first click, so only an explicit event can re-enter the handler).
+  await page.evaluate(() => {
+    const form = document.querySelector(".auth-email-form");
+    form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+
+  await expect(page.getByText(/Check your inbox/i)).toBeVisible({
+    timeout: 10_000,
+  });
+  expect(calls).toBe(1);
+});

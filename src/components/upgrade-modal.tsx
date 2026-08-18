@@ -67,6 +67,7 @@ export function UpgradeModal({
   const configured = paddleEnabled() && Boolean(user ? prices[cycle] : true);
 
   const startCheckout = async () => {
+    if (busy) return;
     const priceId = prices[cycle];
     if (!priceId) {
       setError("Checkout is still being configured. Check back shortly.");
