@@ -110,6 +110,44 @@ test("core surfaces have no horizontal overflow at 768px (tablet)", async ({
   }
 });
 
+test("core surfaces have no horizontal overflow at 1024px and 1920px", async ({
+  page,
+}) => {
+  for (const [width, height] of [
+    [1024, 768],
+    [1920, 1080],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+
+    for (const path of ["/", "/assistant", "/pricing", "/app-store-keywords"]) {
+      await page.goto(path);
+      await expect(page.locator("h1").first()).toBeVisible();
+
+      const pageOverflow = await page.evaluate(
+        () =>
+          Math.max(
+            document.documentElement.scrollWidth,
+            document.body.scrollWidth,
+          ) - document.documentElement.clientWidth,
+      );
+      expect(
+        pageOverflow,
+        `horizontal overflow on ${path} at ${width}px: ${pageOverflow}px`,
+      ).toBeLessThanOrEqual(0);
+
+      // At ≥900px the assistant history sidebar is open by default; the
+      // composer must still fit and stay reachable beside it.
+      if (path === "/assistant") {
+        await expect(page.getByLabel("Message the ASO assistant")).toBeVisible();
+        await expect(page.getByLabel("Toggle chat history")).toHaveAttribute(
+          "aria-pressed",
+          "true",
+        );
+      }
+    }
+  }
+});
+
 test("articles expose canonical metadata and parseable JSON-LD", async ({
   page,
 }) => {

@@ -33,7 +33,23 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Core surfaces · ui (viewport guard, desktop pass)
+
+**Defect:** none found at 1024×768 and 1920×1080 on `/`, `/assistant`,
+`/pricing`, `/app-store-keywords` — 0px horizontal overflow; at ≥900px the
+assistant history sidebar opens by default and the composer stays reachable
+beside it.
+**Repro:** e2e at both widths (second pass per matrix rules).
+**Fix:** e2e `core surfaces have no horizontal overflow at 1024px and 1920px`
+(`tests/e2e/public-discovery.spec.ts`) — also asserts the sidebar toggle
+reports `aria-pressed=true` while the history is open.
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Auth + Upgrade · logic (double submit)
+
 
 **Defect:** `sendMagicLink` (auth modal) and `startCheckout` (upgrade modal)
 had no busy guard: two submits in the same tick (Enter + click, or a forced
