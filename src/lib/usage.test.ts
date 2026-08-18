@@ -5,6 +5,7 @@ import {
   EXPLORER_DAY_KEY,
   peekDayUsage,
   readDayUsage,
+  refundDayUsage,
   todayStamp,
 } from "@/lib/usage";
 
@@ -88,9 +89,43 @@ describe("consumeDayUsage", () => {
     expect(consumeDayUsage(storage, EXPLORER_DAY_KEY, 8, NOW).remaining).toBe(6);
   });
 
+  it("marks the counter as consumed only when the write succeeds", () => {
+    expect(consumeDayUsage(storage, EXPLORER_DAY_KEY, 8, NOW).consumed).toBe(true);
+    expect(consumeDayUsage(storage, EXPLORER_DAY_KEY, null, NOW).consumed).toBe(false);
+    const blocked = consumeDayUsage(storage, EXPLORER_DAY_KEY, 8, NOW);
+    expect(blocked.allowed).toBe(true);
+    expect(blocked.consumed).toBe(true);
+  });
+
   it("resets on the next day", () => {
     for (let i = 0; i < 8; i += 1) consumeDayUsage(storage, EXPLORER_DAY_KEY, 8, NOW);
     expect(consumeDayUsage(storage, EXPLORER_DAY_KEY, 8, NOW).allowed).toBe(false);
     expect(consumeDayUsage(storage, EXPLORER_DAY_KEY, 8, TOMORROW).allowed).toBe(true);
+  });
+});
+
+describe("refundDayUsage", () => {
+  let storage: Storage;
+  beforeEach(() => {
+    storage = makeStorage();
+  });
+
+  it("reverses one unit of today's count", () => {
+    for (let i = 0; i < 3; i += 1) consumeDayUsage(storage, EXPLORER_DAY_KEY, 8, NOW);
+    expect(peekDayUsage(storage, EXPLORER_DAY_KEY, NOW)).toBe(3);
+    refundDayUsage(storage, EXPLORER_DAY_KEY, NOW);
+    expect(peekDayUsage(storage, EXPLORER_DAY_KEY, NOW)).toBe(2);
+  });
+
+  it("never ticks below zero", () => {
+    refundDayUsage(storage, EXPLORER_DAY_KEY, NOW);
+    expect(peekDayUsage(storage, EXPLORER_DAY_KEY, NOW)).toBe(0);
+  });
+
+  it("does not touch a previous day's count", () => {
+    consumeDayUsage(storage, EXPLORER_DAY_KEY, 8, NOW);
+    expect(peekDayUsage(storage, EXPLORER_DAY_KEY, TOMORROW)).toBe(0);
+    refundDayUsage(storage, EXPLORER_DAY_KEY, TOMORROW);
+    expect(peekDayUsage(storage, EXPLORER_DAY_KEY, TOMORROW)).toBe(0);
   });
 });

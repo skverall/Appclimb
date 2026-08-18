@@ -206,6 +206,56 @@ test("explorer removal offers undo", async ({ page }) => {
   await expect(page.locator(".metric-bar--popularity").first()).toBeVisible();
 });
 
+test("failed iTunes lookups refund the guest daily check", async ({ page }) => {
+  // Apple is temporarily down: every iTunes lookup fails (500 is tolerated by
+  // the console-error filter), and official popularity is unconfigured.
+  await page.route(`${ITUNES}/**`, async (route) => {
+    await route.fulfill({ status: 500, body: "Service Unavailable" });
+  });
+  await page.route("**/api/popularity", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ configured: false, results: [] }),
+    });
+  });
+
+  const readCount = () =>
+    page.evaluate(() => {
+      const raw = window.localStorage.getItem("appclimb:explorer:day");
+      const day = new Date().toISOString().slice(0, 10);
+      const parsed = raw ? (JSON.parse(raw) as { day: string; count: number }) : null;
+      return { day, count: parsed?.day === day ? parsed.count : 0 };
+    });
+
+  await page.goto("/");
+  await expect(page.getByPlaceholder(/meditation/)).toBeVisible();
+
+  // First attempt fails — the error surfaces and no row lingers.
+  await page.getByPlaceholder(/meditation/).fill("meditation");
+  await page.getByRole("button", { name: "Analyze", exact: true }).click();
+  await expect(page.locator(".keyword-error")).toContainText(
+    /could not analyze/i,
+    { timeout: 15_000 },
+  );
+  await expect(page.locator(ROW)).toHaveCount(0);
+
+  // The failed attempt must not consume one of the 8 daily checks.
+  expect(await readCount()).toMatchObject({ count: 0 });
+
+  // Apple recovers: a real check now consumes exactly one unit.
+  await mockExplorer(page);
+  await page.getByPlaceholder(/meditation/).fill("yoga");
+  await page.getByRole("button", { name: "Analyze", exact: true }).click();
+  await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
+  expect(await readCount()).toMatchObject({ count: 1 });
+
+  // A refresh of the same keyword (already tracked) is not a new check.
+  await page.getByRole("button", { name: /Refresh all/i }).click();
+  await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
+  expect(await readCount()).toMatchObject({ count: 1 });
+});
+
 test("share links analyze the keyword on load", async ({ page }) => {
   await mockExplorer(page);
   await page.goto("/?kw=yoga&country=US");

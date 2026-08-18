@@ -16,7 +16,7 @@ import {
 import { useAccount } from "@/components/account-provider";
 import { proEnabled } from "@/lib/flags";
 import { notifySyncChange } from "@/lib/sync-client";
-import { consumeDayUsage, EXPLORER_DAY_KEY, peekDayUsage } from "@/lib/usage";
+import { consumeDayUsage, EXPLORER_DAY_KEY, peekDayUsage, refundDayUsage } from "@/lib/usage";
 
 import {
   SUPPORTED_COUNTRIES,
@@ -194,12 +194,14 @@ export function KeywordExplorer() {
         window.localStorage,
         targetCountry,
       ).some((item) => item.toLocaleLowerCase() === key);
+      let consumed = false;
       if (!alreadyTracked) {
         const gate = consumeDayUsage(
           window.localStorage,
           EXPLORER_DAY_KEY,
           explorerLimit,
         );
+        consumed = gate.consumed;
         if (!gate.allowed) {
           setLimitHit(true);
           return;
@@ -232,11 +234,15 @@ export function KeywordExplorer() {
         setRecords((previous) => new Map(previous).set(clean, record));
         if (options.open !== false) setSelected(clean);
       } catch (error) {
-        // A failed first check leaves no half-empty row behind.
+        // A failed first check leaves no half-empty row behind and refunds the
+        // daily-check unit it consumed — a failed attempt is not a check.
         if (!alreadyTracked) {
           setKeywords(
             removeKeywordFromList(window.localStorage, targetCountry, clean),
           );
+          if (consumed) {
+            refundDayUsage(window.localStorage, EXPLORER_DAY_KEY);
+          }
           notifySyncChange("explorer");
         }
         if (options.throwOnError) throw error;

@@ -44,6 +44,8 @@ export function readDayUsage(storage: Storage, key: string, now: Date = new Date
 export interface ConsumeResult {
   allowed: boolean;
   remaining: number;
+  /** True when the counter was actually incremented (write succeeded). */
+  consumed: boolean;
 }
 
 /**
@@ -57,19 +59,52 @@ export function consumeDayUsage(
   now: Date = new Date(),
 ): ConsumeResult {
   if (limit === null) {
-    return { allowed: true, remaining: Number.POSITIVE_INFINITY };
+    return {
+      allowed: true,
+      remaining: Number.POSITIVE_INFINITY,
+      consumed: false,
+    };
   }
   const usage = readDayUsage(storage, key, now);
   if (usage.count >= limit) {
-    return { allowed: false, remaining: 0 };
+    return { allowed: false, remaining: 0, consumed: false };
   }
   const next: DayUsage = { day: usage.day, count: usage.count + 1 };
   try {
     storage.setItem(key, JSON.stringify(next));
   } catch {
     // Storage full or unavailable — fail open rather than block the tool.
+    return {
+      allowed: true,
+      remaining: limit - usage.count,
+      consumed: false,
+    };
   }
-  return { allowed: true, remaining: limit - next.count };
+  return {
+    allowed: true,
+    remaining: limit - next.count,
+    consumed: true,
+  };
+}
+
+/**
+ * Reverse one unit of a daily quota. A failed attempt is not a check, so a
+ * caller that consumed for an operation that then errored may refund it.
+ * Never ticks below zero and only touches today's count.
+ */
+export function refundDayUsage(
+  storage: Storage,
+  key: string,
+  now: Date = new Date(),
+): void {
+  const usage = readDayUsage(storage, key, now);
+  if (usage.count <= 0) return;
+  const next: DayUsage = { day: usage.day, count: usage.count - 1 };
+  try {
+    storage.setItem(key, JSON.stringify(next));
+  } catch {
+    // Storage full or unavailable — keep the count as-is rather than crash.
+  }
 }
 
 /** Current count today without consuming. */
