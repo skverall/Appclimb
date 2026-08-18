@@ -47,7 +47,29 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Keyword Explorer · accessibility (focus after remove/Undo)
+
+**Defect:** Removing a row by keyboard dropped focus to <body> — the Undo
+bar appeared but focus never moved to it, and after Undo (or the 6s
+auto-dismiss) focus was left nowhere, so a keyboard-only user had to Tab
+blindly to continue.
+**Repro:** e2e: focus "Remove meditation", press Enter — activeElement fell
+to <body>; the Undo button was not focused.
+**Root cause:** `removeRow`/`undoRemove`/the auto-dismiss timeout never
+managed focus.
+**Fix:** focus moves to the Undo button when the bar appears, back to the
+search input after Undo, and to the search input when the bar auto-dismisses
+while focused.
+**Protection:** e2e `keyboard removal moves focus to Undo and restores to the
+search box` (`tests/e2e/explorer.spec.ts`) — Enter removes, Undo is focused,
+Enter restores, and the search input receives focus.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — lint/typecheck/unit green (361 passed), e2e green.
+
+---
 ## 2026-08-18 · Keyword Explorer · logic (CSV date hydration)
+
 
 **Defect:** The CSV `last_checked_at` column alternated formats: a fresh
 check wrote the full ISO timestamp (`2026-08-18T10:00:00.000Z`) while a

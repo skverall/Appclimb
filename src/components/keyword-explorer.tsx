@@ -109,6 +109,7 @@ export function KeywordExplorer() {
   const [refreshVersion, setRefreshVersion] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
   const searchFormRef = useRef<HTMLFormElement>(null);
+  const undoRef = useRef<HTMLButtonElement>(null);
   const restoreInputRef = useRef<HTMLInputElement>(null);
   const undoTimeoutRef = useRef<number | null>(null);
   const shareInitRef = useRef(false);
@@ -332,6 +333,10 @@ export function KeywordExplorer() {
         window.clearTimeout(undoTimeoutRef.current);
       }
       undoTimeoutRef.current = window.setTimeout(() => {
+        // The bar disappears on its own; keep focus from dropping to <body>.
+        if (undoRef.current === document.activeElement) {
+          searchRef.current?.focus();
+        }
         setUndoState(null);
         undoTimeoutRef.current = null;
       }, 6000);
@@ -376,6 +381,9 @@ export function KeywordExplorer() {
       setRecords((previous) => new Map(previous).set(keyword, stashedRecord));
     }
     setUndoState(null);
+    // Keyboard users removed the row and restored it; land focus back on the
+    // primary input instead of leaving it on a button that just unmounted.
+    searchRef.current?.focus();
   }, [undoState, country]);
 
   const exportCsv = useCallback(() => {
@@ -470,6 +478,14 @@ export function KeywordExplorer() {
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [suggestionsOpen]);
+
+  /* Move focus to the Undo action when a row is removed, so keyboard users
+     can restore with one keystroke instead of dropping to <body>. */
+  useEffect(() => {
+    if (!undoState) return undefined;
+    const frame = requestAnimationFrame(() => undoRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [undoState]);
 
   const goldenCount = useMemo(
     () =>
@@ -741,7 +757,7 @@ export function KeywordExplorer() {
         {undoState && (
           <div className="keyword-undo-bar" role="status">
             <span>Removed “{undoState.keyword}”</span>
-            <button type="button" onClick={undoRemove}>
+            <button ref={undoRef} type="button" onClick={undoRemove}>
               Undo
             </button>
           </div>

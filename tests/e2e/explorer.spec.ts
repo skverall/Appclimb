@@ -552,3 +552,28 @@ test("a 60-character keyword does not overflow the page", async ({ page }) => {
     `320px detail overflow: ${detailOverflow}px`,
   ).toBeLessThanOrEqual(0);
 });
+
+test("keyboard removal moves focus to Undo and restores to the search box", async ({
+  page,
+}) => {
+  await mockExplorer(page);
+  await page.goto("/");
+
+  await page.getByPlaceholder(/meditation/).fill("meditation");
+  await page.getByRole("button", { name: "Analyze", exact: true }).click();
+  await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
+
+  // Keyboard flow: focus the row's remove action and activate it.
+  await page.getByRole("button", { name: /Remove meditation/i }).focus();
+  await page.keyboard.press("Enter");
+
+  // Focus follows the action: the Undo button receives it.
+  const undo = page.getByRole("button", { name: "Undo" });
+  await expect(undo).toBeVisible();
+  await expect(undo).toBeFocused();
+
+  // One Enter restores the row, and focus lands on the search input.
+  await page.keyboard.press("Enter");
+  await expect(page.locator(ROW)).toHaveCount(1);
+  await expect(page.getByLabel("Search keywords")).toBeFocused();
+});
