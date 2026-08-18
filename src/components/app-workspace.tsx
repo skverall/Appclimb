@@ -227,6 +227,12 @@ export function AppWorkspace() {
   const handleTrackInStorefront = (country: string) => {
     if (!activeApp) return;
     if (!requireAccount("track")) return;
+    // A storefront variant of a tracked app is a new tracked entry: it counts
+    // against the plan's tracked-app limit just like any other add path.
+    if (atAppLimit()) {
+      openUpgrade();
+      return;
+    }
     const {
       store: next,
       added,

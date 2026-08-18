@@ -438,6 +438,80 @@ test("second app stays isolated; Apple errors preserve prior metrics", async ({
   await expect(targetRow.locator(".tracker-position")).toHaveText(/[#>\d]/);
 });
 
+test("free plan cannot exceed the 1-app limit by tracking extra storefronts", async ({
+  page,
+}) => {
+  await mockItunes(page);
+
+  // Simulate a live account backend: a signed-in free user (1 tracked app).
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        user: { id: "user-free-1", email: "free@example.com", name: null },
+        plan: "free",
+        limits: {
+          explorerChecksPerDay: 8,
+          aiMessagesPerDay: 5,
+          popularityPerDay: 30,
+          trackedApps: 1,
+          keywordsPerApp: 25,
+          historyDays: 30,
+          cloudSync: false,
+        },
+        subscription: null,
+      }),
+    });
+  });
+  // Official popularity overlay: present but returning no official hits, so
+  // rows stay honestly labeled as estimates.
+  await page.route("**/api/popularity", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ configured: true, country: "US", results: [] }),
+    });
+  });
+
+  await page.goto("/");
+
+  // Signed-in free user sees the welcome wizard; dismiss it.
+  await expect(
+    page.getByRole("heading", { name: /Welcome to AppClimb/i }),
+  ).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("button", { name: /Not now/i }).click();
+
+  // Track the first app (US) at the 1-app free limit.
+  await page.getByRole("button", { name: /Add App/i }).first().click();
+  await page.getByLabel("Search for an app").fill("Calm Focus");
+  await page.getByRole("button", { name: "Search" }).click();
+  await expect(
+    page.getByRole("button", { name: /Add Calm Focus/i }),
+  ).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("button", { name: /Add Calm Focus/i }).click();
+  await expect(
+    page.getByRole("heading", { name: /Keyword suggestions/i }),
+  ).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("button", { name: /Add selected/i }).click();
+  await expect(page.getByRole("heading", { name: "Calm Focus" })).toBeVisible({
+    timeout: 20_000,
+  });
+
+  // Exactly one tracked entry so far.
+  await expect(page.locator(".tracker-app-pill-list .tracker-app-pill")).toHaveCount(1);
+
+  // Track the same app in another storefront: the free plan must refuse the
+  // second entry and point the user at Pro instead of silently exceeding the
+  // 1-app limit.
+  await page.getByLabel("Track this app in another storefront").selectOption("DE");
+  await expect(
+    page.getByRole("heading", { name: /Upgrade to Pro/i }),
+  ).toBeVisible();
+  await expect(page.locator(".tracker-app-pill-list .tracker-app-pill")).toHaveCount(1);
+});
+
 test("mobile layout keeps tracker actions reachable", async ({ page }) => {
   await mockItunes(page);
   await page.setViewportSize({ width: 390, height: 844 });
