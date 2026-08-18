@@ -491,3 +491,47 @@ test("history window follows the plan: 30 days free, 90 on Pro", async ({
   await openDetail();
   await expect(page.getByText(/60 days · Est\./i)).toBeVisible();
 });
+
+test("a 60-character keyword does not overflow the page", async ({ page }) => {
+  await mockExplorer(page);
+  await page.goto("/");
+
+  const longKeyword = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghij";
+  await page.getByPlaceholder(/meditation/).fill(longKeyword);
+  await page.getByRole("button", { name: "Analyze", exact: true }).click();
+  await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
+
+  const overflow = await page.evaluate(
+    () =>
+      Math.max(
+        document.documentElement.scrollWidth,
+        document.body.scrollWidth,
+      ) - document.documentElement.clientWidth,
+  );
+  expect(overflow, `horizontal overflow: ${overflow}px`).toBeLessThanOrEqual(0);
+
+  // The keyword text itself stays within the table card.
+  const nameBox = await page.locator(".keyword-name").first().boundingBox();
+  const tableBox = await page.locator(".keyword-table").boundingBox();
+  if (nameBox && tableBox) {
+    expect(nameBox.x + nameBox.width).toBeLessThanOrEqual(
+      tableBox.x + tableBox.width + 1,
+    );
+  }
+
+  // Same keyword on a 320px viewport must not push the page sideways.
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.reload();
+  await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
+  const narrowOverflow = await page.evaluate(
+    () =>
+      Math.max(
+        document.documentElement.scrollWidth,
+        document.body.scrollWidth,
+      ) - document.documentElement.clientWidth,
+  );
+  expect(
+    narrowOverflow,
+    `320px horizontal overflow: ${narrowOverflow}px`,
+  ).toBeLessThanOrEqual(0);
+});

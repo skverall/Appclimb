@@ -2931,6 +2931,9 @@ img {
   color: var(--ink);
   display: block;
   line-height: 1.3;
+  /* Long keywords (up to 80 chars, often without spaces) must wrap inside
+     the cell instead of pushing the table wider than the viewport. */
+  overflow-wrap: anywhere;
 }
 
 /* AI Chat Page & Shell (ChatGPT/Claude Style) */

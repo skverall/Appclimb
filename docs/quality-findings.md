@@ -44,7 +44,27 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Keyword Explorer · ui (long keywords overflow at 320px)
+
+**Defect:** A keyword without spaces (up to 80 chars allowed) pushed the table
+wider than the viewport: at 320px a 60-char keyword produced 299px of
+horizontal page overflow — the whole page scrolled sideways.
+**Repro:** e2e at 320×640: analyze a 60-char no-space keyword → 299px
+overflow; at 1440px the same row fits.
+**Root cause:** `.keyword-name` had no wrapping rule; an unbroken string could
+not break inside the cell.
+**Fix:** `overflow-wrap: anywhere` on `.keyword-name` — long keywords wrap
+inside the cell at any width.
+**Protection:** e2e `a 60-character keyword does not overflow the page`
+(`tests/e2e/explorer.spec.ts`) — asserts 0px overflow at 1440px AND 320px,
+and that the name stays inside the table card.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Storage layer (explorer + tracker) · logic (blocked storage)
+
 
 **Defect:** `loadKeywordList`, `loadRecord`, `exportExplorerBackup`, and
 `loadTrackerStore` called `storage.getItem` outside a try/catch. In a blocked
