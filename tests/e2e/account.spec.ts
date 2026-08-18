@@ -455,3 +455,66 @@ test("magic-link rate-limit error is surfaced and recovers", async ({
     timeout: 10_000,
   });
 });
+
+test("Pro sign out flushes local data to the cloud before clearing", async ({
+  page,
+}) => {
+  await mockItunesLike(page);
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        user: { id: "u1", email: "pro@example.com", name: "Pro" },
+        plan: "pro",
+        subscription: { status: "active", current_period_end: null, cancel_at_period_end: false },
+      }),
+    });
+  });
+  let puts = 0;
+  await page.route("**/api/sync?*", async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ revision: 0, json: null, updated_at: null }),
+      });
+      return;
+    }
+    puts += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ revision: puts, applied: true }),
+    });
+  });
+
+  await page.goto("/");
+  const closeWelcome = page.getByRole("button", { name: /Close welcome dialog/i });
+  try {
+    await closeWelcome.waitFor({ state: "visible", timeout: 3_000 });
+    await closeWelcome.click();
+  } catch {
+    // no onboarding modal
+  }
+  await page.getByRole("button", { name: /Try a sample app/i }).click();
+  await expect(page.locator(".tracker-table tbody tr")).toHaveCount(7, {
+    timeout: 30_000,
+  });
+  const hadLocal = await page.evaluate(
+    () => Boolean(window.localStorage.getItem("appclimb:tracker:v1")),
+  );
+  expect(hadLocal).toBe(true);
+
+  // Pro sign out needs no confirmation: it flushes pending local data first.
+  await page.getByRole("button", { name: /Pro/i }).first().click();
+  await page.getByRole("menuitem", { name: /Sign out/i }).click();
+  await expect(page.getByText(/Signed out/i).first()).toBeVisible({
+    timeout: 10_000,
+  });
+  expect(puts).toBeGreaterThanOrEqual(1);
+  expect(
+    await page.evaluate(() => window.localStorage.getItem("appclimb:tracker:v1")),
+  ).toBeNull();
+});

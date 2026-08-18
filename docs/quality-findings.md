@@ -80,7 +80,21 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Auth (sign out) · logic (Pro flush, second pass)
+
+**Defect:** none found — a Pro sign out flushes pending local data to the
+cloud (≥1 PUT to /api/sync) before clearing this device, then shows the
+"Signed out" notice; the local tracker store is gone afterwards.
+**Repro:** e2e second pass per matrix rules.
+**Fix:** e2e `Pro sign out flushes local data to the cloud before clearing`
+(`tests/e2e/account.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Keyword Explorer · security (shared-URL keyword, second pass)
+
 
 **Defect:** none found — a shared keyword containing HTML renders as literal
 React text; no element is injected via the share URL.
