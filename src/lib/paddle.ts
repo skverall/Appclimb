@@ -141,8 +141,14 @@ export function extractSubscriptionInfo(data: Record<string, unknown>): PaddleSu
   let priceId: string | null = null;
   const items = data.items;
   if (Array.isArray(items) && items.length > 0) {
-    const first = items[0] as { price_id?: unknown };
-    if (first && typeof first.price_id === "string") priceId = first.price_id;
+    const first = items[0] as { price_id?: unknown; price?: { id?: unknown } };
+    // Webhooks (API v1) nest the price entity under `items[].price.id`;
+    // the REST API surface uses `items[].price_id`. Accept both.
+    if (typeof first.price_id === "string") {
+      priceId = first.price_id;
+    } else if (first.price && typeof first.price.id === "string") {
+      priceId = first.price.id;
+    }
   }
 
   let currentPeriodEnd: string | null = null;
