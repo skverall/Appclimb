@@ -20,6 +20,7 @@ import { SuggestionsModal } from "@/components/suggestions-modal";
 import { TrackerDetail } from "@/components/tracker-detail";
 import { Sparkline } from "@/components/keyword-charts";
 import { useAccount } from "@/components/account-provider";
+import { proEnabled } from "@/lib/flags";
 import { SUPPORTED_COUNTRIES, formatAsoKeywordField } from "@/lib/aso";
 import {
   enrichAnalysisResult,
@@ -174,8 +175,11 @@ export function TrackerView({
   const autoRefreshDone = useRef<string | null>(null);
   const storeRef = useRef(store);
 
-  const { account } = useAccount();
-  const keywordLimit = account.limits.keywordsPerApp;
+  const { account, accountsLive } = useAccount();
+  // Same plan gate as the workspace: before accounts are live the tool keeps
+  // the pre-monetization shape, so no keyword cap applies (null = unlimited).
+  const limitsOn = proEnabled() || accountsLive;
+  const keywordLimit = limitsOn ? account.limits.keywordsPerApp : null;
 
   useEffect(() => {
     storeRef.current = store;
@@ -1200,13 +1204,21 @@ export function TrackerView({
           );
           onStoreChange(next);
           setAddKeywordsOpen(false);
-          if (capped) {
+          // The cap notice is set after the refresh: refreshKeywords clears
+          // transient errors when it starts, which would otherwise swallow
+          // this message before the user ever sees it.
+          if (added.length > 0) {
+            void refreshKeywords(added.map((row) => row.keyword)).then(() => {
+              if (capped) {
+                setError(
+                  `Free plan tracks up to ${keywordLimit} keywords per app. Upgrade to Pro for unlimited keywords.`,
+                );
+              }
+            });
+          } else if (capped) {
             setError(
               `Free plan tracks up to ${keywordLimit} keywords per app. Upgrade to Pro for unlimited keywords.`,
             );
-          }
-          if (added.length > 0) {
-            void refreshKeywords(added.map((row) => row.keyword));
           }
         }}
       />
@@ -1226,13 +1238,20 @@ export function TrackerView({
           );
           onStoreChange(next);
           setSuggestionsOpen(false);
-          if (capped) {
+          // Same ordering as the Add Keywords handler: the cap notice must
+          // survive the refresh, which clears transient errors on start.
+          if (added.length > 0) {
+            void refreshKeywords(added.map((row) => row.keyword)).then(() => {
+              if (capped) {
+                setError(
+                  `Free plan tracks up to ${keywordLimit} keywords per app. Upgrade to Pro for unlimited keywords.`,
+                );
+              }
+            });
+          } else if (capped) {
             setError(
               `Free plan tracks up to ${keywordLimit} keywords per app. Upgrade to Pro for unlimited keywords.`,
             );
-          }
-          if (added.length > 0) {
-            void refreshKeywords(added.map((row) => row.keyword));
           }
         }}
       />

@@ -533,3 +533,62 @@ test("mobile layout keeps tracker actions reachable", async ({ page }) => {
     expect(box.x + box.width).toBeLessThanOrEqual(390 + 1);
   }
 });
+
+test("keyword cap applies only when plan limits are live", async ({ page }) => {
+  const paste26 = Array.from(
+    { length: 26 },
+    (_, i) => `keyword ${i + 1}`,
+  ).join("\n");
+
+  async function seedSampleApp() {
+    const welcome = page.getByRole("dialog", { name: /Welcome to AppClimb/i });
+    if (await welcome.isVisible().catch(() => false)) {
+      await page.getByRole("button", { name: /Close welcome dialog/i }).click();
+    }
+    await page.getByRole("button", { name: /Try a sample app/i }).click();
+    await expect(
+      page.getByRole("heading", { name: /Car Dealer Tracker: Profit/i }),
+    ).toBeVisible({ timeout: 15_000 });
+  }
+
+  async function pasteAndConfirm() {
+    await page.getByRole("button", { name: /Add Keywords/i }).first().click();
+    await expect(page.getByRole("dialog", { name: "Add Keywords" })).toBeVisible();
+    await page.getByLabel("Keywords to add").fill(paste26);
+    await page.getByRole("button", { name: /Add 26 keywords/i }).click();
+  }
+
+  // Pre-monetization mode (no /api/me mock): the tool stays unlimited — no
+  // phantom "Free plan tracks up to 25 keywords" cap may appear.
+  await mockItunes(page);
+  await page.goto("/");
+  await seedSampleApp();
+  await pasteAndConfirm();
+  await expect(page.locator(".tracker-table tbody tr")).toHaveCount(33, {
+    timeout: 20_000,
+  });
+  await expect(
+    page.getByText(/Free plan tracks up to 25 keywords per app/i),
+  ).toHaveCount(0);
+
+  // Live free account: the real 25-per-app cap applies and explains itself.
+  await page.evaluate(() => window.localStorage.clear());
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        user: { id: "u1", email: "dev@example.com", name: "Dev" },
+        plan: "free",
+        subscription: null,
+      }),
+    });
+  });
+  await page.goto("/");
+  await seedSampleApp();
+  await pasteAndConfirm();
+  await expect(
+    page.getByText(/Free plan tracks up to 25 keywords per app/i),
+  ).toBeVisible({ timeout: 10_000 });
+});

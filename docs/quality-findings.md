@@ -26,7 +26,37 @@ Rules:
   item or a fresh surface, never re-litigates closed ones.
 
 ---
+---
+## 2026-08-18 · My Apps (tracker keywords) · logic (plan gate + swallowed error)
+
+**Defect:** Two bugs in the tracker's keyword cap:
+1. Pre-monetization mode (PRO_ENABLED off, accounts not configured) applied a
+   phantom 25-keyword-per-app cap: TrackerView computed `keywordLimit =
+   account.limits.keywordsPerApp` directly, while the workspace gates limits
+   behind `limitsOn` (null = unlimited). A local/CI user was hard-capped with
+   an "Upgrade to Pro" message in a mode where upgrade does not exist.
+2. The cap message never displayed even when limits were live: `onConfirm`
+   called `setError(cap message)` and then `refreshKeywords(...)`, which
+   starts with `setError(null)` — the message was cleared in the same event
+   and silently lost. The cap applied but the user got no explanation.
+**Repro:** e2e on `/`: quick-start the sample app; live free account → paste
+26 keywords → confirm: rows capped at 25 but no error text. Without /api/me →
+same flow capped at 25 in pre-monetization mode.
+**Root cause:** `tracker-view.tsx:178` (no `limitsOn` gate) and the
+`setError` → `refreshKeywords` ordering in both modal onConfirm handlers.
+**Fix:** TrackerView now gates `keywordLimit` exactly like the workspace
+(`proEnabled() || accountsLive`); the cap notice is set after the refresh
+completes (or immediately when nothing was added), so it survives.
+**Protection:** e2e `keyword cap applies only when plan limits are live`
+(`tests/e2e/app-tracker.spec.ts`) — asserts 33 rows and no cap error in
+pre-monetization mode, and the visible 25-cap message for a live free account.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — lint/typecheck/unit green (347 passed),
+e2e green.
+
+---
 ## 2026-08-18 · Account plumbing (header, composer) · logic (failure path)
+
 
 **Defect:** `fetchAccountState`, `requestMagicLink`, and `fetchPortalLinks` had
 no request timeout. With `/api/me` hanging (unreachable backend, proxy
