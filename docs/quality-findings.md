@@ -56,7 +56,21 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Auth modal · ui (error and sent states)
+
+**Defect:** none found — a server-side magic-link failure surfaces in the
+dialog ("Email is not configured yet.") and the same form reaches the
+"Check your inbox" sent state once the backend recovers.
+**Repro:** e2e: mock /api/auth/magic-link 503 then 200.
+**Fix:** e2e `auth modal surfaces server errors then the sent state`
+(`tests/e2e/account.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · ASO Assistant · ui (viewport guard, sidebar 1024px)
+
 
 **Defect:** none found — with the history sidebar open at 1024px, a full
 send/receive cycle and a conversation switch work with 0px overflow and the

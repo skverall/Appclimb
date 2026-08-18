@@ -1,4 +1,4 @@
-import { expect, test } from "./runtime-test";
+import { dismissExpectedConsoleErrors, expect, test } from "./runtime-test";
 
 // Minimal iTunes catalog + icon mocks so tracker flows can run here too.
 async function mockItunesLike(page: import("@playwright/test").Page) {
@@ -264,4 +264,59 @@ test("manage subscription opens the portal links for a canceled Pro plan", async
     () => (window as unknown as { __openedUrl?: string }).__openedUrl ?? "",
   );
   expect(opened).toBe("https://paddle.example/update");
+});
+
+test("auth modal surfaces server errors then the sent state", async ({
+  page,
+}) => {
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        user: null,
+        plan: "free",
+        subscription: null,
+      }),
+    });
+  });
+  let magicOk = false;
+  await page.route("**/api/auth/magic-link", async (route) => {
+    if (!magicOk) {
+      await route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({
+          error: "Email is not configured yet.",
+          configured: false,
+        }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ ok: true, email: "dev@example.com" }),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: /^Sign in$/i }).first().click();
+  await page.getByLabel("Email").fill("dev@example.com");
+  await page.getByRole("button", { name: /Email me a sign-in link/i }).click();
+
+  // The server-side failure is shown in the dialog, not swallowed.
+  await expect(page.locator(".keyword-error")).toContainText(
+    /Email is not configured yet/i,
+    { timeout: 10_000 },
+  );
+  dismissExpectedConsoleErrors(page, [/Failed to load resource.*503/]);
+
+  // Once the backend recovers, the same form reaches the sent state.
+  magicOk = true;
+  await page.getByRole("button", { name: /Email me a sign-in link/i }).click();
+  await expect(page.getByText(/Check your inbox/i)).toBeVisible({
+    timeout: 10_000,
+  });
 });
