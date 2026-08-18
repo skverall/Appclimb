@@ -62,7 +62,23 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · ASO Assistant · logic (5th/6th message boundary)
+
+**Defect:** none found — with the free daily cap primed to 4, the 5th message
+reaches the server, and the 6th is rejected by the client pre-check before
+any network activity; the draft is preserved for retry.
+**Repro:** e2e: free signed-in account, `appclimb:ai:day` count=4 → 5th send
+succeeds (1 request), 6th send shows the assistant-limit error with no new
+request and the text intact.
+**Fix:** e2e `the 5th free message passes and the 6th is blocked client-side`
+(`tests/e2e/assistant.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Auth (magic-link) · logic (rate-limit surface, second pass)
+
 
 **Defect:** none found — the client surfaces a server 429 ("Too many sign-in
 emails…") verbatim in the dialog and recovers to the sent state once the

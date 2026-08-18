@@ -400,3 +400,59 @@ test("chat works with the history sidebar open at 1024px", async ({ page }) => {
   expect(overflow, `horizontal overflow: ${overflow}px`).toBeLessThanOrEqual(0);
   await expect(page.getByLabel("Message the ASO assistant")).toBeVisible();
 });
+
+test("the 5th free message passes and the 6th is blocked client-side", async ({
+  page,
+}) => {
+  let chatRequests = 0;
+  await page.route("**/api/chat", async (route) => {
+    chatRequests += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ message: "free reply", remainingDay: 1 }),
+    });
+  });
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        user: { id: "u1", email: "free@example.com", name: "Free" },
+        plan: "free",
+        subscription: null,
+      }),
+    });
+  });
+
+  await page.goto("/assistant");
+  // The free quota (5/day) has 4 used: one message left.
+  await page.evaluate(() => {
+    const day = new Date().toISOString().slice(0, 10);
+    window.localStorage.setItem(
+      "appclimb:ai:day",
+      JSON.stringify({ day, count: 4 }),
+    );
+  });
+  await page.reload();
+
+  // The 5th message succeeds.
+  await page.getByLabel("Message the ASO assistant").fill("message five");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText(/free reply/i)).toBeVisible({ timeout: 15_000 });
+  expect(chatRequests).toBe(1);
+
+  // The 6th is rejected by the client pre-check without touching the server;
+  // the draft survives for retry later.
+  await page.getByLabel("Message the ASO assistant").fill("message six");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.locator(".ai-chat-error")).toContainText(
+    /assistant limit/i,
+    { timeout: 10_000 },
+  );
+  expect(chatRequests).toBe(1);
+  await expect(page.getByLabel("Message the ASO assistant")).toHaveValue(
+    "message six",
+  );
+});
