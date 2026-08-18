@@ -88,7 +88,20 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Upgrade/Paddle · ui (modal at 375px)
+
+**Defect:** none found — the upgrade dialog fits 375×812 and the billing-cycle
+toggle is reachable and switches to the yearly price at that width.
+**Repro:** e2e second pass per matrix rules.
+**Fix:** e2e `upgrade modal fits and stays usable at 375px`
+(`tests/e2e/app-tracker.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Keyword Explorer · accessibility+viewport (bulk modal, 375px)
+
 
 **Defect:** none found — the bulk-analyze dialog fits 375×812, Tab cycling
 stays inside it (the focus trap holds after the document-listener fix), and

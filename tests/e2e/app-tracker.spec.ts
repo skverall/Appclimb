@@ -746,3 +746,45 @@ test("free plan enforces the 25-keyword cap exactly", async ({ page }) => {
   ).toBeVisible({ timeout: 10_000 });
   await expect(page.locator(".tracker-table tbody tr")).toHaveCount(25);
 });
+
+test("upgrade modal fits and stays usable at 375px", async ({ page }) => {
+  await mockItunes(page);
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        user: { id: "u1", email: "free@example.com", name: "Free" },
+        plan: "free",
+        subscription: null,
+      }),
+    });
+  });
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/");
+  const closeWelcome = page.getByRole("button", { name: /Close welcome dialog/i });
+  try {
+    await closeWelcome.waitFor({ state: "visible", timeout: 3_000 });
+    await closeWelcome.click();
+  } catch {
+    // no onboarding modal
+  }
+
+  // Seed a tracked app so Add App is disabled?... Instead open Upgrade via the
+  // account menu.
+  await page.getByRole("button", { name: /Free/i }).first().click();
+  await page.getByRole("menuitem", { name: /Upgrade to Pro/i }).click();
+  const dialog = page.getByRole("dialog", { name: /Upgrade to Pro/i });
+  await expect(dialog).toBeVisible();
+
+  const box = await dialog.boundingBox();
+  if (box) {
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(375);
+  }
+
+  // The plan toggle is reachable and switchable at this width.
+  await page.getByRole("tab", { name: /\$64 \/ year/i }).click();
+  await expect(page.getByText(/save 33%/i)).toBeVisible();
+});
