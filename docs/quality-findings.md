@@ -55,7 +55,21 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · ASO Assistant · ui (viewport guard, sidebar 1024px)
+
+**Defect:** none found — with the history sidebar open at 1024px, a full
+send/receive cycle and a conversation switch work with 0px overflow and the
+composer reachable.
+**Repro:** e2e at 1024×768 (interactive second pass per matrix rules).
+**Fix:** e2e `chat works with the history sidebar open at 1024px`
+(`tests/e2e/assistant.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Keyword Explorer · logic (input wipe race while analyzing)
+
 
 **Defect:** While an analysis is in flight, a user who starts typing the next
 keyword had their input wiped: the analyze's `finally` called `setQuery("")`

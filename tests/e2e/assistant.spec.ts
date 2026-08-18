@@ -360,3 +360,43 @@ test("upgrading mid-session unlocks the composer gate", async ({ page }) => {
     timeout: 15_000,
   });
 });
+
+test("chat works with the history sidebar open at 1024px", async ({ page }) => {
+  await page.route("**/api/chat", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ message: "sidebar reply", remainingDay: 19 }),
+    });
+  });
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto("/assistant");
+
+  // The history sidebar is open by default at ≥900px.
+  await expect(page.getByLabel("Toggle chat history")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+
+  // A full send/receive cycle works beside the open sidebar.
+  await page.getByLabel("Message the ASO assistant").fill("hello");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText(/sidebar reply/i)).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(page.locator(".ai-chat-history-list li")).toHaveCount(1);
+
+  // Switching to the first chat keeps the layout intact.
+  await page.locator(".ai-chat-history-list").getByRole("button").first().click();
+  await expect(page.getByText(/sidebar reply/i)).toBeVisible();
+
+  const overflow = await page.evaluate(
+    () =>
+      Math.max(
+        document.documentElement.scrollWidth,
+        document.body.scrollWidth,
+      ) - document.documentElement.clientWidth,
+  );
+  expect(overflow, `horizontal overflow: ${overflow}px`).toBeLessThanOrEqual(0);
+  await expect(page.getByLabel("Message the ASO assistant")).toBeVisible();
+});
