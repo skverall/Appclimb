@@ -68,7 +68,21 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · SEO / schema · ui (JSON-LD coverage, second pass)
+
+**Defect:** none found — all 11 checked pages emit at least one parseable,
+non-empty JSON-LD block (WebSite/Organization on the layout, FAQ/HowTo and
+article schemas on the content pages).
+**Repro:** e2e crawl across every public page (second pass per matrix rules).
+**Fix:** e2e `every page emits parseable, non-empty JSON-LD`
+(`tests/e2e/public-discovery.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · My Apps (tracker) · data-honesty (labels, second pass)
+
 
 **Defect:** none found — the opportunity column is "Opp. · Est.", difficulty is
 "· Est.", the opportunity filter denies "Apple search volume or downloads",

@@ -304,3 +304,47 @@ test("404 page stays usable at 320px", async ({ page }) => {
     page.getByRole("heading", { name: /This page is not in the index/i }),
   ).toBeVisible();
 });
+
+test("every page emits parseable, non-empty JSON-LD", async ({ page }) => {
+  const pages = [
+    "/",
+    "/about",
+    "/pricing",
+    "/app-store-keywords",
+    "/guides/keyword-research",
+    "/blog",
+    "/blog/app-store-conversion-rate",
+    "/privacy",
+    "/terms",
+    "/refunds",
+    "/assistant",
+  ];
+
+  for (const path of pages) {
+    await page.goto(path);
+    const parsed = await page.evaluate(() => {
+      const scripts = Array.from(
+        document.querySelectorAll('script[type="application/ld+json"]'),
+      );
+      return scripts.map((script) => {
+        try {
+          const value = JSON.parse(script.textContent ?? "");
+          return {
+            ok: true,
+            keys: Array.isArray(value) ? [] : Object.keys(value),
+            hasType: Boolean(value && (value["@type"] || Array.isArray(value) && value.some((v) => v?.["@type"]))),
+          };
+        } catch {
+          return { ok: false, keys: [], hasType: false };
+        }
+      });
+    });
+    expect(
+      parsed.length,
+      `${path} should emit at least one JSON-LD block`,
+    ).toBeGreaterThan(0);
+    expect(parsed.every((entry) => entry.ok), `${path} JSON-LD must parse`).toBe(
+      true,
+    );
+  }
+});
