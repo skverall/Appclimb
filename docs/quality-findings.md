@@ -106,7 +106,23 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Marketing shell · copy (CTA second pass)
+
+**Defect:** none found — every marketing CTA names the next step ("Search
+keywords", "Open the keyword explorer", "Try it now", "Open Explorer"); no
+vague "Submit"/"Click here" CTAs, no lorem/TODO copy, and no mixed-language
+JSX text (the ✅ emoji bullets are decoration, not language).
+**Repro:** code-level second pass (lens 9) over app-store-keywords, the guide,
+about, pricing, blog, error, and 404 pages; CTA visibility is already asserted
+by the 1920px marketing e2e.
+**Fix:** n/a — recorded as checked.
+**Status:** checked (local branch, not pushed).
+**Verification:** locally tested.
+
+---
 ## 2026-08-18 · Auth dialog · logic+viewport (magic-link 429 at 320px)
+
 
 **Defect:** none found — at 320×640 the sign-in dialog shows the server 429
 ("Too many sign-in emails…") in its alert, the focus trap holds with the
@@ -349,7 +365,23 @@ so a keyboard user can immediately keep typing.
 ---
 ---
 ---
+---
+## 2026-08-18 · Marketing shell · copy (CTA second pass)
+
+**Defect:** none found — every marketing CTA names the next step ("Search
+keywords", "Open the keyword explorer", "Try it now", "Open Explorer"); no
+vague "Submit"/"Click here" CTAs, no lorem/TODO copy, and no mixed-language
+JSX text (the ✅ emoji bullets are decoration, not language).
+**Repro:** code-level second pass (lens 9) over app-store-keywords, the guide,
+about, pricing, blog, error, and 404 pages; CTA visibility is already asserted
+by the 1920px marketing e2e.
+**Fix:** n/a — recorded as checked.
+**Status:** checked (local branch, not pushed).
+**Verification:** locally tested.
+
+---
 ## 2026-08-18 · Auth dialog · logic+viewport (magic-link 429 at 320px)
+
 
 **Defect:** none found — at 320×640 the sign-in dialog shows the server 429
 ("Too many sign-in emails…") in its alert, the focus trap holds with the
