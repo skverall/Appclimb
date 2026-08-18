@@ -3,8 +3,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { AppleAdsError, lookupSearchTermPopularity, readAppleAdsCredentials } from "@/lib/apple-ads";
 import { isAppleAdsGenre, mapItunesGenre } from "@/lib/apple-ads-genres";
 import { SUPPORTED_COUNTRIES } from "@/lib/aso";
-import { nextUtcMidnightMs } from "@/lib/day-window";
 import { getDb } from "@/lib/db";
+import {
+  consumePopularityRate,
+  emptyPopularityBucket,
+  type PopularityRateBucket,
+} from "@/lib/popularity-quota";
 import type { OfficialPopularity } from "@/lib/popularity";
 import {
   LEGACY_POPULARITY_DAILY,
@@ -18,60 +22,9 @@ export const dynamic = "force-dynamic";
 
 const MAX_ITEMS = 25;
 const MAX_TERM_CHARS = 80;
-const MIN_INTERVAL_MS = 80;
 
-interface RateBucket {
-  dayCount: number;
-  dayReset: number;
-  lastAt: number;
-}
-
-const rateBuckets = new Map<string, RateBucket>();
+const rateBuckets = new Map<string, PopularityRateBucket>();
 const supported = new Set(SUPPORTED_COUNTRIES.map((item) => item.code));
-
-function emptyBucket(now: number): RateBucket {
-  return {
-    dayCount: 0,
-    dayReset: nextUtcMidnightMs(now),
-    lastAt: 0,
-  };
-}
-
-function consumeRate(
-  bucket: RateBucket,
-  now: number,
-  maxPerDay: number,
-): {
-  ok: boolean;
-  reason?: string;
-  retryAfterSec?: number;
-  bucket: RateBucket;
-} {
-  const next = { ...bucket };
-  if (now >= next.dayReset) {
-    next.dayCount = 0;
-    next.dayReset = nextUtcMidnightMs(now);
-  }
-  if (now - next.lastAt < MIN_INTERVAL_MS) {
-    return {
-      ok: false,
-      reason: "Too many popularity lookups. Wait a moment.",
-      retryAfterSec: 1,
-      bucket: next,
-    };
-  }
-  if (Number.isFinite(maxPerDay) && next.dayCount >= maxPerDay) {
-    return {
-      ok: false,
-      reason: "Daily popularity lookup limit reached.",
-      retryAfterSec: Math.max(1, Math.ceil((next.dayReset - now) / 1000)),
-      bucket: next,
-    };
-  }
-  next.dayCount += 1;
-  next.lastAt = now;
-  return { ok: true, bucket: next };
-}
 
 function jsonError(
   status: number,
@@ -141,8 +94,8 @@ export async function POST(request: NextRequest) {
   const maxPerDay = proQuotasEnabled()
     ? popularityDailyLimit(subject.plan)
     : LEGACY_POPULARITY_DAILY;
-  const existing = rateBuckets.get(subject.key) ?? emptyBucket(now);
-  const rate = consumeRate(existing, now, maxPerDay);
+  const existing = rateBuckets.get(subject.key) ?? emptyPopularityBucket(now);
+  const rate = consumePopularityRate(existing, now, maxPerDay);
   rateBuckets.set(subject.key, rate.bucket);
   if (rateBuckets.size > 5_000) {
     const first = rateBuckets.keys().next().value;

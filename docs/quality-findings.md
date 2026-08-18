@@ -41,7 +41,24 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · /api/popularity · logic (quota unit coverage)
+
+**Defect:** none found — the route's daily quota (30/day guest, 500 Pro,
+80ms min interval, UTC-midnight reset) was correct but untestable inline.
+**Repro:** n/a (coverage gap); the 8th/9th-request semantics were only
+verifiable by reading.
+**Fix:** extracted the rate bucket into `src/lib/popularity-quota.ts`
+(`emptyPopularityBucket`/`consumePopularityRate`) and imported it from the
+route; unit tests now cover the 30th-pass/31st-block boundary, the UTC-
+midnight reset, the min-interval gate, and unlimited plans
+(`src/lib/popularity-quota.test.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — lint/typecheck/unit green (358 passed), build green.
+
+---
 ## 2026-08-18 · Marketing shell · ui (viewport guard, mobile nav 375px)
+
 
 **Defect:** none found — the mobile navigation drawer at 375px opens without
 horizontal overflow, every link is reachable, and selecting one closes the

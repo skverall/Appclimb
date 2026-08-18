@@ -268,6 +268,7 @@ test("chat history drawer stays usable at 375px", async ({ page }) => {
   await expect(page.getByText(/drawer reply/i)).toBeVisible({
     timeout: 15_000,
   });
+  expect(calls).toBe(1);
 
   // Open the history drawer on a phone-sized viewport.
   await page.getByRole("button", { name: /Chat history/i }).click();
