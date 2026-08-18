@@ -86,7 +86,20 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · /api/popularity · logic (route-level 429)
+
+**Defect:** none found — with PRO_ENABLED on and mocked credentials, the route
+allows the guest's 30th lookup for an IP and returns 429 on the 31st, with the
+80ms min-interval respected; different IPs have independent buckets.
+**Repro:** unit route tests with frozen `Date.now` (`src/app/api/popularity/route.test.ts`).
+**Fix:** n/a — covered.
+**Status:** covered (local branch, not pushed).
+**Verification:** locally tested — unit green (380 passed).
+
+---
 ## 2026-08-18 · /api/chat · logic (hourly quota 429, route-level)
+
 
 **Defect:** none found — the route returns 429 with a rate-limit error once
 the hourly cap (20/IP) is exhausted, with the 1200ms interval respected.
