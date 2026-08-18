@@ -5,7 +5,7 @@ import { Check, Loader2, LogIn, Sparkles, X } from "lucide-react";
 
 import { useModalFocus } from "@/components/use-modal-focus";
 import type { AccountUser } from "@/lib/account";
-import { openProCheckout, paddleEnabled, proPriceIds } from "@/lib/paddle-client";
+import { openProCheckout, proPriceIds } from "@/lib/paddle-client";
 import { PRO_MONTHLY_USD, PRO_YEARLY_USD } from "@/lib/plan";
 
 type BillingCycle = "monthly" | "yearly";
@@ -64,7 +64,6 @@ export function UpgradeModal({
   if (!open) return null;
 
   const prices = proPriceIds();
-  const configured = paddleEnabled() && Boolean(user ? prices[cycle] : true);
 
   const startCheckout = async () => {
     if (busy) return;
@@ -150,7 +149,10 @@ export function UpgradeModal({
               type="button"
               className="tracker-button-primary large upgrade-cta"
               onClick={() => void startCheckout()}
-              disabled={busy || !configured}
+              // Keep the button clickable even when checkout isn't configured yet:
+              // the startCheckout handler surfaces an honest "still being
+              // configured" error instead of leaving a mysteriously disabled CTA.
+              disabled={busy}
             >
               {busy ? (
                 <Loader2 className="spin" size={16} aria-hidden="true" />

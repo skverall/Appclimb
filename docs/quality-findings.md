@@ -95,7 +95,26 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Upgrade/Paddle · logic (unreachable checkout-error state)
+
+**Defect:** With Paddle unconfigured the upgrade CTA was
+`disabled={busy || !configured}` — the button sat disabled with no reason, and
+the honest `startCheckout` error ("Checkout is still being configured. Check
+back shortly.") was unreachable dead code; a user could not learn why the CTA
+did nothing.
+**Root cause:** `upgrade-modal.tsx` disabled the button on `!configured`.
+**Fix:** the CTA stays enabled (disabled only while busy); the handler now
+surfaces the honest "still being configured" error, and the dead `configured`
+derivation/import were removed.
+**Protection:** unit `paddle-client.test.ts` — `openProCheckout` returns a
+clean not-configured error without throwing when the token env is absent.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — unit green (383 passed).
+
+---
 ## 2026-08-18 · ASO Assistant · logic (raw network error in UI)
+
 
 **Defect:** A network rejection in `requestAssistantReply`'s `fetch` itself
 leaked the browser's raw "Failed to fetch" into the composer error — cryptic
@@ -169,7 +188,26 @@ so a keyboard user can immediately keep typing.
 ---
 ---
 ---
+---
+## 2026-08-18 · Upgrade/Paddle · logic (unreachable checkout-error state)
+
+**Defect:** With Paddle unconfigured the upgrade CTA was
+`disabled={busy || !configured}` — the button sat disabled with no reason, and
+the honest `startCheckout` error ("Checkout is still being configured. Check
+back shortly.") was unreachable dead code; a user could not learn why the CTA
+did nothing.
+**Root cause:** `upgrade-modal.tsx` disabled the button on `!configured`.
+**Fix:** the CTA stays enabled (disabled only while busy); the handler now
+surfaces the honest "still being configured" error, and the dead `configured`
+derivation/import were removed.
+**Protection:** unit `paddle-client.test.ts` — `openProCheckout` returns a
+clean not-configured error without throwing when the token env is absent.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — unit green (383 passed).
+
+---
 ## 2026-08-18 · ASO Assistant · logic (raw network error in UI)
+
 
 **Defect:** A network rejection in `requestAssistantReply`'s `fetch` itself
 leaked the browser's raw "Failed to fetch" into the composer error — cryptic
