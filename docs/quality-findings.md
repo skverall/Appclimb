@@ -26,6 +26,32 @@ Rules:
   item or a fresh surface, never re-litigates closed ones.
 
 ---
+## 2026-08-18 · ASO Assistant · logic/ui (failure paths)
+
+**Defect:** A failed send (network error, server 500/429, or client-side quota
+throw) cleared the composer — the user’s typed draft was lost forever — while
+the optimistic user bubble stayed committed to the thread/history even though
+the message never reached the model. And at 0 messages left the composer
+stayed fully enabled, so every extra send could only fail.
+**Repro:** e2e on `/assistant`: mock `**/api/chat` → 500, type a message, send —
+error banner appears but the textarea is empty and the user bubble lingers.
+Second e2e: mock success `remainingDay:0`, prime the day counter to the cap —
+the textarea/send remain active with no honest “limit reached” state.
+**Root cause:** `ai-chat-conversation.tsx` `send()` called `setInput("")` before
+the request and never restored it in the catch block; the optimistic bubble was
+added before the try and never reverted on failure. The composer conditional
+only handled the guest gate, not a zero-remaining state.
+**Fix:** Clear the draft only on success; on failure, restore `setInput(content)`
+and filter the failed optimistic bubble out of the thread (persisted removal via
+the save effect). The composer now renders an honest daily-limit gate
+(“Today’s messages are used up … resets every 24 hours”) with an Upgrade CTA
+when Pro is enabled, instead of an input that can only error.
+**Protection:** e2e `failed sends keep the draft and do not commit the message`
+and `assistant shows the daily-limit gate at zero remaining messages`
+(`tests/e2e/assistant.spec.ts`). Both failed before the fix, passed after.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — lint/typecheck/unit green (336 passed),
+assistant e2e spec 6/6 green.
 
 ## 2026-08-18 · My Apps (tracked-app add flows) · logic
 

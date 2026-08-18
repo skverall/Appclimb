@@ -104,6 +104,81 @@ test("conversation history: new chat, switch back, delete", async ({
   await expect(historyList.locator("li")).toHaveCount(1);
 });
 
+test("failed sends keep the draft and do not commit the message", async ({
+  page,
+}) => {
+  await page.route("**/api/chat", async (route) => {
+    await route.fulfill({ status: 500, body: "{}" });
+  });
+
+  await page.goto("/assistant");
+  await page
+    .getByLabel("Message the ASO assistant")
+    .fill("a draft that must survive the failure");
+  await page.getByRole("button", { name: "Send" }).click();
+
+  // The error is surfaced, the draft is restored for retry, and the failed
+  // message did not enter the thread/history (it never reached the model).
+  await expect(page.locator(".ai-chat-error")).toContainText(
+    /Assistant request failed/i,
+    { timeout: 15_000 },
+  );
+  await expect(page.getByLabel("Message the ASO assistant")).toHaveValue(
+    "a draft that must survive the failure",
+  );
+  await expect(page.locator(".ai-chat-bubble--user")).toHaveCount(0);
+
+  // A retry from the restored draft works once the backend recovers.
+  await page.route("**/api/chat", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        message: "recovered reply",
+        remainingDay: 19,
+        remainingHour: 5,
+      }),
+    });
+  });
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText(/recovered reply/i)).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(page.getByLabel("Message the ASO assistant")).toHaveValue("");
+  await expect(page.locator(".ai-chat-bubble--user")).toHaveCount(1);
+});
+
+test("assistant shows the daily-limit gate at zero remaining messages", async ({
+  page,
+}) => {
+  await page.route("**/api/chat", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ message: "last reply", remainingDay: 0 }),
+    });
+  });
+
+  await page.goto("/assistant");
+  // Prime the client-side counter to the cap so the next send would be
+  // rejected locally, then hand back a server reply reporting 0 remaining.
+  await page.evaluate(() => {
+    const day = new Date().toISOString().slice(0, 10);
+    window.localStorage.setItem(
+      "appclimb:ai:day",
+      JSON.stringify({ day, count: 59 }),
+    );
+  });
+  await page.getByLabel("Message the ASO assistant").fill("last message");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText(/last reply/i)).toBeVisible({ timeout: 15_000 });
+
+  // With 0 messages left the composer is replaced by an honest limit gate
+  // instead of an always-enabled input that can only fail.
+  await expect(page.getByLabel("Message the ASO assistant")).toHaveCount(0);
+  await expect(page.getByText(/used up/i)).toBeVisible();
+});
+
 test("assistant surfaces rate-limit and local-limit errors", async ({
   page,
 }) => {

@@ -255,7 +255,6 @@ export function AiChatConversation({
       if (!content || busy) return;
 
       setError(null);
-      setInput("");
       if (inputRef.current) {
         inputRef.current.style.height = "auto";
       }
@@ -279,6 +278,8 @@ export function AiChatConversation({
           context: loadTrackerContext(),
           maxPerDay: aiLimit,
         });
+        // The message reached the model — only now is the draft consumed.
+        setInput("");
         if (typeof result.remainingDay === "number") {
           setRemainingDay(result.remainingDay);
         }
@@ -294,6 +295,15 @@ export function AiChatConversation({
         messagesRef.current = withReply;
         setMessages(withReply);
       } catch (err) {
+        // The send failed (network, server, or quota). Restore the draft so
+        // the user can retry without retyping, and drop the optimistic bubble
+        // that never reached the assistant from the thread and history.
+        const reverted = messagesRef.current.filter(
+          (message) => message.id !== userMsg.id,
+        );
+        messagesRef.current = reverted;
+        setMessages(reverted);
+        setInput(content);
         setError(
           err instanceof Error ? err.message : "Could not reach the assistant.",
         );
@@ -620,6 +630,32 @@ export function AiChatConversation({
                 <LogIn size={15} aria-hidden="true" />
                 Sign in free
               </button>
+            </div>
+          ) : aiLimit !== null && remainingDay === 0 ? (
+            <div
+              className="ai-chat-auth-gate"
+              role="region"
+              aria-label="Daily limit reached"
+            >
+              <span className="guest-lock-icon" aria-hidden="true">
+                <Lock size={16} />
+              </span>
+              <div>
+                <strong>Today&rsquo;s messages are used up</strong>
+                <p>
+                  You&rsquo;ve used all {aiLimit} assistant messages for today.
+                  The limit resets every 24 hours.
+                </p>
+              </div>
+              {proOn && (
+                <button
+                  type="button"
+                  className="tracker-button-primary"
+                  onClick={openUpgrade}
+                >
+                  Upgrade for more
+                </button>
+              )}
             </div>
           ) : (
           <form
