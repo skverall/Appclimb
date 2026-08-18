@@ -388,4 +388,5 @@ test("Pro sync pushes local changes and keeps data on backend failure", async ({
 
   // The failed push did not delete local data.
   await expect(page.locator(".tracker-table tbody tr")).toHaveCount(8);
+  dismissExpectedConsoleErrors(page, [/Failed to load resource.*503/]);
 });
