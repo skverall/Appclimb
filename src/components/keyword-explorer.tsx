@@ -118,22 +118,12 @@ export function KeywordExplorer() {
   const explorerLimit =
     proEnabled() || accountsLive ? account.limits.explorerChecksPerDay : null;
   const isGuest = accountsLive && !signedIn && !loading;
-  const [limitHit, setLimitHit] = useState(false);
-
-  // A successful upgrade lifts the cap; clear any stale limit banner.
-  useEffect(() => {
-    if (explorerLimit === null) {
-      let cancelled = false;
-      void (async () => {
-        await Promise.resolve();
-        if (cancelled) return;
-        setLimitHit(false);
-      })();
-      return () => {
-        cancelled = true;
-      };
-    }
-  }, [explorerLimit]);
+  // Derived from the day counter rather than a sticky flag: the limit banner
+  // must clear automatically when the day rolls over (or the plan lifts the
+  // cap) instead of lingering until the next successful check.
+  const limitHit =
+    explorerLimit !== null &&
+    peekDayUsage(window.localStorage, EXPLORER_DAY_KEY) >= explorerLimit;
 
   const countryLabel =
     SUPPORTED_COUNTRIES.find((item) => item.code === country)?.label ?? country;
@@ -203,11 +193,9 @@ export function KeywordExplorer() {
           explorerLimit,
         );
         consumed = gate.consumed;
-        if (!gate.allowed) {
-          setLimitHit(true);
-          return;
-        }
-        setLimitHit(false);
+        // The limit banner is derived from the day counter, so a blocked
+        // attempt needs no state of its own.
+        if (!gate.allowed) return;
       }
 
       setBusy((previous) => new Set(previous).add(key));

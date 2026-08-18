@@ -30,7 +30,34 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Keyword Explorer · logic (quota banner day rollover)
+
+**Defect:** The "you've used your 8 free checks" banner was driven by a sticky
+`limitHit` flag that only cleared on a successful analyze or when the plan
+lifted the cap. A tab left open across UTC midnight kept showing yesterday's
+exhausted banner on the new day, and the remaining-checks indicator stayed
+hidden — the user had to attempt an analyze to discover the fresh budget.
+**Repro:** e2e on `/` with a live free account: prime `appclimb:explorer:day`
+to today+8 → banner shows; rewrite the key to yesterday+8 (midnight passed
+while the tab stayed open); interact → banner persists and checks appear
+blocked until an analyze actually runs.
+**Root cause:** `keyword-explorer.tsx` — `limitHit` as state + set-only
+transitions instead of deriving from the day counter.
+**Fix:** `limitHit` is now computed (`explorerLimit !== null &&
+peekDayUsage(...) >= explorerLimit`), so the banner and indicator always
+reflect the current UTC day and the current plan; the state and the
+setLimitHit calls were removed.
+**Protection:** e2e `limit banner clears when the day rolls over`
+(`tests/e2e/explorer.spec.ts`) — exhausted banner shows, further attempts
+blocked, then after a simulated midnight the banner clears on interaction and
+a successful analyze consumes exactly one fresh check ("7 of 8 left today").
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — lint/typecheck/unit green (350 passed), e2e green.
+
+---
 ## 2026-08-18 · Core surfaces · ui (viewport guard, tablet pass)
+
 
 **Defect:** none found at 768×1024 on `/`, `/assistant`, `/pricing`,
 `/app-store-keywords` — all render with 0px horizontal overflow and the

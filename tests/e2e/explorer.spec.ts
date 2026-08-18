@@ -312,3 +312,60 @@ test("keyword suggestions close on Escape and on outside click", async ({
   await expect(input).toHaveAttribute("aria-controls", "keyword-suggestions");
   await input.press("Escape");
 });
+
+test("limit banner clears when the day rolls over", async ({ page }) => {
+  // Live free account so the 8/day guest cap is enforced.
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        user: null,
+        plan: "free",
+        subscription: null,
+      }),
+    });
+  });
+  await mockExplorer(page);
+
+  const day = new Date().toISOString().slice(0, 10);
+  await page.goto("/");
+  await page.evaluate((stamp) => {
+    window.localStorage.setItem(
+      "appclimb:explorer:day",
+      JSON.stringify({ day: stamp, count: 8 }),
+    );
+  }, day);
+  await page.reload();
+
+  const banner = page.getByText(/You've used your 8 free keyword checks/);
+  await expect(banner).toBeVisible();
+
+  // A further attempt stays blocked while the cap is genuinely exhausted.
+  await page.getByPlaceholder(/meditation/).fill("yoga");
+  await page.getByRole("button", { name: "Analyze", exact: true }).click();
+  await expect(page.locator(ROW)).toHaveCount(0);
+
+  // Midnight passes while the tab stays open: the counter now belongs to
+  // yesterday, so the stale banner must clear on the next interaction and a
+  // fresh day of checks must be available.
+  await page.evaluate(() => {
+    const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    window.localStorage.setItem(
+      "appclimb:explorer:day",
+      JSON.stringify({ day: yesterday, count: 8 }),
+    );
+  });
+  await page.getByPlaceholder(/meditation/).fill("yoga");
+
+  await expect(banner).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Analyze", exact: true }).click();
+  await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
+  // The fresh day's counter is now at 1: the remaining-checks indicator
+  // returns and shows the honest budget.
+  await expect(page.getByText(/7 of 8 free checks left today/i)).toBeVisible();
+});
