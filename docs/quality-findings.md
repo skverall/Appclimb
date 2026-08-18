@@ -26,6 +26,32 @@ Rules:
   item or a fresh surface, never re-litigates closed ones.
 
 ---
+## 2026-08-18 · Keyword Explorer · logic (quota/failure path)
+
+**Defect:** A failed analysis (iTunes non-2xx, network error, throttle)
+consumed one of the guest's 8 daily checks even though no data was delivered.
+A transient Apple outage silently burned limited budget; the user could be
+locked out of searching by failed attempts alone.
+**Repro:** e2e on `/`: mock `https://itunes.apple.com/**` → 500 and
+`/api/popularity` → unconfigured; analyze a keyword → error banner, no row,
+but `appclimb:explorer:day` count incremented to 1.
+**Root cause:** `keyword-explorer.tsx` `analyze()` consumed the daily unit via
+`consumeDayUsage` before the attempt and the catch path only removed the row,
+never returning the unit.
+**Fix:** `consumeDayUsage` now reports whether the write actually happened
+(`consumed`), and a new `refundDayUsage` reverses one unit safely (never below
+zero, today only). The catch path refunds when the failed attempt had consumed.
+Only successful analyses count toward the daily cap; same-key refreshes still
+consume nothing.
+**Protection:** unit tests for `refundDayUsage` (`src/lib/usage.test.ts`) and
+e2e `failed iTunes lookups refund the guest daily check`
+(`tests/e2e/explorer.spec.ts`) — asserts count stays 0 after a failed attempt,
+becomes exactly 1 after a successful one, and stays 1 after a refresh.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — lint/typecheck/unit green (340 passed),
+explorer e2e spec green.
+
+---
 ## 2026-08-18 · ASO Assistant · logic/ui (failure paths)
 
 **Defect:** A failed send (network error, server 500/429, or client-side quota

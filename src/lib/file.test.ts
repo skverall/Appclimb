@@ -20,6 +20,28 @@ describe("csvEscape", () => {
     expect(csvEscape("line1\nline2")).toBe('"line1\nline2"');
     expect(csvEscape("line1\r\nline2")).toBe('"line1\r\nline2"');
   });
+
+  it("neutralizes spreadsheet formula injection (OWASP CSV)", () => {
+    expect(csvEscape("=SUM(A1:A9)")).toBe("'=SUM(A1:A9)");
+    expect(csvEscape("+cmd|'/C calc'!A0")).toBe("'+cmd|'/C calc'!A0");
+    expect(csvEscape("@@SUM")).toBe("'@@SUM");
+    expect(csvEscape("@HYPERLINK(\"http://x\")")).toBe(
+      '"\'@HYPERLINK(""http://x"")"',
+    );
+    expect(csvEscape("-value")).toBe("'-value");
+    expect(csvEscape("\t1+1")).toBe("'\t1+1");
+  });
+
+  it("does not touch legitimately non-formula values", () => {
+    expect(csvEscape("baby-stroller")).toBe("baby-stroller");
+    expect(csvEscape("2+2")).toBe("2+2");
+    expect(csvEscape("-able")).toBe("'-able"); // leading dash is still risky
+    expect(csvEscape("5 + 5")).toBe("5 + 5");
+  });
+
+  it("keeps quoting when a formula-prefixed value also needs quoting", () => {
+    expect(csvEscape('=cmd,foo')).toBe('"\'=cmd,foo"');
+  });
 });
 
 describe("downloadTextFile", () => {
