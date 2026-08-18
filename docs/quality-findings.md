@@ -105,7 +105,21 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Auth dialog · logic+viewport (magic-link 429 at 320px)
+
+**Defect:** none found — at 320×640 the sign-in dialog shows the server 429
+("Too many sign-in emails…") in its alert, the focus trap holds with the
+error visible, and Escape closes the dialog.
+**Repro:** e2e combo of lenses 1 × 4 (surface D).
+**Fix:** e2e `magic-link 429 at 320px: error shows and the trap holds`
+(`tests/e2e/guest-access.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · ASO Assistant · logic (long CJK history)
+
 
 **Defect:** none found — a 100-message CJK thread is capped to the trailing 80
 on load and on save, the tail survives intact (messages #21–#100), CJK content
@@ -334,7 +348,21 @@ so a keyboard user can immediately keep typing.
 ---
 ---
 ---
+---
+## 2026-08-18 · Auth dialog · logic+viewport (magic-link 429 at 320px)
+
+**Defect:** none found — at 320×640 the sign-in dialog shows the server 429
+("Too many sign-in emails…") in its alert, the focus trap holds with the
+error visible, and Escape closes the dialog.
+**Repro:** e2e combo of lenses 1 × 4 (surface D).
+**Fix:** e2e `magic-link 429 at 320px: error shows and the trap holds`
+(`tests/e2e/guest-access.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · ASO Assistant · logic (long CJK history)
+
 
 **Defect:** none found — a 100-message CJK thread is capped to the trailing 80
 on load and on save, the tail survives intact (messages #21–#100), CJK content

@@ -238,3 +238,44 @@ test("pre-monetization mode shows no account chrome and no gates", async ({
   await expect(page.getByLabel("Message the ASO assistant")).toBeVisible();
   await expect(page.getByText(/Sign in to chat/i)).toHaveCount(0);
 });
+
+test("magic-link 429 at 320px: error shows and the trap holds", async ({
+  page,
+}) => {
+  await mockGuestAccount(page);
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.route("**/api/auth/magic-link", async (route) => {
+    await route.fulfill({
+      status: 429,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: "Too many sign-in emails. Try again later.",
+        retryAfterSec: 3600,
+      }),
+    });
+  });
+
+  await page.goto("/");
+  await page.getByRole("button", { name: /^Sign in$/i }).first().click();
+  const dialog = page.getByRole("dialog", { name: /Sign in to AppClimb/i });
+  await expect(dialog).toBeVisible();
+
+  await page.getByLabel("Email").fill("dev@example.com");
+  await page.getByRole("button", { name: /Email me a sign-in link/i }).click();
+  await expect(page.locator(".keyword-error")).toContainText(
+    /Too many sign-in emails/i,
+    { timeout: 10_000 },
+  );
+
+  // The trap holds with the rate-limit error visible at 320px.
+  for (let i = 0; i < 6; i += 1) {
+    await page.keyboard.press("Tab");
+    const inside = await page.evaluate(() => {
+      const el = document.activeElement;
+      return Boolean(el && el.closest('[role="dialog"]'));
+    });
+    if (!inside) throw new Error(`focus escaped on Tab #${i + 1}`);
+  }
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+});
