@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useId } from "react";
+import { useEffect, useId, useRef } from "react";
 import { CloudUpload, ListPlus, Plus, Search, X } from "lucide-react";
+
+import { useModalFocus } from "@/components/use-modal-focus";
 
 export function OnboardingModal({
   open,
@@ -16,6 +18,8 @@ export function OnboardingModal({
   onClose: () => void;
 }) {
   const titleId = useId();
+  const modalRef = useRef<HTMLDivElement>(null);
+  useModalFocus(open, modalRef);
 
   useEffect(() => {
     if (!open) return;
@@ -32,6 +36,7 @@ export function OnboardingModal({
     <div className="tracker-modal-backdrop" role="presentation" onClick={onClose}>
       <div
         className="tracker-modal"
+        ref={modalRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

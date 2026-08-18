@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Loader2, Search, Sparkles, X } from "lucide-react";
 
+import { useModalFocus } from "@/components/use-modal-focus";
 import { SUPPORTED_COUNTRIES } from "@/lib/aso";
 import {
   humanizeItunesError,
@@ -33,6 +34,8 @@ export function AddAppModal({
   quickStartBusy?: boolean;
 }) {
   const titleId = useId();
+  const modalRef = useRef<HTMLDivElement>(null);
+  useModalFocus(open, modalRef);
   const inputRef = useRef<HTMLInputElement>(null);
   const [country, setCountry] = useState(defaultCountry);
   const [query, setQuery] = useState("");
@@ -110,6 +113,7 @@ export function AddAppModal({
     <div className="tracker-modal-backdrop" role="presentation" onClick={onClose}>
       <div
         className="tracker-modal"
+        ref={modalRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

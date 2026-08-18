@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 
+import { useModalFocus } from "@/components/use-modal-focus";
 import { MAX_BATCH_KEYWORDS, parseKeywordBatch } from "@/lib/aso";
 
 export function BulkKeywordsModal({
@@ -17,6 +18,8 @@ export function BulkKeywordsModal({
   onConfirm: (keywords: string[]) => void;
 }) {
   const titleId = useId();
+  const modalRef = useRef<HTMLDivElement>(null);
+  useModalFocus(open, modalRef);
   const [text, setText] = useState("");
 
   useEffect(() => {
@@ -52,6 +55,7 @@ export function BulkKeywordsModal({
     <div className="tracker-modal-backdrop" role="presentation" onClick={onClose}>
       <div
         className="tracker-modal"
+        ref={modalRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

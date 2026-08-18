@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Loader2, Mail, X } from "lucide-react";
 
+import { useModalFocus } from "@/components/use-modal-focus";
 import { requestMagicLink } from "@/lib/account";
 import { AUTH_COPY, type AuthIntent } from "@/lib/access";
 
@@ -19,6 +20,8 @@ export function AuthModal({
   onSuccess?: () => void;
 }) {
   const titleId = useId();
+  const modalRef = useRef<HTMLDivElement>(null);
+  useModalFocus(open, modalRef);
   const emailRef = useRef<HTMLInputElement>(null);
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
@@ -78,6 +81,7 @@ export function AuthModal({
     <div className="tracker-modal-backdrop" role="presentation" onClick={onClose}>
       <div
         className="tracker-modal"
+        ref={modalRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

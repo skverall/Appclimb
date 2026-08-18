@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Lightbulb, X } from "lucide-react";
 
+import { useModalFocus } from "@/components/use-modal-focus";
 import type { KeywordSuggestion } from "@/lib/itunes";
 
 type SuggestionRow = KeywordSuggestion & { alreadyTracked?: boolean };
@@ -21,6 +22,8 @@ export function SuggestionsModal({
   onConfirm: (keywords: string[]) => void;
 }) {
   const titleId = useId();
+  const modalRef = useRef<HTMLDivElement>(null);
+  useModalFocus(open, modalRef);
   const selectable = useMemo(
     () => suggestions.filter((item) => !item.alreadyTracked),
     [suggestions],
@@ -78,6 +81,7 @@ export function SuggestionsModal({
     <div className="tracker-modal-backdrop" role="presentation" onClick={onClose}>
       <div
         className="tracker-modal tracker-modal--wide"
+        ref={modalRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}

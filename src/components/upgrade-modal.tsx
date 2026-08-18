@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Check, Loader2, LogIn, Sparkles, X } from "lucide-react";
 
+import { useModalFocus } from "@/components/use-modal-focus";
 import type { AccountUser } from "@/lib/account";
 import { openProCheckout, paddleEnabled, proPriceIds } from "@/lib/paddle-client";
 import { PRO_MONTHLY_USD, PRO_YEARLY_USD } from "@/lib/plan";
@@ -30,6 +31,8 @@ export function UpgradeModal({
   onRequireAuth: () => void;
 }) {
   const titleId = useId();
+  const modalRef = useRef<HTMLDivElement>(null);
+  useModalFocus(open, modalRef);
   const [cycle, setCycle] = useState<BillingCycle>("monthly");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -87,6 +90,7 @@ export function UpgradeModal({
     <div className="tracker-modal-backdrop" role="presentation" onClick={onClose}>
       <div
         className="tracker-modal tracker-modal--wide"
+        ref={modalRef}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
