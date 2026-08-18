@@ -348,3 +348,50 @@ test("every page emits parseable, non-empty JSON-LD", async ({ page }) => {
     );
   }
 });
+
+test("marketing navigation and CTA work interactively at 1920px", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1920, height: 1080 });
+
+  for (const [path, heading, primaryLabel] of [
+    ["/app-store-keywords", /Popularity from Apple/i, "Open Explorer"],
+    ["/guides/keyword-research", /practical guide to App Store keyword research/i, "Open Explorer"],
+    ["/about", /We show Apple/i, "Open Explorer"],
+    ["/blog", /Understand App Store search/i, "Open Explorer"],
+  ] as const) {
+    await page.goto(path);
+    await expect(
+      page.getByRole("heading", { level: 1, name: heading }),
+    ).toBeVisible();
+
+    // 0px horizontal overflow at 1920.
+    const overflow = await page.evaluate(
+      () =>
+        Math.max(
+          document.documentElement.scrollWidth,
+          document.body.scrollWidth,
+        ) - document.documentElement.clientWidth,
+    );
+    expect(overflow, `${path} overflow: ${overflow}px`).toBeLessThanOrEqual(0);
+
+    // The desktop nav links and the exploration CTA are reachable.
+    await expect(
+      page.getByRole("navigation", { name: "Main navigation" }).getByRole("link", { name: "Pricing", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: primaryLabel, exact: true }),
+    ).toBeVisible();
+  }
+
+  // Navigating via the nav links works at this width.
+  await page.goto("/app-store-keywords");
+  await page
+    .getByRole("navigation", { name: "Main navigation" })
+    .getByRole("link", { name: "Pricing", exact: true })
+    .click();
+  await expect(page).toHaveURL(/\/pricing$/);
+  await expect(
+    page.getByRole("heading", { level: 1, name: /Honest limits on Free/i }),
+  ).toBeVisible();
+});

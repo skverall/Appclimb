@@ -71,7 +71,21 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Marketing shell · ui (interactive pass, 1920px)
+
+**Defect:** none found — at 1920×1080 the desktop nav links and "Open
+Explorer" CTA are reachable on the marketing pages, navigation via the links
+works, and every page holds 0px horizontal overflow.
+**Repro:** e2e second pass per matrix rules.
+**Fix:** e2e `marketing navigation and CTA work interactively at 1920px`
+(`tests/e2e/public-discovery.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · ASO Assistant · ui (interactive pass, 375/768px)
+
 
 **Defect:** none found — a full send/reply cycle and the history drawer work
 at 375×812 and 768×1024 with 0px overflow and the composer reachable.
