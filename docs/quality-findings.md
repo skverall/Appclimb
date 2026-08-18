@@ -31,7 +31,30 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · /api/popularity · logic (quota day boundary)
+
+**Defect:** The popularity route kept its own rolling-24h daily window (a
+duplicate of the bug fixed in the chat route): a user who hit the 30/day cap
+at 23:30 UTC stayed locked until 23:30 the next day while every other daily
+quota resets at UTC midnight.
+**Repro:** code-level: `emptyBucket`/`consumeRate` anchored `dayReset` at
+`firstUse + 24h`; unit-level the shared helper now pins the boundary.
+**Root cause:** `src/app/api/popularity/route.ts` duplicated the rolling
+window instead of sharing the UTC-midnight boundary.
+**Fix:** new dependency-free `src/lib/day-window.ts` (`utcDayStartMs`,
+`nextUtcMidnightMs`); both the chat rate bucket and the popularity route now
+use it. Daily windows are UTC-calendar-aligned everywhere; hourly/min-interval
+controls stay rolling.
+**Protection:** unit tests `src/lib/day-window.test.ts` (midnight alignment,
+next-midnight boundary, year rollover); the chat UTC-midnight test keeps
+passing through the shared helper.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — lint/typecheck/unit green (352 passed), build green.
+
+---
 ## 2026-08-18 · Keyword Explorer · logic (quota banner day rollover)
+
 
 **Defect:** The "you've used your 8 free checks" banner was driven by a sticky
 `limitHit` flag that only cleared on a successful analyze or when the plan

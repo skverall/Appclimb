@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import {
-  AppleAdsError,
-  lookupSearchTermPopularity,
-  readAppleAdsCredentials,
-} from "@/lib/apple-ads";
+import { AppleAdsError, lookupSearchTermPopularity, readAppleAdsCredentials } from "@/lib/apple-ads";
 import { isAppleAdsGenre, mapItunesGenre } from "@/lib/apple-ads-genres";
 import { SUPPORTED_COUNTRIES } from "@/lib/aso";
+import { nextUtcMidnightMs } from "@/lib/day-window";
 import { getDb } from "@/lib/db";
 import type { OfficialPopularity } from "@/lib/popularity";
 import {
@@ -35,7 +32,7 @@ const supported = new Set(SUPPORTED_COUNTRIES.map((item) => item.code));
 function emptyBucket(now: number): RateBucket {
   return {
     dayCount: 0,
-    dayReset: now + 24 * 60 * 60 * 1000,
+    dayReset: nextUtcMidnightMs(now),
     lastAt: 0,
   };
 }
@@ -53,7 +50,7 @@ function consumeRate(
   const next = { ...bucket };
   if (now >= next.dayReset) {
     next.dayCount = 0;
-    next.dayReset = now + 24 * 60 * 60 * 1000;
+    next.dayReset = nextUtcMidnightMs(now);
   }
   if (now - next.lastAt < MIN_INTERVAL_MS) {
     return {
