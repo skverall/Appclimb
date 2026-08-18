@@ -103,6 +103,20 @@ so a keyboard user can immediately keep typing.
 **Verification:** locally tested — e2e green.
 
 ---
+## 2026-08-18 · ASO Assistant · accessibility (composer focus on switching)
+
+**Defect:** none found — after "New chat" the composer receives focus, and
+switching back to a previous thread via history also refocuses the composer.
+**Repro:** e2e second pass per matrix rules (lens 5).
+**Fix:** e2e `switching conversations refocuses the composer`
+(`tests/e2e/assistant.spec.ts`). Two older chat tests referenced a thread
+titled "first message Today" that never exists (titles derive from the first
+user message); their history-selection selectors now target
+`.ai-chat-history-select`, and the full suite is green again.
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · My Apps (tracker) · ui (app navigation at 375px)
 
 

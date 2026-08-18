@@ -287,10 +287,7 @@ test("chat history drawer stays usable at 375px", async ({ page }) => {
   expect(overflow, `horizontal overflow: ${overflow}px`).toBeLessThanOrEqual(0);
 
   // Picking a chat from the drawer closes it and keeps the composer visible.
-  await page
-    .locator(".ai-chat-history-list")
-    .getByRole("button", { name: /first message Today/i })
-    .click();
+  await page.locator(".ai-chat-history-list .ai-chat-history-select").first().click();
   await expect(
     page.locator(".ai-chat-history-popover, .ai-chat-history-sidebar.is-open"),
   ).toHaveCount(0);
@@ -390,10 +387,7 @@ test("chat works with the history sidebar open at 1024px", async ({ page }) => {
   await expect(page.locator(".ai-chat-history-list li")).toHaveCount(1);
 
   // Switching to the first chat keeps the layout intact.
-  await page
-    .locator(".ai-chat-history-list")
-    .getByRole("button", { name: /first message Today/i })
-    .click();
+  await page.locator(".ai-chat-history-list .ai-chat-history-select").first().click();
   await expect(page.getByText(/sidebar reply/i)).toBeVisible();
 
   const overflow = await page.evaluate(
