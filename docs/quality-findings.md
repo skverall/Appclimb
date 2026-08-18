@@ -79,7 +79,21 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Keyword Explorer · security (shared-URL keyword, second pass)
+
+**Defect:** none found — a shared keyword containing HTML renders as literal
+React text; no element is injected via the share URL.
+**Repro:** e2e on `/?kw=<img src=x onerror=alert(1)>` — the row shows the raw
+payload with zero injected `<img>`.
+**Fix:** e2e `a shared keyword containing HTML renders as literal text`
+(`tests/e2e/explorer.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · /api/chat · logic (upstream failure coverage)
+
 
 **Defect:** none found — the route maps upstream failures honestly: no key → 503,
 fetch throw → 502, upstream 429 → 429, upstream 401/403 → 503, non-JSON body →

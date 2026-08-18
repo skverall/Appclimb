@@ -823,3 +823,16 @@ test("explorer modals fit and stay centered at 1024px", async ({ page }) => {
     expect(authBox.x + authBox.width).toBeLessThanOrEqual(1024);
   }
 });
+
+test("a shared keyword containing HTML renders as literal text", async ({
+  page,
+}) => {
+  await mockExplorer(page);
+  const payload = "<img src=x onerror=alert(1)>";
+  await page.goto(`/?kw=${encodeURIComponent(payload)}&country=US`);
+
+  await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
+  await expect(page.locator(".keyword-name").first()).toHaveText(payload);
+  // React escapes the payload — no live element is injected.
+  await expect(page.locator(".keyword-name img")).toHaveCount(0);
+});
