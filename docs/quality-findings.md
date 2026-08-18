@@ -101,7 +101,22 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Upgrade/Paddle · ui (checker states)
+
+**Defect:** none found — the checkout states are all reachable and honest:
+busy shows "Opening checkout…" with a disabled CTA, an absent token surfaces
+"Checkout is not configured yet." (unit), a failed SDK load surfaces
+"Checkout failed to load. Try again." (unit), and the toggle/pricing states
+are covered e2e (375px modal test).
+**Fix:** added the SDK-failure unit test to `src/lib/paddle-client.test.ts`
+(mocked `initializePaddle` resolving undefined).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — unit green (384 passed).
+
+---
 ## 2026-08-18 · My Apps (tracker) · accessibility (keyboard flow + Esc)
+
 
 **Defect:** tracker keyword rows handled Enter/Space (open the detail) but
 Escape never closed the open detail — a keyboard user had to Tab to the close
@@ -271,7 +286,22 @@ so a keyboard user can immediately keep typing.
 ---
 ---
 ---
+---
+## 2026-08-18 · Upgrade/Paddle · ui (checker states)
+
+**Defect:** none found — the checkout states are all reachable and honest:
+busy shows "Opening checkout…" with a disabled CTA, an absent token surfaces
+"Checkout is not configured yet." (unit), a failed SDK load surfaces
+"Checkout failed to load. Try again." (unit), and the toggle/pricing states
+are covered e2e (375px modal test).
+**Fix:** added the SDK-failure unit test to `src/lib/paddle-client.test.ts`
+(mocked `initializePaddle` resolving undefined).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — unit green (384 passed).
+
+---
 ## 2026-08-18 · My Apps (tracker) · accessibility (keyboard flow + Esc)
+
 
 **Defect:** tracker keyword rows handled Enter/Space (open the detail) but
 Escape never closed the open detail — a keyboard user had to Tab to the close
