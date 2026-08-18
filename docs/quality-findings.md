@@ -49,7 +49,23 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Auth (sign out) · ui (flow coverage)
+
+**Defect:** none found — sign out asks for confirmation on the free plan,
+clears the local workspace (tracker store) after acceptance, and shows the
+"Signed out" notice.
+**Repro:** e2e: signed-in free user seeds the sample app → Sign out →
+confirm → toast + empty localStorage.
+**Fix:** e2e `sign out clears free-plan workspace data after confirmation`
+(`tests/e2e/account.spec.ts`) — also adds the minimal iTunes mock helper used
+by tracker flows in this spec.
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · ASO Assistant · logic (upgrade mid-session, covered)
+
 
 **Defect:** none found — the composer gate unlocks after an upgrade. The
 stale-`remainingDay` concern is neutralized by the product flow: Paddle

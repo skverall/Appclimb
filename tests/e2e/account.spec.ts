@@ -1,5 +1,63 @@
 import { expect, test } from "./runtime-test";
 
+// Minimal iTunes catalog + icon mocks so tracker flows can run here too.
+async function mockItunesLike(page: import("@playwright/test").Page) {
+  const PIXEL = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+    "base64",
+  );
+  await page.route("https://is1-ssl.mzstatic.com/**", async (route) => {
+    await route.fulfill({ status: 200, contentType: "image/png", body: PIXEL });
+  });
+  await page.route("https://itunes.apple.com/**", async (route) => {
+    const url = new URL(route.request().url());
+    const path = url.pathname;
+    if (path.endsWith("/lookup")) {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          resultCount: 1,
+          results: [
+            {
+              trackId: 6755675367,
+              trackName: "Car Dealer Tracker: Profit",
+              bundleId: "com.ezcar24.business",
+              sellerName: "Shokhabbos Makhmudov",
+              primaryGenreName: "Business",
+              artworkUrl100: "https://is1-ssl.mzstatic.com/image/thumb/dealer.png",
+              trackViewUrl: "https://apps.apple.com/app/id6755675367",
+              description: "Manage vehicle inventory, track sales, expenses, and profit.",
+              userRatingCount: 40,
+              averageUserRating: 4.3,
+            },
+          ],
+        }),
+      });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        resultCount: 1,
+        results: [
+          {
+            trackId: 111,
+            trackName: "Competitor App",
+            sellerName: "Other Co",
+            primaryGenreName: "Business",
+            userRatingCount: 500,
+            averageUserRating: 4.2,
+          },
+        ],
+      }),
+    });
+  });
+}
+
+
+
 test("pricing page lists the free plan with honest limits and Pro at $8", async ({
   page,
 }) => {
@@ -95,4 +153,51 @@ test("magic-link submit is single-flight (no double email)", async ({
     timeout: 10_000,
   });
   expect(calls).toBe(1);
+});
+
+test("sign out clears free-plan workspace data after confirmation", async ({
+  page,
+}) => {
+  await mockItunesLike(page);
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        user: { id: "u1", email: "free@example.com", name: "Free" },
+        plan: "free",
+        subscription: null,
+      }),
+    });
+  });
+
+  await page.goto("/");
+  const notNow = page.getByRole("button", { name: /Not now/i });
+  if (await notNow.isVisible().catch(() => false)) {
+    await notNow.click();
+  }
+  await page.getByRole("button", { name: /Try a sample app/i }).click();
+  await expect(
+    page.getByRole("heading", { name: /Car Dealer Tracker: Profit/i }),
+  ).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator(".tracker-table tbody tr")).toHaveCount(7, {
+    timeout: 30_000,
+  });
+  expect(
+    await page.evaluate(() => Boolean(window.localStorage.getItem("appclimb:tracker:v1"))),
+  ).toBe(true);
+
+  // Sign out from the account menu; the free-plan confirmation is accepted.
+  await page.getByRole("button", { name: /Free/i }).first().click();
+  page.once("dialog", (dialog) => void dialog.accept());
+  await page.getByRole("menuitem", { name: /Sign out/i }).click();
+  await expect(page.getByText(/Signed out/i).first()).toBeVisible({
+    timeout: 10_000,
+  });
+
+  // The workspace data is gone from this device.
+  expect(
+    await page.evaluate(() => window.localStorage.getItem("appclimb:tracker:v1")),
+  ).toBeNull();
 });
