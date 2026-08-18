@@ -867,3 +867,37 @@ test("explorer degrades gracefully when localStorage is blocked", async ({
   await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
   await expect(page.locator(".source-pill").first()).toContainText(/Est\./);
 });
+
+test("bulk modal traps focus and fits at 375px", async ({ page }) => {
+  await mockExplorer(page);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/");
+
+  const opener = page.getByRole("button", { name: /Analyze list/i });
+  await opener.focus();
+  await opener.click();
+  const dialog = page.getByRole("dialog", { name: "Analyze a list" });
+  await expect(dialog).toBeVisible();
+
+  // The dialog fits the viewport.
+  const box = await dialog.boundingBox();
+  if (box) {
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(375);
+  }
+
+  // Tab cycling stays inside the dialog (focus trap holds at 375px).
+  for (let i = 0; i < 10; i += 1) {
+    await page.keyboard.press("Tab");
+    const inside = await page.evaluate(() => {
+      const el = document.activeElement;
+      return Boolean(el && el.closest('[role="dialog"]'));
+    });
+    if (!inside) throw new Error(`focus escaped on Tab #${i + 1}`);
+  }
+
+  // Escape closes the dialog and restores focus to the opener.
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+});

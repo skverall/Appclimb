@@ -87,7 +87,21 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Keyword Explorer · accessibility+viewport (bulk modal, 375px)
+
+**Defect:** none found — the bulk-analyze dialog fits 375×812, Tab cycling
+stays inside it (the focus trap holds after the document-listener fix), and
+Escape closes it with focus restored to the opener.
+**Repro:** e2e second pass per matrix rules (lens 5 × 4).
+**Fix:** e2e `bulk modal traps focus and fits at 375px`
+(`tests/e2e/explorer.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · /api/popularity · logic (route-level 429)
+
 
 **Defect:** none found — with PRO_ENABLED on and mocked credentials, the route
 allows the guest's 30th lookup for an IP and returns 429 on the 31st, with the
