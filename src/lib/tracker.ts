@@ -220,7 +220,13 @@ function isRankSnapshot(value: unknown): value is RankSnapshot {
 
 /** Load the tracker store. Corrupt or missing data yields an empty store. */
 export function loadTrackerStore(storage: TrackerStorage): TrackerStore {
-  const raw = storage.getItem(TRACKER_STORAGE_KEY);
+  let raw: string | null = null;
+  try {
+    raw = storage.getItem(TRACKER_STORAGE_KEY);
+  } catch {
+    // Storage blocked (private mode) — start from an empty store.
+    return emptyStore();
+  }
   if (!raw) return emptyStore();
   try {
     const parsed = JSON.parse(raw) as Partial<TrackerStore>;

@@ -1458,6 +1458,18 @@ describe("updateKeywordTags and calculateCompetitorOverlap", () => {
 });
 
 
+describe("blocked storage (private mode)", () => {
+  it("loads an empty store instead of throwing", () => {
+    const blocked: TrackerStorage = {
+      ...makeStorage(),
+      getItem: () => {
+        throw new DOMException("The operation is insecure", "SecurityError");
+      },
+    };
+    expect(loadTrackerStore(blocked)).toEqual(emptyStore());
+  });
+});
+
 describe("storage write resilience", () => {
   it("fails open when localStorage writes are blocked (quota/private mode)", () => {
     const throwing: TrackerStorage = {

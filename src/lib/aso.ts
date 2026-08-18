@@ -441,7 +441,13 @@ export function loadRecord(
   keyword: string,
   country: string,
 ): KeywordRecord | null {
-  const raw = storage.getItem(historyStorageKey(keyword, country));
+  let raw: string | null = null;
+  try {
+    raw = storage.getItem(historyStorageKey(keyword, country));
+  } catch {
+    // Storage blocked (private mode) — treat as no record.
+    return null;
+  }
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as unknown;
@@ -559,7 +565,13 @@ export function loadKeywordList(
   storage: KeywordStorage,
   country: string,
 ): string[] {
-  const raw = storage.getItem(listStorageKey(country));
+  let raw: string | null = null;
+  try {
+    raw = storage.getItem(listStorageKey(country));
+  } catch {
+    // Storage blocked (private mode) — treat as an empty list.
+    return [];
+  }
   if (!raw) return [];
   try {
     const parsed = JSON.parse(raw) as unknown;
@@ -862,8 +874,12 @@ export function exportExplorerBackup(storage: KeywordStorage): string {
   for (let index = 0; index < storage.length; index += 1) {
     const key = storage.key(index);
     if (!key || !key.startsWith(EXPLORER_KEY_PREFIX)) continue;
-    const raw = storage.getItem(key);
-    if (raw) data[key] = raw;
+    try {
+      const raw = storage.getItem(key);
+      if (raw) data[key] = raw;
+    } catch {
+      // Storage blocked — skip unreadable keys rather than fail the export.
+    }
   }
   const backup: ExplorerBackup = {
     version: EXPLORER_BACKUP_VERSION,

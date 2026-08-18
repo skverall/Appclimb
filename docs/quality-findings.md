@@ -43,7 +43,27 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Storage layer (explorer + tracker) · logic (blocked storage)
+
+**Defect:** `loadKeywordList`, `loadRecord`, `exportExplorerBackup`, and
+`loadTrackerStore` called `storage.getItem` outside a try/catch. In a blocked
+storage context (private mode / security policy) the read throws and crashes
+the explorer rehydration or the tracker workspace, instead of degrading to an
+empty state.
+**Repro:** unit-level: a storage whose `getItem` throws SecurityError —
+`loadKeywordList`/`loadRecord`/`loadTrackerStore` propagate the exception.
+**Root cause:** read paths guarded only `JSON.parse`, not the `getItem` call.
+**Fix:** all four reads fail closed (empty list / null record / empty store /
+skip unreadable keys in backups), mirroring the fail-open writes.
+**Protection:** unit tests `blocked storage (private mode)` in
+`src/lib/aso.test.ts` and `src/lib/tracker.test.ts`.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — lint/typecheck/unit green (360 passed).
+
+---
 ## 2026-08-18 · Keyword Explorer · logic (90-day history was unimplemented)
+
 
 **Defect:** The UI claimed "90-day history" on Pro (pricing page, limit
 banners, llms.txt) and `plan.ts` defines `historyDays: 90` for Pro — but the

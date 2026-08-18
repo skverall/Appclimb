@@ -670,3 +670,19 @@ describe("formatAsoKeywordField", () => {
     );
   });
 });
+
+describe("blocked storage (private mode)", () => {
+  it("reads fail closed to empty instead of throwing", () => {
+    const blocked: KeywordStorage = {
+      ...makeStorage(),
+      getItem: () => {
+        throw new DOMException("The operation is insecure", "SecurityError");
+      },
+    };
+    expect(loadKeywordList(blocked, "US")).toEqual([]);
+    expect(loadRecord(blocked, "meditation", "US")).toBeNull();
+    expect(() => exportExplorerBackup(blocked)).not.toThrow();
+    expect(() => addKeywordToList(blocked, "US", "meditation")).not.toThrow();
+    expect(() => recordSnapshot(blocked, metricsFor("meditation", [makeApp()]))).not.toThrow();
+  });
+});
