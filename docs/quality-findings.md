@@ -26,6 +26,60 @@ Rules:
   item or a fresh surface, never re-litigates closed ones.
 
 ---
+## 2026-08-18 · Dialogs (all modals) · accessibility (keyboard / focus)
+
+**Defect:** All seven dialogs (`aria-modal`) let Tab escape into the page behind
+them and never restored focus to the opener on close — keyboard-only users
+could get lost behind a dialog.
+**Repro:** e2e on `/`: open the sign-in dialog as a guest, press Tab repeatedly —
+focus lands on page links behind the modal; close with Escape — focus stays on
+`<body>` instead of returning to the "Sign in to track" button.
+**Root cause:** no shared focus management existed; each modal only handled
+Escape and its own initial focus.
+**Fix:** new `useModalFocus` hook (`src/components/use-modal-focus.ts`) traps
+Tab/Shift+Tab between the dialog's first and last focusable elements, moves
+focus into the dialog on open when the dialog does not, and restores focus on
+close. Wired into auth, add-app, add-keywords, bulk, onboarding, suggestions,
+and upgrade modals.
+**Protection:** e2e `auth dialog traps keyboard focus and restores it on close`
+(`tests/e2e/guest-access.spec.ts`) — 12 Tab and 12 Shift+Tab keystrokes must
+stay inside the dialog, and Escape returns focus to the opener.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — lint/typecheck/unit green (344 passed).
+
+---
+## 2026-08-18 · Import/Export (CSV) · security (edge data / injection)
+
+**Defect:** The CSV exporter (shared by Keyword Explorer and My Apps) passed
+bare values starting with `=`, `+`, `-`, `@`, or a tab straight into the CSV.
+On open in Excel / Google Sheets / LibreOffice, such a cell is evaluated as a
+formula (CSV injection): a keyword or app name like `=HYPERLINK(...)` or
+`+cmd|...` would execute in the user's spreadsheet. Keywords, notes, and app
+names are user/third-party controlled.
+**Repro:** `csvEscape("=SUM(A1:A9)")` returned `=SUM(A1:A9)` (unit-level);
+in-app, a keyword or note starting with one of those characters exported as a
+live-formula cell.
+**Root cause:** `src/lib/file.ts` `csvEscape` only quoted commas/quotes/newlines
+and never neutralized leading spreadsheet-formula characters.
+**Fix:** `csvEscape` now prefixes an apostrophe to any value starting with a
+formula character (OWASP CSV-injection guidance). Spreadsheet apps strip the
+prefix and render the literal text; the prefix also lands inside the quoting
+branch when the value concurrently needs quoting.
+**Protection:** unit tests in `src/lib/file.test.ts` covering `= + - @ \t`
+prefixes, unaffected values (`baby-stroller`, `2+2`), and quote interplay.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — lint/typecheck/unit green (343 passed).
+
+---
+## 2026-08-18 · Keyword Explorer · quota e2e note
+
+**Note:** the refund e2e initially flaked in a rerun because the pre-monetization
+mode sets `explorerLimit` to `null` (no cap), so `consumeDayUsage` never wrote a
+counter. The test now mocks `GET /api/me` → `configured:true, user:null,
+plan:free` to activate the guest 8/day cap before exercising the refund path.
+Explorer spec 7/7 green.
+
+---
 ## 2026-08-18 · Keyword Explorer · logic (quota/failure path)
 
 **Defect:** A failed analysis (iTunes non-2xx, network error, throttle)

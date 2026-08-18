@@ -71,3 +71,51 @@ test("guest assistant page asks for a free account instead of a composer", async
     page.getByRole("heading", { name: /Sign in to use the assistant/i }),
   ).toBeVisible();
 });
+
+test("auth dialog traps keyboard focus and restores it on close", async ({
+  page,
+}) => {
+  await mockGuestAccount(page);
+  await page.goto("/");
+
+  const opener = page.getByRole("button", { name: /Sign in to track/i }).first();
+  await opener.focus();
+  await opener.click();
+  const dialog = page.getByRole("dialog", {
+    name: /Sign in to track an app/i,
+  });
+  await expect(dialog).toBeVisible();
+
+  // Tab cycles inside the dialog: focus must never escape into the page.
+  for (let i = 0; i < 12; i += 1) {
+    await page.keyboard.press("Tab");
+    const inside = await page.evaluate(() => {
+      const el = document.activeElement;
+      return Boolean(el && el.closest('[role="dialog"]'));
+    });
+    if (!inside) {
+      throw new Error(
+        `focus escaped the dialog on Tab #${i + 1}`,
+      );
+    }
+  }
+
+  // Shift+Tab wraps backward the same way.
+  for (let i = 0; i < 12; i += 1) {
+    await page.keyboard.press("Shift+Tab");
+    const inside = await page.evaluate(() => {
+      const el = document.activeElement;
+      return Boolean(el && el.closest('[role="dialog"]'));
+    });
+    if (!inside) {
+      throw new Error(
+        `focus escaped the dialog on Shift+Tab #${i + 1}`,
+      );
+    }
+  }
+
+  // Escape closes the dialog and returns focus to the opener.
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
+});
