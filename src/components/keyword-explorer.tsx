@@ -419,6 +419,9 @@ export function KeywordExplorer() {
         : "No valid keyword records found in that file.",
     );
     setRefreshVersion((version) => version + 1);
+    // The native file picker left focus on the hidden input; move it to the
+    // primary search box so a keyboard user can continue immediately.
+    searchRef.current?.focus();
   }, []);
 
   /* Global shortcuts: "/" focuses the search box, Escape closes the detail

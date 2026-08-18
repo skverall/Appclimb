@@ -97,7 +97,22 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Keyword Explorer · accessibility (focus after restore)
+
+**Defect:** After the native backup/restore file picker, focus stayed on the
+hidden `type=file` input — invisible to a keyboard user, who then had to Tab
+blindly to continue.
+**Root cause:** `handleRestoreFile` never managed focus.
+**Fix:** after a restore, focus moves to the primary search box.
+**Protection:** the CSV/backup/restore e2e now asserts the search input is
+focused after a restore (`tests/e2e/explorer.spec.ts`).
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · ASO Assistant · ui (interactive pass, 320px)
+
 
 **Defect:** none found — a full send/reply cycle and the history drawer work
 at 320×640 too (the smallest supported width): 0px overflow and the composer
@@ -205,7 +220,22 @@ so a keyboard user can immediately keep typing.
 ---
 ---
 ---
+---
+## 2026-08-18 · Keyword Explorer · accessibility (focus after restore)
+
+**Defect:** After the native backup/restore file picker, focus stayed on the
+hidden `type=file` input — invisible to a keyboard user, who then had to Tab
+blindly to continue.
+**Root cause:** `handleRestoreFile` never managed focus.
+**Fix:** after a restore, focus moves to the primary search box.
+**Protection:** the CSV/backup/restore e2e now asserts the search input is
+focused after a restore (`tests/e2e/explorer.spec.ts`).
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · ASO Assistant · ui (interactive pass, 320px)
+
 
 **Defect:** none found — a full send/reply cycle and the history drawer work
 at 320×640 too (the smallest supported width): 0px overflow and the composer

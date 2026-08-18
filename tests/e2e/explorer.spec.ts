@@ -191,6 +191,8 @@ test("explorer exports CSV, backs up, and restores history", async ({
   await expect(page.getByText(/Restored 1 keyword record/i)).toBeVisible();
   await expect(page.locator(ROW)).toHaveCount(1);
   await expect(page.locator(".keyword-name").first()).toHaveText("meditation");
+  // The native picker must not leave keyboard focus on the hidden input.
+  await expect(page.getByLabel("Search keywords")).toBeFocused();
 });
 
 test("explorer removal offers undo", async ({ page }) => {
