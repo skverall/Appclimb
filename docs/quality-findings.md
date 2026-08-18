@@ -58,7 +58,21 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · My Apps (tracker) · ui (viewport guard, 1440/1920px)
+
+**Defect:** none found — the tracker workspace keeps 0px horizontal overflow,
+reachable actions, and design tokens (tabular figures, sticky-column shadow,
+chips fit) at 1440×900 and 1920×1080.
+**Repro:** e2e at both widths (second pass per matrix rules).
+**Fix:** the tracker token-invariant test now iterates 375/1024/1440/1920
+(`tests/e2e/tracker-tokens.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · /api/sync (Pro) · logic (end-to-end coverage)
+
 
 **Defect:** none found — a Pro user's local tracker changes get pushed to
 /api/sync (debounced), and when the backend returns 503 the push fails

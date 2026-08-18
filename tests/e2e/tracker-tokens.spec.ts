@@ -51,12 +51,14 @@ async function mockTrackerItunes(page: import("@playwright/test").Page) {
   });
 }
 
-test("tracker design tokens hold at 375px and 1024px", async ({ page }) => {
+test("tracker design tokens hold from 375px to 1920px", async ({ page }) => {
   await mockTrackerItunes(page);
 
   for (const [width, height] of [
     [375, 812],
     [1024, 768],
+    [1440, 900],
+    [1920, 1080],
   ] as const) {
     await page.setViewportSize({ width, height });
     await page.goto("/");
