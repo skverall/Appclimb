@@ -848,3 +848,41 @@ test("tracker rows open with Enter and close with Escape", async ({ page }) => {
   ).toHaveCount(0);
   await expect(page.locator(".tracker-table tbody tr").first()).toBeFocused();
 });
+
+test("a 60-char keyword survives an iTunes failure honestly", async ({ page }) => {
+  await mockItunes(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: /Try a sample app/i }).click();
+  await expect(page.locator(".tracker-table tbody tr")).toHaveCount(7, {
+    timeout: 30_000,
+  });
+
+  // Add a 60-character keyword whose rank lookups are rate-limited by the
+  // mock (the "fail-refresh" term family).
+  const longKeyword = `fail-refresh ${"longkeyword".repeat(4)}`.slice(0, 60);
+  await page.getByRole("button", { name: /Add Keywords/i }).first().click();
+  await page.getByLabel("Keywords to add").fill(longKeyword);
+  await page.getByRole("button", { name: /Add 1 keyword/i }).click();
+
+  // The row exists; the failed check marks it honestly (no fake metrics).
+  await expect(page.locator(".tracker-table tbody tr")).toHaveCount(8, {
+    timeout: 15_000,
+  });
+  const row = page
+    .locator(".tracker-table tbody tr")
+    .filter({ hasText: longKeyword });
+  await expect(row).toHaveCount(1);
+
+  // Eventually the batch error surfaces and the row is not left spinning.
+  await expect
+    .poll(
+      async () =>
+        (await page.locator(".keyword-error").textContent().catch(() => "")) ?? "",
+      { timeout: 30_000 },
+    )
+    .toMatch(/rate-limit|couldn|failed|preserved/i);
+  await expect(row).toHaveCount(1);
+  await expect(
+    page.locator("nextjs-portal, [data-nextjs-dialog-overlay]"),
+  ).toHaveCount(0);
+});

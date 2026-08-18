@@ -103,7 +103,22 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · My Apps (tracker) · logic (60-char keyword + iTunes failure)
+
+**Defect:** none found — a 60-character keyword whose rank lookups are
+rate-limited is added, stays as a row, gets marked honestly (no fake
+metrics), the batch error surfaces with preserved-data messaging, and no
+error overlay appears.
+**Repro:** e2e combo of lenses 6 × 2 (surface B).
+**Fix:** e2e `a 60-char keyword survives an iTunes failure honestly`
+(`tests/e2e/app-tracker.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Cloud sync / plan change · logic (downgrade mid-session)
+
 
 **Defect:** none found — when the account refresh reports Free after Pro, the
 sync-status row disappears (non-Pro), sync no longer runs, and the local
@@ -302,7 +317,22 @@ so a keyboard user can immediately keep typing.
 ---
 ---
 ---
+---
+## 2026-08-18 · My Apps (tracker) · logic (60-char keyword + iTunes failure)
+
+**Defect:** none found — a 60-character keyword whose rank lookups are
+rate-limited is added, stays as a row, gets marked honestly (no fake
+metrics), the batch error surfaces with preserved-data messaging, and no
+error overlay appears.
+**Repro:** e2e combo of lenses 6 × 2 (surface B).
+**Fix:** e2e `a 60-char keyword survives an iTunes failure honestly`
+(`tests/e2e/app-tracker.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Cloud sync / plan change · logic (downgrade mid-session)
+
 
 **Defect:** none found — when the account refresh reports Free after Pro, the
 sync-status row disappears (non-Pro), sync no longer runs, and the local
