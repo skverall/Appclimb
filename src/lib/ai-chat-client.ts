@@ -490,7 +490,7 @@ export async function requestAssistantReply(options: {
           ? "Sign in to use the ASO assistant."
           : response.status === 429
             ? "Rate limit reached. Please wait and try again."
-            : "Assistant request failed."),
+            : "Assistant request failed. Try again in a moment."),
     );
   }
 

@@ -109,7 +109,22 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · ASO Assistant · copy (error messages, second pass)
+
+**Defect:** the generic 5xx fallback ("Assistant request failed.") did not
+name a next step; every other assistant error already did (check your
+connection / wait and retry / upgrade to Pro / sign in / resets in 24h).
+**Root cause:** `ai-chat-client.ts` status fallback string.
+**Fix:** the fallback now reads "Assistant request failed. Try again in a
+moment." — no mixed language anywhere in the assistant error set.
+**Protection:** the non-JSON-500 unit test asserts the retry guidance.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — unit green (385 passed).
+
+---
 ## 2026-08-18 · Upgrade/Paddle + pricing · copy (second pass)
+
 
 **Defect:** none found — the pricing page and upgrade modal stay honest and
 next-step: prices match the founder cap ($8/month, $64/year with "save 33%"),
@@ -402,7 +417,22 @@ so a keyboard user can immediately keep typing.
 ---
 ---
 ---
+---
+## 2026-08-18 · ASO Assistant · copy (error messages, second pass)
+
+**Defect:** the generic 5xx fallback ("Assistant request failed.") did not
+name a next step; every other assistant error already did (check your
+connection / wait and retry / upgrade to Pro / sign in / resets in 24h).
+**Root cause:** `ai-chat-client.ts` status fallback string.
+**Fix:** the fallback now reads "Assistant request failed. Try again in a
+moment." — no mixed language anywhere in the assistant error set.
+**Protection:** the non-JSON-500 unit test asserts the retry guidance.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — unit green (385 passed).
+
+---
 ## 2026-08-18 · Upgrade/Paddle + pricing · copy (second pass)
+
 
 **Defect:** none found — the pricing page and upgrade modal stay honest and
 next-step: prices match the founder cap ($8/month, $64/year with "save 33%"),

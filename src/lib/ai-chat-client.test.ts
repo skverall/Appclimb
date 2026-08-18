@@ -559,7 +559,7 @@ describe("requestAssistantReply failure bodies", () => {
     stubFetch(async () => new Response("<html>Bad Gateway</html>", { status: 500 }));
     await expect(
       requestAssistantReply({ message: "hi", history: [], context: null }),
-    ).rejects.toThrow("Assistant request failed.");
+    ).rejects.toThrow("Assistant request failed. Try again in a moment.");
   });
 
   it("maps a non-JSON 429 body to the rate-limit message", async () => {
