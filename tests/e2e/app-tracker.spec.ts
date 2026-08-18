@@ -592,3 +592,60 @@ test("keyword cap applies only when plan limits are live", async ({ page }) => {
     page.getByText(/Free plan tracks up to 25 keywords per app/i),
   ).toBeVisible({ timeout: 10_000 });
 });
+
+test("tracker layout has no overflow and stays usable at 1024px", async ({
+  page,
+}) => {
+  await mockItunes(page);
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.goto("/");
+
+  await page.getByRole("button", { name: /Try a sample app/i }).click();
+  await expect(
+    page.getByRole("heading", { name: /Car Dealer Tracker: Profit/i }),
+  ).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator(".tracker-table tbody tr")).toHaveCount(7, {
+    timeout: 30_000,
+  });
+
+  const overflow = await page.evaluate(
+    () =>
+      Math.max(
+        document.documentElement.scrollWidth,
+        document.body.scrollWidth,
+      ) - document.documentElement.clientWidth,
+  );
+  expect(overflow, `horizontal overflow: ${overflow}px`).toBeLessThanOrEqual(0);
+
+  // Key actions stay reachable at this width.
+  await expect(
+    page.getByRole("button", { name: /Add Keywords/i }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Export keywords as CSV/i }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: /Best Position History/i }),
+  ).toBeVisible();
+
+  // Second pass: the keyword detail panel must also fit at this width.
+  await page
+    .locator(".tracker-overview-list")
+    .getByRole("button", { name: /car dealer tracker/i })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "car dealer tracker", exact: true }),
+  ).toBeVisible({ timeout: 5_000 });
+  const detailOverflow = await page.evaluate(
+    () =>
+      Math.max(
+        document.documentElement.scrollWidth,
+        document.body.scrollWidth,
+      ) - document.documentElement.clientWidth,
+  );
+  expect(
+    detailOverflow,
+    `detail horizontal overflow: ${detailOverflow}px`,
+  ).toBeLessThanOrEqual(0);
+  await page.getByRole("button", { name: /Close keyword detail/i }).click();
+});

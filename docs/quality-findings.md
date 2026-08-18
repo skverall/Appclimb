@@ -38,7 +38,21 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · My Apps (tracker) · ui (viewport guard, 1024px)
+
+**Defect:** none found — the tracker workspace, its table, the ranking
+overview, and the keyword detail panel all fit 1024×768 with 0px horizontal
+overflow; Add Keywords / CSV export / overview remain reachable.
+**Repro:** e2e at 1024×768 (two passes: workspace then keyword detail panel).
+**Fix:** e2e `tracker layout has no overflow and stays usable at 1024px`
+(`tests/e2e/app-tracker.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Keyword Explorer · ui (bulk partial-failure coverage)
+
 
 **Defect:** none found — the bulk banner already reports partial failures
 honestly ("Done — N of M couldn't be analyzed…") and failed rows are removed.
