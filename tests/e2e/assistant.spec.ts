@@ -246,3 +246,49 @@ test("IME composition Enter does not send the message", async ({ page }) => {
   await expect(page.getByText(/reply/i)).toBeVisible({ timeout: 15_000 });
   expect(calls).toBe(1);
 });
+
+test("chat history drawer stays usable at 375px", async ({ page }) => {
+  let calls = 0;
+  await page.route("**/api/chat", async (route) => {
+    calls += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        message: "drawer reply",
+        remainingDay: 19,
+        remainingHour: 5,
+      }),
+    });
+  });
+
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/assistant");
+  await page.getByRole("button", { name: SUGGESTION }).click();
+  await expect(page.getByText(/drawer reply/i)).toBeVisible({
+    timeout: 15_000,
+  });
+
+  // Open the history drawer on a phone-sized viewport.
+  await page.getByRole("button", { name: /Chat history/i }).click();
+  await expect(
+    page.locator(".ai-chat-history-popover, .ai-chat-history-sidebar.is-open"),
+  ).toBeVisible();
+
+  // The drawer must not push the page horizontally.
+  const overflow = await page.evaluate(
+    () =>
+      Math.max(
+        document.documentElement.scrollWidth,
+        document.body.scrollWidth,
+      ) - document.documentElement.clientWidth,
+  );
+  expect(overflow, `horizontal overflow: ${overflow}px`).toBeLessThanOrEqual(0);
+
+  // Picking a chat from the drawer closes it and keeps the composer visible.
+  await page.locator(".ai-chat-history-list").getByRole("button").first().click();
+  await expect(
+    page.locator(".ai-chat-history-popover, .ai-chat-history-sidebar.is-open"),
+  ).toHaveCount(0);
+  await expect(page.getByLabel("Message the ASO assistant")).toBeVisible();
+});
