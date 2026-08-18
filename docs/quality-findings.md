@@ -92,7 +92,20 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Pre-monetization mode · ui (no gates without accounts)
+
+**Defect:** none found — with accounts unconfigured the header shows no sign-in
+chrome, the assistant composer is open (no auth gate), and the explorer renders.
+**Repro:** e2e second pass per matrix rules (surface I).
+**Fix:** e2e `pre-monetization mode shows no account chrome and no gates`
+(`tests/e2e/guest-access.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Auth dialog · ui (1024px and 1920px)
+
 
 **Defect:** none found — the sign-in dialog fits, stays centered (midpoint
 within 24px), keeps its fields reachable, and closes with Escape at both
@@ -118,7 +131,20 @@ so a keyboard user can immediately keep typing.
 
 ---
 ---
+---
+## 2026-08-18 · Pre-monetization mode · ui (no gates without accounts)
+
+**Defect:** none found — with accounts unconfigured the header shows no sign-in
+chrome, the assistant composer is open (no auth gate), and the explorer renders.
+**Repro:** e2e second pass per matrix rules (surface I).
+**Fix:** e2e `pre-monetization mode shows no account chrome and no gates`
+(`tests/e2e/guest-access.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Auth dialog · ui (1024px and 1920px)
+
 
 **Defect:** none found — the sign-in dialog fits, stays centered (midpoint
 within 24px), keeps its fields reachable, and closes with Escape at both

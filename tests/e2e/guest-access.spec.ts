@@ -221,3 +221,20 @@ test("auth dialog fits and stays centered at 1024px and 1920px", async ({
     await expect(dialog).toHaveCount(0);
   }
 });
+
+test("pre-monetization mode shows no account chrome and no gates", async ({
+  page,
+}) => {
+  // No /api/me mock: the real route reports configured:false (accounts off).
+  await page.goto("/");
+  await expect(page.getByPlaceholder(/meditation/)).toBeVisible();
+
+  // No sign-in chrome in the header.
+  await expect(page.getByRole("button", { name: /^Sign in$/i })).toHaveCount(0);
+  await expect(page.getByText("Guest", { exact: true })).toHaveCount(0);
+
+  // The assistant composer is open (no auth gate) in pre-monetization mode.
+  await page.goto("/assistant");
+  await expect(page.getByLabel("Message the ASO assistant")).toBeVisible();
+  await expect(page.getByText(/Sign in to chat/i)).toHaveCount(0);
+});
