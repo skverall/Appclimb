@@ -70,7 +70,20 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · ASO Assistant · ui (interactive pass, 375/768px)
+
+**Defect:** none found — a full send/reply cycle and the history drawer work
+at 375×812 and 768×1024 with 0px overflow and the composer reachable.
+**Repro:** e2e second pass per matrix rules.
+**Fix:** e2e `chat send and history work at 375px and 768px`
+(`tests/e2e/assistant.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Keyword Explorer · logic (CJK/cyrillic keywords)
+
 
 **Defect:** none found — a Japanese (瞑想) and a Russian (медитация) keyword
 analyze and render intact with honest Est. labels; case-insensitive dedup and

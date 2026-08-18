@@ -456,3 +456,52 @@ test("the 5th free message passes and the 6th is blocked client-side", async ({
     "message six",
   );
 });
+
+test("chat send and history work at 375px and 768px", async ({ page }) => {
+  await page.route("**/api/chat", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ message: "mobile reply", remainingDay: 19 }),
+    });
+  });
+
+  for (const [width, height] of [
+    [375, 812],
+    [768, 1024],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.goto("/assistant");
+    await page.evaluate(() => window.localStorage.clear());
+    await page.reload();
+
+    // Full send cycle at this width.
+    await page.getByLabel("Message the ASO assistant").fill("hello");
+    await page.getByRole("button", { name: "Send" }).click();
+    await expect(page.getByText(/mobile reply/i)).toBeVisible({
+      timeout: 15_000,
+    });
+
+    // Opening the history drawer keeps the composer reachable and the page
+    // un-overflowed.
+    await page.getByRole("button", { name: /Chat history/i }).click();
+    await expect(
+      page.locator(".ai-chat-history-popover, .ai-chat-history-sidebar.is-open"),
+    ).toBeVisible();
+    const overflow = await page.evaluate(
+      () =>
+        Math.max(
+          document.documentElement.scrollWidth,
+          document.body.scrollWidth,
+        ) - document.documentElement.clientWidth,
+    );
+    expect(
+      overflow,
+      `overflow at ${width}px: ${overflow}px`,
+    ).toBeLessThanOrEqual(0);
+    await page.getByLabel("Message the ASO assistant").fill("still here");
+    await expect(page.getByLabel("Message the ASO assistant")).toHaveValue(
+      "still here",
+    );
+  }
+});
