@@ -746,7 +746,7 @@ export function KeywordExplorer() {
             <span>
               {batchResult.failed.length === 0
                 ? `Done — all ${batchResult.total} keywords analyzed.`
-                : `Done — ${batchResult.failed.length} of ${batchResult.total} couldn’t be analyzed (the App Store may be rate-limiting).`}
+                : `Done — ${batchResult.failed.length} of ${batchResult.total} couldn’t be analyzed (the App Store may be rate-limiting). Existing data was kept — wait a moment and analyze them again.`}
             </span>
             <button type="button" onClick={() => setBatchResult(null)}>
               Dismiss

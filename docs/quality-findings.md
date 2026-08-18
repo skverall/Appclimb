@@ -107,7 +107,24 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Keyword Explorer · copy (error messages, second pass)
+
+**Defect:** the bulk partial-failure banner named the cause ("the App Store
+may be rate-limiting") but not the next step — unlike the tracker's
+equivalent message, it never told the user data was kept or how to retry.
+**Root cause:** `keyword-explorer.tsx` batch banner copy.
+**Fix:** the banner now ends with "Existing data was kept — wait a moment and
+analyze them again." The analyze error ("try again in a moment") and the
+limit banner ("Upgrade to Pro…") already named next steps; no mixed language
+found anywhere.
+**Protection:** the partial-failure e2e now asserts the retry guidance.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — unit green (385 passed), e2e green.
+
+---
 ## 2026-08-18 · Marketing shell · copy (CTA second pass)
+
 
 **Defect:** none found — every marketing CTA names the next step ("Search
 keywords", "Open the keyword explorer", "Try it now", "Open Explorer"); no
@@ -366,7 +383,24 @@ so a keyboard user can immediately keep typing.
 ---
 ---
 ---
+---
+## 2026-08-18 · Keyword Explorer · copy (error messages, second pass)
+
+**Defect:** the bulk partial-failure banner named the cause ("the App Store
+may be rate-limiting") but not the next step — unlike the tracker's
+equivalent message, it never told the user data was kept or how to retry.
+**Root cause:** `keyword-explorer.tsx` batch banner copy.
+**Fix:** the banner now ends with "Existing data was kept — wait a moment and
+analyze them again." The analyze error ("try again in a moment") and the
+limit banner ("Upgrade to Pro…") already named next steps; no mixed language
+found anywhere.
+**Protection:** the partial-failure e2e now asserts the retry guidance.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — unit green (385 passed), e2e green.
+
+---
 ## 2026-08-18 · Marketing shell · copy (CTA second pass)
+
 
 **Defect:** none found — every marketing CTA names the next step ("Search
 keywords", "Open the keyword explorer", "Try it now", "Open Explorer"); no

@@ -389,7 +389,7 @@ test("bulk analyze reports partial failures honestly", async ({ page }) => {
   // One succeeds, one is rate-limited: the banner names the failure instead
   // of pretending everything worked, and no failed row lingers.
   await expect(
-    page.getByText(/Done — 1 of 2 couldn’t be analyzed/i),
+    page.getByText(/Done — 1 of 2 couldn’t be analyzed.*analyze them again/i),
   ).toBeVisible({ timeout: 20_000 });
   await expect(page.locator(ROW)).toHaveCount(1);
   await expect(page.locator(ROW).filter({ hasText: "fail-bulk" })).toHaveCount(0);
