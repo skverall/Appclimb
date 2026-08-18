@@ -66,7 +66,22 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · ASO Assistant · data-honesty (welcome + prompt contract)
+
+**Defect:** none found — the welcome message promises not to invent search
+volumes, and the system prompt labels popularity as official-or-estimate,
+difficulty as always an estimate, and forbids claiming volume/downloads/
+revenue; context rows are labeled "estimates / observed position".
+**Repro:** unit-level second pass per matrix rules.
+**Fix:** unit tests `assistant honesty contract`
+(`src/lib/ai-chat.test.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — unit green (365 passed).
+
+---
 ## 2026-08-18 · My Apps (cloud sync) · ui (missing sync states)
+
 
 **Defect:** `syncState` (syncing/synced/error) was held in the account provider
 but rendered nowhere — a Pro subscriber had zero feedback that their data

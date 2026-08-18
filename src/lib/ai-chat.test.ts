@@ -170,3 +170,26 @@ describe("ai-chat policy", () => {
     expect(normalizeAppContext({ keywords: [{ popularity: 1 }] })?.keywords).toBeUndefined();
   });
 });
+
+describe("assistant honesty contract", () => {
+  it("welcome message never promises invented volumes", () => {
+    const welcome = `Hi — I’m the AppClimb ASO assistant (DeepSeek V4 Flash). I can suggest keywords, interpret estimated scores, and help plan title/subtitle changes for your tracked app. I won’t invent search volumes or share any secrets.`;
+    expect(`${welcome}`).toMatch(/won’t invent search volumes/i);
+    expect(`${welcome}`).toMatch(/estimated scores/i);
+    expect(`${welcome}`).not.toMatch(/downloads or revenue/i);
+  });
+
+  it("system prompt labels every metric and forbids volume claims", () => {
+    const prompt = buildSystemPrompt({
+      appName: "Calm Focus",
+      keywords: [{ keyword: "meditation", popularity: 70, difficulty: 40 }],
+    });
+    // The model is told popularity is official-or-estimate and never volume.
+    expect(prompt).toMatch(/NOT search volume/i);
+    expect(prompt).toMatch(/ESTIMATE/i);
+    expect(prompt).toMatch(/difficulty is always an ESTIMATE/i);
+    expect(prompt).toMatch(/Do not claim search volume, downloads, or revenue/i);
+    // Context rows are labeled as estimates / observed positions.
+    expect(prompt).toMatch(/estimates \/ observed position/i);
+  });
+});
