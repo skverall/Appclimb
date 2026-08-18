@@ -53,7 +53,21 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Marketing (404) · ui (coverage)
+
+**Defect:** none found — unknown URLs return a real 404 status, render the
+not-found page with the "Search keywords" recovery link, and stay overflow-
+free at 320px.
+**Repro:** e2e on two bogus paths (second pass per matrix rules).
+**Fix:** e2e `unknown URLs render the 404 page with a 404 status` and
+`404 page stays usable at 320px` (`tests/e2e/public-discovery.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Upgrade/Paddle · logic (portal flow coverage)
+
 
 **Defect:** none found — for a canceled Pro plan (cancel_at_period_end),
 "Manage subscription" fetches the portal links and opens the update-payment-

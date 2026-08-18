@@ -1,4 +1,4 @@
-import { expect, test } from "./runtime-test";
+import { dismissExpectedConsoleErrors, expect, test } from "./runtime-test";
 
 test("keyword research landing page is indexable and mobile-safe", async ({
   page,
@@ -269,4 +269,38 @@ test("marketing mobile nav drawer fits 375px without overflow", async ({
     .click();
   await expect(page).toHaveURL(/\/pricing$/);
   await expect(page.locator(".marketing-mobile-drawer")).toHaveCount(0);
+});
+
+test("unknown URLs render the 404 page with a 404 status", async ({
+  page,
+}) => {
+  const response = await page.goto("/definitely-not-a-real-page");
+  expect(response?.status()).toBe(404);
+  dismissExpectedConsoleErrors(page, [/Failed to load resource.*404/]);
+
+  await expect(
+    page.getByRole("heading", { name: /This page is not in the index/i }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: /Search keywords/i }),
+  ).toBeVisible();
+});
+
+test("404 page stays usable at 320px", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  const response = await page.goto("/nope-nope-nope");
+  expect(response?.status()).toBe(404);
+  dismissExpectedConsoleErrors(page, [/Failed to load resource.*404/]);
+
+  const overflow = await page.evaluate(
+    () =>
+      Math.max(
+        document.documentElement.scrollWidth,
+        document.body.scrollWidth,
+      ) - document.documentElement.clientWidth,
+  );
+  expect(overflow, `horizontal overflow: ${overflow}px`).toBeLessThanOrEqual(0);
+  await expect(
+    page.getByRole("heading", { name: /This page is not in the index/i }),
+  ).toBeVisible();
 });
