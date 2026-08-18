@@ -83,7 +83,23 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Keyword Explorer · logic (blocked storage e2e)
+
+**Defect:** none found — with localStorage fully blocked (private mode via
+SecurityError-throwing Storage methods) the explorer renders the empty state
+and a keyword analysis completes in-session: no crash, no eternal spinner.
+This validates the fail-closed reads and fail-open writes end-to-end.
+**Repro:** e2e with `Storage.prototype` methods denied (second pass per matrix
+rules).
+**Fix:** e2e `explorer degrades gracefully when localStorage is blocked`
+(`tests/e2e/explorer.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · ASO Assistant · logic (non-JSON / aborted chat responses)
+
 
 **Defect:** `requestAssistantReply` awaited `response.json()` before checking
 `response.ok`: a 5xx with a non-JSON body (proxy error page, WAF block,

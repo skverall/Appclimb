@@ -836,3 +836,34 @@ test("a shared keyword containing HTML renders as literal text", async ({
   // React escapes the payload — no live element is injected.
   await expect(page.locator(".keyword-name img")).toHaveCount(0);
 });
+
+test("explorer degrades gracefully when localStorage is blocked", async ({
+  page,
+}) => {
+  await page.addInitScript(() => {
+    const deny = () => {
+      throw new DOMException("storage disabled", "SecurityError");
+    };
+    Storage.prototype.getItem = deny;
+    Storage.prototype.setItem = deny;
+    Storage.prototype.removeItem = deny;
+    Storage.prototype.clear = deny;
+  });
+  await mockExplorer(page);
+  await page.route("**/api/popularity", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ configured: false, results: [] }),
+    });
+  });
+
+  // Private mode: the tool still renders (empty state) and analysis works in
+  // the session — no crash, no eternal spinner.
+  await page.goto("/");
+  await expect(page.getByPlaceholder(/meditation/)).toBeVisible();
+  await page.getByPlaceholder(/meditation/).fill("yoga");
+  await page.getByRole("button", { name: "Analyze", exact: true }).click();
+  await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
+  await expect(page.locator(".source-pill").first()).toContainText(/Est\./);
+});
