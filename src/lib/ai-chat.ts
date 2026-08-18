@@ -160,12 +160,27 @@ export interface RateBucket {
   lastAt: number;
 }
 
+/**
+ * Milliseconds at the start of the current UTC calendar day. The daily cap is
+ * aligned to the same UTC-midnight boundary the browser counters use
+ * (`appclimb:ai:day`), so a user who reaches the cap late at night is
+ * unblocked at midnight instead of staying locked for a full rolling 24h.
+ */
+function utcDayStartMs(now: number): number {
+  const time = new Date(now);
+  return Date.UTC(
+    time.getUTCFullYear(),
+    time.getUTCMonth(),
+    time.getUTCDate(),
+  );
+}
+
 export function emptyRateBucket(now = Date.now()): RateBucket {
   return {
     hourCount: 0,
     hourReset: now + 60 * 60 * 1000,
     dayCount: 0,
-    dayReset: now + 24 * 60 * 60 * 1000,
+    dayReset: utcDayStartMs(now) + 24 * 60 * 60 * 1000,
     lastAt: 0,
   };
 }
@@ -194,7 +209,7 @@ export function checkAndConsumeRateLimit(
   }
   if (now >= next.dayReset) {
     next.dayCount = 0;
-    next.dayReset = now + 24 * 60 * 60 * 1000;
+    next.dayReset = utcDayStartMs(now) + 24 * 60 * 60 * 1000;
   }
 
   const sinceLast = now - next.lastAt;

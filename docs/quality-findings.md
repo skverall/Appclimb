@@ -26,6 +26,29 @@ Rules:
   item or a fresh surface, never re-litigates closed ones.
 
 ---
+## 2026-08-18 · ASO Assistant · logic (quota day boundary)
+
+**Defect:** The server's daily message cap used a rolling 24h window starting at
+first use, while the browser counter (`appclimb:ai:day`) resets at UTC
+midnight. A free user who hit the 5-message cap late at night stayed locked
+for a full rolling day even though the UI showed a fresh "5 messages left" —
+every send then failed with a server 429 for up to 24h.
+**Repro:** unit-level: bucket created at 2026-08-18T23:30Z, 5 messages
+consumed; at 2026-08-19T00:10Z the old code still blocked (dayCount 5) while
+the client counter had already reset.
+**Root cause:** `src/lib/ai-chat.ts` `emptyRateBucket`/`checkAndConsumeRateLimit`
+anchored `dayReset` at `firstUse + 24h` instead of the UTC calendar boundary.
+**Fix:** `dayReset` is now `UTC-midnight + 24h`; the reset branch recomputes it
+from the current UTC day. The hour window stays rolling (abuse control), only
+the daily window is calendar-aligned — matching the browser counters and
+making `retryAfterSec` honest (seconds to midnight instead of 24h).
+**Protection:** unit test `resets the daily cap at UTC midnight, matching the
+browser counter` (`src/lib/ai-chat.test.ts`) — 5/day free-plan caps, asserts
+reset at 00:10Z and the retry value pointing at midnight.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — lint/typecheck/unit green (345 passed).
+
+---
 ## 2026-08-18 · Dialogs (all modals) · accessibility (keyboard / focus)
 
 **Defect:** All seven dialogs (`aria-modal`) let Tab escape into the page behind

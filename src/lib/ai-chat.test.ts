@@ -108,6 +108,45 @@ describe("ai-chat policy", () => {
     }
   });
 
+  it("resets the daily cap at UTC midnight, matching the browser counter", () => {
+    // A free user at 23:30 UTC: the browser counter flips at midnight, so the
+    // server day window must also flip there instead of a rolling 24h lockout.
+    const caps = { maxPerHour: 20, maxPerDay: 5 };
+    const lateNight = Date.UTC(2026, 7, 18, 23, 30, 0); // 2026-08-18T23:30Z
+    let bucket = emptyRateBucket(lateNight);
+    expect(bucket.dayReset).toBe(Date.UTC(2026, 7, 19, 0, 0, 0));
+
+    for (let i = 0; i < 5; i += 1) {
+      const step = checkAndConsumeRateLimit(
+        bucket,
+        lateNight + i * (AI_LIMITS.minIntervalMs + 10),
+        caps,
+      );
+      expect(step.ok).toBe(true);
+      if (step.ok) bucket = step.bucket;
+    }
+
+    // Still the same UTC day: blocked, retry points at midnight.
+    const stillBlocked = checkAndConsumeRateLimit(
+      bucket,
+      lateNight + 10 * 60 * 1000,
+      caps,
+    );
+    expect(stillBlocked.ok).toBe(false);
+    if (!stillBlocked.ok) {
+      expect(stillBlocked.retryAfterSec).toBeLessThanOrEqual(
+        (Date.UTC(2026, 7, 19, 0, 0, 0) - (lateNight + 10 * 60 * 1000)) / 1000,
+      );
+    }
+
+    // 10 minutes after UTC midnight: the day window resets and unlocks.
+    const afterMidnight = Date.UTC(2026, 7, 19, 0, 10, 0);
+    const unlocked = checkAndConsumeRateLimit(bucket, afterMidnight, caps);
+    expect(unlocked.ok).toBe(true);
+    expect(unlocked.bucket.dayCount).toBe(1);
+    expect(unlocked.bucket.dayReset).toBe(Date.UTC(2026, 7, 20, 0, 0, 0));
+  });
+
   it("hashes client keys and flags secret fishing", () => {
     expect(clientRateKey("1.2.3.4", "Mozilla")).toMatch(/^ai:/);
     expect(clientRateKey("1.2.3.4", "Mozilla")).toBe(
