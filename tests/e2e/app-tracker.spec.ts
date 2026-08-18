@@ -683,3 +683,66 @@ test("tracker labels every score honestly: no volume or downloads claims", async
     page.getByText(/not Apple search volume or downloads/i),
   ).toBeVisible();
 });
+
+test("free plan enforces the 25-keyword cap exactly", async ({ page }) => {
+  await mockItunes(page);
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        user: { id: "u1", email: "free@example.com", name: "Free" },
+        plan: "free",
+        subscription: null,
+      }),
+    });
+  });
+
+  await page.goto("/");
+  const closeWelcome = page.getByRole("button", { name: /Close welcome dialog/i });
+  try {
+    await closeWelcome.waitFor({ state: "visible", timeout: 3_000 });
+    await closeWelcome.click();
+  } catch {
+    // no onboarding modal for this account state
+  }
+
+  // Add Calm Focus by search (no starter keywords seeded).
+  await page.getByRole("button", { name: /Add App/i }).first().click();
+  await expect(page.getByRole("heading", { name: "Add App" })).toBeVisible();
+  const searchBox = page.getByLabel("Search for an app");
+  await searchBox.fill("Calm Focus");
+  await page.getByRole("button", { name: "Search" }).click();
+  await page.getByRole("button", { name: /Add Calm Focus/i }).click();
+  // Dismiss the keyword-suggestions modal (no keywords are seeded this way).
+  const suggestions = page.getByRole("dialog", { name: /Keyword suggestions/i });
+  await expect(suggestions).toBeVisible({ timeout: 10_000 });
+  await page.keyboard.press("Escape");
+  await expect(suggestions).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Calm Focus" })).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(page.getByText(/No keywords tracked yet/i)).toBeVisible();
+
+  // Add exactly 25 keywords: allowed, no cap notice.
+  const twentyFive = Array.from({ length: 25 }, (_, i) => `kw ${i + 1}`).join("\n");
+  await page.getByRole("button", { name: /Add Keywords/i }).first().click();
+  await page.getByLabel("Keywords to add").fill(twentyFive);
+  await page.getByRole("button", { name: /Add 25 keywords/i }).click();
+  await expect(page.locator(".tracker-table tbody tr")).toHaveCount(25, {
+    timeout: 20_000,
+  });
+  await expect(
+    page.getByText(/Free plan tracks up to 25 keywords/i),
+  ).toHaveCount(0);
+
+  // One more is blocked with the honest explanation.
+  await page.getByRole("button", { name: /Add Keywords/i }).first().click();
+  await page.getByLabel("Keywords to add").fill("overflow kw");
+  await page.getByRole("button", { name: /Add 1 keyword/i }).click();
+  await expect(
+    page.getByText(/Free plan tracks up to 25 keywords/i),
+  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator(".tracker-table tbody tr")).toHaveCount(25);
+});

@@ -81,7 +81,22 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · My Apps (tracker) · logic (25-keyword cap boundary)
+
+**Defect:** none found — a fresh free app can add exactly 25 keywords with no
+cap notice; the 26th is blocked with the honest "Free plan tracks up to 25
+keywords" message and the row count stays at 25.
+**Repro:** e2e: add Calm Focus by search (no starter keywords), add 25 → all
+added; add 1 more → blocked.
+**Fix:** e2e `free plan enforces the 25-keyword cap exactly`
+(`tests/e2e/app-tracker.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Auth (sign out) · logic (Pro flush, second pass)
+
 
 **Defect:** none found — a Pro sign out flushes pending local data to the
 cloud (≥1 PUT to /api/sync) before clearing this device, then shows the
