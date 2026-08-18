@@ -78,7 +78,21 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · /api/chat · logic (upstream failure coverage)
+
+**Defect:** none found — the route maps upstream failures honestly: no key → 503,
+fetch throw → 502, upstream 429 → 429, upstream 401/403 → 503, non-JSON body →
+502, empty reply → 502, success → the message.
+**Repro:** added unit tests against the real route handler with a mocked global
+`fetch` and a null DB (IP-keyed quota subjects so each case runs independently).
+**Fix:** `src/app/api/chat/route.test.ts`.
+**Status:** covered (local branch, not pushed).
+**Verification:** locally tested — 7 route tests green, full unit green (373 total).
+
+---
 ## 2026-08-18 · My Apps (tracker) + ASO Assistant · design/storage (second passes)
+
 
 **Defect:** none found — tracker status filters route unavailable keywords to
 "unchecked" (never lost), and the chat store caps the thread tail at 80
