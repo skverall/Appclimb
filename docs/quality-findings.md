@@ -82,7 +82,29 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · ASO Assistant · logic (non-JSON / aborted chat responses)
+
+**Defect:** `requestAssistantReply` awaited `response.json()` before checking
+`response.ok`: a 5xx with a non-JSON body (proxy error page, WAF block,
+truncated response from a dropped connection) threw a raw SyntaxError that
+leaked into the composer error instead of a clean message, and the status-based
+fallbacks never ran.
+**Repro:** unit-level: a 500 with an HTML body rejected with a parse error
+before this fix.
+**Root cause:** `src/lib/ai-chat-client.ts` parsed the body unconditionally.
+**Fix:** the body is parsed defensively (empty on failure) so status-based
+messages ("Assistant request failed.", 401/429 hints, server `error` field)
+always apply.
+**Protection:** unit tests `requestAssistantReply failure bodies`
+(`src/lib/ai-chat-client.test.ts`) — non-JSON 500/429, server error field, and
+the success path.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — unit green (377 passed).
+
+---
 ## 2026-08-18 · My Apps (tracker) · logic (25-keyword cap boundary)
+
 
 **Defect:** none found — a fresh free app can add exactly 25 keywords with no
 cap notice; the 26th is blocked with the honest "Free plan tracks up to 25

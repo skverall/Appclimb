@@ -463,12 +463,18 @@ export async function requestAssistantReply(options: {
     }),
   });
 
-  const data = (await response.json()) as {
+  let data: {
     message?: string;
     error?: string;
     remainingDay?: number;
     remainingHour?: number;
-  };
+  } = {};
+  try {
+    data = (await response.json()) as typeof data;
+  } catch {
+    // Non-JSON failure body (proxy error page, truncated response, abort) —
+    // fall back to status-based messaging instead of leaking a parse error.
+  }
 
   if (!response.ok) {
     throw new Error(

@@ -538,3 +538,50 @@ function loadStoredMessagesFrom(
   seedStore(storage, [conversation("c1", raw as UiMessage[])]);
   return loadStoredMessages();
 }
+
+describe("requestAssistantReply failure bodies", () => {
+  const stubFetch = (impl: typeof fetch) => {
+    vi.stubGlobal("fetch", impl);
+  };
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("maps a non-JSON 500 body to a clean error, not a parse error", async () => {
+    stubFetch(async () => new Response("<html>Bad Gateway</html>", { status: 500 }));
+    await expect(
+      requestAssistantReply({ message: "hi", history: [], context: null }),
+    ).rejects.toThrow("Assistant request failed.");
+  });
+
+  it("maps a non-JSON 429 body to the rate-limit message", async () => {
+    stubFetch(async () => new Response("<html>rate</html>", { status: 429 }));
+    await expect(
+      requestAssistantReply({ message: "hi", history: [], context: null }),
+    ).rejects.toThrow(/Rate limit reached/i);
+  });
+
+  it("surfaces the server error field when present", async () => {
+    stubFetch(
+      async () =>
+        new Response(JSON.stringify({ error: "Upstream down" }), {
+          status: 502,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    await expect(
+      requestAssistantReply({ message: "hi", history: [], context: null }),
+    ).rejects.toThrow("Upstream down");
+  });
+
+  it("returns the message on a valid response", async () => {
+    stubFetch(
+      async () =>
+        new Response(JSON.stringify({ message: "ok" }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }),
+    );
+    await expect(
+      requestAssistantReply({ message: "hi", history: [], context: null }),
+    ).resolves.toMatchObject({ message: "ok" });
+  });
+});
