@@ -577,3 +577,76 @@ test("keyboard removal moves focus to Undo and restores to the search box", asyn
   await expect(page.locator(ROW)).toHaveCount(1);
   await expect(page.getByLabel("Search keywords")).toBeFocused();
 });
+
+test("the quota gate blocks the 9th check before touching a slow iTunes", async ({
+  page,
+}) => {
+  let itunesRequests = 0;
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        user: null,
+        plan: "free",
+        subscription: null,
+      }),
+    });
+  });
+  // Slow network: every iTunes lookup takes 800ms.
+  await page.route(`${ITUNES}/**`, async (route) => {
+    const url = new URL(route.request().url());
+    const limit = Number(url.searchParams.get("limit") ?? "8");
+    // Only keyword-rank lookups count as checks; suggestion fetches (limit 8)
+    // fire on every keystroke and must not affect the quota accounting.
+    if (limit > 10) itunesRequests += 1;
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    const body =
+      limit <= 10
+        ? searchPayload([calmApp])
+        : searchPayload([competitor, calmApp, focusTimer]);
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(body),
+    });
+  });
+  await page.route("**/api/popularity", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ configured: false, results: [] }),
+    });
+  });
+
+  await page.goto("/");
+  const requestsBefore = 0;
+
+  // Eight checks on a slow network: each consumes exactly one unit and the
+  // row appears once the (slow) data arrives.
+  for (let i = 1; i <= 8; i += 1) {
+    await page.getByPlaceholder(/meditation/).fill(`keyword ${i}`);
+    await expect(
+      page.getByRole("button", { name: "Analyze", exact: true }),
+    ).toBeEnabled({ timeout: 10_000 });
+    await page.getByRole("button", { name: "Analyze", exact: true }).click();
+    await expect(page.locator(ROW)).toHaveCount(i, { timeout: 15_000 });
+  }
+  const requestsAfterEight = itunesRequests;
+  expect(requestsAfterEight).toBeGreaterThan(requestsBefore);
+  await expect(
+    page.getByText(/You've used your 8 free keyword checks/),
+  ).toBeVisible();
+
+  // Ninth attempt: blocked by the gate before any network activity.
+  const requestsAtAttempt = itunesRequests;
+  await page.getByPlaceholder(/meditation/).fill("keyword 9");
+  await page.getByRole("button", { name: "Analyze", exact: true }).click();
+  await page.waitForTimeout(1_000);
+  expect(itunesRequests).toBe(requestsAtAttempt);
+  await expect(page.locator(ROW)).toHaveCount(8);
+  await expect(
+    page.getByText(/You've used your 8 free keyword checks/),
+  ).toBeVisible();
+});

@@ -248,7 +248,10 @@ export function KeywordExplorer() {
           return next;
         });
         if (options.clearInput !== false) {
-          setQuery("");
+          // Only clear when the box still holds the analyzed term: a user who
+          // starts typing the next keyword while this check is in flight must
+          // not have their input wiped by the finishing finally block.
+          setQuery((current) => (current.trim() === clean ? "" : current));
         }
         setSuggestionsOpen(false);
       }

@@ -54,7 +54,30 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Keyword Explorer · logic (input wipe race while analyzing)
+
+**Defect:** While an analysis is in flight, a user who starts typing the next
+keyword had their input wiped: the analyze's `finally` called `setQuery("")`
+unconditionally, destroying whatever was typed after the click. Reproduced
+with a slow iTunes mock — the box was empty right after the second fill.
+**Repro:** e2e on `/` with an 800ms iTunes mock: fill "keyword 1", Analyze,
+then fill "keyword 2" before the first check finishes — the input empties.
+**Root cause:** `keyword-explorer.tsx` finally block cleared the query without
+checking whether it still held the analyzed term.
+**Fix:** the clear is conditional — `setQuery(current => current.trim() ===
+clean ? "" : current)` — the box clears only when it still contains the
+searched keyword; a new draft survives.
+**Protection:** e2e `the quota gate blocks the 9th check before touching a
+slow iTunes` (`tests/e2e/explorer.spec.ts`) — eight sequential checks on a
+slow network (each fill happens while the previous check may still run), then
+the 9th attempt proves the gate blocks before any rank-search request.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — lint/typecheck/unit green (363 passed), e2e green.
+
+---
 ## 2026-08-18 · Marketing (404) · ui (coverage)
+
 
 **Defect:** none found — unknown URLs return a real 404 status, render the
 not-found page with the "Search keywords" recovery link, and stay overflow-
