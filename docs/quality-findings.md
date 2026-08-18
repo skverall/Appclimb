@@ -36,7 +36,28 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · ASO Assistant · logic (IME composition Enter)
+
+**Defect:** The composer sent the message on any Enter keydown, including the
+Enter that confirms an IME composition (CJK input). A Japanese/Chinese user
+typing with an input method got a half-composed message sent mid-word.
+**Repro:** e2e on `/assistant`: dispatch a keydown Enter with
+`isComposing: true` on the composer — a `/api/chat` request fired and a user
+bubble appeared before the fix.
+**Root cause:** `ai-chat-conversation.tsx` `onKeyDown` handled Enter without
+checking `event.nativeEvent.isComposing`.
+**Fix:** return early while composing; regular Enter (and Shift+Enter
+newline) behave as before.
+**Protection:** e2e `IME composition Enter does not send the message`
+(`tests/e2e/assistant.spec.ts`) — composed Enter sends nothing (0 requests,
+no bubble), then a plain Enter sends normally.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — lint/typecheck/unit green (354 passed), e2e green.
+
+---
 ## 2026-08-18 · Auth dialog · ui (viewport guard, 320px)
+
 
 **Defect:** none found — the sign-in dialog fits the 320px viewport with the
 email field and submit button reachable.

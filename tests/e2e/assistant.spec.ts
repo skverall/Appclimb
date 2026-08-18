@@ -207,3 +207,42 @@ test("assistant surfaces rate-limit and local-limit errors", async ({
     timeout: 15_000,
   });
 });
+
+test("IME composition Enter does not send the message", async ({ page }) => {
+  let calls = 0;
+  await page.route("**/api/chat", async (route) => {
+    calls += 1;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ message: "reply", remainingDay: 19 }),
+    });
+  });
+
+  await page.goto("/assistant");
+  const input = page.getByLabel("Message the ASO assistant");
+  await input.fill("日本語のキーワード");
+
+  // Pressing Enter to confirm IME composition must not send.
+  await page.evaluate(() => {
+    const textarea = document.querySelector(
+      'textarea[aria-label="Message the ASO assistant"]',
+    );
+    textarea?.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        code: "Enter",
+        bubbles: true,
+        cancelable: true,
+        isComposing: true,
+      }),
+    );
+  });
+  await expect(page.locator(".ai-chat-bubble--user")).toHaveCount(0);
+  expect(calls).toBe(0);
+
+  // A regular Enter still sends.
+  await input.press("Enter");
+  await expect(page.getByText(/reply/i)).toBeVisible({ timeout: 15_000 });
+  expect(calls).toBe(1);
+});

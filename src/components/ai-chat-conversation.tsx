@@ -676,6 +676,9 @@ export function AiChatConversation({
                 disabled={busy}
                 aria-label="Message the ASO assistant"
                 onKeyDown={(event) => {
+                  // Enter confirms the IME composition (CJK input); it must
+                  // not send a half-composed message.
+                  if (event.nativeEvent.isComposing) return;
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
                     void send(input);
