@@ -50,6 +50,38 @@ test("home page renders the keyword explorer without an account", async ({
   ).toBeVisible();
 });
 
+test("core surfaces have no horizontal overflow at 320px", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+
+  for (const path of ["/", "/assistant", "/pricing"]) {
+    await page.goto(path);
+    await expect(page.locator("h1").first()).toBeVisible();
+
+    const pageOverflow = await page.evaluate(
+      () =>
+        Math.max(
+          document.documentElement.scrollWidth,
+          document.body.scrollWidth,
+        ) - document.documentElement.clientWidth,
+    );
+    expect(
+      pageOverflow,
+      `horizontal overflow on ${path}: ${pageOverflow}px`,
+    ).toBeLessThanOrEqual(0);
+
+    // The primary interactive surface must still be reachable at this width.
+    if (path === "/") {
+      await expect(page.getByPlaceholder(/meditation/)).toBeVisible();
+    } else if (path === "/assistant") {
+      await expect(page.getByLabel("Message the ASO assistant")).toBeVisible();
+    } else {
+      await expect(page.getByText("Free", { exact: true }).first()).toBeVisible();
+    }
+  }
+});
+
 test("articles expose canonical metadata and parseable JSON-LD", async ({
   page,
 }) => {

@@ -35,9 +35,16 @@ export function anonymousAccount(): AccountState {
   };
 }
 
-export async function fetchAccountState(): Promise<AccountState> {
+export async function fetchAccountState(
+  options: { timeoutMs?: number } = {},
+): Promise<AccountState> {
   try {
-    const res = await fetch("/api/me", { cache: "no-store" });
+    const res = await fetch("/api/me", {
+      cache: "no-store",
+      // A hung backend must not leave the header/composer in a permanent
+      // loading state — fall back to the anonymous shape after a few seconds.
+      signal: AbortSignal.timeout(options.timeoutMs ?? 8_000),
+    });
     if (!res.ok) return anonymousAccount();
     const data = (await res.json()) as Partial<AccountState>;
     const plan: PlanId = data.plan === "pro" ? "pro" : "free";
@@ -65,6 +72,7 @@ export async function requestMagicLink(email: string): Promise<MagicLinkResult> 
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email }),
+      signal: AbortSignal.timeout(10_000),
     });
     const data = (await res.json().catch(() => ({}))) as { error?: string; configured?: boolean };
     if (!res.ok) {
@@ -95,7 +103,10 @@ export interface PortalLinks {
 
 export async function fetchPortalLinks(): Promise<PortalLinks | null> {
   try {
-    const res = await fetch("/api/billing/portal", { cache: "no-store" });
+    const res = await fetch("/api/billing/portal", {
+      cache: "no-store",
+      signal: AbortSignal.timeout(8_000),
+    });
     if (!res.ok) return null;
     return (await res.json()) as PortalLinks;
   } catch {
