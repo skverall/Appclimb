@@ -85,7 +85,21 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · /api/chat · logic (hourly quota 429, route-level)
+
+**Defect:** none found — the route returns 429 with a rate-limit error once
+the hourly cap (20/IP) is exhausted, with the 1200ms interval respected.
+**Repro:** unit route test with frozen `Date.now` and one IP: 20 spaced
+requests pass, the 21st is 429.
+**Fix:** added `/api/chat hourly quota (429)` to
+`src/app/api/chat/route.test.ts`.
+**Status:** covered (local branch, not pushed).
+**Verification:** locally tested — 8 route tests green, full unit green (378).
+
+---
 ## 2026-08-18 · Marketing shell · ui (degradation when /api/me fails)
+
 
 **Defect:** none found — with /api/me returning 500, marketing pages render
 their H1 and no Next.js error overlay appears; the account fetch degrades to
