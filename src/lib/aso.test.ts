@@ -572,7 +572,26 @@ describe("buildExplorerCsv", () => {
       "keyword,store,popularity,popularity_source,difficulty_estimated,results,saturated,trend_delta,last_checked_at",
     );
     expect(csv).toContain("meditation,US");
-    expect(csv).toContain(metrics.sampledAt);
+    expect(csv).toContain(metrics.sampledAt.slice(0, 10));
+  });
+
+  it("normalizes restored records to the same date-only last_checked_at", () => {
+    // Fresh checks carry a full ISO timestamp; a record restored from
+    // localStorage only keeps the date. The CSV column must not alternate.
+    const fresh = metricsFor("meditation", [makeApp()]);
+    expect(fresh.sampledAt).toMatch(/T/);
+
+    const storage = makeStorage();
+    const record = recordSnapshot(storage, fresh);
+    const restored = restoreMetricsFromRecord(loadRecord(storage, "meditation", "US")!);
+    expect(restored?.sampledAt).not.toMatch(/T/);
+
+    const csv = buildExplorerCsv([
+      { keyword: "meditation", country: "US", metrics: restored!, record },
+    ]);
+    const row = csv.split("\n").find((line) => line.startsWith("meditation,"));
+    expect(row).toContain(restored!.sampledAt.slice(0, 10));
+    expect(row).not.toMatch(/T\d{2}:/);
   });
 
   it("escapes commas and leaves blank cells for pending rows", () => {

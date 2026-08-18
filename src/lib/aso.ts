@@ -838,6 +838,10 @@ export function buildExplorerCsv(rows: readonly ExplorerCsvRow[]): string {
       (row.record && row.record.history.length > 0
         ? row.record.history[row.record.history.length - 1].date
         : "");
+    // Normalize the timestamp: fresh checks store a full ISO string while a
+    // record restored from localStorage only keeps the date. History lives at
+    // day granularity, so the export column is always the date part.
+    const lastCheckedDate = lastChecked.slice(0, 10);
     lines.push(
       [
         csvEscape(row.keyword),
@@ -848,7 +852,7 @@ export function buildExplorerCsv(rows: readonly ExplorerCsvRow[]): string {
         metrics ? String(metrics.results) : "",
         metrics ? String(metrics.saturated) : "",
         delta === null ? "" : String(delta),
-        csvEscape(lastChecked),
+        csvEscape(lastCheckedDate),
       ].join(","),
     );
   }

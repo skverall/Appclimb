@@ -46,7 +46,29 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Keyword Explorer · logic (CSV date hydration)
+
+**Defect:** The CSV `last_checked_at` column alternated formats: a fresh
+check wrote the full ISO timestamp (`2026-08-18T10:00:00.000Z`) while a
+record restored from localStorage only kept the date (`2026-08-18`) — the
+same keyword exported different formats before and after a reload.
+**Repro:** unit-level: `estimateMetrics` sampledAt contains "T"; after
+`recordSnapshot` + `restoreMetricsFromRecord` it is date-only; the CSV row
+reflected each format verbatim.
+**Root cause:** `buildExplorerCsv` emitted `metrics.sampledAt` as-is.
+**Fix:** the export column is normalized to the date part
+(`lastChecked.slice(0, 10)`) — history lives at day granularity, so the
+column is always the date.
+**Protection:** unit test `normalizes restored records to the same
+date-only last_checked_at` (`src/lib/aso.test.ts`); the fresh-path assertion
+now expects the date part too.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — lint/typecheck/unit green (361 passed).
+
+---
 ## 2026-08-18 · Keyword Explorer · ui (detail panel overflow at 320px)
+
 
 **Defect:** The keyword detail panel with a long no-space keyword overflowed
 the 320px viewport by 509px — the heading could not wrap, so the panel (and
