@@ -73,10 +73,14 @@ export function useModalFocus(
       target.focus();
     });
 
-    container.addEventListener("keydown", onKeyDown);
+    // Listen on the document, not the dialog: when an active element inside
+    // the dialog becomes disabled it drops focus to <body>, and a listener on
+    // the container would never see the next Tab. The document handler
+    // re-routes any Tab whose target is outside the dialog back into it.
+    document.addEventListener("keydown", onKeyDown);
     return () => {
       cancelAnimationFrame(frame);
-      container.removeEventListener("keydown", onKeyDown);
+      document.removeEventListener("keydown", onKeyDown);
       previouslyFocused?.focus();
     };
   }, [open, containerRef]);

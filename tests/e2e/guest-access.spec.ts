@@ -1,4 +1,4 @@
-import { expect, test } from "./runtime-test";
+import { dismissExpectedConsoleErrors, expect, test } from "./runtime-test";
 
 const FREE_LIMITS = {
   explorerChecksPerDay: 8,
@@ -141,4 +141,48 @@ test("auth dialog fits the 320px viewport", async ({ page }) => {
   await expect(
     page.getByRole("button", { name: /Email me a sign-in link/i }),
   ).toBeVisible();
+});
+
+test("auth dialog keeps the focus trap at 320px and on errors", async ({
+  page,
+}) => {
+  await mockGuestAccount(page);
+  await page.setViewportSize({ width: 320, height: 640 });
+  await page.route("**/api/auth/magic-link", async (route) => {
+    await route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "Email is not configured yet.", configured: false }),
+    });
+  });
+
+  await page.goto("/");
+  const opener = page.getByRole("button", { name: /^Sign in$/i }).first();
+  await opener.focus();
+  await opener.click();
+  const dialog = page.getByRole("dialog", { name: /Sign in to AppClimb/i });
+  await expect(dialog).toBeVisible();
+
+  // Trigger a visible error inside the dialog.
+  await page.getByLabel("Email").fill("dev@example.com");
+  await page.getByRole("button", { name: /Email me a sign-in link/i }).click();
+  await expect(page.locator(".keyword-error")).toContainText(/Email is not configured/i, {
+    timeout: 10_000,
+  });
+  dismissExpectedConsoleErrors(page, [/Failed to load resource.*503/]);
+
+  // The trap holds even with the error visible at 320px.
+  for (let i = 0; i < 8; i += 1) {
+    await page.keyboard.press("Tab");
+    const inside = await page.evaluate(() => {
+      const el = document.activeElement;
+      return Boolean(el && el.closest('[role="dialog"]'));
+    });
+    if (!inside) throw new Error(`focus escaped on Tab #${i + 1}`);
+  }
+
+  // Escaping closes the dialog and restores focus to the opener.
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  await expect(opener).toBeFocused();
 });

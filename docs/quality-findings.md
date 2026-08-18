@@ -74,7 +74,30 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Dialogs (auth) · accessibility (focus trap vs disabled button)
+
+**Defect:** The focus trap's Tab handler listened on the dialog element only.
+When the focused element inside the dialog became disabled while focused
+(e.g. the magic-link submit button during the in-flight/error state), focus
+dropped to <body> — and a listener on the dialog never receives keydown events
+that target <body>, so the next Tab escaped the modal (reproduced at 320px:
+"focus escaped on Tab #1").
+**Repro:** e2e at 320×640: open the auth dialog, submit to trigger an error,
+press Tab — the first Tab landed outside the dialog.
+**Root cause:** `use-modal-focus.ts` attached the keydown handler to the
+container; a body-focused Tab bypassed it.
+**Fix:** attach the handler to `document` instead — the handler already
+re-routes any Tab whose activeElement is outside the dialog back into it.
+**Protection:** e2e `auth dialog keeps the focus trap at 320px and on errors`
+(`tests/e2e/guest-access.spec.ts`) — trap holds with the error visible, and
+Esc restores focus. The original focus-trap e2e still passes.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — lint/typecheck/unit green (366 passed), e2e green.
+
+---
 ## 2026-08-18 · Keyword Explorer · logic (upgrade mid-session, e2e)
+
 
 **Defect:** none found — an exhausted free quota shows the banner; after the
 mid-session upgrade to Pro (post-checkout refresh), the gate clears and
