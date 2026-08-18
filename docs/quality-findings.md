@@ -91,7 +91,21 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Auth dialog · ui (1024px and 1920px)
+
+**Defect:** none found — the sign-in dialog fits, stays centered (midpoint
+within 24px), keeps its fields reachable, and closes with Escape at both
+1024×768 and 1920×1080.
+**Repro:** e2e second pass per matrix rules.
+**Fix:** e2e `auth dialog fits and stays centered at 1024px and 1920px`
+(`tests/e2e/guest-access.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · ASO Assistant · accessibility (composer focus on switching)
+
 
 **Defect:** none found — after "New chat" the composer receives focus, and
 switching back to a previous thread via history also refocuses the composer,
@@ -103,7 +117,21 @@ so a keyboard user can immediately keep typing.
 **Verification:** locally tested — e2e green.
 
 ---
+---
+## 2026-08-18 · Auth dialog · ui (1024px and 1920px)
+
+**Defect:** none found — the sign-in dialog fits, stays centered (midpoint
+within 24px), keeps its fields reachable, and closes with Escape at both
+1024×768 and 1920×1080.
+**Repro:** e2e second pass per matrix rules.
+**Fix:** e2e `auth dialog fits and stays centered at 1024px and 1920px`
+(`tests/e2e/guest-access.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · ASO Assistant · accessibility (composer focus on switching)
+
 
 **Defect:** none found — after "New chat" the composer receives focus, and
 switching back to a previous thread via history also refocuses the composer.

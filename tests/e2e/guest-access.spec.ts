@@ -186,3 +186,38 @@ test("auth dialog keeps the focus trap at 320px and on errors", async ({
   await expect(dialog).toHaveCount(0);
   await expect(opener).toBeFocused();
 });
+
+test("auth dialog fits and stays centered at 1024px and 1920px", async ({
+  page,
+}) => {
+  await mockGuestAccount(page);
+
+  for (const [width, height] of [
+    [1024, 768],
+    [1920, 1080],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    await page.goto("/");
+    await page.getByRole("button", { name: /^Sign in$/i }).first().click();
+    const dialog = page.getByRole("dialog", { name: /Sign in to AppClimb/i });
+    await expect(dialog).toBeVisible();
+
+    const box = await dialog.boundingBox();
+    if (box) {
+      expect(box.x).toBeGreaterThanOrEqual(0);
+      expect(box.x + box.width).toBeLessThanOrEqual(width);
+      // Centered on the horizontal midpoint.
+      expect(
+        Math.abs(box.x + box.width / 2 - width / 2),
+      ).toBeLessThanOrEqual(24);
+    }
+
+    // The fields remain reachable at both widths.
+    await expect(page.getByLabel("Email")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /Email me a sign-in link/i }),
+    ).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+  }
+});
