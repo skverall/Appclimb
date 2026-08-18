@@ -67,7 +67,22 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · My Apps (tracker) · data-honesty (labels, second pass)
+
+**Defect:** none found — the opportunity column is "Opp. · Est.", difficulty is
+"· Est.", the opportunity filter denies "Apple search volume or downloads",
+and the detail note names the source (official or estimate) without claiming
+downloads/revenue.
+**Repro:** e2e second pass per matrix rules.
+**Fix:** e2e `tracker labels every score honestly: no volume or downloads
+claims` (`tests/e2e/app-tracker.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · ASO Assistant · data-honesty (welcome + prompt contract)
+
 
 **Defect:** none found — the welcome message promises not to invent search
 volumes, and the system prompt labels popularity as official-or-estimate,

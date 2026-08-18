@@ -649,3 +649,37 @@ test("tracker layout has no overflow and stays usable at 1024px", async ({
   ).toBeLessThanOrEqual(0);
   await page.getByRole("button", { name: /Close keyword detail/i }).click();
 });
+
+test("tracker labels every score honestly: no volume or downloads claims", async ({
+  page,
+}) => {
+  await mockItunes(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: /Try a sample app/i }).click();
+  await expect(
+    page.getByRole("heading", { name: /Car Dealer Tracker: Profit/i }),
+  ).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator(".tracker-table tbody tr")).toHaveCount(7, {
+    timeout: 30_000,
+  });
+
+  // The opportunity and difficulty columns are labeled as estimates.
+  await expect(page.getByText("Opp. · Est.")).toBeVisible();
+  await expect(page.getByText("Difficulty · Est.")).toBeVisible();
+
+  // The keyword detail note names the source honestly and never claims
+  // volume or downloads.
+  await page.locator(".tracker-table tbody tr").first().click();
+  const note = page.locator(".keyword-estimate-note--detail");
+  await expect(note).toBeVisible({ timeout: 10_000 });
+  const noteText = (await note.textContent()) ?? "";
+  expect(noteText).toMatch(/not search volume|estimate from public iTunes signals/i);
+  expect(noteText).not.toMatch(/downloads|revenue/i);
+  await page.getByRole("button", { name: /Close keyword detail/i }).click();
+
+  // The opportunity filter explains the heuristic and never claims volume.
+  await page.getByRole("tab", { name: /Opportunity/i }).click();
+  await expect(
+    page.getByText(/not Apple search volume or downloads/i),
+  ).toBeVisible();
+});
