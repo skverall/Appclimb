@@ -90,7 +90,21 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · ASO Assistant · accessibility (composer focus on switching)
+
+**Defect:** none found — after "New chat" the composer receives focus, and
+switching back to a previous thread via history also refocuses the composer,
+so a keyboard user can immediately keep typing.
+**Repro:** e2e second pass per matrix rules (lens 5).
+**Fix:** e2e `switching conversations refocuses the composer`
+(`tests/e2e/assistant.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · My Apps (tracker) · ui (app navigation at 375px)
+
 
 **Defect:** none found — at 375×812 the mobile sidebar exposes Add App, a
 second app can be tracked via search, and the app pills switch the workspace

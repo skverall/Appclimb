@@ -287,7 +287,10 @@ test("chat history drawer stays usable at 375px", async ({ page }) => {
   expect(overflow, `horizontal overflow: ${overflow}px`).toBeLessThanOrEqual(0);
 
   // Picking a chat from the drawer closes it and keeps the composer visible.
-  await page.locator(".ai-chat-history-list").getByRole("button").first().click();
+  await page
+    .locator(".ai-chat-history-list")
+    .getByRole("button", { name: /first message Today/i })
+    .click();
   await expect(
     page.locator(".ai-chat-history-popover, .ai-chat-history-sidebar.is-open"),
   ).toHaveCount(0);
@@ -387,7 +390,10 @@ test("chat works with the history sidebar open at 1024px", async ({ page }) => {
   await expect(page.locator(".ai-chat-history-list li")).toHaveCount(1);
 
   // Switching to the first chat keeps the layout intact.
-  await page.locator(".ai-chat-history-list").getByRole("button").first().click();
+  await page
+    .locator(".ai-chat-history-list")
+    .getByRole("button", { name: /first message Today/i })
+    .click();
   await expect(page.getByText(/sidebar reply/i)).toBeVisible();
 
   const overflow = await page.evaluate(
@@ -504,4 +510,33 @@ test("chat send and history work at 375px and 768px", async ({ page }) => {
       "still here",
     );
   }
+});
+
+test("switching conversations refocuses the composer", async ({ page }) => {
+  await page.route("**/api/chat", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ message: "focus reply", remainingDay: 19 }),
+    });
+  });
+  await page.goto("/assistant");
+
+  const input = page.getByLabel("Message the ASO assistant");
+  await input.fill("first message");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText(/focus reply/i)).toBeVisible({ timeout: 15_000 });
+
+  // A new chat, then back to the first via history: focus must return to the
+  // composer each time.
+  await page.locator('.ai-chat-icon-link[aria-label="New chat"]').click();
+  await expect(page.getByLabel("Message the ASO assistant")).toBeFocused();
+
+  // The history sidebar is already open at ≥900px; pick the first chat.
+  await page
+    .locator(".ai-chat-history-list")
+    .getByRole("button", { name: /first message Today/i })
+    .click();
+  await expect(page.getByText(/focus reply/i)).toBeVisible();
+  await expect(page.getByLabel("Message the ASO assistant")).toBeFocused();
 });
