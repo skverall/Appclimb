@@ -37,7 +37,22 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Keyword Explorer · ui (bulk partial-failure coverage)
+
+**Defect:** none found — the bulk banner already reports partial failures
+honestly ("Done — N of M couldn't be analyzed…") and failed rows are removed.
+**Repro:** e2e: bulk-analyze "meditation\nfail-bulk" with the mocked iTunes
+returning 429 for the second term (second pass per matrix rules).
+**Fix:** e2e `bulk analyze reports partial failures honestly`
+(`tests/e2e/explorer.spec.ts`) — asserts the failure banner, exactly one
+successful row, and no lingering failed row.
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · ASO Assistant · logic (IME composition Enter)
+
 
 **Defect:** The composer sent the message on any Enter keydown, including the
 Enter that confirms an IME composition (CJK input). A Japanese/Chinese user

@@ -84,6 +84,12 @@ async function mockExplorer(page: import("@playwright/test").Page) {
       return;
     }
 
+    // One deliberately failing term exercises the partial-failure banner.
+    if (term.includes("fail-bulk")) {
+      await route.fulfill({ status: 429, body: "rate limited" });
+      return;
+    }
+
     // Rank searches: "yoga" is saturated and weak → golden. Everything else
     // returns a small weak list → solid but not golden.
     const body =
@@ -368,4 +374,26 @@ test("limit banner clears when the day rolls over", async ({ page }) => {
   // The fresh day's counter is now at 1: the remaining-checks indicator
   // returns and shows the honest budget.
   await expect(page.getByText(/7 of 8 free checks left today/i)).toBeVisible();
+});
+
+test("bulk analyze reports partial failures honestly", async ({ page }) => {
+  await mockExplorer(page);
+  await page.goto("/");
+
+  await page.getByRole("button", { name: /Analyze list/i }).click();
+  await page.getByLabel("Keywords to analyze").fill("meditation\nfail-bulk");
+  await page.getByRole("button", { name: /Analyze 2 keywords/i }).click();
+
+  // One succeeds, one is rate-limited: the banner names the failure instead
+  // of pretending everything worked, and no failed row lingers.
+  await expect(
+    page.getByText(/Done — 1 of 2 couldn’t be analyzed/i),
+  ).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator(ROW)).toHaveCount(1);
+  await expect(page.locator(ROW).filter({ hasText: "fail-bulk" })).toHaveCount(0);
+
+  // The successful keyword is present with its metrics.
+  await expect(
+    page.locator(ROW).filter({ hasText: "meditation" }),
+  ).toHaveCount(1);
 });
