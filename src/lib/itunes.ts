@@ -9,6 +9,21 @@
 
 export const ITUNES_ORIGIN = "https://itunes.apple.com";
 
+/** Default timeout for Apple's public catalog, which can hang under load. */
+export const ITUNES_TIMEOUT_MS = 15_000;
+
+/**
+ * Combine a caller-provided abort signal with a default timeout, so a hung
+ * iTunes request cannot leave the UI in a permanent loading state.
+ */
+export function requestSignal(
+  callerSignal?: AbortSignal,
+  timeoutMs = ITUNES_TIMEOUT_MS,
+): AbortSignal {
+  const timeout = AbortSignal.timeout(timeoutMs);
+  return callerSignal ? AbortSignal.any([callerSignal, timeout]) : timeout;
+}
+
 export interface AppStoreResult {
   trackId?: number;
   trackName?: string;
@@ -100,7 +115,7 @@ export function storefrontLang(country: string): string {
 export async function searchAppStoreCatalog(
   query: string,
   country: string,
-  options: { fetchImpl?: typeof fetch; signal?: AbortSignal } = {},
+  options: { fetchImpl?: typeof fetch; signal?: AbortSignal; timeoutMs?: number } = {},
 ): Promise<CatalogApp[]> {
   const term = query.trim();
   if (term.length < 2 || term.length > 80) {
@@ -119,7 +134,7 @@ export async function searchAppStoreCatalog(
   const fetchImpl = options.fetchImpl ?? fetch;
   const response = await fetchImpl(`${ITUNES_ORIGIN}/search?${parameters}`, {
     headers: { accept: "application/json" },
-    signal: options.signal,
+    signal: requestSignal(options.signal, options.timeoutMs),
   });
   if (!response.ok) {
     throw new Error(`app_store_catalog_unavailable:${response.status}`);
@@ -139,7 +154,7 @@ export async function keywordRankPosition(
   keyword: string,
   country: string,
   appStoreId: string,
-  options: { fetchImpl?: typeof fetch; signal?: AbortSignal; limit?: number } = {},
+  options: { fetchImpl?: typeof fetch; signal?: AbortSignal; limit?: number; timeoutMs?: number } = {},
 ): Promise<number | null> {
   const storefront = boundedStorefront(country);
   const parameters = new URLSearchParams({
@@ -154,7 +169,7 @@ export async function keywordRankPosition(
   const fetchImpl = options.fetchImpl ?? fetch;
   const response = await fetchImpl(`${ITUNES_ORIGIN}/search?${parameters}`, {
     headers: { accept: "application/json" },
-    signal: options.signal,
+    signal: requestSignal(options.signal, options.timeoutMs),
   });
   if (!response.ok) {
     throw new Error(`app_store_catalog_unavailable:${response.status}`);
@@ -171,7 +186,7 @@ export async function keywordRankPosition(
 export async function lookupAppStoreApp(
   appStoreId: string,
   country: string,
-  options: { fetchImpl?: typeof fetch; signal?: AbortSignal } = {},
+  options: { fetchImpl?: typeof fetch; signal?: AbortSignal; timeoutMs?: number } = {},
 ): Promise<AppStoreResult> {
   const storefront = boundedStorefront(country);
   const parameters = new URLSearchParams({
@@ -183,7 +198,7 @@ export async function lookupAppStoreApp(
   const fetchImpl = options.fetchImpl ?? fetch;
   const response = await fetchImpl(`${ITUNES_ORIGIN}/lookup?${parameters}`, {
     headers: { accept: "application/json" },
-    signal: options.signal,
+    signal: requestSignal(options.signal, options.timeoutMs),
   });
   if (!response.ok) {
     throw new Error(`app_store_catalog_unavailable:${response.status}`);
@@ -378,7 +393,7 @@ export async function lookupAppStoreIcon(
   const fetchFn = options.fetchImpl || fetch;
   const url = `${ITUNES_ORIGIN}/lookup?id=${cleanId}&country=${encodeURIComponent(country)}`;
   try {
-    const res = await fetchFn(url);
+    const res = await fetchFn(url, { signal: requestSignal() });
     if (!res.ok) return null;
     const body = (await res.json()) as { results?: AppStoreResult[] };
     const result = body.results?.[0];

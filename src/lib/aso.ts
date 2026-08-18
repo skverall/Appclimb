@@ -12,6 +12,7 @@
 
 import {
   boundedStorefront,
+  requestSignal,
   storefrontLang,
   type CatalogApp,
 } from "@/lib/itunes";
@@ -189,7 +190,7 @@ export async function fetchKeywordResults(
   const fetchImpl = options.fetchImpl ?? fetch;
   const response = await fetchImpl(`${ITUNES_ORIGIN}/search?${parameters}`, {
     headers: { accept: "application/json" },
-    signal: options.signal,
+    signal: requestSignal(options.signal),
   });
   if (!response.ok) {
     throw new Error(`app_store_catalog_unavailable:${response.status}`);

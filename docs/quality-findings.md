@@ -34,7 +34,31 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · iTunes fetches (explorer, tracker, add-app) · logic (hang timeout)
+
+**Defect:** The iTunes catalog fetches had no request timeout. A hung request
+(network blackhole, proxy stall) left the explorer's "Analyzing" row and the
+tracker's refresh progress in a permanent loading state — the whole explorer
+stays disabled ("Wait for the current analysis to finish") with no recovery.
+**Repro:** unit-level: stub `fetch` to never settle — `searchAppStoreCatalog`
+never resolves; with the fix it rejects after `timeoutMs`.
+**Root cause:** `src/lib/itunes.ts` and `src/lib/aso.ts` passed only the
+caller's optional signal to `fetch`.
+**Fix:** new `requestSignal(callerSignal?, timeoutMs?)` in `itunes.ts`
+(default 15s) combining a caller signal with `AbortSignal.timeout` via
+`AbortSignal.any`; applied to all five fetch sites (catalog search, rank
+search, lookup, icon lookup, keyword-result search). Callers that cancel
+(user abort) still work; `analyzeWithRetry` rethrows AbortError without
+retrying, so a timeout is reported as a keyword failure, not a retry storm.
+**Protection:** unit tests `src/lib/itunes.test.ts` — a never-settling fetch
+aborts within `timeoutMs`; a caller signal is combined with the timeout.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — lint/typecheck/unit green (354 passed).
+
+---
 ## 2026-08-18 · Core surfaces · ui (viewport guard, desktop pass)
+
 
 **Defect:** none found at 1024×768 and 1920×1080 on `/`, `/assistant`,
 `/pricing`, `/app-store-keywords` — 0px horizontal overflow; at ≥900px the

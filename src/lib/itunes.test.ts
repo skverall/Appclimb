@@ -280,3 +280,43 @@ describe("cleanSearchResult", () => {
     expect(cleanSearchResult({ trackId: 123, trackName: "  " })).toBeNull();
   });
 });
+
+describe("requestSignal timeout", () => {
+  it("aborts a hung iTunes request instead of loading forever", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        (_url: string, init?: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            init?.signal?.addEventListener("abort", () => {
+              reject(new DOMException("Aborted", "AbortError"));
+            });
+          }),
+      ),
+    );
+
+    await expect(
+      searchAppStoreCatalog("meditation", "US", { timeoutMs: 50 }),
+    ).rejects.toThrow();
+  });
+
+  it("combines a caller signal with the timeout", async () => {
+    const caller = new AbortController();
+    let combined: AbortSignal | null | undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((_url: string, init?: RequestInit) => {
+        combined = init?.signal;
+        return Promise.reject(new Error("boom"));
+      }),
+    );
+
+    await expect(
+      searchAppStoreCatalog("meditation", "US", {
+        signal: caller.signal,
+        timeoutMs: 5_000,
+      }),
+    ).rejects.toThrow("boom");
+    expect(combined).toBeDefined();
+  });
+});
