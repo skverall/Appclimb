@@ -279,3 +279,36 @@ test("share links analyze the keyword on load", async ({ page }) => {
   await expect(page.locator(".keyword-name").first()).toHaveText("yoga");
   await expect(page.locator(".keyword-golden-badge").first()).toHaveText("Golden");
 });
+
+test("keyword suggestions close on Escape and on outside click", async ({
+  page,
+}) => {
+  await mockExplorer(page);
+  await page.goto("/");
+
+  const input = page.getByLabel("Search keywords");
+  await input.fill("med");
+  const dropdown = page.locator(".keyword-suggestions");
+  await expect(dropdown).toBeVisible({ timeout: 10_000 });
+  await expect(dropdown.getByRole("option").first()).toBeVisible();
+
+  // Escape closes the dropdown (the query itself is preserved).
+  await input.press("Escape");
+  await expect(dropdown).toHaveCount(0);
+  await expect(input).toHaveValue("med");
+
+  // It reopens while typing, then a click outside the form dismisses it.
+  await input.press("m");
+  await expect(dropdown).toBeVisible({ timeout: 10_000 });
+  await page
+    .getByRole("heading", { level: 1, name: /Popularity from Apple/ })
+    .click();
+  await expect(dropdown).toHaveCount(0);
+
+  // The input announces the listbox relationship while suggestions are open.
+  await input.fill("med");
+  await expect(dropdown).toBeVisible({ timeout: 10_000 });
+  await expect(input).toHaveAttribute("aria-expanded", "true");
+  await expect(input).toHaveAttribute("aria-controls", "keyword-suggestions");
+  await input.press("Escape");
+});

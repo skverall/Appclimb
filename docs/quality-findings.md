@@ -27,7 +27,32 @@ Rules:
 
 ---
 ---
+---
+## 2026-08-18 · Keyword Explorer · accessibility (suggestions dropdown)
+
+**Defect:** The live suggestions dropdown could not be dismissed by keyboard
+(Escape) or by clicking elsewhere — it stayed open over the page until the
+query changed or an analysis completed. The input also had no combobox
+relationship (no aria-expanded / aria-controls), so assistive tech could not
+announce the listbox.
+**Repro:** e2e on `/`: type "med" → dropdown opens; press Escape → still open;
+click the page heading → still open.
+**Root cause:** `keyword-explorer.tsx` — Escape in the global key handler only
+closed the detail panel; no outside-click listener existed; the input was a
+plain text field with no listbox binding.
+**Fix:** Escape now also closes suggestions; a pointerdown outside the search
+form dismisses them; the input declares `role="combobox"`, `aria-expanded`,
+`aria-controls="keyword-suggestions"`, `aria-autocomplete="list"`, and the
+listbox carries the matching id.
+**Protection:** e2e `keyword suggestions close on Escape and on outside click`
+(`tests/e2e/explorer.spec.ts`) — Escape keeps the query, outside click
+dismisses, and the combobox attributes are asserted while open.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — lint/typecheck/unit green (347 passed), e2e green.
+
+---
 ## 2026-08-18 · My Apps (tracker keywords) · logic (plan gate + swallowed error)
+
 
 **Defect:** Two bugs in the tracker's keyword cap:
 1. Pre-monetization mode (PRO_ENABLED off, accounts not configured) applied a

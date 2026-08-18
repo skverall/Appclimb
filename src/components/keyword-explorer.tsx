@@ -108,6 +108,7 @@ export function KeywordExplorer() {
   const [restoreMessage, setRestoreMessage] = useState<string | null>(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
+  const searchFormRef = useRef<HTMLFormElement>(null);
   const restoreInputRef = useRef<HTMLInputElement>(null);
   const undoTimeoutRef = useRef<number | null>(null);
   const shareInitRef = useRef(false);
@@ -434,6 +435,7 @@ export function KeywordExplorer() {
         event.preventDefault();
         searchRef.current?.focus();
       } else if (event.key === "Escape") {
+        setSuggestionsOpen(false);
         setSelected(null);
       }
     };
@@ -464,6 +466,20 @@ export function KeywordExplorer() {
     }, 250);
     return () => window.clearTimeout(timer);
   }, [query, country]);
+
+  /* A pointer-down anywhere outside the search form dismisses the open
+     suggestions dropdown (same affordance as Escape). */
+  useEffect(() => {
+    if (!suggestionsOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && !searchFormRef.current?.contains(target)) {
+        setSuggestionsOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [suggestionsOpen]);
 
   const goldenCount = useMemo(
     () =>
@@ -567,6 +583,7 @@ export function KeywordExplorer() {
         <form
           className="keyword-search-form"
           role="search"
+          ref={searchFormRef}
           onSubmit={(event) => {
             event.preventDefault();
             void analyze(query);
@@ -580,6 +597,10 @@ export function KeywordExplorer() {
             placeholder="Search a keyword, e.g. “meditation”"
             maxLength={80}
             aria-label="Search keywords"
+            role="combobox"
+            aria-expanded={suggestionsOpen && suggestions.length > 0}
+            aria-controls="keyword-suggestions"
+            aria-autocomplete="list"
             autoComplete="off"
             spellCheck={false}
           />
@@ -618,7 +639,11 @@ export function KeywordExplorer() {
             <i className="keyword-busy-line" aria-hidden="true" />
           )}
           {suggestionsOpen && suggestions.length > 0 && (
-            <div className="keyword-suggestions" role="listbox">
+            <div
+              className="keyword-suggestions"
+              role="listbox"
+              id="keyword-suggestions"
+            >
               {suggestions.map((suggestion) => (
                 <button
                   type="button"
