@@ -84,7 +84,21 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Marketing shell · ui (degradation when /api/me fails)
+
+**Defect:** none found — with /api/me returning 500, marketing pages render
+their H1 and no Next.js error overlay appears; the account fetch degrades to
+the anonymous shape and the header hides the account menu.
+**Repro:** e2e second pass per matrix rules.
+**Fix:** e2e `marketing pages render when /api/me is unavailable`
+(`tests/e2e/public-discovery.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Keyword Explorer · logic (blocked storage e2e)
+
 
 **Defect:** none found — with localStorage fully blocked (private mode via
 SecurityError-throwing Storage methods) the explorer renders the empty state

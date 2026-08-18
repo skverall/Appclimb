@@ -395,3 +395,24 @@ test("marketing navigation and CTA work interactively at 1920px", async ({
     page.getByRole("heading", { level: 1, name: /Honest limits on Free/i }),
   ).toBeVisible();
 });
+
+test("marketing pages render when /api/me is unavailable", async ({ page }) => {
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({ status: 500, body: "boom" });
+  });
+
+  for (const [path, heading] of [
+    ["/app-store-keywords", /Popularity from Apple/i],
+    ["/guides/keyword-research", /practical guide/i],
+    ["/pricing", /Honest limits on Free/i],
+  ] as const) {
+    await page.goto(path);
+    await expect(
+      page.getByRole("heading", { level: 1, name: heading }),
+    ).toBeVisible();
+    // No runtime crash from the failed account fetch.
+    await expect(
+      page.locator("nextjs-portal, [data-nextjs-dialog-overlay]"),
+    ).toHaveCount(0);
+  }
+});
