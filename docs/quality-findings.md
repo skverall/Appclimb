@@ -42,7 +42,33 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Keyword Explorer · logic (90-day history was unimplemented)
+
+**Defect:** The UI claimed "90-day history" on Pro (pricing page, limit
+banners, llms.txt) and `plan.ts` defines `historyDays: 90` for Pro — but the
+explorer always charted `recentHistory(record)` with the hardcoded 30-day
+window. Pro subscribers got exactly the same 30-day charts as free users
+despite the promise; the stored history cap (92) anticipated a 90-day view
+that never rendered.
+**Repro:** e2e: seed a record with 60 history points; a Pro account shows
+"60 days" only after the fix, a free account stays at "30 days".
+**Root cause:** `keyword-detail.tsx` and the table sparkline called
+`recentHistory(record)` (default `HISTORY_DAYS = 30`); the plan's
+`historyDays` was never threaded through.
+**Fix:** `historyDays` is derived from `account.limits.historyDays` in the
+explorer, passed to `KeywordDetail`, and used for both the detail charts and
+the table sparkline (`recentHistory(record, historyDays)`).
+**Protection:** e2e `history window follows the plan: 30 days free, 90 on Pro`
+(`tests/e2e/explorer.spec.ts`) — same stored data renders "30 days · Est."
+for free and "60 days · Est." for Pro. (Pro flow also mocks /api/sync, which
+the account provider calls when a Pro user is signed in.)
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — lint/typecheck/unit green (358 passed), e2e green.
+
+---
 ## 2026-08-18 · /api/popularity · logic (quota unit coverage)
+
 
 **Defect:** none found — the route's daily quota (30/day guest, 500 Pro,
 80ms min interval, UTC-midnight reset) was correct but untestable inline.

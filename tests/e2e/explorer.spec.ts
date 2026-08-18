@@ -397,3 +397,97 @@ test("bulk analyze reports partial failures honestly", async ({ page }) => {
     page.locator(ROW).filter({ hasText: "meditation" }),
   ).toHaveCount(1);
 });
+
+test("history window follows the plan: 30 days free, 90 on Pro", async ({
+  page,
+}) => {
+  await mockExplorer(page);
+
+  const seedHistory = (): Record<string, string> => {
+    const points = Array.from({ length: 60 }, (_, i) => ({
+      date: `2026-0${(i % 9) + 1}-15`,
+      popularity: 50 + (i % 10),
+      difficulty: 40,
+      popularitySource: "estimated",
+    }));
+    const record = {
+      keyword: "meditation",
+      country: "US",
+      firstSeen: "2026-05-01",
+      backfilled: false,
+      history: points,
+      lastCheck: { results: 42, saturated: false },
+    };
+    return {
+      "appclimb:kw:v1:US:meditation": JSON.stringify(record),
+      "appclimb:kw:v1:list:US": JSON.stringify(["meditation"]),
+    };
+  };
+
+  const openDetail = async () => {
+    const onboarding = page.getByRole("button", { name: /Not now/i });
+    if (await onboarding.isVisible().catch(() => false)) {
+      await onboarding.click();
+    }
+    await page.locator(ROW).filter({ hasText: "meditation" }).click();
+    await expect(
+      page.getByRole("heading", { name: "meditation", exact: true }),
+    ).toBeVisible({ timeout: 10_000 });
+  };
+
+  // Free account: the 60 stored days are trimmed to the 30-day window.
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        user: null,
+        plan: "free",
+        subscription: null,
+      }),
+    });
+  });
+  await page.goto("/");
+  await page.evaluate((seed) => {
+    for (const [key, value] of Object.entries(seed)) {
+      window.localStorage.setItem(key, value);
+    }
+  }, seedHistory());
+  await page.reload();
+  await expect(page.locator(ROW)).toHaveCount(1, { timeout: 10_000 });
+  await openDetail();
+  await expect(page.getByText(/30 days · Est\./i)).toBeVisible();
+
+  // Pro account: the same stored days show the full 60-day window. A Pro
+  // mock activates the cloud-sync flow, so /api/sync must answer too.
+  await page.route("**/api/sync?*", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ revision: 0, json: null, updated_at: null }),
+    });
+  });
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        user: { id: "u1", email: "pro@example.com", name: "Pro" },
+        plan: "pro",
+        subscription: { status: "active", current_period_end: null, cancel_at_period_end: false },
+      }),
+    });
+  });
+  await page.goto("/");
+  await page.evaluate((seed) => {
+    for (const [key, value] of Object.entries(seed)) {
+      window.localStorage.setItem(key, value);
+    }
+  }, seedHistory());
+  await page.reload();
+  await expect(page.locator(ROW)).toHaveCount(1, { timeout: 10_000 });
+  await openDetail();
+  await expect(page.getByText(/60 days · Est\./i)).toBeVisible();
+});

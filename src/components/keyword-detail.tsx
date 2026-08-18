@@ -37,6 +37,7 @@ export function KeywordDetail({
   metrics,
   record,
   busy,
+  historyDays = 30,
   onClose,
   onRefresh,
   onAnalyze,
@@ -47,14 +48,16 @@ export function KeywordDetail({
   metrics: KeywordMetrics | null;
   record: KeywordRecord | null;
   busy: boolean;
+  /** Plan history window (30 free, 90 Pro) — drives the chart and labels. */
+  historyDays?: number;
   onClose: () => void;
   onRefresh: () => void;
   onAnalyze: (keyword: string) => void;
 }) {
   const [copied, setCopied] = useState(false);
   const history = useMemo(
-    () => (record ? recentHistory(record) : []),
-    [record],
+    () => (record ? recentHistory(record, historyDays) : []),
+    [record, historyDays],
   );
   const related = useMemo(
     () => (metrics ? relatedKeywords(metrics.topApps, keyword) : []),

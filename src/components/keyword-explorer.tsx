@@ -117,6 +117,8 @@ export function KeywordExplorer() {
     useAccount();
   const explorerLimit =
     proEnabled() || accountsLive ? account.limits.explorerChecksPerDay : null;
+  // Plan history window for trend charts (30 free / 90 Pro).
+  const historyDays = account.limits.historyDays;
   const isGuest = accountsLive && !signedIn && !loading;
   // Derived from the day counter rather than a sticky flag: the limit banner
   // must clear automatically when the day rolls over (or the plan lifts the
@@ -924,7 +926,9 @@ export function KeywordExplorer() {
                       const record = records.get(keyword);
                       const metric = metrics.get(keyword);
                       const history = record
-                        ? recentHistory(record).map((point) => point.popularity)
+                        ? recentHistory(record, historyDays).map(
+                            (point) => point.popularity,
+                          )
                         : [];
                       const delta = record ? trendDelta(record.history) : null;
                       const isBusy = busy.has(keyword.toLocaleLowerCase());
@@ -1141,6 +1145,7 @@ export function KeywordExplorer() {
                 metrics={selectedMetrics ?? null}
                 record={selectedRecord ?? null}
                 busy={selectedBusy}
+                historyDays={historyDays}
                 onClose={() => setSelected(null)}
                 onRefresh={() =>
                   void analyze(selected, {
