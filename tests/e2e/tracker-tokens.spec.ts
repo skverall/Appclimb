@@ -93,6 +93,15 @@ test("tracker design tokens hold from 375px to 1920px", async ({ page }) => {
       expect(chipsBox.x + chipsBox.width).toBeLessThanOrEqual(width + 1);
     }
 
+    // The last-checked date renders as a localized timestamp (not a bare
+    // date-only string, which would shift by a day in negative timezones).
+    await expect
+      .poll(
+        () => page.locator(".tracker-table tbody tr").last().textContent(),
+        { timeout: 15_000 },
+      )
+      .toMatch(/(AM|PM)/i);
+
     // The page itself never scrolls horizontally.
     const overflow = await page.evaluate(
       () =>

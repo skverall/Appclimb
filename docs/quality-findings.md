@@ -59,7 +59,22 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · My Apps (tracker) · logic (localized date display)
+
+**Defect:** none found — the tracker's last-checked column renders the full
+ISO timestamp through toLocaleString (correct in every timezone), never a
+bare date-only string that would shift a day in negative timezones.
+**Repro:** e2e second pass: the sample app's rows reach a localized
+AM/PM timestamp once their checks complete.
+**Fix:** the tracker token-invariant e2e now polls for the formatted
+timestamp across all widths (`tests/e2e/tracker-tokens.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · My Apps (tracker) · ui (viewport guard, 1440/1920px)
+
 
 **Defect:** none found — the tracker workspace keeps 0px horizontal overflow,
 reachable actions, and design tokens (tabular figures, sticky-column shadow,
