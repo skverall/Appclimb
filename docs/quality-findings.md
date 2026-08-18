@@ -64,7 +64,22 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Keyword Explorer · data-honesty (detail labels, second pass)
+
+**Defect:** none found — the detail panel labels the estimate ("Estimated
+demand from public iTunes signals"), shows the difficulty-as-estimate caption,
+never claims search volume, and never renders a bare number without its
+source (with the overlay unconfigured, the badge is Est. only).
+**Repro:** e2e (mocked configured:false) — second pass per matrix rules.
+**Fix:** e2e `detail labels every score with its source, never claiming volume`
+(`tests/e2e/explorer.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · /api/popularity · logic (e2e note)
+
 
 **Note:** an attempted e2e asserting the unconfigured-overlay fallback against
 the real route was removed: this environment ships valid Apple Ads

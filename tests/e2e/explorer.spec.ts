@@ -650,3 +650,38 @@ test("the quota gate blocks the 9th check before touching a slow iTunes", async 
     page.getByText(/You've used your 8 free keyword checks/),
   ).toBeVisible();
 });
+
+
+test("detail labels every score with its source, never claiming volume", async ({
+  page,
+}) => {
+  await mockExplorer(page);
+  await page.route("**/api/popularity", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ configured: false, results: [] }),
+    });
+  });
+  await page.goto("/");
+  await page.getByPlaceholder(/meditation/).fill("meditation");
+  await page.getByRole("button", { name: "Analyze", exact: true }).click();
+  await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
+
+  // Open the detail panel.
+  await page.locator(ROW).filter({ hasText: "meditation" }).click();
+  await expect(
+    page.getByRole("heading", { name: "meditation", exact: true }),
+  ).toBeVisible({ timeout: 10_000 });
+
+  // The popularity evidence is labeled as an estimate (not black-box volume).
+  await expect(
+    page.getByText(/Estimated demand from public iTunes signals/i),
+  ).toBeVisible();
+  // Difficulty is always an estimate.
+  await expect(page.getByText(/Harder to rank = higher/i)).toBeVisible();
+  // "search volume" appears only inside the disclaiming caption, never as a
+  // claim of data the tool provides.
+  const detail = await page.locator(".keyword-detail").textContent();
+  expect(detail).not.toMatch(/search volume/i);
+});
