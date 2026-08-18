@@ -822,3 +822,29 @@ test("tracker app sidebar navigation works at 375px", async ({ page }) => {
     page.getByRole("heading", { name: /Car Dealer Tracker: Profit/i }),
   ).toBeVisible({ timeout: 10_000 });
 });
+
+test("tracker rows open with Enter and close with Escape", async ({ page }) => {
+  await mockItunes(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: /Try a sample app/i }).click();
+  await expect(
+    page.getByRole("heading", { name: /Car Dealer Tracker: Profit/i }),
+  ).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator(".tracker-table tbody tr")).toHaveCount(7, {
+    timeout: 30_000,
+  });
+
+  // Focus the first row and open it with Enter (keyboard-only).
+  await page.locator(".tracker-table tbody tr").first().focus();
+  await page.keyboard.press("Enter");
+  await expect(
+    page.getByRole("heading", { name: "auto dealer app", exact: true }),
+  ).toBeVisible({ timeout: 10_000 });
+
+  // Escape closes the detail panel (and ignores typing in fields).
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("heading", { name: "auto dealer app", exact: true }),
+  ).toHaveCount(0);
+  await expect(page.locator(".tracker-table tbody tr").first()).toBeFocused();
+});

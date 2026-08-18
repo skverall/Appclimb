@@ -185,6 +185,26 @@ export function TrackerView({
     storeRef.current = store;
   }, [store]);
 
+  // Escape closes the open keyword detail, except while typing in a field.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        Boolean(target?.isContentEditable)
+      ) {
+        return;
+      }
+      setSelected(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const keywords = useMemo(
     () => listKeywordsForApp(store, app.appStoreId, app.country),
     [store, app.appStoreId, app.country],

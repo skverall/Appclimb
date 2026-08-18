@@ -100,7 +100,24 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · My Apps (tracker) · accessibility (keyboard flow + Esc)
+
+**Defect:** tracker keyword rows handled Enter/Space (open the detail) but
+Escape never closed the open detail — a keyboard user had to Tab to the close
+button; the Explorer's Escape handler did not apply to the tracker surface.
+**Root cause:** `tracker-view.tsx` had no Escape handling.
+**Fix:** a global keydown handler closes the open keyword detail on Escape,
+except while typing in input/textarea/select/contenteditable fields.
+**Protection:** e2e `tracker rows open with Enter and close with Escape`
+(`tests/e2e/app-tracker.spec.ts`) — Enter opens, Escape closes, and the row
+keeps focus.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Keyword Explorer · logic (quota + overlay combo)
+
 
 **Defect:** none found — with the guest quota exhausted AND the official
 popularity overlay returning 500, the limit banner still shows, a further
@@ -253,7 +270,24 @@ so a keyboard user can immediately keep typing.
 ---
 ---
 ---
+---
+## 2026-08-18 · My Apps (tracker) · accessibility (keyboard flow + Esc)
+
+**Defect:** tracker keyword rows handled Enter/Space (open the detail) but
+Escape never closed the open detail — a keyboard user had to Tab to the close
+button; the Explorer's Escape handler did not apply to the tracker surface.
+**Root cause:** `tracker-view.tsx` had no Escape handling.
+**Fix:** a global keydown handler closes the open keyword detail on Escape,
+except while typing in input/textarea/select/contenteditable fields.
+**Protection:** e2e `tracker rows open with Enter and close with Escape`
+(`tests/e2e/app-tracker.spec.ts`) — Enter opens, Escape closes, and the row
+keeps focus.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Keyword Explorer · logic (quota + overlay combo)
+
 
 **Defect:** none found — with the guest quota exhausted AND the official
 popularity overlay returning 500, the limit banner still shows, a further
