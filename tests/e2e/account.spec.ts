@@ -581,3 +581,50 @@ test("a mid-session downgrade stops sync but preserves local data", async ({
     timeout: 10_000,
   });
 });
+
+test("pricing and upgrade copy stay honest and next-step", async ({ page }) => {
+  await page.goto("/pricing");
+  await expect(
+    page.getByRole("heading", { level: 1, name: /Honest limits on Free/i }),
+  ).toBeVisible();
+  // Prices match the founder cap ($8/month, $64/year ≤ $10/mo).
+  await expect(page.getByText(/\$8/i).first()).toBeVisible();
+  await page.getByRole("tab", { name: /Yearly/i }).click();
+  await expect(page.getByText(/\$64/i).first()).toBeVisible();
+  await expect(page.getByText(/save 33%/i)).toBeVisible();
+
+  // The upgrade modal's feature list matches the shipped plan limits.
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        user: { id: "u1", email: "free@example.com", name: "Free" },
+        plan: "free",
+        subscription: null,
+      }),
+    });
+  });
+  await page.goto("/");
+  const closeWelcome = page.getByRole("button", { name: /Close welcome dialog/i });
+  try {
+    await closeWelcome.waitFor({ state: "visible", timeout: 3_000 });
+    await closeWelcome.click();
+  } catch {
+    // no onboarding modal
+  }
+  await page.getByRole("button", { name: /Free/i }).first().click();
+  await page.getByRole("menuitem", { name: /Upgrade to Pro/i }).click();
+  const dialog = page.getByRole("dialog", { name: /Upgrade to Pro/i });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText(/Unlimited keyword checks/i)).toBeVisible();
+  await expect(dialog.getByText(/Cloud sync across devices/i)).toBeVisible();
+  await expect(dialog.getByText(/90-day history and charts/i)).toBeVisible();
+  await expect(dialog.getByText(/200 AI assistant messages \/ day/i)).toBeVisible();
+  await expect(dialog.getByText(/500 official popularity lookups \/ day/i)).toBeVisible();
+  // The CTA names the action and the price.
+  await expect(
+    dialog.getByRole("button", { name: /Upgrade — \$8\/month/i }),
+  ).toBeVisible();
+});

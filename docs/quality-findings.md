@@ -108,7 +108,24 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Upgrade/Paddle + pricing · copy (second pass)
+
+**Defect:** none found — the pricing page and upgrade modal stay honest and
+next-step: prices match the founder cap ($8/month, $64/year with "save 33%"),
+the feature list matches the shipped limits (unlimited checks/apps, cloud
+sync, 90-day history, 200 assistant/day, 500 popularity/day), errors name
+their step ("Check back shortly", "Try again"), and the CTA names the action
+and the price ("Upgrade — $8/month"). No mixed language.
+**Repro:** e2e second pass (lens 9, surface E).
+**Fix:** e2e `pricing and upgrade copy stay honest and next-step`
+(`tests/e2e/account.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Keyword Explorer · copy (error messages, second pass)
+
 
 **Defect:** the bulk partial-failure banner named the cause ("the App Store
 may be rate-limiting") but not the next step — unlike the tracker's
@@ -384,7 +401,24 @@ so a keyboard user can immediately keep typing.
 ---
 ---
 ---
+---
+## 2026-08-18 · Upgrade/Paddle + pricing · copy (second pass)
+
+**Defect:** none found — the pricing page and upgrade modal stay honest and
+next-step: prices match the founder cap ($8/month, $64/year with "save 33%"),
+the feature list matches the shipped limits (unlimited checks/apps, cloud
+sync, 90-day history, 200 assistant/day, 500 popularity/day), errors name
+their step ("Check back shortly", "Try again"), and the CTA names the action
+and the price ("Upgrade — $8/month"). No mixed language.
+**Repro:** e2e second pass (lens 9, surface E).
+**Fix:** e2e `pricing and upgrade copy stay honest and next-step`
+(`tests/e2e/account.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Keyword Explorer · copy (error messages, second pass)
+
 
 **Defect:** the bulk partial-failure banner named the cause ("the App Store
 may be rate-limiting") but not the next step — unlike the tracker's
