@@ -34,4 +34,19 @@ describe("ChatMarkdown", () => {
     expect(out).not.toMatch(/<script>/u);
     expect(out).toContain("alert(1)");
   });
+
+  it("passes CJK, cyrillic, and emoji through untouched", () => {
+    const out = html("🎯 推荐关键词：**冥想**\nключевые слова для приложения");
+    expect(out).toContain("🎯");
+    expect(out).toContain("推荐关键词");
+    expect(out).toContain("<strong>冥想</strong>");
+    expect(out).toContain("ключевые слова для приложения");
+    expect(out).not.toContain("**");
+  });
+
+  it("keeps stray asterisks literal when unbalanced", () => {
+    const out = html("price is 5*5=25 here");
+    expect(out).toContain("5*5=25");
+    expect(out).not.toContain("<em>");
+  });
 });

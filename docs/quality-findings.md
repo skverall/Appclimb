@@ -51,7 +51,21 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · ASO Assistant · design (CJK/cyrillic/emoji in markdown)
+
+**Defect:** none found — CJK, cyrillic, and emoji pass through the chat
+markdown renderer untouched, bold still applies to CJK spans, and unbalanced
+stray asterisks stay literal.
+**Repro:** unit-level second pass (`src/components/chat-markdown.test.ts`) —
+🎯/推荐关键词/**冥想**, cyrillic text, and "5*5=25".
+**Fix:** tests added; no code change needed.
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — unit green (363 passed).
+
+---
 ## 2026-08-18 · My Apps (tracker) · design (token invariants)
+
 
 **Defect:** none found — numeric cells use tabular figures, the sticky keyword
 column carries a separation shadow, status chips fit the viewport, and the
