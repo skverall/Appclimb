@@ -65,7 +65,26 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · My Apps (cloud sync) · ui (missing sync states)
+
+**Defect:** `syncState` (syncing/synced/error) was held in the account provider
+but rendered nowhere — a Pro subscriber had zero feedback that their data
+synced, failed, or was in progress.
+**Repro:** code-level: grep for `syncState` consumers found only the provider.
+**Root cause:** the account menu never surfaced the sync state.
+**Fix:** the Pro account menu now shows a status row (role=status): "Syncing…",
+"Cloud sync on", or "Cloud sync failed — data stays on this device" (honest,
+matches the actual degradation). Hidden while "off" and for non-Pro.
+**Protection:** the Pro-sync e2e asserts "Cloud sync on" after a successful
+push and "Cloud sync failed" after a 503
+(`tests/e2e/account.spec.ts`).
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — lint/typecheck/unit green (363 passed), e2e green.
+
+---
 ## 2026-08-18 · Keyword Explorer · data-honesty (detail labels, second pass)
+
 
 **Defect:** none found — the detail panel labels the estimate ("Estimated
 demand from public iTunes signals"), shows the difficulty-as-estimate caption,

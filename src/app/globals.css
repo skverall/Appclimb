@@ -6835,3 +6835,16 @@ img {
     animation: none;
   }
 }
+
+/* Cloud-sync status inside the account menu (Pro only). */
+.account-sync-status {
+  color: var(--ink-muted);
+}
+
+.account-sync-status.is-error {
+  color: var(--coral-600);
+}
+
+.account-sync-status.is-synced {
+  color: var(--green-600);
+}

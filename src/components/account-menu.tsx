@@ -13,7 +13,7 @@ function initialOf(email: string, name: string | null): string {
 }
 
 export function AccountMenu() {
-  const { account, loading, signedIn, isPro, accountsLive, openAuth, openUpgrade, signOut } =
+  const { account, loading, signedIn, isPro, accountsLive, openAuth, openUpgrade, signOut, syncState } =
     useAccount();
   const [open, setOpen] = useState(false);
   const [manageBusy, setManageBusy] = useState(false);
@@ -101,6 +101,18 @@ export function AccountMenu() {
             <span className={`account-plan-chip ${isPro ? "is-pro" : "is-free"}`}>
               {isPro ? "Pro plan" : "Free plan"}
             </span>
+            {isPro && syncState !== "off" && (
+              <span
+                className={`account-sync-status is-${syncState}`}
+                role="status"
+              >
+                {syncState === "syncing"
+                  ? "Syncing…"
+                  : syncState === "error"
+                    ? "Cloud sync failed — data stays on this device"
+                    : "Cloud sync on"}
+              </span>
+            )}
           </div>
 
           {!isPro && (

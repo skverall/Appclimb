@@ -376,6 +376,11 @@ test("Pro sync pushes local changes and keeps data on backend failure", async ({
   // The debounced push uploads the local (sample) data.
   await expect.poll(async () => puts, { timeout: 15_000 }).toBeGreaterThanOrEqual(1);
 
+  // The account menu surfaces the synced state.
+  await page.getByRole("button", { name: /Pro/i }).first().click();
+  await expect(page.getByText(/Cloud sync on/i)).toBeVisible();
+  await page.keyboard.press("Escape");
+
   // Backend goes down; a local change must still succeed locally.
   syncDown = true;
   await page.getByRole("button", { name: /Add Keywords/i }).first().click();
@@ -386,8 +391,13 @@ test("Pro sync pushes local changes and keeps data on backend failure", async ({
   });
   await page.waitForTimeout(3_000);
 
-  // The failed push did not delete local data.
+  // The failed push did not delete local data, and the menu now says so.
   await expect(page.locator(".tracker-table tbody tr")).toHaveCount(8);
+  await page.getByRole("button", { name: /Pro/i }).first().click();
+  await expect(page.getByText(/Cloud sync failed/i)).toBeVisible({
+    timeout: 10_000,
+  });
+  await page.keyboard.press("Escape");
   dismissExpectedConsoleErrors(page, [/Failed to load resource.*503/]);
 });
 
