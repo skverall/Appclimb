@@ -82,6 +82,34 @@ test("core surfaces have no horizontal overflow at 320px", async ({
   }
 });
 
+test("core surfaces have no horizontal overflow at 768px (tablet)", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 768, height: 1024 });
+
+  for (const path of ["/", "/assistant", "/pricing", "/app-store-keywords"]) {
+    await page.goto(path);
+    await expect(page.locator("h1").first()).toBeVisible();
+
+    const pageOverflow = await page.evaluate(
+      () =>
+        Math.max(
+          document.documentElement.scrollWidth,
+          document.body.scrollWidth,
+        ) - document.documentElement.clientWidth,
+    );
+    expect(
+      pageOverflow,
+      `horizontal overflow on ${path}: ${pageOverflow}px`,
+    ).toBeLessThanOrEqual(0);
+
+    // The chat history drawer/tablet layout must keep the composer reachable.
+    if (path === "/assistant") {
+      await expect(page.getByLabel("Message the ASO assistant")).toBeVisible();
+    }
+  }
+});
+
 test("articles expose canonical metadata and parseable JSON-LD", async ({
   page,
 }) => {

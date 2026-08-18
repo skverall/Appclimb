@@ -29,7 +29,22 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Core surfaces · ui (viewport guard, tablet pass)
+
+**Defect:** none found at 768×1024 on `/`, `/assistant`, `/pricing`,
+`/app-store-keywords` — all render with 0px horizontal overflow and the
+primary interactive element stays reachable.
+**Repro:** e2e at 768×1024 (second pass per matrix rules).
+**Root cause:** n/a — coverage gap only.
+**Fix:** e2e `core surfaces have no horizontal overflow at 768px (tablet)`
+(`tests/e2e/public-discovery.spec.ts`) added alongside the 320px guard.
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Keyword Explorer / My Apps · performance (localStorage growth)
+
 
 **Defect:** Keyword history grew without bound — `recordSnapshot` appended a
 daily snapshot forever (a 3-year-old keyword ≈ 1100 entries). With many
