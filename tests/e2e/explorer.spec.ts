@@ -685,3 +685,32 @@ test("detail labels every score with its source, never claiming volume", async (
   const detail = await page.locator(".keyword-detail").textContent();
   expect(detail).not.toMatch(/search volume/i);
 });
+
+test("CJK and cyrillic keywords analyze and render intact", async ({
+  page,
+}) => {
+  await mockExplorer(page);
+  await page.route("**/api/popularity", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ configured: false, results: [] }),
+    });
+  });
+  await page.goto("/");
+
+  // Japanese keyword.
+  await page.getByPlaceholder(/meditation/).fill("瞑想");
+  await page.getByRole("button", { name: "Analyze", exact: true }).click();
+  await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
+  await expect(
+    page.locator(".keyword-name").first(),
+  ).toHaveText("瞑想");
+  await expect(page.locator(".source-pill").first()).toContainText(/Est\./);
+
+  // Cyrillic keyword.
+  await page.getByPlaceholder(/meditation/).fill("медитация");
+  await page.getByRole("button", { name: "Analyze", exact: true }).click();
+  await expect(page.locator(ROW)).toHaveCount(2, { timeout: 15_000 });
+  await expect(page.locator(ROW).filter({ hasText: "медитация" })).toHaveCount(1);
+});

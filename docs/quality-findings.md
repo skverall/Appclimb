@@ -69,7 +69,21 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Keyword Explorer · logic (CJK/cyrillic keywords)
+
+**Defect:** none found — a Japanese (瞑想) and a Russian (медитация) keyword
+analyze and render intact with honest Est. labels; case-insensitive dedup and
+sorting are locale-safe for these scripts.
+**Repro:** e2e second pass per matrix rules.
+**Fix:** e2e `CJK and cyrillic keywords analyze and render intact`
+(`tests/e2e/explorer.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · SEO / schema · ui (JSON-LD coverage, second pass)
+
 
 **Defect:** none found — all 11 checked pages emit at least one parseable,
 non-empty JSON-LD block (WebSite/Organization on the layout, FAQ/HowTo and
