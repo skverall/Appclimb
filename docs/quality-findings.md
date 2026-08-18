@@ -89,7 +89,21 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · My Apps (tracker) · ui (app navigation at 375px)
+
+**Defect:** none found — at 375×812 the mobile sidebar exposes Add App, a
+second app can be tracked via search, and the app pills switch the workspace
+back and forth correctly.
+**Repro:** e2e second pass per matrix rules.
+**Fix:** e2e `tracker app sidebar navigation works at 375px`
+(`tests/e2e/app-tracker.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Upgrade/Paddle · ui (modal at 375px)
+
 
 **Defect:** none found — the upgrade dialog fits 375×812 and the billing-cycle
 toggle is reachable and switches to the yearly price at that width.

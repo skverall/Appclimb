@@ -788,3 +788,37 @@ test("upgrade modal fits and stays usable at 375px", async ({ page }) => {
   await page.getByRole("tab", { name: /\$64 \/ year/i }).click();
   await expect(page.getByText(/save 33%/i)).toBeVisible();
 });
+
+test("tracker app sidebar navigation works at 375px", async ({ page }) => {
+  await mockItunes(page);
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/");
+  await page.getByRole("button", { name: /Try a sample app/i }).click();
+  await expect(
+    page.getByRole("heading", { name: /Car Dealer Tracker: Profit/i }),
+  ).toBeVisible({ timeout: 15_000 });
+
+  // Track a second app via the mobile sidebar's Add App entry.
+  await page
+    .getByRole("button", { name: "Open navigation", exact: true })
+    .click();
+  await page.getByRole("button", { name: /Add App/i }).click();
+  await page.getByLabel("Search for an app").fill("Calm Focus");
+  await page.getByRole("button", { name: "Search" }).click();
+  await page.getByRole("button", { name: /Add Calm Focus/i }).click();
+  const suggestions = page.getByRole("dialog", { name: /Keyword suggestions/i });
+  await expect(suggestions).toBeVisible({ timeout: 10_000 });
+  await page.keyboard.press("Escape");
+  await expect(
+    page.getByRole("heading", { name: "Calm Focus" }),
+  ).toBeVisible({ timeout: 15_000 });
+
+  // Open the mobile sidebar and switch back to the sample app.
+  await page.getByRole("button", { name: /Tracked Apps/i }).click();
+  await page
+    .getByRole("button", { name: /Car Dealer Tracker: Profit/i })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: /Car Dealer Tracker: Profit/i }),
+  ).toBeVisible({ timeout: 10_000 });
+});
