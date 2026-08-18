@@ -534,4 +534,21 @@ test("a 60-character keyword does not overflow the page", async ({ page }) => {
     narrowOverflow,
     `320px horizontal overflow: ${narrowOverflow}px`,
   ).toBeLessThanOrEqual(0);
+
+  // The detail panel with the same long keyword must fit at 320px too.
+  await page.locator(ROW).filter({ hasText: longKeyword }).click();
+  await expect(
+    page.getByRole("heading", { name: longKeyword, exact: true }),
+  ).toBeVisible({ timeout: 10_000 });
+  const detailOverflow = await page.evaluate(
+    () =>
+      Math.max(
+        document.documentElement.scrollWidth,
+        document.body.scrollWidth,
+      ) - document.documentElement.clientWidth,
+  );
+  expect(
+    detailOverflow,
+    `320px detail overflow: ${detailOverflow}px`,
+  ).toBeLessThanOrEqual(0);
 });

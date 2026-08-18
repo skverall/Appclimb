@@ -2623,6 +2623,8 @@ img {
 .keyword-detail-header h2 {
   font-size: var(--text-lg);
   margin-top: 2px;
+  /* Long keywords must wrap in the heading instead of widening the panel. */
+  overflow-wrap: anywhere;
 }
 
 .keyword-detail-actions {

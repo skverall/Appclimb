@@ -45,7 +45,26 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · Keyword Explorer · ui (detail panel overflow at 320px)
+
+**Defect:** The keyword detail panel with a long no-space keyword overflowed
+the 320px viewport by 509px — the heading could not wrap, so the panel (and
+the page) scrolled sideways.
+**Repro:** e2e at 320×640: open the detail for a 60-char keyword → 509px
+overflow.
+**Root cause:** `.keyword-detail-header h2` had no wrapping rule (the same
+class of defect as the table name, fixed in the previous cycle).
+**Fix:** `overflow-wrap: anywhere` on the detail heading.
+**Protection:** extended e2e `a 60-character keyword does not overflow the
+page` (`tests/e2e/explorer.spec.ts`) — asserts 0px overflow at 1440px, at
+320px with the table, and at 320px with the detail panel open.
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Keyword Explorer · ui (long keywords overflow at 320px)
+
 
 **Defect:** A keyword without spaces (up to 80 chars allowed) pushed the table
 wider than the viewport: at 320px a 60-char keyword produced 299px of
