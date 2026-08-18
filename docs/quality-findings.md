@@ -26,6 +26,42 @@ Rules:
   item or a fresh surface, never re-litigates closed ones.
 
 ---
+## 2026-08-18 · Account plumbing (header, composer) · logic (failure path)
+
+**Defect:** `fetchAccountState`, `requestMagicLink`, and `fetchPortalLinks` had
+no request timeout. With `/api/me` hanging (unreachable backend, proxy
+blackhole), the header showed a permanent placeholder and the ASO assistant
+composer area rendered blank (`loading ? null : …`) — an eternal spinner class
+of failure with no recovery.
+**Repro:** unit-level: stub `fetch` to never settle — `fetchAccountState()`
+never resolves; with the fix it aborts after `timeoutMs` and returns the
+anonymous account.
+**Root cause:** `src/lib/account.ts` raw `fetch` with no `AbortSignal`.
+**Fix:** all three fetches carry `AbortSignal.timeout` (8s `/api/me` + portal,
+10s magic link); `fetchAccountState` accepts `timeoutMs` for tests. The catch
+path already existed and now actually runs for hangs.
+**Protection:** unit test `falls back to the anonymous account when /api/me
+hangs` (`src/lib/account.test.ts`, new file).
+**Status:** fixed (local branch `goal/assistant-draft-and-limit-gate`, not pushed).
+**Verification:** locally tested — lint/typecheck/unit green (347 passed).
+
+---
+## 2026-08-18 · Core surfaces · ui (viewport guard)
+
+**Defect:** No regression guard existed against horizontal overflow at narrow
+widths for the three core surfaces — only the marketing landing page was
+checked (390px).
+**Repro:** e2e at 320×640 on `/`, `/assistant`, `/pricing`.
+**Root cause:** test coverage gap, not a product bug — the surfaces render
+fine at 320px (verified: 0px overflow on all three).
+**Fix:** e2e `core surfaces have no horizontal overflow at 320px`
+(`tests/e2e/public-discovery.spec.ts`) asserts scrollWidth ≤ clientWidth and
+that the primary interactive element (search input / composer / plan card) is
+visible on each page at 320px.
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · ASO Assistant · logic (quota day boundary)
 
 **Defect:** The server's daily message cap used a rolling 24h window starting at
