@@ -457,7 +457,7 @@ test("the 5th free message passes and the 6th is blocked client-side", async ({
   );
 });
 
-test("chat send and history work at 375px and 768px", async ({ page }) => {
+test("chat send and history interactive from 320px to 768px", async ({ page }) => {
   await page.route("**/api/chat", async (route) => {
     await route.fulfill({
       status: 200,
@@ -467,6 +467,7 @@ test("chat send and history work at 375px and 768px", async ({ page }) => {
   });
 
   for (const [width, height] of [
+    [320, 640],
     [375, 812],
     [768, 1024],
   ] as const) {

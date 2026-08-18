@@ -96,7 +96,22 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · ASO Assistant · ui (interactive pass, 320px)
+
+**Defect:** none found — a full send/reply cycle and the history drawer work
+at 320×640 too (the smallest supported width): 0px overflow and the composer
+reachable beside the drawer.
+**Repro:** e2e second pass per matrix rules; the interactive loop now covers
+320/375/768.
+**Fix:** extended `chat send and history interactive from 320px to 768px`
+(`tests/e2e/assistant.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Upgrade/Paddle · logic (unreachable checkout-error state)
+
 
 **Defect:** With Paddle unconfigured the upgrade CTA was
 `disabled={busy || !configured}` — the button sat disabled with no reason, and
@@ -189,7 +204,22 @@ so a keyboard user can immediately keep typing.
 ---
 ---
 ---
+---
+## 2026-08-18 · ASO Assistant · ui (interactive pass, 320px)
+
+**Defect:** none found — a full send/reply cycle and the history drawer work
+at 320×640 too (the smallest supported width): 0px overflow and the composer
+reachable beside the drawer.
+**Repro:** e2e second pass per matrix rules; the interactive loop now covers
+320/375/768.
+**Fix:** extended `chat send and history interactive from 320px to 768px`
+(`tests/e2e/assistant.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Upgrade/Paddle · logic (unreachable checkout-error state)
+
 
 **Defect:** With Paddle unconfigured the upgrade CTA was
 `disabled={busy || !configured}` — the button sat disabled with no reason, and
