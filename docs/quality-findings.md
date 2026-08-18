@@ -75,7 +75,20 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · My Apps (add-app) · logic (double submit, second pass)
+
+**Defect:** none found — a re-search aborts the previous request via
+`abortRef`, the submit button is disabled while busy, and the skeleton list
+is marked `aria-busy`; an aborted search never surfaces a spurious error.
+**Repro:** code-level second pass per matrix rules.
+**Fix:** n/a — recorded as checked.
+**Status:** checked (local branch, not pushed).
+**Verification:** locally tested.
+
+---
 ## 2026-08-18 · Dialogs (auth) · accessibility (focus trap vs disabled button)
+
 
 **Defect:** The focus trap's Tab handler listened on the dialog element only.
 When the focused element inside the dialog became disabled while focused
