@@ -48,7 +48,24 @@ Rules:
 ---
 ---
 ---
+---
+## 2026-08-18 · ASO Assistant · logic (upgrade mid-session, covered)
+
+**Defect:** none found — the composer gate unlocks after an upgrade. The
+stale-`remainingDay` concern is neutralized by the product flow: Paddle
+redirects back with `?checkout=success`, the page (re)mounts, and the
+gate condition (`aiLimit !== null && remainingDay === 0`) no longer holds
+for the new plan.
+**Repro:** e2e: free user hits 0 → gate shows; /api/me flips to Pro and the
+post-checkout refresh runs → gate gone, composer visible, a new send works.
+**Fix:** e2e `upgrading mid-session unlocks the composer gate`
+(`tests/e2e/assistant.spec.ts`).
+**Status:** checked + covered (local branch, not pushed).
+**Verification:** locally tested — e2e green.
+
+---
 ## 2026-08-18 · Keyword Explorer · accessibility (focus after remove/Undo)
+
 
 **Defect:** Removing a row by keyboard dropped focus to <body> — the Undo
 bar appeared but focus never moved to it, and after Undo (or the 6s

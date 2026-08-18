@@ -293,3 +293,70 @@ test("chat history drawer stays usable at 375px", async ({ page }) => {
   ).toHaveCount(0);
   await expect(page.getByLabel("Message the ASO assistant")).toBeVisible();
 });
+
+test("upgrading mid-session unlocks the composer gate", async ({ page }) => {
+  await page.route("**/api/chat", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ message: "last free reply", remainingDay: 0 }),
+    });
+  });
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        user: { id: "u1", email: "dev@example.com", name: "Dev" },
+        plan: "free",
+        subscription: null,
+      }),
+    });
+  });
+
+  await page.goto("/assistant");
+  await page.getByLabel("Message the ASO assistant").fill("hello");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText(/last free reply/i)).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(page.getByText(/used up/i)).toBeVisible();
+
+  // The user upgrades mid-session: /api/me reports Pro and the post-checkout
+  // refresh runs (the real upgrade flow navigates back with ?checkout=success).
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        user: { id: "u1", email: "dev@example.com", name: "Dev" },
+        plan: "pro",
+        subscription: {
+          status: "active",
+          current_period_end: null,
+          cancel_at_period_end: false,
+        },
+      }),
+    });
+  });
+  await page.route("**/api/sync?*", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ revision: 0, json: null, updated_at: null }),
+    });
+  });
+  await page.goto("/assistant?checkout=success");
+
+  await expect(page.getByText(/used up/i)).toHaveCount(0);
+  await expect(page.getByLabel("Message the ASO assistant")).toBeVisible();
+
+  // The upgraded session can send again.
+  await page.getByLabel("Message the ASO assistant").fill("more");
+  await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByText(/last free reply/i)).toHaveCount(2, {
+    timeout: 15_000,
+  });
+});
