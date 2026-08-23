@@ -1441,6 +1441,7 @@ export function KeywordExplorer() {
           type="file"
           accept=".json,application/json"
           hidden
+          aria-label="Restore a keyword backup file"
           onChange={(event) => {
             const file = event.target.files?.[0];
             if (file) void handleRestoreFile(file);
