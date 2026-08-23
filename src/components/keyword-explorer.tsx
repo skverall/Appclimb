@@ -2,21 +2,29 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  CheckSquare,
   ChevronRight,
+  Copy,
   Download,
   ListPlus,
   Loader2,
   RefreshCw,
   Search,
   Sparkles,
+  Square,
   Trash2,
   Upload,
+  Wand2,
+  X,
 } from "lucide-react";
 
 import { useAccount } from "@/components/account-provider";
 import { proEnabled } from "@/lib/flags";
 import { notifySyncChange } from "@/lib/sync-client";
 import { consumeDayUsage, EXPLORER_DAY_KEY, peekDayUsage, refundDayUsage } from "@/lib/usage";
+import { useToast } from "@/components/toast";
+import { AsoOptimizerModal } from "@/components/aso-optimizer-modal";
+import { optimizeKeywordField } from "@/lib/aso-optimizer";
 
 import {
   SUPPORTED_COUNTRIES,
@@ -72,10 +80,13 @@ function MetricBar({
 const EXAMPLE_KEYWORDS = ["meditation", "habit tracker", "invoice scanner"];
 
 type SortKey = "keyword" | "popularity" | "difficulty" | "results" | "trend";
+type ExplorerFilterTab = "all" | "golden" | "official" | "high_demand" | "low_diff";
 
 export function KeywordExplorer() {
+  const { showToast } = useToast();
   const [country, setCountry] = useState<string>("US");
   const [query, setQuery] = useState("");
+  const [tableFilter, setTableFilter] = useState("");
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
   const [keywords, setKeywords] = useState<string[]>([]);
@@ -86,12 +97,14 @@ export function KeywordExplorer() {
   const [busy, setBusy] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [selectedSet, setSelectedSet] = useState<Set<string>>(new Set());
   const [sort, setSort] = useState<{
     key: SortKey;
     dir: "asc" | "desc";
   } | null>(null);
-  const [goldenOnly, setGoldenOnly] = useState(false);
+  const [filterTab, setFilterTab] = useState<ExplorerFilterTab>("all");
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [optimizerOpen, setOptimizerOpen] = useState(false);
   const [batchProgress, setBatchProgress] = useState<{
     done: number;
     total: number;
@@ -118,12 +131,8 @@ export function KeywordExplorer() {
     useAccount();
   const explorerLimit =
     proEnabled() || accountsLive ? account.limits.explorerChecksPerDay : null;
-  // Plan history window for trend charts (30 free / 90 Pro).
   const historyDays = account.limits.historyDays;
   const isGuest = accountsLive && !signedIn && !loading;
-  // Derived from the day counter rather than a sticky flag: the limit banner
-  // must clear automatically when the day rolls over (or the plan lifts the
-  // cap) instead of lingering until the next successful check.
   const limitHit =
     explorerLimit !== null &&
     peekDayUsage(window.localStorage, EXPLORER_DAY_KEY) >= explorerLimit;
@@ -131,9 +140,6 @@ export function KeywordExplorer() {
   const countryLabel =
     SUPPORTED_COUNTRIES.find((item) => item.code === country)?.label ?? country;
 
-  /* Rehydrate persisted rows whenever the country changes (or after a
-     restore). The read is deferred out of the effect body so state updates
-     happen in the async callback, not synchronously during render commit. */
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -153,6 +159,7 @@ export function KeywordExplorer() {
       setRecords(nextRecords);
       setMetrics(nextMetrics);
       setSelected(null);
+      setSelectedSet(new Set());
       setError(null);
     })();
     return () => {
@@ -167,13 +174,7 @@ export function KeywordExplorer() {
         open?: boolean;
         reorder?: boolean;
         throwOnError?: boolean;
-        /** Explicit storefront for share links (before country state settles). */
         country?: string;
-        /**
-         * Clear the search box after the run. Defaults to true for direct
-         * searches; background runs (refresh all, bulk, detail refresh) pass
-         * false so the user's typing is never wiped mid-queue.
-         */
         clearInput?: boolean;
       } = {},
     ) => {
@@ -182,8 +183,6 @@ export function KeywordExplorer() {
       if (!clean || busy.has(key)) return;
       const targetCountry = options.country ?? country;
 
-      // Daily check cap (free tier). Only a keyword not already in the list
-      // consumes a check; refreshing tracked keywords stays free.
       const alreadyTracked = loadKeywordList(
         window.localStorage,
         targetCountry,
@@ -196,15 +195,11 @@ export function KeywordExplorer() {
           explorerLimit,
         );
         consumed = gate.consumed;
-        // The limit banner is derived from the day counter, so a blocked
-        // attempt needs no state of its own.
         if (!gate.allowed) return;
       }
 
       setBusy((previous) => new Set(previous).add(key));
       setError(null);
-      // Show the row immediately: the keyword lands in the table as a
-      // shimmering "Analyzing" row and fills in when the data arrives.
       if (!alreadyTracked) {
         setKeywords(
           addKeywordToList(window.localStorage, targetCountry, clean),
@@ -226,8 +221,6 @@ export function KeywordExplorer() {
         setRecords((previous) => new Map(previous).set(clean, record));
         if (options.open !== false) setSelected(clean);
       } catch (error) {
-        // A failed first check leaves no half-empty row behind and refunds the
-        // daily-check unit it consumed — a failed attempt is not a check.
         if (!alreadyTracked) {
           setKeywords(
             removeKeywordFromList(window.localStorage, targetCountry, clean),
@@ -248,9 +241,6 @@ export function KeywordExplorer() {
           return next;
         });
         if (options.clearInput !== false) {
-          // Only clear when the box still holds the analyzed term: a user who
-          // starts typing the next keyword while this check is in flight must
-          // not have their input wiped by the finishing finally block.
           setQuery((current) => (current.trim() === clean ? "" : current));
         }
         setSuggestionsOpen(false);
@@ -259,10 +249,6 @@ export function KeywordExplorer() {
     [busy, country, explorerLimit],
   );
 
-  /* Shareable deep link: ?kw=meditation&country=DE analyzes on load, then the
-     URL is cleaned so a refresh does not re-analyze. Runs once on mount; the
-     deferred async body matches the rehydrate pattern and avoids synchronous
-     setState inside the effect. */
   useEffect(() => {
     if (shareInitRef.current) return;
     shareInitRef.current = true;
@@ -281,17 +267,13 @@ export function KeywordExplorer() {
       await Promise.resolve();
       if (cancelled) return;
       setCountry(requestedCountry);
-      // Explicit country so the analysis is not racing the country rehydrate.
       void analyze(sharedKeyword, { open: true, country: requestedCountry });
     })();
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [country, analyze]);
 
-  /* Refresh all with bounded concurrency and a small gap between starts so a
-     large list does not trip iTunes rate limits. */
   const refreshAll = useCallback(async () => {
     await runBatched(keywords, async (keyword) => {
       await analyze(keyword, {
@@ -302,8 +284,6 @@ export function KeywordExplorer() {
     });
   }, [analyze, keywords]);
 
-  /* Bulk: analyze a pasted list with bounded concurrency; failures are
-     collected and reported in a summary banner instead of stopping the run. */
   const runBulk = useCallback(
     async (batch: string[]) => {
       setBulkOpen(false);
@@ -326,7 +306,6 @@ export function KeywordExplorer() {
 
   const removeRow = useCallback(
     (keyword: string) => {
-      // Stash the row for undo before deleting anything from storage.
       setUndoState({
         keyword,
         metrics: metrics.get(keyword) ?? null,
@@ -336,7 +315,6 @@ export function KeywordExplorer() {
         window.clearTimeout(undoTimeoutRef.current);
       }
       undoTimeoutRef.current = window.setTimeout(() => {
-        // The bar disappears on its own; keep focus from dropping to <body>.
         if (undoRef.current === document.activeElement) {
           searchRef.current?.focus();
         }
@@ -357,6 +335,11 @@ export function KeywordExplorer() {
         return next;
       });
       setSelected((current) => (current === keyword ? null : current));
+      setSelectedSet((prev) => {
+        const next = new Set(prev);
+        next.delete(keyword);
+        return next;
+      });
     },
     [country, metrics, records],
   );
@@ -384,23 +367,26 @@ export function KeywordExplorer() {
       setRecords((previous) => new Map(previous).set(keyword, stashedRecord));
     }
     setUndoState(null);
-    // Keyboard users removed the row and restored it; land focus back on the
-    // primary input instead of leaving it on a button that just unmounted.
     searchRef.current?.focus();
   }, [undoState, country]);
 
-  const exportCsv = useCallback(() => {
-    const rows = keywords.map((keyword) => ({
-      keyword,
-      country,
-      metrics: metrics.get(keyword) ?? null,
-      record: records.get(keyword) ?? null,
-    }));
-    downloadTextFile(
-      `appclimb-keywords-${country.toLowerCase()}.csv`,
-      buildExplorerCsv(rows),
-    );
-  }, [keywords, metrics, records, country]);
+  const exportCsv = useCallback(
+    (customKeywords?: string[]) => {
+      const targets = customKeywords ?? keywords;
+      const rows = targets.map((keyword) => ({
+        keyword,
+        country,
+        metrics: metrics.get(keyword) ?? null,
+        record: records.get(keyword) ?? null,
+      }));
+      downloadTextFile(
+        `appclimb-keywords-${country.toLowerCase()}.csv`,
+        buildExplorerCsv(rows),
+      );
+      showToast(`Exported ${targets.length} keywords to CSV`);
+    },
+    [keywords, metrics, records, country, showToast],
+  );
 
   const backupJson = useCallback(() => {
     downloadTextFile(
@@ -408,7 +394,8 @@ export function KeywordExplorer() {
       exportExplorerBackup(window.localStorage),
       "application/json;charset=utf-8",
     );
-  }, []);
+    showToast("Downloaded complete JSON history backup");
+  }, [showToast]);
 
   const handleRestoreFile = useCallback(async (file: File) => {
     const text = await file.text();
@@ -419,103 +406,86 @@ export function KeywordExplorer() {
         : "No valid keyword records found in that file.",
     );
     setRefreshVersion((version) => version + 1);
-    // The native file picker left focus on the hidden input; move it to the
-    // primary search box so a keyboard user can continue immediately.
     searchRef.current?.focus();
   }, []);
 
-  /* Global shortcuts: "/" focuses the search box, Escape closes the detail
-     panel. Skipped while typing in a form control. */
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      const tag = target?.tagName;
-      const typing =
-        tag === "INPUT" ||
-        tag === "TEXTAREA" ||
-        tag === "SELECT" ||
-        Boolean(target?.isContentEditable);
-      if (event.key === "/" && !typing) {
-        event.preventDefault();
-        searchRef.current?.focus();
-      } else if (event.key === "Escape") {
-        setSuggestionsOpen(false);
-        setSelected(null);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
-  /* Debounced live suggestions while typing. All state updates run inside the
-     debounce callback, never synchronously in the effect body. */
-  useEffect(() => {
-    const term = query.trim();
-    const timer = window.setTimeout(() => {
-      void (async () => {
-        if (term.length < 2) {
-          setSuggestions([]);
-          setSuggestionsOpen(false);
-          return;
+  const handleCopy100Ch = useCallback(
+    async (targetKeywords: string[]) => {
+      const optimized = optimizeKeywordField(targetKeywords, { stripSpaces: true });
+      try {
+        if (navigator.clipboard?.writeText) {
+          await navigator.clipboard.writeText(optimized.optimized);
+          showToast(`Copied ${optimized.charCount}ch ASO keyword field!`);
         }
-        try {
-          const apps = await searchAppStoreCatalog(term, country);
-          setSuggestions(suggestKeywords(term, apps));
-          setSuggestionsOpen(true);
-        } catch {
-          setSuggestions([]);
-          setSuggestionsOpen(false);
-        }
-      })();
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, [query, country]);
-
-  /* A pointer-down anywhere outside the search form dismisses the open
-     suggestions dropdown (same affordance as Escape). */
-  useEffect(() => {
-    if (!suggestionsOpen) return;
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target && !searchFormRef.current?.contains(target)) {
-        setSuggestionsOpen(false);
+      } catch {
+        // Ignore clipboard failure
       }
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [suggestionsOpen]);
-
-  /* Move focus to the Undo action when a row is removed, so keyboard users
-     can restore with one keystroke instead of dropping to <body>. */
-  useEffect(() => {
-    if (!undoState) return undefined;
-    const frame = requestAnimationFrame(() => undoRef.current?.focus());
-    return () => cancelAnimationFrame(frame);
-  }, [undoState]);
-
-  const goldenCount = useMemo(
-    () =>
-      keywords.filter((keyword) => {
-        const metric = metrics.get(keyword);
-        return metric ? isGoldenKeyword(metric) : false;
-      }).length,
-    [keywords, metrics],
+    },
+    [showToast],
   );
+
+  const counts = useMemo(() => {
+    let golden = 0;
+    let official = 0;
+    let highDemand = 0;
+    let lowDiff = 0;
+
+    for (const kw of keywords) {
+      const m = metrics.get(kw);
+      if (!m) continue;
+      if (isGoldenKeyword(m)) golden++;
+      if (popularitySourceOf(m) === "official") official++;
+      if (m.popularity >= 50) highDemand++;
+      if (m.difficulty <= 35) lowDiff++;
+    }
+
+    return {
+      all: keywords.length,
+      golden,
+      official,
+      high_demand: highDemand,
+      low_diff: lowDiff,
+    };
+  }, [keywords, metrics]);
 
   const displayKeywords = useMemo(() => {
     let rows = keywords;
-    if (goldenOnly) {
-      rows = keywords.filter((keyword) => {
-        const metric = metrics.get(keyword);
-        return metric ? isGoldenKeyword(metric) : false;
+
+    // Instant table text filter
+    if (tableFilter.trim()) {
+      const needle = tableFilter.trim().toLowerCase();
+      rows = rows.filter((kw) => kw.toLowerCase().includes(needle));
+    }
+
+    // Filter tab
+    if (filterTab === "golden") {
+      rows = rows.filter((kw) => {
+        const m = metrics.get(kw);
+        return m ? isGoldenKeyword(m) : false;
+      });
+    } else if (filterTab === "official") {
+      rows = rows.filter((kw) => {
+        const m = metrics.get(kw);
+        return m ? popularitySourceOf(m) === "official" : false;
+      });
+    } else if (filterTab === "high_demand") {
+      rows = rows.filter((kw) => {
+        const m = metrics.get(kw);
+        return m ? m.popularity >= 50 : false;
+      });
+    } else if (filterTab === "low_diff") {
+      rows = rows.filter((kw) => {
+        const m = metrics.get(kw);
+        return m ? m.difficulty <= 35 : false;
       });
     }
+
     if (!sort) return rows;
     const dir = sort.dir === "asc" ? 1 : -1;
-    const trendValue = (keyword: string): number => {
-      const record = records.get(keyword);
-      if (!record || record.history.length < 2) return -1_000_000;
-      return trendDelta(record.history) ?? -1_000_000;
+    const getTrend = (kw: string) => {
+      const rec = records.get(kw);
+      if (!rec || rec.history.length < 2) return -1_000_000;
+      return trendDelta(rec.history) ?? -1_000_000;
     };
     return [...rows].sort((left, right) => {
       switch (sort.key) {
@@ -540,10 +510,113 @@ export function KeywordExplorer() {
               (metrics.get(right)?.results ?? -1))
           );
         case "trend":
-          return dir * (trendValue(left) - trendValue(right));
+          return dir * (getTrend(left) - getTrend(right));
       }
     });
-  }, [keywords, goldenOnly, metrics, records, sort]);
+  }, [keywords, tableFilter, filterTab, metrics, records, sort]);
+
+  const toggleSelectAll = () => {
+    if (selectedSet.size === displayKeywords.length) {
+      setSelectedSet(new Set());
+    } else {
+      setSelectedSet(new Set(displayKeywords));
+    }
+  };
+
+  const toggleSelectKeyword = (keyword: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedSet((prev) => {
+      const next = new Set(prev);
+      if (next.has(keyword)) {
+        next.delete(keyword);
+      } else {
+        next.add(keyword);
+      }
+      return next;
+    });
+  };
+
+  const deleteSelectedKeywords = () => {
+    if (selectedSet.size === 0) return;
+    if (
+      !window.confirm(
+        `Delete ${selectedSet.size} selected keyword${selectedSet.size === 1 ? "" : "s"}?`,
+      )
+    ) {
+      return;
+    }
+    const toDelete = Array.from(selectedSet);
+    for (const kw of toDelete) {
+      removeKeywordFromList(window.localStorage, country, kw);
+      deleteRecord(window.localStorage, kw, country);
+    }
+    setRefreshVersion((v) => v + 1);
+    setSelectedSet(new Set());
+    setSelected(null);
+    notifySyncChange("explorer");
+    showToast(`Removed ${toDelete.length} keywords`);
+  };
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName;
+      const typing =
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        Boolean(target?.isContentEditable);
+      if ((event.key === "/" || (event.key === "k" && (event.metaKey || event.ctrlKey))) && !typing) {
+        event.preventDefault();
+        searchRef.current?.focus();
+      } else if (event.key === "Escape") {
+        setSuggestionsOpen(false);
+        setSelected(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  useEffect(() => {
+    const term = query.trim();
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        if (term.length < 2) {
+          setSuggestions([]);
+          setSuggestionsOpen(false);
+          return;
+        }
+        try {
+          const apps = await searchAppStoreCatalog(term, country);
+          setSuggestions(suggestKeywords(term, apps));
+          setSuggestionsOpen(true);
+        } catch {
+          setSuggestions([]);
+          setSuggestionsOpen(false);
+        }
+      })();
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [query, country]);
+
+  useEffect(() => {
+    if (!suggestionsOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && !searchFormRef.current?.contains(target)) {
+        setSuggestionsOpen(false);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [suggestionsOpen]);
+
+  useEffect(() => {
+    if (!undoState) return undefined;
+    const frame = requestAnimationFrame(() => undoRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [undoState]);
 
   const toggleSort = useCallback((key: SortKey) => {
     setSort((current) => {
@@ -551,7 +624,7 @@ export function KeywordExplorer() {
         return { key, dir: key === "keyword" ? "asc" : "desc" };
       }
       if (current.dir === "asc") return { key, dir: "desc" };
-      return null; // third click returns to insertion order
+      return null;
     });
   }, []);
 
@@ -606,7 +679,7 @@ export function KeywordExplorer() {
             ref={searchRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search a keyword, e.g. “meditation”"
+            placeholder="Search any App Store keyword, e.g. “meditation” (Press / to focus)"
             maxLength={80}
             aria-label="Search keywords"
             role="combobox"
@@ -699,6 +772,15 @@ export function KeywordExplorer() {
                   of {explorerLimit} free checks left today
                 </span>
               )}
+            <button
+              type="button"
+              className="keyword-meta-link keyword-meta-link--primary"
+              onClick={() => setOptimizerOpen(true)}
+              title="Optimize App Store 100-character keyword field"
+            >
+              <Wand2 size={14} aria-hidden="true" />
+              100ch Optimizer
+            </button>
             <button
               type="button"
               className="keyword-meta-link"
@@ -802,54 +884,141 @@ export function KeywordExplorer() {
                   <button
                     type="button"
                     role="tab"
-                    aria-selected={!goldenOnly}
+                    aria-selected={filterTab === "all"}
                     className={
-                      !goldenOnly
+                      filterTab === "all"
                         ? "keyword-status-chip is-active"
                         : "keyword-status-chip"
                     }
-                    onClick={() => setGoldenOnly(false)}
+                    onClick={() => setFilterTab("all")}
                   >
-                    All <span>{keywords.length}</span>
+                    All <span>{counts.all}</span>
                   </button>
                   <button
                     type="button"
                     role="tab"
-                    aria-selected={goldenOnly}
+                    aria-selected={filterTab === "golden"}
                     className={
-                      goldenOnly
+                      filterTab === "golden"
                         ? "keyword-status-chip is-active"
                         : "keyword-status-chip"
                     }
-                    onClick={() => setGoldenOnly(true)}
+                    onClick={() => setFilterTab("golden")}
+                    title="Popularity ≥ 55 and Difficulty ≤ 40"
                   >
-                    Golden <span>{goldenCount}</span>
+                    Golden <span>{counts.golden}</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={filterTab === "official"}
+                    className={
+                      filterTab === "official"
+                        ? "keyword-status-chip is-active"
+                        : "keyword-status-chip"
+                    }
+                    onClick={() => setFilterTab("official")}
+                    title="Official Apple Ads verified popularity"
+                  >
+                    Apple Ads <span>{counts.official}</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={filterTab === "high_demand"}
+                    className={
+                      filterTab === "high_demand"
+                        ? "keyword-status-chip is-active"
+                        : "keyword-status-chip"
+                    }
+                    onClick={() => setFilterTab("high_demand")}
+                    title="Popularity score ≥ 50"
+                  >
+                    High Demand <span>{counts.high_demand}</span>
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={filterTab === "low_diff"}
+                    className={
+                      filterTab === "low_diff"
+                        ? "keyword-status-chip is-active"
+                        : "keyword-status-chip"
+                    }
+                    onClick={() => setFilterTab("low_diff")}
+                    title="Difficulty score ≤ 35"
+                  >
+                    Low Diff <span>{counts.low_diff}</span>
                   </button>
                 </div>
-                <button
-                  type="button"
-                  className="refresh-all-button keyword-topbar-refresh"
-                  onClick={() => void refreshAll()}
-                  disabled={keywords.length === 0 || busy.size > 0}
-                >
-                  <RefreshCw
-                    className={busy.size > 0 ? "spin" : ""}
-                    size={15}
-                    aria-hidden="true"
-                  />
-                  Refresh all
-                </button>
+
+                <div className="keyword-topbar-right">
+                  <div className="keyword-instant-search">
+                    <Search size={13} aria-hidden="true" />
+                    <input
+                      value={tableFilter}
+                      onChange={(e) => setTableFilter(e.target.value)}
+                      placeholder="Filter list…"
+                      aria-label="Filter loaded keywords"
+                    />
+                    {tableFilter && (
+                      <button
+                        type="button"
+                        onClick={() => setTableFilter("")}
+                        aria-label="Clear filter"
+                      >
+                        <X size={12} aria-hidden="true" />
+                      </button>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    className="refresh-all-button keyword-topbar-refresh"
+                    onClick={() => void refreshAll()}
+                    disabled={keywords.length === 0 || busy.size > 0}
+                    title="Refresh scores for all keywords"
+                  >
+                    <RefreshCw
+                      className={busy.size > 0 ? "spin" : ""}
+                      size={15}
+                      aria-hidden="true"
+                    />
+                    Refresh all
+                  </button>
+                </div>
               </div>
-              {goldenOnly && (
+
+              {filterTab === "golden" && (
                 <p className="keyword-heuristic-note">
                   “Golden” means popularity ≥ 55 and estimated difficulty ≤ 40 —
                   terms with solid demand and a low barrier, worth fighting for.
                 </p>
               )}
+
               <div className="keyword-table-scroll">
                 <table className="keyword-table">
                   <thead>
                     <tr>
+                      <th className="keyword-th-select">
+                        <button
+                          type="button"
+                          className="keyword-select-all-btn"
+                          onClick={toggleSelectAll}
+                          aria-label={
+                            selectedSet.size === displayKeywords.length
+                              ? "Deselect all"
+                              : "Select all"
+                          }
+                          title="Select / Deselect all"
+                        >
+                          {selectedSet.size > 0 &&
+                          selectedSet.size === displayKeywords.length ? (
+                            <CheckSquare size={16} className="keyword-checkbox-icon" />
+                          ) : (
+                            <Square size={16} className="keyword-checkbox-icon" />
+                          )}
+                        </button>
+                      </th>
                       <th
                         aria-sort={
                           sort?.key === "keyword"
@@ -954,12 +1123,32 @@ export function KeywordExplorer() {
                         : [];
                       const delta = record ? trendDelta(record.history) : null;
                       const isBusy = busy.has(keyword.toLocaleLowerCase());
+                      const isSelected = selectedSet.has(keyword);
+
                       return (
                         <tr
                           key={keyword}
-                          className={selected === keyword ? "is-selected" : ""}
+                          className={`${selected === keyword ? "is-selected" : ""} ${
+                            isSelected ? "is-row-checked" : ""
+                          }`}
                           onClick={() => setSelected(keyword)}
                         >
+                          <td
+                            className="keyword-td-select"
+                            onClick={(e) => toggleSelectKeyword(keyword, e)}
+                          >
+                            <button
+                              type="button"
+                              className="keyword-row-checkbox"
+                              aria-label={isSelected ? `Deselect ${keyword}` : `Select ${keyword}`}
+                            >
+                              {isSelected ? (
+                                <CheckSquare size={16} className="keyword-checkbox-icon is-checked" />
+                              ) : (
+                                <Square size={16} className="keyword-checkbox-icon" />
+                              )}
+                            </button>
+                          </td>
                           <td>
                             <span className="keyword-name-row">
                               <strong className="keyword-name">
@@ -1106,7 +1295,7 @@ export function KeywordExplorer() {
                     })}
                     {displayKeywords.length === 0 && (
                       <tr>
-                        <td colSpan={6}>
+                        <td colSpan={7}>
                           <em className="keyword-pending">
                             No keywords match this filter yet — analyze more
                             terms or switch the filter.
@@ -1117,12 +1306,68 @@ export function KeywordExplorer() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Floating Multi-Select Action Bar */}
+              {selectedSet.size > 0 && (
+                <div className="keyword-selection-bar" role="toolbar" aria-label="Selection actions">
+                  <div className="keyword-selection-info">
+                    <CheckSquare size={16} aria-hidden="true" />
+                    <span>
+                      <strong>{selectedSet.size}</strong> keyword{selectedSet.size === 1 ? "" : "s"} selected
+                    </span>
+                  </div>
+                  <div className="keyword-selection-actions">
+                    <button
+                      type="button"
+                      className="tracker-button-primary"
+                      onClick={() => void handleCopy100Ch(Array.from(selectedSet))}
+                      title="Copy selected keywords optimized for App Store 100ch field"
+                    >
+                      <Copy size={14} aria-hidden="true" />
+                      Copy 100ch
+                    </button>
+                    <button
+                      type="button"
+                      className="tracker-button-secondary"
+                      onClick={() => setOptimizerOpen(true)}
+                    >
+                      <Wand2 size={14} aria-hidden="true" />
+                      Optimizer
+                    </button>
+                    <button
+                      type="button"
+                      className="tracker-button-secondary"
+                      onClick={() => exportCsv(Array.from(selectedSet))}
+                    >
+                      <Download size={14} aria-hidden="true" />
+                      Export CSV
+                    </button>
+                    <button
+                      type="button"
+                      className="tracker-button-secondary keyword-btn-danger"
+                      onClick={deleteSelectedKeywords}
+                    >
+                      <Trash2 size={14} aria-hidden="true" />
+                      Delete
+                    </button>
+                    <button
+                      type="button"
+                      className="keyword-selection-dismiss"
+                      onClick={() => setSelectedSet(new Set())}
+                      aria-label="Clear selection"
+                    >
+                      <X size={15} aria-hidden="true" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <footer className="keyword-table-foot">
                 <div className="keyword-table-actions">
                   <button
                     type="button"
                     className="refresh-all-button"
-                    onClick={exportCsv}
+                    onClick={() => exportCsv()}
                     disabled={keywords.length === 0}
                   >
                     <Download size={14} aria-hidden="true" />
@@ -1182,8 +1427,6 @@ export function KeywordExplorer() {
           </div>
         )}
 
-        {/* Shared restore picker: rendered in both empty and table states so a
-            wiped list can always be recovered from a backup. */}
         <input
           ref={restoreInputRef}
           type="file"
@@ -1201,6 +1444,12 @@ export function KeywordExplorer() {
           countryLabel={countryLabel}
           onClose={() => setBulkOpen(false)}
           onConfirm={(keywords) => void runBulk(keywords)}
+        />
+
+        <AsoOptimizerModal
+          open={optimizerOpen}
+          initialKeywords={selectedSet.size > 0 ? Array.from(selectedSet) : keywords}
+          onClose={() => setOptimizerOpen(false)}
         />
       </section>
     </main>

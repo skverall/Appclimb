@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { AccountProvider } from "@/components/account-provider";
+import { ToastProvider } from "@/components/toast";
 import { JsonLd } from "@/components/json-ld";
 import { iconUrl } from "@/lib/brand";
 import {
@@ -170,7 +171,9 @@ export default function RootLayout({
             ],
           }}
         />
-        <AccountProvider>{children}</AccountProvider>
+        <AccountProvider>
+          <ToastProvider>{children}</ToastProvider>
+        </AccountProvider>
       </body>
     </html>
   );

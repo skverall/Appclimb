@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
+import { useId, useMemo, useState } from "react";
+import { Crown, Flame, Rocket, Sparkles, Target, Trophy } from "lucide-react";
 
 import {
   allRankedApps,
@@ -13,26 +14,29 @@ import {
 } from "@/lib/tracker";
 
 /**
- * Best-position mini chart. Y axis is inverted so #1 (best) sits at the top;
+ * Best-position mini chart with interactive hover tooltip. Y axis is inverted so #1 (best) sits at the top;
  * only measured days are plotted — gaps are never filled in.
  */
 function BestPositionChart({ points }: { points: BestPositionPoint[] }) {
+  const gradientId = useId();
   const width = 300;
-  const height = 80;
-  const paddingX = 10;
-  const paddingY = 8;
+  const height = 90;
+  const paddingX = 12;
+  const paddingY = 10;
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+
   const positions = points.map((point) => point.position);
   const worst = Math.max(...positions);
   const best = Math.min(...positions);
   const span = worst - best || 1;
   const availableWidth = width - 2 * paddingX;
-  const availableHeight = height - 2 * paddingY - 14; // room for bottom text
+  const availableHeight = height - 2 * paddingY - 16;
 
   const stepX = points.length > 1 ? availableWidth / (points.length - 1) : availableWidth;
   const coords = points.map((point, index) => {
     const x = paddingX + index * stepX;
     const y = paddingY + ((point.position - best) / span) * availableHeight;
-    return { x, y };
+    return { x, y, point };
   });
 
   const pathD = coords
@@ -40,11 +44,12 @@ function BestPositionChart({ points }: { points: BestPositionPoint[] }) {
     .join(" ");
 
   const areaD = coords.length > 1
-    ? `${pathD} L${coords[coords.length - 1].x.toFixed(1)},${(height - 16).toFixed(1)} L${coords[0].x.toFixed(1)},${(height - 16).toFixed(1)} Z`
+    ? `${pathD} L${coords[coords.length - 1].x.toFixed(1)},${(height - 18).toFixed(1)} L${coords[0].x.toFixed(1)},${(height - 18).toFixed(1)} Z`
     : "";
 
   const first = points[0]?.date.slice(5) ?? "";
   const last = points[points.length - 1]?.date.slice(5) ?? "";
+  const activeCoord = hoverIndex !== null && coords[hoverIndex] ? coords[hoverIndex] : null;
 
   return (
     <div className="tracker-chart-container">
@@ -53,14 +58,24 @@ function BestPositionChart({ points }: { points: BestPositionPoint[] }) {
         viewBox={`0 0 ${width} ${height}`}
         role="img"
         aria-label="Best observed App Store position per day over the last 7 days"
+        onMouseMove={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          const mouseX = ((e.clientX - rect.left) / rect.width) * width;
+          const closest = Math.min(
+            Math.max(0, Math.round((mouseX - paddingX) / stepX)),
+            points.length - 1,
+          );
+          setHoverIndex(closest);
+        }}
+        onMouseLeave={() => setHoverIndex(null)}
       >
         <defs>
-          <linearGradient id="bestPosGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--teal-500)" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="var(--teal-500)" stopOpacity="0.0" />
+          <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--teal-500)" stopOpacity={0.3} />
+            <stop offset="100%" stopColor="var(--teal-500)" stopOpacity={0.0} />
           </linearGradient>
         </defs>
-        {areaD && <path d={areaD} fill="url(#bestPosGrad)" />}
+        {areaD && <path d={areaD} fill={`url(#${gradientId})`} />}
         <path
           d={pathD}
           fill="none"
@@ -74,24 +89,48 @@ function BestPositionChart({ points }: { points: BestPositionPoint[] }) {
             key={i}
             cx={pt.x}
             cy={pt.y}
-            r={2.5}
-            fill="#fff"
+            r={i === hoverIndex ? 4 : 2.5}
+            fill={i === hoverIndex ? "var(--teal-600)" : "#fff"}
             stroke="var(--teal-600)"
             strokeWidth={1.5}
           />
         ))}
-        <text x={paddingX} y={height - 2} className="trend-chart-label">
+        {activeCoord && (
+          <g>
+            <line
+              x1={activeCoord.x}
+              x2={activeCoord.x}
+              y1={paddingY}
+              y2={height - 18}
+              stroke="var(--line-strong)"
+              strokeDasharray="2 2"
+            />
+          </g>
+        )}
+        <text x={paddingX} y={height - 3} className="trend-chart-label">
           {first}
         </text>
         <text
           x={width - paddingX}
-          y={height - 2}
+          y={height - 3}
           textAnchor="end"
           className="trend-chart-label"
         >
           {last}
         </text>
       </svg>
+      {activeCoord && (
+        <div
+          className="tracker-overview-chart-tooltip"
+          style={{
+            left: `${(activeCoord.x / width) * 100}%`,
+            top: `${(activeCoord.y / height) * 100}%`,
+          }}
+        >
+          <span>{activeCoord.point.date}</span>
+          <strong>#{activeCoord.point.position} Best</strong>
+        </div>
+      )}
     </div>
   );
 }
@@ -155,38 +194,50 @@ export function RankingOverview({
           </p>
         ) : (
           <ul className="tracker-overview-list">
-            {rankings.map((row) => (
-              <li key={row.normalizedKeyword}>
-                <button
-                  type="button"
-                  className="tracker-overview-kw-btn"
-                  onClick={() => onSelectKeyword(row.normalizedKeyword)}
-                  title={`View details for ${row.keyword}`}
-                >
-                  <span className="tracker-overview-kw" title={row.keyword}>
-                    {row.keyword}
-                  </span>
-                  <span className="tracker-position">
-                    {formatPosition(row.position)}
-                  </span>
-                  {row.surge === null ? (
-                    <span className="rank-trend rank-trend--new">New</span>
-                  ) : row.surge === 0 ? (
-                    <span className="rank-trend rank-trend--unchanged">
-                      No change
+            {rankings.map((row) => {
+              const pos = row.position;
+              return (
+                <li key={row.normalizedKeyword}>
+                  <button
+                    type="button"
+                    className="tracker-overview-kw-btn"
+                    onClick={() => onSelectKeyword(row.normalizedKeyword)}
+                    title={`View details for ${row.keyword}`}
+                  >
+                    <span className="tracker-overview-kw" title={row.keyword}>
+                      {row.keyword}
                     </span>
-                  ) : row.surge > 0 ? (
-                    <span className="rank-trend rank-trend--up">
-                      ↑ {row.surge}
+                    <span className="tracker-position-pill">
+                      {pos === 1 ? (
+                        <Crown size={11} className="pos-icon--crown" aria-hidden="true" />
+                      ) : pos <= 3 ? (
+                        <Rocket size={11} className="pos-icon--top3" aria-hidden="true" />
+                      ) : pos <= 10 ? (
+                        <Sparkles size={11} className="pos-icon--top10" aria-hidden="true" />
+                      ) : (
+                        <Target size={11} className="pos-icon--top50" aria-hidden="true" />
+                      )}
+                      {formatPosition(row.position)}
                     </span>
-                  ) : (
-                    <span className="rank-trend rank-trend--down">
-                      ↓ {Math.abs(row.surge)}
-                    </span>
-                  )}
-                </button>
-              </li>
-            ))}
+                    {row.surge === null ? (
+                      <span className="rank-trend rank-trend--new">New</span>
+                    ) : row.surge === 0 ? (
+                      <span className="rank-trend rank-trend--unchanged">
+                        —
+                      </span>
+                    ) : row.surge > 0 ? (
+                      <span className="rank-trend rank-trend--up">
+                        ↑ {row.surge}
+                      </span>
+                    ) : (
+                      <span className="rank-trend rank-trend--down">
+                        ↓ {Math.abs(row.surge)}
+                      </span>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

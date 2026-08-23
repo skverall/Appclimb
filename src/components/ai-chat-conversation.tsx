@@ -7,15 +7,20 @@ import {
   ChevronDown,
   Copy,
   ExternalLink,
+  Globe,
   History,
   Loader2,
   Lock,
   LogIn,
   Maximize2,
+  Rocket,
+  Search,
   Send,
   Sparkles,
   SquarePen,
+  Target,
   Trash2,
+  Wand2,
 } from "lucide-react";
 
 import { AiChatHistory } from "@/components/ai-chat-history";
@@ -42,6 +47,45 @@ import {
   type AiConversationSummary,
   type UiMessage,
 } from "@/lib/ai-chat-client";
+
+const PROMPT_WORKFLOWS = [
+  {
+    title: "100-Char Keyword Field",
+    description: "Generate comma-separated App Store keywords with zero wasted space",
+    icon: Wand2,
+    prompt: "Generate an optimal, comma-separated 100-character App Store keyword string with zero duplicate words for my app.",
+  },
+  {
+    title: "Title & Subtitle Audit",
+    description: "Optimize for ranking power, clarity & 30-char limits",
+    icon: Sparkles,
+    prompt: "Audit my app title and subtitle for keyword weight, brand clarity, and 30-character compliance.",
+  },
+  {
+    title: "Competitor Keyword Gap",
+    description: "Discover terms top competitors rank for that I'm missing",
+    icon: Search,
+    prompt: "What high-intent keywords are competitor apps ranking for that my app might be missing?",
+  },
+  {
+    title: "Storefront Localization",
+    description: "Target US, UK, and EU App Store searches",
+    icon: Globe,
+    prompt: "Give me localized keyword and subtitle ideas for the US, UK, and German App Stores.",
+  },
+  {
+    title: "Priority Strategy",
+    description: "Which tracked terms have the fastest rank potential",
+    icon: Target,
+    prompt: "Which of my tracked keywords are worth focusing on first based on popularity vs difficulty?",
+  },
+  {
+    title: "First Page Climb Plan",
+    description: "Actionable roadmap if my rank is >200",
+    icon: Rocket,
+    prompt: "My position is >200 for key terms — what specific ASO steps can get me onto Page 1?",
+  },
+];
 
 function AssistantBubble({ content }: { content: string }) {
   const [copied, setCopied] = useState(false);
@@ -562,6 +606,7 @@ export function AiChatConversation({
                       disabled={busy}
                       onClick={() => void send(item)}
                     >
+                      <Sparkles size={14} className="ai-chat-suggestion-icon" aria-hidden="true" />
                       <span>{item}</span>
                     </button>
                   ))}

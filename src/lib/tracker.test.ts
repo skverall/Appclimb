@@ -50,6 +50,7 @@ import {
   STARTER_KEYWORDS,
   TRACKER_STORAGE_KEY,
   calculateCompetitorOverlap,
+  calculateAppHealthSummary,
   updateKeywordTags,
   updateKeywordNote,
   type TrackerStorage,
@@ -1519,3 +1520,73 @@ describe("rank snapshot retention", () => {
     expect(store.snapshots[key]).toHaveLength(90);
   });
 });
+
+describe("calculateAppHealthSummary", () => {
+  it("computes accurate app health metrics and rank distributions", () => {
+    let store = addTrackedApp(emptyStore(), sampleApp).store;
+    const { store: withKw } = addKeywordsToStore(
+      store,
+      sampleApp.appStoreId,
+      sampleApp.country,
+      ["focus timer", "pomodoro timer", "habit tracker"],
+    );
+    store = withKw;
+
+    store = applyAnalysisToStore(
+      store,
+      sampleApp.appStoreId,
+      sampleApp.country,
+      "focus timer",
+      {
+        metrics: {
+          keyword: "focus timer",
+          country: sampleApp.country,
+          popularity: 65,
+          difficulty: 30,
+          results: 50,
+          saturated: false,
+          topApps: [],
+          sampledAt: "2026-08-20T10:00:00Z",
+        },
+        position: 1,
+        topApps: [],
+      },
+    );
+
+    store = applyAnalysisToStore(
+      store,
+      sampleApp.appStoreId,
+      sampleApp.country,
+      "pomodoro timer",
+      {
+        metrics: {
+          keyword: "pomodoro timer",
+          country: sampleApp.country,
+          popularity: 45,
+          difficulty: 40,
+          results: 100,
+          saturated: false,
+          topApps: [],
+          sampledAt: "2026-08-20T10:00:00Z",
+        },
+        position: 5,
+        topApps: [],
+      },
+    );
+
+    const summary = calculateAppHealthSummary(
+      store,
+      sampleApp.appStoreId,
+      sampleApp.country,
+    );
+
+    expect(summary.totalKeywords).toBe(3);
+    expect(summary.rankedKeywords).toBe(2);
+    expect(summary.top1Count).toBe(1);
+    expect(summary.top3Count).toBe(1);
+    expect(summary.top10Count).toBe(2);
+    expect(summary.averageRank).toBe(3); // (1 + 5) / 2
+    expect(summary.visibilityScore).toBeGreaterThan(0);
+  });
+});
+

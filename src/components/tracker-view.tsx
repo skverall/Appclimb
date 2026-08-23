@@ -2,16 +2,21 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  Check,
+  ArrowUp,
   Compass,
   Copy,
+  Crown,
   Download,
   Lightbulb,
   Loader2,
   Plus,
   RefreshCw,
+  Rocket,
   Search,
+  Sparkles,
+  Target,
   Trash2,
+  Wand2,
 } from "lucide-react";
 
 import { AddKeywordsModal } from "@/components/add-keywords-modal";
@@ -21,7 +26,10 @@ import { TrackerDetail } from "@/components/tracker-detail";
 import { Sparkline } from "@/components/keyword-charts";
 import { useAccount } from "@/components/account-provider";
 import { proEnabled } from "@/lib/flags";
-import { SUPPORTED_COUNTRIES, formatAsoKeywordField } from "@/lib/aso";
+import { SUPPORTED_COUNTRIES } from "@/lib/aso";
+import { useToast } from "@/components/toast";
+import { AsoOptimizerModal } from "@/components/aso-optimizer-modal";
+import { optimizeKeywordField } from "@/lib/aso-optimizer";
 import {
   enrichAnalysisResult,
   popularityShortLabel,
@@ -37,6 +45,7 @@ import {
   applyAnalysisToStore,
   buildKeywordSuggestions,
   buildKeywordsCsv,
+  calculateAppHealthSummary,
   describeRankTrend,
   downloadTextFile,
   formatPosition,
@@ -144,12 +153,10 @@ export function TrackerView({
   app: TrackedApp;
   store: TrackerStore;
   onStoreChange: (next: TrackerStore) => void;
-  /** Parent is already analyzing (e.g. post-add suggestions) — don't double-fetch. */
   suspendAutoRefresh?: boolean;
-  /** Offer tracking the same app id in another country. */
   onTrackInStorefront?: (country: string) => void;
 }) {
-  const [copiedAsoField, setCopiedAsoField] = useState(false);
+  const { showToast } = useToast();
   const [filter, setFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState<KeywordStatusFilter>("all");
   const [historyDays, setHistoryDays] = useState<7 | 30>(30);
@@ -167,6 +174,7 @@ export function TrackerView({
   const [error, setError] = useState<string | null>(null);
   const [addKeywordsOpen, setAddKeywordsOpen] = useState(false);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [optimizerOpen, setOptimizerOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<
     Array<KeywordSuggestion & { alreadyTracked: boolean }>
   >([]);
@@ -176,8 +184,6 @@ export function TrackerView({
   const storeRef = useRef(store);
 
   const { account, accountsLive } = useAccount();
-  // Same plan gate as the workspace: before accounts are live the tool keeps
-  // the pre-monetization shape, so no keyword cap applies (null = unlimited).
   const limitsOn = proEnabled() || accountsLive;
   const keywordLimit = limitsOn ? account.limits.keywordsPerApp : null;
 
@@ -185,7 +191,6 @@ export function TrackerView({
     storeRef.current = store;
   }, [store]);
 
-  // Escape closes the open keyword detail, except while typing in a field.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
@@ -207,6 +212,11 @@ export function TrackerView({
 
   const keywords = useMemo(
     () => listKeywordsForApp(store, app.appStoreId, app.country),
+    [store, app.appStoreId, app.country],
+  );
+
+  const health = useMemo(
+    () => calculateAppHealthSummary(store, app.appStoreId, app.country),
     [store, app.appStoreId, app.country],
   );
 
@@ -356,6 +366,8 @@ export function TrackerView({
                   rateLimited > 0 ? " (some hits were rate-limited)" : ""
                 }. Existing data was kept.`,
           );
+        } else {
+          showToast(`Checked rankings for ${targets.length} keywords`);
         }
       } catch (err) {
         if (err instanceof DOMException && err.name === "AbortError") {
@@ -368,7 +380,7 @@ export function TrackerView({
         setProgress(null);
       }
     },
-    [app.appStoreId, app.country, onStoreChange],
+    [app.appStoreId, app.country, onStoreChange, showToast],
   );
 
   useEffect(() => {
@@ -500,7 +512,8 @@ export function TrackerView({
       if (!needle) return true;
       return (
         row.keyword.toLocaleLowerCase().includes(needle) ||
-        row.note.toLocaleLowerCase().includes(needle)
+        row.note.toLocaleLowerCase().includes(needle) ||
+        (row.tags ?? []).some((t) => t.toLowerCase().includes(needle))
       );
     });
     const dir = sortDir === "asc" ? 1 : -1;
@@ -568,6 +581,7 @@ export function TrackerView({
       removeKeywordFromStore(store, app.appStoreId, app.country, normalized),
     );
     setSelected((current) => (current === normalized ? null : current));
+    showToast(`Removed “${label}”`);
   };
 
   const exportCsv = () => {
@@ -584,6 +598,22 @@ export function TrackerView({
       `appclimb-${safeName || app.appStoreId}-${app.country}.csv`,
       csv,
     );
+    showToast(`Exported ${keywords.length} tracked keywords to CSV`);
+  };
+
+  const copy100Ch = async () => {
+    const optimized = optimizeKeywordField(keywords.map((k) => k.keyword), {
+      appTitle: app.name,
+      stripSpaces: true,
+    });
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(optimized.optimized);
+        showToast(`Copied ${optimized.charCount}ch ASO keyword string!`);
+      }
+    } catch {
+      // Ignore clipboard write failures in non-secure context
+    }
   };
 
   return (
@@ -592,7 +622,7 @@ export function TrackerView({
         <div className="tracker-view-app">
           {app.iconUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={app.iconUrl} alt="" width={40} height={40} />
+            <img src={app.iconUrl} alt="" width={44} height={44} className="tracker-app-avatar" />
           ) : (
             <span className="tracker-app-icon-fallback" aria-hidden="true">
               {app.name.charAt(0)}
@@ -635,6 +665,66 @@ export function TrackerView({
         )}
       </header>
 
+      {/* App Health Scorecard Strip */}
+      {keywords.length > 0 && (
+        <section className="tracker-scorecard-grid" aria-label="App ranking summary">
+          <div className="tracker-scorecard-card">
+            <span className="tracker-scorecard-label">Ranked Keywords</span>
+            <div className="tracker-scorecard-value">
+              <strong>{health.rankedKeywords}</strong>
+              <small>/ {health.totalKeywords}</small>
+            </div>
+            <span className="tracker-scorecard-meta">
+              {keywordLimit !== null ? `Plan: up to ${keywordLimit}` : "Unlimited on Pro"}
+            </span>
+          </div>
+
+          <div className="tracker-scorecard-card">
+            <span className="tracker-scorecard-label">Average Rank</span>
+            <div className="tracker-scorecard-value">
+              <strong>{health.averageRank !== null ? `#${health.averageRank}` : "—"}</strong>
+            </div>
+            <span className="tracker-scorecard-meta">Across top 200 results</span>
+          </div>
+
+          <div className="tracker-scorecard-card">
+            <span className="tracker-scorecard-label">Top 10 Rankings</span>
+            <div className="tracker-scorecard-value">
+              <strong>{health.top10Count}</strong>
+              {health.top1Count > 0 && (
+                <span className="tracker-badge-top1" title="Number 1 rankings">
+                  👑 {health.top1Count}
+                </span>
+              )}
+            </div>
+            <span className="tracker-scorecard-meta">High visibility positions</span>
+          </div>
+
+          <div className="tracker-scorecard-card">
+            <span className="tracker-scorecard-label">Visibility Score</span>
+            <div className="tracker-scorecard-value">
+              <strong>{health.visibilityScore}</strong>
+              <small>/ 100</small>
+            </div>
+            <span className="tracker-scorecard-meta">Position & demand index</span>
+          </div>
+
+          {health.gainers.length > 0 && (
+            <div className="tracker-scorecard-card tracker-scorecard-movers">
+              <span className="tracker-scorecard-label">Today&apos;s Gainers</span>
+              <div className="tracker-movers-list">
+                {health.gainers.map((g) => (
+                  <span key={g.keyword} className="tracker-mover-pill tracker-mover-pill--up" title={`Ranked +${g.surge} positions today`}>
+                    <ArrowUp size={12} aria-hidden="true" />
+                    <b>{g.keyword}</b> +{g.surge}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
+
       <div className="tracker-toolbar" role="toolbar" aria-label="Keyword actions">
         <div className="tracker-toolbar-actions">
           <span className="tracker-store-pill" title={`Active storefront: ${countryLabel}`}>
@@ -667,6 +757,16 @@ export function TrackerView({
           </button>
           <button
             type="button"
+            className="tracker-button-secondary"
+            onClick={() => setOptimizerOpen(true)}
+            disabled={keywords.length === 0}
+            title="Open 100-character keyword field optimizer studio"
+          >
+            <Wand2 size={15} aria-hidden="true" />
+            100ch Optimizer
+          </button>
+          <button
+            type="button"
             className="refresh-all-button"
             onClick={() => void refreshKeywords(keywords.map((row) => row.keyword))}
             disabled={keywords.length === 0 || busyKeys.size > 0}
@@ -693,37 +793,22 @@ export function TrackerView({
           <button
             type="button"
             className="refresh-all-button"
-            onClick={async () => {
-              const formatted = formatAsoKeywordField(keywords.map((k) => k.keyword));
-              try {
-                if (navigator.clipboard?.writeText) {
-                  await navigator.clipboard.writeText(formatted);
-                }
-                setCopiedAsoField(true);
-                setTimeout(() => setCopiedAsoField(false), 2000);
-              } catch {
-                // Ignore clipboard failure
-              }
-            }}
+            onClick={copy100Ch}
             disabled={keywords.length === 0}
             title="Copies up to 100 characters of comma-separated keywords for Apple App Store Connect keyword field"
           >
-            {copiedAsoField ? (
-              <Check size={15} aria-hidden="true" />
-            ) : (
-              <Copy size={15} aria-hidden="true" />
-            )}
-            {copiedAsoField ? "Copied 100ch" : "Copy ASO 100ch"}
+            <Copy size={15} aria-hidden="true" />
+            Copy 100ch
           </button>
         </div>
 
         <div className="tracker-toolbar-controls">
-          <label className="tracker-filter" title="Filter keywords by search text">
+          <label className="tracker-filter" title="Filter keywords by search text or tags">
             <Search size={14} aria-hidden="true" />
             <input
               value={filter}
               onChange={(event) => setFilter(event.target.value)}
-              placeholder="Filter keywords…"
+              placeholder="Filter keywords or tags…"
               aria-label="Filter keywords"
             />
           </label>
@@ -973,6 +1058,7 @@ export function TrackerView({
                     );
                     const opp = opportunityScore(metrics);
                     const spark = positionSparklineValues(snaps, historyDays);
+                    const pos = metrics?.position;
                     const lastUpdate = row.lastCheckedAt
                       ? new Date(row.lastCheckedAt).toLocaleString(undefined, {
                           month: "short",
@@ -1051,17 +1137,37 @@ export function TrackerView({
                           )}
                         </td>
                         <td>
-                          <strong className="tracker-position">
-                            {isBusy && !metrics
-                              ? "…"
-                              : formatPosition(
+                          <div className="tracker-position-cell">
+                            {isBusy && !metrics ? (
+                              <span className="tracker-position">…</span>
+                            ) : pos === 1 ? (
+                              <span className="tracker-position tracker-pos-badge tracker-pos-badge--crown" title="Ranked #1 on the App Store!">
+                                <Crown size={12} aria-hidden="true" /> #1
+                              </span>
+                            ) : pos && pos <= 3 ? (
+                              <span className="tracker-position tracker-pos-badge tracker-pos-badge--top3" title="Top 3 rank on the App Store">
+                                <Rocket size={12} aria-hidden="true" /> #{pos}
+                              </span>
+                            ) : pos && pos <= 10 ? (
+                              <span className="tracker-position tracker-pos-badge tracker-pos-badge--top10" title="Top 10 Page 1 rank">
+                                <Sparkles size={11} aria-hidden="true" /> #{pos}
+                              </span>
+                            ) : pos && pos <= 50 ? (
+                              <span className="tracker-position tracker-pos-badge tracker-pos-badge--top50">
+                                <Target size={11} aria-hidden="true" /> #{pos}
+                              </span>
+                            ) : (
+                              <strong className="tracker-position">
+                                {formatPosition(
                                   metrics?.position ?? null,
                                   Boolean(
                                     metrics?.unavailable &&
                                       metrics.popularity === 0,
                                   ),
                                 )}
-                          </strong>
+                              </strong>
+                            )}
+                          </div>
                         </td>
                         <td>
                           <span
@@ -1224,9 +1330,6 @@ export function TrackerView({
           );
           onStoreChange(next);
           setAddKeywordsOpen(false);
-          // The cap notice is set after the refresh: refreshKeywords clears
-          // transient errors when it starts, which would otherwise swallow
-          // this message before the user ever sees it.
           if (added.length > 0) {
             void refreshKeywords(added.map((row) => row.keyword)).then(() => {
               if (capped) {
@@ -1258,8 +1361,6 @@ export function TrackerView({
           );
           onStoreChange(next);
           setSuggestionsOpen(false);
-          // Same ordering as the Add Keywords handler: the cap notice must
-          // survive the refresh, which clears transient errors on start.
           if (added.length > 0) {
             void refreshKeywords(added.map((row) => row.keyword)).then(() => {
               if (capped) {
@@ -1274,6 +1375,13 @@ export function TrackerView({
             );
           }
         }}
+      />
+
+      <AsoOptimizerModal
+        open={optimizerOpen}
+        initialKeywords={keywords.map((k) => k.keyword)}
+        appTitle={app.name}
+        onClose={() => setOptimizerOpen(false)}
       />
     </div>
   );

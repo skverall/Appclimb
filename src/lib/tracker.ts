@@ -1457,3 +1457,80 @@ export function allRankedApps(
     )
     .slice(0, limit);
 }
+
+export interface AppHealthSummary {
+  totalKeywords: number;
+  rankedKeywords: number;
+  top1Count: number;
+  top3Count: number;
+  top10Count: number;
+  averageRank: number | null;
+  visibilityScore: number;
+  gainers: Array<{ keyword: string; surge: number }>;
+  droppers: Array<{ keyword: string; drop: number }>;
+}
+
+/**
+ * Calculates high-level health metrics for a tracked app, including rank distribution,
+ * average rank, visibility index heuristic, and top gainers/droppers.
+ */
+export function calculateAppHealthSummary(
+  store: TrackerStore,
+  appStoreId: string,
+  country: string,
+): AppHealthSummary {
+  const rows = listKeywordsForApp(store, appStoreId, country);
+  let rankedCount = 0;
+  let top1 = 0;
+  let top3 = 0;
+  let top10 = 0;
+  let rankSum = 0;
+  let visibilitySum = 0;
+  const gainers: Array<{ keyword: string; surge: number }> = [];
+  const droppers: Array<{ keyword: string; drop: number }> = [];
+
+  for (const row of rows) {
+    const pos = row.currentMetrics?.position;
+    const pop = row.currentMetrics?.popularity ?? 20;
+    if (typeof pos === "number" && pos > 0 && pos <= 200) {
+      rankedCount++;
+      rankSum += pos;
+      if (pos === 1) top1++;
+      if (pos <= 3) top3++;
+      if (pos <= 10) top10++;
+
+      const rankFactor = Math.max(0, (201 - pos) / 200);
+      visibilitySum += (pop / 100) * rankFactor * 100;
+    }
+
+    const snaps = snapshotsFor(store, appStoreId, country, row.normalizedKeyword, 7);
+    if (snaps.length >= 2) {
+      const prev = snaps[snaps.length - 2]?.position;
+      const curr = pos ?? null;
+      if (typeof prev === "number" && typeof curr === "number") {
+        const delta = prev - curr;
+        if (delta >= 1) gainers.push({ keyword: row.keyword, surge: delta });
+        if (delta <= -1) droppers.push({ keyword: row.keyword, drop: Math.abs(delta) });
+      }
+    }
+  }
+
+  const avgRank = rankedCount > 0 ? Number((rankSum / rankedCount).toFixed(1)) : null;
+  const visibilityScore = rows.length > 0 ? Math.min(100, Math.round(visibilitySum / Math.max(1, rows.length))) : 0;
+
+  gainers.sort((a, b) => b.surge - a.surge);
+  droppers.sort((a, b) => b.drop - a.drop);
+
+  return {
+    totalKeywords: rows.length,
+    rankedKeywords: rankedCount,
+    top1Count: top1,
+    top3Count: top3,
+    top10Count: top10,
+    averageRank: avgRank,
+    visibilityScore,
+    gainers: gainers.slice(0, 3),
+    droppers: droppers.slice(0, 3),
+  };
+}
+

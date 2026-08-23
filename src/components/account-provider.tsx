@@ -262,7 +262,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [refresh]);
+  }, [refresh, account.user?.email]);
 
   /**
    * Sign out and remove account-scoped workspace data from this device.

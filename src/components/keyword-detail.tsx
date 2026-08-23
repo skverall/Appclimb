@@ -1,15 +1,18 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   Check,
   ExternalLink,
   Link2,
   Loader2,
   RefreshCw,
+  Sparkles,
   Star,
   X,
 } from "lucide-react";
+import { useToast } from "@/components/toast";
 
 import {
   recentHistory,
@@ -54,6 +57,7 @@ export function KeywordDetail({
   onRefresh: () => void;
   onAnalyze: (keyword: string) => void;
 }) {
+  const { showToast } = useToast();
   const [copied, setCopied] = useState(false);
   const history = useMemo(
     () => (record ? recentHistory(record, historyDays) : []),
@@ -89,11 +93,13 @@ export function KeywordDetail({
       }
       textarea.remove();
       setCopied(true);
+      showToast(`Copied share link for "${keyword}"`);
     };
     try {
       if (navigator.clipboard?.writeText) {
         await navigator.clipboard.writeText(shareUrl);
         setCopied(true);
+        showToast(`Copied share link for "${keyword}"`);
       } else {
         fallback();
       }
@@ -238,6 +244,19 @@ export function KeywordDetail({
                 : " — today's popularity is the iTunes estimate."}
             </p>
           )}
+
+          <div className="tracker-ask-ai-card">
+            <div className="tracker-ask-ai-icon">
+              <Sparkles size={16} aria-hidden="true" />
+            </div>
+            <div className="tracker-ask-ai-copy">
+              <strong>ASO strategy for &ldquo;{keyword}&rdquo;</strong>
+              <p>Ask the assistant how to rank for this term in your title or subtitle.</p>
+            </div>
+            <Link href="/assistant" className="tracker-button-primary tracker-ask-ai-btn">
+              Ask AI
+            </Link>
+          </div>
 
           {related.length > 0 && (
             <section className="keyword-related">

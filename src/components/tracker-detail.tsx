@@ -1,16 +1,21 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
+  Check,
+  Copy,
   ExternalLink,
   Loader2,
   RefreshCw,
+  Sparkles,
   Star,
   Trash2,
   X,
 } from "lucide-react";
 
 import { TrendChart } from "@/components/keyword-charts";
+import { useToast } from "@/components/toast";
 import {
   calculateCompetitorOverlap,
   describeRankTrend,
@@ -49,6 +54,8 @@ export function TrackerDetail({
   onRefresh: () => void;
   onDelete: () => void;
 }) {
+  const { showToast } = useToast();
+  const [copied, setCopied] = useState(false);
   const metrics = keyword.currentMetrics;
   const competitorOverlap = useMemo(
     () => (allKeywords.length > 0 ? calculateCompetitorOverlap(app.appStoreId, allKeywords) : []),
@@ -65,11 +72,23 @@ export function TrackerDetail({
       ? { position: metrics.unavailable ? null : metrics.position }
       : null,
   );
-  // For rank chart we invert so lower rank (#1) is higher on the chart.
   const rankValues = snapshots
     .slice(-historyDays)
     .map((snap) => (snap.position === null ? null : snap.position));
   const hasRealRankHistory = snapshots.length >= 2;
+
+  const copyKeyword = async () => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(keyword.keyword);
+        setCopied(true);
+        showToast(`Copied "${keyword.keyword}"`);
+        setTimeout(() => setCopied(false), 2000);
+      }
+    } catch {
+      // Ignore
+    }
+  };
 
   return (
     <aside className="tracker-detail" aria-labelledby="tracker-detail-title">
@@ -81,6 +100,15 @@ export function TrackerDetail({
           <h2 id="tracker-detail-title">{keyword.keyword}</h2>
         </div>
         <div className="keyword-detail-actions">
+          <button
+            type="button"
+            className="keyword-detail-share"
+            onClick={copyKeyword}
+            title="Copy keyword text"
+          >
+            {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
+            {copied ? "Copied" : "Copy"}
+          </button>
           <button
             type="button"
             className="keyword-detail-refresh"
@@ -215,6 +243,20 @@ export function TrackerDetail({
         </figure>
       </div>
 
+      {/* Ask ASO Assistant Action Callout */}
+      <div className="tracker-ask-ai-card">
+        <div className="tracker-ask-ai-icon">
+          <Sparkles size={16} aria-hidden="true" />
+        </div>
+        <div className="tracker-ask-ai-copy">
+          <strong>Optimize for &ldquo;{keyword.keyword}&rdquo;</strong>
+          <p>Ask the assistant to generate title, subtitle, or metadata strategies to climb higher.</p>
+        </div>
+        <Link href="/assistant" className="tracker-button-primary tracker-ask-ai-btn">
+          Ask AI
+        </Link>
+      </div>
+
       {metrics && metrics.topApps.length > 0 && (
         <section className="keyword-top-apps">
           <h3>Top apps in results</h3>
@@ -314,6 +356,8 @@ function RankHistoryChart({
 }) {
   const width = 640;
   const height = 160;
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null);
+
   const numeric = values.filter((value): value is number => value !== null);
   if (numeric.length === 0) {
     return (
@@ -330,40 +374,82 @@ function RankHistoryChart({
     .map((value, index) => {
       if (value === null) return null;
       const x = index * stepX;
-      // Invert: rank 1 at top.
       const y = ((value - min) / span) * (height - 24) + 8;
-      return `${x.toFixed(1)},${y.toFixed(1)}`;
+      return { x, y, value, date: dates[index] };
     })
-    .filter(Boolean);
+    .filter((p): p is { x: number; y: number; value: number; date: string } => p !== null);
+
   const path = points
-    .map((point, index) => `${index === 0 ? "M" : "L"}${point}`)
+    .map((point, index) => `${index === 0 ? "M" : "L"}${point.x.toFixed(1)},${point.y.toFixed(1)}`)
     .join(" ");
 
+  const active = hoverIndex !== null && points[hoverIndex] ? points[hoverIndex] : null;
+
   return (
-    <svg
-      className="trend-chart"
-      viewBox={`0 0 ${width} ${height}`}
-      role="img"
-      aria-label="Rank over time"
-    >
-      <path
-        d={path}
-        fill="none"
-        stroke="var(--teal-500)"
-        strokeWidth={2}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <text x="0" y={height - 4} className="trend-chart-label">
-        {dates[0] ?? ""}
-      </text>
-      <text
-        x={width}
-        y={height - 4}
-        className="trend-chart-label trend-chart-label-end"
+    <div className="trend-chart-interactive-wrapper">
+      <svg
+        className="trend-chart"
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label="Rank over time"
+        onMouseMove={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          const mouseX = ((e.clientX - rect.left) / rect.width) * width;
+          const closest = Math.min(
+            Math.max(0, Math.round(mouseX / stepX)),
+            points.length - 1,
+          );
+          setHoverIndex(closest);
+        }}
+        onMouseLeave={() => setHoverIndex(null)}
       >
-        {dates[dates.length - 1] ?? ""}
-      </text>
-    </svg>
+        <path
+          d={path}
+          fill="none"
+          stroke="var(--teal-500)"
+          strokeWidth={2.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {points.map((p, i) => (
+          <circle
+            key={i}
+            cx={p.x}
+            cy={p.y}
+            r={i === hoverIndex ? 4.5 : 2.5}
+            fill={i === hoverIndex ? "var(--teal-600)" : "#fff"}
+            stroke="var(--teal-600)"
+            strokeWidth={1.5}
+          />
+        ))}
+        <text x="0" y={height - 4} className="trend-chart-label">
+          {dates[0] ?? ""}
+        </text>
+        <text
+          x={width}
+          y={height - 4}
+          className="trend-chart-label trend-chart-label-end"
+        >
+          {dates[dates.length - 1] ?? ""}
+        </text>
+      </svg>
+      {active && (
+        <div
+          className="trend-chart-tooltip"
+          style={{
+            left: `${(active.x / width) * 100}%`,
+            top: `${(active.y / height) * 100}%`,
+          }}
+        >
+          <div className="trend-chart-tooltip-header">
+            <span>{active.date}</span>
+          </div>
+          <div className="trend-chart-tooltip-val">
+            <strong style={{ color: "var(--teal-500)" }}>#{active.value}</strong>
+            <small>Observed Rank</small>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
