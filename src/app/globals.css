@@ -670,6 +670,74 @@ img {
   padding-block: 40px;
 }
 
+/* Legal pages (privacy, terms, refunds, 404): readable measure, clear
+   hierarchy. These are trust surfaces — they must not render as raw text
+   stretched across the full viewport. */
+.legal-page {
+  max-width: 76ch;
+  margin: 0 auto;
+  padding: 48px 24px 72px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.legal-page h1 {
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--ink);
+  margin: 0;
+}
+
+.legal-page h2 {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--ink);
+  margin: 24px 0 0;
+}
+
+.legal-page p {
+  margin: 8px 0 0;
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed, 1.65);
+  color: var(--ink-secondary);
+}
+
+.legal-page .eyebrow {
+  color: var(--teal-700);
+}
+
+.legal-page .legal-updated {
+  margin-top: 0;
+  font-size: var(--text-xs);
+  color: var(--ink-muted);
+}
+
+.legal-page .legal-note {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--n-25);
+  color: var(--ink-secondary);
+}
+
+.legal-page .marketing-hero-actions {
+  margin-top: 8px;
+}
+
+/* Short pages (404) keep the footer pinned to the viewport bottom. */
+.marketing-site {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.marketing-site > .marketing-footer {
+  margin-top: auto;
+}
+
 .marketing-hero {
   padding-block: 56px 40px;
 }
