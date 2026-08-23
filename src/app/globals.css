@@ -3221,6 +3221,35 @@ img {
   flex-shrink: 0;
 }
 
+/* On narrow screens the title, model tag, four icon actions and the
+   "Back to tool" link cannot share one row without truncation. */
+@media (max-width: 640px) {
+  .ai-chat-header {
+    height: auto;
+    min-height: 52px;
+    flex-wrap: wrap;
+    padding: 8px 14px;
+    row-gap: 4px;
+  }
+
+  .ai-chat-header-left {
+    flex: 1 1 100%;
+  }
+
+  .ai-chat-title-group {
+    flex-wrap: wrap;
+  }
+
+  .ai-chat-header-actions {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+  }
+
+  .ai-chat-text-link {
+    white-space: nowrap;
+  }
+}
+
 .ai-chat-header-left {
   display: flex;
   align-items: center;
@@ -3768,8 +3797,9 @@ img {
 
 @media (max-width: 640px) {
   .ai-chat-header {
-    height: 48px;
-    padding: 0 12px;
+    height: auto;
+    min-height: 48px;
+    padding: 8px 12px;
   }
 
   .ai-chat-messages {
