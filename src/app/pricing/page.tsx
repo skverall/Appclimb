@@ -85,6 +85,17 @@ export default function PricingPage() {
           ],
         }}
       />
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          mainEntity: FAQ.map((item) => ({
+            "@type": "Question",
+            name: item.question,
+            acceptedAnswer: { "@type": "Answer", text: item.answer },
+          })),
+        }}
+      />
       <main className="marketing-page pricing-page">
         <section className="pricing-hero">
           <p className="eyebrow">Pricing</p>
