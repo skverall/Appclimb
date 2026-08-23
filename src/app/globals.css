@@ -5230,6 +5230,14 @@ img {
   background: var(--n-100);
   border: 1px solid var(--line);
   border-radius: var(--radius-pill);
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.keyword-status-filters::-webkit-scrollbar {
+  display: none;
 }
 
 .keyword-status-chip {
