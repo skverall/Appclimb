@@ -981,6 +981,19 @@ export function TrackerView({
             <>
               <div className="tracker-table-scroll">
               <table className="keyword-table tracker-table">
+                <colgroup>
+                  <col style={{ width: "auto", minWidth: 160 }} />
+                  <col style={{ width: 76 }} />
+                  <col style={{ width: 136 }} />
+                  <col style={{ width: 110 }} />
+                  <col style={{ width: 88 }} />
+                  <col style={{ width: 88 }} />
+                  <col style={{ width: 88 }} />
+                  <col style={{ width: 110 }} />
+                  <col style={{ width: 100 }} />
+                  <col style={{ width: 130 }} />
+                  <col style={{ width: 68 }} />
+                </colgroup>
                 <thead>
                   <tr>
                     <th className="tracker-col-sticky tracker-col-keyword" title="Keyword phrase (click to sort by alphabetical order)">
@@ -1257,6 +1270,15 @@ export function TrackerView({
                       </tr>
                     );
                   })}
+                  {filteredSorted.length === 0 && (
+                    <tr>
+                      <td colSpan={11} className="keyword-empty-cell">
+                        <em className="keyword-pending">
+                          No keywords match this filter. Try clearing your search or switching filters.
+                        </em>
+                      </td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>

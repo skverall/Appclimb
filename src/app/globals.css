@@ -1211,8 +1211,9 @@ img {
 
 .tracker-view {
   display: grid;
-  gap: 16px;
-  padding: 24px 24px 0;
+  gap: 18px;
+  padding: 20px 0 0;
+  width: 100%;
 }
 
 .tracker-view-header {
@@ -1367,42 +1368,57 @@ img {
 /* Main Split: Table + Right Inspector */
 .tracker-main-split {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 340px;
+  grid-template-columns: minmax(0, 1fr) 360px;
   gap: 20px;
   align-items: start;
+}
+
+@media (max-width: 1180px) {
+  .tracker-main-split {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .tracker-table-wrap {
   min-width: 0;
   background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-xl);
   box-shadow: var(--shadow-sm);
   overflow: hidden;
 }
 
-.tracker-table-scroll {
+.tracker-table-scroll,
+.keyword-table-scroll {
+  width: 100%;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
 
 .keyword-table {
   width: 100%;
-  border-collapse: collapse;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
   text-align: left;
 }
 
+.tracker-table {
+  min-width: 1040px;
+}
+
 .keyword-table th {
-  height: 40px;
-  padding: 0 12px;
+  height: 42px;
+  padding: 0 14px;
   font-size: 11px;
   font-weight: var(--weight-bold);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   color: var(--ink-muted);
-  background: var(--n-25);
+  background: var(--n-50);
   border-bottom: 1px solid var(--line);
   white-space: nowrap;
+  user-select: none;
 }
 
 .keyword-table th button {
@@ -1426,10 +1442,11 @@ img {
 
 .keyword-table td {
   height: 52px;
-  padding: 6px 12px;
+  padding: 8px 14px;
   font-size: var(--text-xs);
   border-bottom: 1px solid var(--line);
   vertical-align: middle;
+  white-space: nowrap;
 }
 
 .keyword-table tbody tr {
@@ -1438,16 +1455,16 @@ img {
 }
 
 .keyword-table tbody tr:hover {
-  background: var(--teal-25);
+  background: rgba(20, 184, 166, 0.04);
 }
 
 .keyword-table tbody tr.is-selected {
-  background: var(--teal-50);
+  background: rgba(20, 184, 166, 0.08);
 }
 
 /* Compact density (Density control in the tracker toolbar) */
 .tracker-view--compact .keyword-table td {
-  height: 40px;
+  height: 42px;
   padding-block: 4px;
 }
 
@@ -1465,20 +1482,22 @@ img {
   position: sticky;
   left: 0;
   background: var(--card);
-  z-index: 2;
-  box-shadow: inset -1px 0 0 var(--line), 2px 0 6px rgba(23, 39, 45, 0.06);
+  z-index: 3;
+  box-shadow: inset -1px 0 0 var(--line), 3px 0 8px -2px rgba(23, 39, 45, 0.06);
 }
 
 .keyword-table thead .tracker-col-sticky {
-  background: var(--n-25);
+  background: var(--n-50);
+  z-index: 4;
 }
 
 .keyword-table tbody tr:hover .tracker-col-sticky {
-  background: var(--teal-25);
+  background: #f6faf9;
 }
 
 .keyword-table tbody tr.is-selected .tracker-col-sticky {
-  background: var(--teal-50);
+  background: #edf7f4;
+  box-shadow: inset 3px 0 0 var(--teal-500), inset -1px 0 0 var(--line), 3px 0 8px -2px rgba(23, 39, 45, 0.06);
 }
 
 .keyword-name {
@@ -3852,25 +3871,7 @@ img {
   }
 }
 
-/* Progressive disclosure for wide-but-optional table columns. Sparklines are
-   decorative; competitor icons and timestamps are nice-to-have context. */
-@media (max-width: 1560px) {
-  .tracker-col-spark {
-    display: none;
-  }
-}
-
-@media (max-width: 1419px) {
-  .tracker-col-apps {
-    display: none;
-  }
-}
-
 @media (max-width: 1024px) {
-  .tracker-col-updated {
-    display: none;
-  }
-
   .tracker-detail {
     position: static;
     max-height: none;
@@ -5286,33 +5287,6 @@ img {
 }
 
 /* Shared keyword table refinements (explorer + tracker) */
-.keyword-table th {
-  height: 44px;
-  padding: 0 16px;
-  background: transparent;
-  font-size: 11px;
-  color: var(--ink-muted);
-  border-bottom: 1px solid var(--line);
-}
-
-.keyword-table thead .tracker-col-sticky {
-  background: var(--card);
-}
-
-.keyword-table td {
-  height: 56px;
-  padding: 8px 16px;
-}
-
-.keyword-table tbody tr:last-child td {
-  border-bottom: none;
-}
-
-.keyword-table tbody tr.is-selected {
-  background: var(--teal-25);
-  box-shadow: inset 3px 0 0 var(--teal-500);
-}
-
 .keyword-name-row {
   display: flex;
   align-items: center;
@@ -5347,6 +5321,16 @@ img {
 .keyword-pending {
   font-style: normal;
   font-size: var(--text-2xs);
+  color: var(--ink-muted);
+}
+
+.keyword-empty-cell {
+  text-align: center !important;
+  padding: 36px 16px !important;
+}
+
+.keyword-empty-cell .keyword-pending {
+  font-size: 0.8125rem;
   color: var(--ink-muted);
 }
 

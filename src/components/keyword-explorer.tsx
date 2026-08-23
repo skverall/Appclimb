@@ -997,6 +997,15 @@ export function KeywordExplorer() {
 
               <div className="keyword-table-scroll">
                 <table className="keyword-table">
+                  <colgroup>
+                    <col style={{ width: 44 }} />
+                    <col style={{ width: "auto" }} />
+                    <col style={{ width: 136 }} />
+                    <col style={{ width: 116 }} />
+                    <col style={{ width: 100 }} />
+                    <col style={{ width: 84 }} />
+                    <col style={{ width: 50 }} />
+                  </colgroup>
                   <thead>
                     <tr>
                       <th className="keyword-th-select">
