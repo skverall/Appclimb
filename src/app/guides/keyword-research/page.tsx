@@ -294,7 +294,8 @@ export default function KeywordResearchGuide() {
                   record the scores.
                 </li>
                 <li>
-                  <strong>Add category phrases.</strong> Your genre plus the
+                  <strong>Add category phrases.</strong>{" "}
+                  Your genre plus the
                   core noun (&quot;meditation timer&quot;, &quot;invoice
                   scanner&quot;).
                 </li>

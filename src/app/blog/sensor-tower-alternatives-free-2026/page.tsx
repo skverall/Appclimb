@@ -149,7 +149,7 @@ export default function SensorTowerAlternativesArticle() {
 
       <h2>1. AppClimb — Free-Tier Keyword &amp; Rank Tracker</h2>
       <p>
-        <Link href="/">AppClimb</Link> is an open-source App Store keyword tool
+        <Link href="/">AppClimb</Link>{" "}is an open-source App Store keyword tool
         that tracks your keyword rankings over time. It queries Apple&apos;s
         public iTunes Search API from your browser — no API keys, and by
         default nothing is stored on a server. Your keyword list and history
@@ -182,7 +182,7 @@ export default function SensorTowerAlternativesArticle() {
       <p>
         The limitation: no keyword-level data. Apple tells you{" "}
         <em>how many</em> impressions you got from search, but not{" "}
-        <em>which keywords</em> drove them. That&apos;s the gap AppClimb and the
+        <em>which keywords</em>{" "}drove them. That&apos;s the gap AppClimb and the
         iTunes Search API fill.
       </p>
       <p>
@@ -278,7 +278,7 @@ export default function SensorTowerAlternativesArticle() {
         <li><strong>Market-level data</strong> — category trends, top charts history</li>
       </ul>
       <p>
-        None of these help you optimize <em>your own</em> listing. Download
+        None of these help you optimize <em>your own</em>{" "}listing. Download
         estimates are for investors and publishers doing market sizing. Ad
         intelligence is for UA teams spending $10K+/month on paid acquisition.
         If you&apos;re an indie dev doing organic ASO, you&apos;re paying for

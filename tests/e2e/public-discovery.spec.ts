@@ -235,6 +235,28 @@ test("every canonical sitemap page returns a successful document", async ({
   }
 });
 
+test("no page renders words glued to a preceding strong/em/link tag", async ({
+  request,
+}) => {
+  // The JSX compiler can drop the space after a closing inline tag when the
+  // text run spans multiple lines, gluing words together (e.g. "Popularityis").
+  // Guard every public page against that class of copy bug.
+  const sitemap = await (await request.get("/sitemap.xml")).text();
+  const paths = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map(
+    (match) => new URL(match[1]).pathname,
+  );
+
+  for (const path of paths) {
+    const raw = await (await request.get(path)).text();
+    const html = raw.replace(/<script[\s\S]*?<\/script>/g, "");
+    const glued = html.match(/<\/(strong|em|code|a)>[A-Za-z0-9]/g) ?? [];
+    expect(
+      glued,
+      `${path} glues words to a closing tag: ${glued.join(", ")}`,
+    ).toEqual([]);
+  }
+});
+
 test("marketing mobile nav drawer fits 375px without overflow", async ({
   page,
 }) => {

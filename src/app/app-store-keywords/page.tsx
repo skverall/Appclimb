@@ -141,7 +141,7 @@ export default function KeywordResearchPage() {
             <h2>What the scores mean</h2>
             <div>
               <p>
-                <strong>Popularity</strong> is Apple&apos;s official relative
+                <strong>Popularity</strong>{" "}is Apple&apos;s official relative
                 Ads score (1–100) when the term appears in that storefront and
                 genre; otherwise an estimate from competition and top-result
                 strength. <strong>Difficulty</strong> is always an estimate of
