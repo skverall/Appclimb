@@ -76,36 +76,36 @@ function AsoOptimizerModalContent({
 
   return (
     <div
-      className="modal-backdrop"
+      className="tracker-modal-backdrop"
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
     >
       <div
         ref={modalRef}
-        className="modal-card aso-optimizer-modal"
+        className="tracker-modal tracker-modal--wide aso-optimizer-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
       >
-        <header className="modal-header">
+        <header className="tracker-modal-header">
           <div className="aso-optimizer-title-group">
             <span className="aso-optimizer-icon-badge">
               <Wand2 size={18} aria-hidden="true" />
             </span>
             <div>
-              <h2 id={titleId} className="modal-title">
+              <h2 id={titleId}>
                 100-Character Keyword Optimizer
               </h2>
-              <p className="modal-subtitle">
+              <p>
                 Maximize App Store Connect keyword field efficiency with zero wasted bytes
               </p>
             </div>
           </div>
           <button
             type="button"
-            className="modal-close"
+            className="tracker-icon-button"
             onClick={onClose}
             aria-label="Close modal"
           >
@@ -227,10 +227,10 @@ function AsoOptimizerModalContent({
           </div>
         </div>
 
-        <footer className="modal-footer">
+        <footer className="tracker-modal-footer">
           <button
             type="button"
-            className="refresh-all-button"
+            className="tracker-button-secondary"
             onClick={onClose}
           >
             Done
