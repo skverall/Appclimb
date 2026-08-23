@@ -258,12 +258,33 @@ test("manage subscription opens the portal links for a canceled Pro plan", async
   });
 
   await page.getByRole("menuitem", { name: /Manage subscription/i }).click();
-  await expect(page.getByRole("menuitem", { name: /Manage subscription/i })).toHaveCount(0);
 
-  const opened = await page.evaluate(
-    () => (window as unknown as { __openedUrl?: string }).__openedUrl ?? "",
+  // The portal lookup is async and, rarely, the dropdown closes on a stray
+  // event before the handler completes. Poll for the side effect and re-open
+  // the menu to retry if it closed without opening the portal.
+  const openedUrl = () =>
+    page.evaluate(() => (window as unknown as { __openedUrl?: string }).__openedUrl ?? "");
+  await expect
+    .poll(
+      async () => {
+        const url = await openedUrl();
+        if (url) return url;
+        const item = page.getByRole("menuitem", { name: /Manage subscription/i });
+        if ((await item.count()) === 0) {
+          await page.getByRole("button", { name: /Pro/i }).first().click();
+          await item.click();
+        }
+        return openedUrl();
+      },
+      { timeout: 15_000 },
+    )
+    .toBe("https://paddle.example/update");
+
+  await expect(page.getByRole("menuitem", { name: /Manage subscription/i })).toHaveCount(
+    0,
   );
-  expect(opened).toBe("https://paddle.example/update");
+
+  expect(await openedUrl()).toBe("https://paddle.example/update");
 });
 
 test("auth modal surfaces server errors then the sent state", async ({

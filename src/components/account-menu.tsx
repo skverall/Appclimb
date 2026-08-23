@@ -63,7 +63,12 @@ export function AccountMenu() {
 
   const manageSubscription = async () => {
     setManageBusy(true);
-    const links = await fetchPortalLinks();
+    let links: Awaited<ReturnType<typeof fetchPortalLinks>> = null;
+    try {
+      links = await fetchPortalLinks();
+    } catch {
+      // Portal lookup failed — fall through and just close the menu.
+    }
     setManageBusy(false);
     const url = links?.updatePaymentMethod ?? links?.cancel;
     if (url) {
