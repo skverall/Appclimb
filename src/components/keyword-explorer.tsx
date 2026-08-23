@@ -999,7 +999,7 @@ export function KeywordExplorer() {
                 <table className="keyword-table">
                   <colgroup>
                     <col style={{ width: 44 }} />
-                    <col style={{ width: "auto" }} />
+                    <col style={{ width: "auto", minWidth: 140 }} />
                     <col style={{ width: 120 }} />
                     <col style={{ width: 116 }} />
                     <col style={{ width: 100 }} />

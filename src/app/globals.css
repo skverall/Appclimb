@@ -5295,6 +5295,20 @@ img {
   flex-wrap: wrap;
 }
 
+/* Long keyword phrases must never bleed into the Popularity column
+   (the Keyword column is fixed-width under table-layout: fixed). */
+.keyword-table td .keyword-name-row {
+  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.keyword-table td .keyword-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
 .keyword-table td:first-child small {
   display: block;
   margin-top: 2px;
