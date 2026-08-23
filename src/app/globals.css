@@ -1598,8 +1598,9 @@ img {
 
 .metric-with-source {
   display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
   white-space: nowrap;
 }
 
@@ -5351,6 +5352,10 @@ img {
   white-space: nowrap;
 }
 
+.keyword-trend-cell .sparkline {
+  display: block;
+}
+
 .sparkline {
   color: var(--teal-600);
   vertical-align: middle;
@@ -5362,10 +5367,12 @@ img {
 
 .trend-up,
 .trend-down {
-  margin-left: 6px;
-  font-size: 11px;
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
   font-weight: var(--weight-bold);
   font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
 .trend-up {

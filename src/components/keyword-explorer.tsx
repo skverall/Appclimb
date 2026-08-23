@@ -1000,7 +1000,7 @@ export function KeywordExplorer() {
                   <colgroup>
                     <col style={{ width: 44 }} />
                     <col style={{ width: "auto" }} />
-                    <col style={{ width: 136 }} />
+                    <col style={{ width: 120 }} />
                     <col style={{ width: 116 }} />
                     <col style={{ width: 100 }} />
                     <col style={{ width: 84 }} />
@@ -1236,7 +1236,7 @@ export function KeywordExplorer() {
                           <td className="keyword-trend-cell">
                             {record ? (
                               <>
-                                <Sparkline values={history} />
+                                <Sparkline values={history} width={64} height={22} />
                                 {delta !== null && delta !== 0 && (
                                   <span
                                     className={

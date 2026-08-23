@@ -984,7 +984,7 @@ export function TrackerView({
                 <colgroup>
                   <col style={{ width: "auto", minWidth: 160 }} />
                   <col style={{ width: 76 }} />
-                  <col style={{ width: 136 }} />
+                  <col style={{ width: 120 }} />
                   <col style={{ width: 110 }} />
                   <col style={{ width: 88 }} />
                   <col style={{ width: 88 }} />
