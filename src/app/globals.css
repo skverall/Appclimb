@@ -6416,6 +6416,22 @@ img {
     flex-basis: 100%;
   }
 
+  /* Stack the keyword detail header so long keywords keep room: the
+     Share/Check-now buttons drop below the title instead of crushing it
+     into a column a couple of characters wide. */
+  .keyword-detail-header {
+    flex-wrap: wrap;
+  }
+
+  .keyword-detail-header > div:first-child {
+    flex: 1 1 100%;
+  }
+
+  .keyword-detail-actions {
+    flex: 1 1 100%;
+    justify-content: flex-end;
+  }
+
   .keyword-search-row .country-select {
     flex: 1 1 auto;
   }
