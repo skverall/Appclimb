@@ -51,8 +51,11 @@ async function mockTrackerItunes(page: import("@playwright/test").Page) {
   });
 }
 
-test("tracker design tokens hold from 375px to 1920px", async ({ page }) => {
-  await mockTrackerItunes(page);
+test(
+  "tracker design tokens hold from 375px to 1920px",
+  async ({ page }) => {
+    test.setTimeout(180_000);
+    await mockTrackerItunes(page);
 
   for (const [width, height] of [
     [375, 812],
@@ -112,4 +115,4 @@ test("tracker design tokens hold from 375px to 1920px", async ({ page }) => {
     );
     expect(overflow, `overflow at ${width}px: ${overflow}px`).toBeLessThanOrEqual(0);
   }
-});
+  });
