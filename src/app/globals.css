@@ -6750,6 +6750,35 @@ img {
   }
 }
 
+@media (max-width: 400px) {
+  /* The search pill cannot hold icon + input + country + Analyze in 320px.
+     Stack the controls so Analyze is never clipped by the floating ASO AI FAB. */
+  .keyword-search-form {
+    height: auto;
+    min-height: 52px;
+    flex-wrap: wrap;
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .keyword-search-form > input {
+    flex: 1 1 calc(100% - 32px);
+  }
+
+  .keyword-country-chip {
+    flex: 1 1 auto;
+  }
+
+  .keyword-search-form > button[type="submit"] {
+    flex: 1 1 40%;
+    justify-content: center;
+  }
+
+  .keyword-hero {
+    padding-bottom: 72px;
+  }
+}
+
 @media (max-width: 640px) {
   .keyword-hero h1 {
     font-size: 30px;
@@ -7035,6 +7064,12 @@ img {
   .tracker-cta-strip {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+@media (max-width: 400px) {
+  .keyword-search-form {
+    height: auto;
   }
 }
 

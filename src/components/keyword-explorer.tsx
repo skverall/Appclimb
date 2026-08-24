@@ -679,7 +679,7 @@ export function KeywordExplorer() {
             ref={searchRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search any App Store keyword, e.g. “meditation” (Press / to focus)"
+            placeholder="Search a keyword, e.g. meditation"
             maxLength={80}
             aria-label="Search keywords"
             role="combobox"
