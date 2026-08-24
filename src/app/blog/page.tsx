@@ -8,7 +8,7 @@ import { ARTICLES, SITE_UPDATED } from "@/lib/site";
 export const metadata: Metadata = {
   title: "Field Notes on App Store Keywords and ASO",
   description:
-    "Practical notes for independent app builders on App Store search, keyword research, ASO, and discovery.",
+    "Practical notes for indie app builders: what App Store keyword data is public, how popularity and difficulty estimates work, and how to earn installs from search.",
   alternates: {
     canonical: "/blog",
   },
