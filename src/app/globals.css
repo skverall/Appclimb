@@ -861,6 +861,35 @@ img {
   display: none;
 }
 
+/* Expand affordance: the summary reserves right-side space but the markup
+   has no icon, so draw one. Rotates to an × when open. */
+.marketing-faq-list summary::after {
+  content: "+";
+  flex-shrink: 0;
+  margin-left: 16px;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  color: var(--teal-700);
+  font-size: 14px;
+  font-weight: var(--weight-bold);
+  line-height: 1;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.marketing-faq-list details[open] summary::after {
+  content: "\2212";
+  background: var(--teal-50);
+}
+
+.marketing-faq-list summary:hover::after {
+  background: var(--teal-50);
+}
+
 .marketing-faq-list p {
   margin-top: 10px;
   color: var(--ink-secondary);
