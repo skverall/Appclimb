@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useMemo, useState } from "react";
-import { Crown, Flame, Rocket, Sparkles, Target, Trophy } from "lucide-react";
+import { Crown, Rocket, Sparkles, Target } from "lucide-react";
 
 import {
   allRankedApps,

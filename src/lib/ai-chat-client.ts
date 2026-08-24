@@ -46,7 +46,7 @@ export const AI_WELCOME: UiMessage = {
   id: "welcome",
   role: "assistant",
   content:
-    "Hi — I’m the AppClimb ASO assistant (DeepSeek V4 Flash). I can suggest keywords, interpret estimated scores, and help plan title/subtitle changes for your tracked app. I won’t invent search volumes or share any secrets.",
+    "Hi — I’m the AppClimb ASO assistant (DeepSeek V4 Flash). I can suggest keywords, interpret estimated scores, and help plan title/subtitle changes for your tracked app. I label every score with its source and never invent search volumes.",
   createdAt: "welcome",
 };
 
