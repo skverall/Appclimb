@@ -25,6 +25,7 @@ AppClimb searches any App Store keyword and shows Apple's official Ads popularit
 - ASO guide: https://appclimb.app/guides/keyword-research
 - Field notes: https://appclimb.app/blog
 - Pricing: https://appclimb.app/pricing
+- Machine-readable plan spec: https://appclimb.app/pricing.md
 - About: https://appclimb.app/about
 - Privacy: https://appclimb.app/privacy
 - Terms: https://appclimb.app/terms
