@@ -18,7 +18,7 @@ describe("aso-optimizer", () => {
     expect(fromString).toEqual(["meditation", "mindfulness", "relax", "yoga"]);
 
     const fromArray = extractKeywordTokens(["focus timer", "pomodoro"]);
-    expect(fromArray).toEqual(["focus timer", "pomodoro"]);
+    expect(fromArray).toEqual(["focus", "timer", "pomodoro"]);
   });
 
   it("extracts unique metadata words from title & subtitle", () => {
@@ -44,7 +44,7 @@ describe("aso-optimizer", () => {
       "relax",
     ];
     const result = optimizeKeywordField(input, { stripSpaces: true });
-    expect(result.optimized).toBe("meditation,mindfulness,sleepsounds,relax");
+    expect(result.optimized).toBe("meditation,mindfulness,sleep,sounds,relax");
     expect(result.charCount).toBe(result.optimized.length);
     expect(result.duplicateWordsRemoved).toContain("meditation");
     expect(result.charCount).toBeLessThanOrEqual(100);

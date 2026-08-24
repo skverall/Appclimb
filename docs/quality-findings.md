@@ -26,89 +26,65 @@ Rules:
   item or a fresh surface, never re-litigates closed ones.
 
 ---
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
----
+## 2026-08-24 · Pricing & Conversion · cro (Free vs Pro comparison matrix)
+
+**Defect:** Pricing page had feature lists on plan cards but lacked an explicit side-by-side comparison table, leaving users uncertain about granular differences (e.g. cloud sync vs local storage, popularity quotas, history retention).
+**Root cause:** `src/app/pricing/page.tsx` jumped directly from card tier blocks to the FAQ.
+**Fix:** Added an accessible, mobile-responsive Free vs Pro plan comparison table highlighting daily checks, official Apple Ads lookups, tracked apps/keywords, 30 vs 90 day history, AI messages, and cancellation terms.
+**Protection:** `tests/e2e/account.spec.ts` (`pricing page lists the free plan with honest limits and Pro at $8`).
+**Status:** fixed (local branch, not pushed).
+**Verification:** locally tested — unit green (392 passed), e2e green (85 passed), full check suite green.
+
+---
+## 2026-08-24 · ASO Assistant · ui/ux (app-context aware prompt starters)
+
+**Defect:** ASO Assistant suggested generic prompts regardless of whether the user had an active tracked app selected.
+**Root cause:** `src/components/ai-chat-conversation.tsx` rendered static `AI_SUGGESTIONS` array without inspecting `contextLabel`.
+**Fix:** Added `suggestedPrompts` memo that dynamically promotes 1-click app analysis (`Analyze [App Name] keyword rankings and find opportunities`) when app context is active, plus streamlined ASO prompt library in `src/lib/ai-chat-client.ts`.
+**Protection:** `src/lib/ai-chat-client.test.ts` + `tests/e2e/assistant.spec.ts`.
+**Status:** fixed (local branch, not pushed).
+**Verification:** locally tested — unit green (392 passed), e2e green (85 passed).
+
+---
+## 2026-08-24 · Keyword Explorer · ui/ux (quick scorecards, keyboard shortcuts)
+
+**Defect:** Keyword Explorer lacked aggregate list metrics (Golden % ratio, Apple Ads verified ratio, average demand/barrier) and had no keyboard shortcut to quickly jump to search.
+**Root cause:** `src/components/keyword-explorer.tsx` lacked global hotkey listeners and aggregate list scorecards.
+**Fix:** Added global `⌘K` / `Ctrl+K` and `/` keydown handler to focus search input, added `<kbd className="keyword-search-kbd">⌘K</kbd>` badge, expanded quick example pills, and added responsive overview scorecards.
+**Protection:** `tests/e2e/explorer.spec.ts` + `tests/e2e/public-discovery.spec.ts`.
+**Status:** fixed (local branch, not pushed).
+**Verification:** locally tested — unit green (392 passed), e2e green (85 passed).
+
+---
+## 2026-08-24 · ASO Optimizer · logic (word tokenization for App Store index)
+
+**Defect:** ASO 100-character keyword field optimizer's `stripSpaces` mode concatenated multi-word phrases into compound strings (e.g. `"sleep sounds"` -> `"sleepsounds"`), which broke Apple search indexing since Apple matches individual comma-separated words.
+**Root cause:** `src/lib/aso-optimizer.ts` string replacement removed all whitespace unconditionally before splitting by comma.
+**Fix:** Updated tokenizer to split multi-word phrases into valid discrete word tokens (`["sleep", "sounds"]`), deduplicate tokens, remove Title/Subtitle words, and join with commas without spaces (`"sleep,sounds"`).
+**Protection:** Unit tests in `src/lib/aso-optimizer.test.ts`.
+**Status:** fixed (local branch, not pushed).
+**Verification:** locally tested — unit green (392 passed).
+
+---
+## 2026-08-24 · Blog / SEO · ui & data-honesty (hardcoded article date & disclaimer)
+
+**Defect:** Article layout template rendered a hardcoded `"July 25, 2026"` date string inside the `<time>` tag regardless of the article's actual `updated` frontmatter date.
+**Root cause:** `src/components/article-layout.tsx` hardcoded static date string.
+**Fix:** Added `formatArticleDate` helper to dynamically format article frontmatter dates and updated the sidebar disclaimer to honestly explain Apple Ads official popularity vs estimates.
+**Protection:** `tests/e2e/public-discovery.spec.ts` (`articles expose canonical metadata and parseable JSON-LD`).
+**Status:** fixed (local branch, not pushed).
+**Verification:** locally tested — unit green (392 passed), e2e green (85 passed).
+
+---
+## 2026-08-24 · SEO & Discovery · seo (structured data schema graph)
+
+**Defect:** Missing `WebSite.SearchAction`, `WebApplication`, `BreadcrumbList`, and `FAQPage` JSON-LD structured data on multiple marketing and guide surfaces.
+**Root cause:** Several marketing routes lacked structured JSON-LD scripts.
+**Fix:** Added comprehensive JSON-LD graphs across `layout.tsx` (`SearchAction`, `WebApplication`), `blog/page.tsx` (`CollectionPage`, `ItemList`, `BreadcrumbList`), `pricing/page.tsx`, `about/page.tsx`, `assistant/page.tsx`, `app-store-keywords/page.tsx` (`FAQPage`), and `guides/keyword-research/page.tsx`.
+**Protection:** `tests/e2e/public-discovery.spec.ts` (`every page emits parseable, non-empty JSON-LD`).
+**Status:** fixed (local branch, not pushed).
+**Verification:** locally tested — unit green (392 passed), e2e green (85 passed).
+
 ---
 ## 2026-08-18 · ASO Assistant · copy (error messages, second pass)
 

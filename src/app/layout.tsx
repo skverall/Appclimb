@@ -173,6 +173,51 @@ export default function RootLayout({
                   "@id": `${SITE_URL}/#organization`,
                 },
                 inLanguage: "en",
+                potentialAction: {
+                  "@type": "SearchAction",
+                  target: {
+                    "@type": "EntryPoint",
+                    urlTemplate: `${SITE_URL}/?kw={search_term_string}`,
+                  },
+                  "query-input": "required name=search_term_string",
+                },
+              },
+              {
+                "@type": "WebApplication",
+                "@id": `${SITE_URL}/#app`,
+                name: "AppClimb App Store Keyword Explorer",
+                url: SITE_URL,
+                applicationCategory: "DeveloperApplication",
+                operatingSystem: "Any",
+                description: SITE_DESCRIPTION,
+                offers: [
+                  {
+                    "@type": "Offer",
+                    name: "Free Plan",
+                    price: "0",
+                    priceCurrency: "USD",
+                  },
+                  {
+                    "@type": "Offer",
+                    name: "Pro Monthly",
+                    price: "8",
+                    priceCurrency: "USD",
+                  },
+                  {
+                    "@type": "Offer",
+                    name: "Pro Yearly",
+                    price: "64",
+                    priceCurrency: "USD",
+                  },
+                ],
+                featureList: [
+                  "Official Apple Ads Popularity (1–100)",
+                  "App Store Keyword Difficulty Estimates",
+                  "30-day and 90-day Local Trend Charts",
+                  "100-Character App Store Connect Keyword Field Optimizer",
+                  "Multi-storefront iOS App Rank Tracking",
+                  "ASO AI Assistant",
+                ],
               },
             ],
           }}

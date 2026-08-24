@@ -53,10 +53,10 @@ export const AI_WELCOME: UiMessage = {
 export const AI_SUGGESTIONS = [
   "Which of my tracked keywords are worth focusing on first?",
   "Suggest long-tail keywords for my app title and subtitle.",
+  "Generate a 100-character App Store Connect keyword string.",
   "How should I interpret popularity vs difficulty estimates?",
-  "My position is >200 — what should I change next?",
   "Rewrite my App Store subtitle for better discoverability.",
-  "Give me a 7-day keyword research plan for my app.",
+  "How do I diagnose and improve my App Store conversion rate?",
 ] as const;
 
 export const AI_FOLLOWUPS = [

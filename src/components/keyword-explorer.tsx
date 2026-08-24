@@ -77,7 +77,14 @@ function MetricBar({
   );
 }
 
-const EXAMPLE_KEYWORDS = ["meditation", "habit tracker", "invoice scanner"];
+const EXAMPLE_KEYWORDS = [
+  "meditation",
+  "habit tracker",
+  "invoice scanner",
+  "podcast player",
+  "pomodoro timer",
+  "budget planner",
+];
 
 type SortKey = "keyword" | "popularity" | "difficulty" | "results" | "trend";
 type ExplorerFilterTab = "all" | "golden" | "official" | "high_demand" | "low_diff";
@@ -274,6 +281,29 @@ export function KeywordExplorer() {
     };
   }, [country, analyze]);
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const isCmdK = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k";
+      const isSlash = event.key === "/" && !event.metaKey && !event.ctrlKey && !event.altKey;
+
+      const activeTag = document.activeElement?.tagName;
+      const isInput =
+        activeTag === "INPUT" ||
+        activeTag === "TEXTAREA" ||
+        activeTag === "SELECT" ||
+        Boolean((document.activeElement as HTMLElement)?.isContentEditable);
+
+      if (isCmdK || (isSlash && !isInput)) {
+        event.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   const refreshAll = useCallback(async () => {
     await runBatched(keywords, async (keyword) => {
       await analyze(keyword, {
@@ -445,6 +475,24 @@ export function KeywordExplorer() {
       official,
       high_demand: highDemand,
       low_diff: lowDiff,
+    };
+  }, [keywords, metrics]);
+
+  const avgMetrics = useMemo(() => {
+    let popSum = 0;
+    let diffSum = 0;
+    let count = 0;
+    for (const kw of keywords) {
+      const m = metrics.get(kw);
+      if (!m) continue;
+      popSum += m.popularity;
+      diffSum += m.difficulty;
+      count++;
+    }
+    if (count === 0) return null;
+    return {
+      avgPop: Math.round(popSum / count),
+      avgDiff: Math.round(diffSum / count),
     };
   }, [keywords, metrics]);
 
@@ -689,6 +737,9 @@ export function KeywordExplorer() {
             autoComplete="off"
             spellCheck={false}
           />
+          <kbd className="keyword-search-kbd" title="Press ⌘K or / to search" aria-hidden="true">
+            ⌘K
+          </kbd>
           <label
             className="keyword-country-chip"
             title={
@@ -873,7 +924,53 @@ export function KeywordExplorer() {
             </button>
           </div>
         ) : (
-          <div className={`explorer-split${selected ? " has-detail" : ""}`}>
+          <>
+            <section
+              className="tracker-scorecard-grid explorer-scorecards"
+              aria-label="Keyword list summary"
+            >
+              <div className="tracker-scorecard-card">
+                <span className="tracker-scorecard-label">Keywords Analyzed</span>
+                <div className="tracker-scorecard-value">
+                  <strong>{counts.all}</strong>
+                  <small>in {country}</small>
+                </div>
+                <span className="tracker-scorecard-meta">Saved in local browser</span>
+              </div>
+
+              <div className="tracker-scorecard-card">
+                <span className="tracker-scorecard-label">Golden Opportunities</span>
+                <div className="tracker-scorecard-value">
+                  <strong>{counts.golden}</strong>
+                  {counts.golden > 0 && (
+                    <span className="tracker-badge-top1" title="High demand, achievable difficulty">
+                      ⭐ {Math.round((counts.golden / counts.all) * 100)}%
+                    </span>
+                  )}
+                </div>
+                <span className="tracker-scorecard-meta">Pop ≥55 & Diff ≤40</span>
+              </div>
+
+              <div className="tracker-scorecard-card">
+                <span className="tracker-scorecard-label">Official Apple Ads</span>
+                <div className="tracker-scorecard-value">
+                  <strong>{counts.official}</strong>
+                  <small>/ {counts.all}</small>
+                </div>
+                <span className="tracker-scorecard-meta">Verified Platform API v1</span>
+              </div>
+
+              <div className="tracker-scorecard-card">
+                <span className="tracker-scorecard-label">Avg Demand / Barrier</span>
+                <div className="tracker-scorecard-value">
+                  <strong>{avgMetrics ? avgMetrics.avgPop : "—"}</strong>
+                  <small>/ {avgMetrics ? avgMetrics.avgDiff : "—"}</small>
+                </div>
+                <span className="tracker-scorecard-meta">Pop (1–100) / Diff (1–100)</span>
+              </div>
+            </section>
+
+            <div className={`explorer-split${selected ? " has-detail" : ""}`}>
             <div className="keyword-table-wrap">
               <div className="keyword-table-topbar">
                 <div
@@ -1434,6 +1531,7 @@ export function KeywordExplorer() {
               />
             )}
           </div>
+          </>
         )}
 
         <input

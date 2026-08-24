@@ -4,7 +4,7 @@ import Link from "next/link";
 
 import { JsonLd } from "@/components/json-ld";
 import { MarketingShell } from "@/components/marketing-shell";
-import { absoluteUrl } from "@/lib/site";
+import { SITE_NAME, absoluteUrl } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "About AppClimb",
@@ -35,6 +35,26 @@ export default function AboutPage() {
           mainEntity: {
             "@id": "https://appclimb.app/#organization",
           },
+        }}
+      />
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            {
+              "@type": "ListItem",
+              position: 1,
+              name: SITE_NAME,
+              item: absoluteUrl("/"),
+            },
+            {
+              "@type": "ListItem",
+              position: 2,
+              name: "About",
+              item: absoluteUrl("/about"),
+            },
+          ],
         }}
       />
       <main className="about-page">

@@ -96,6 +96,26 @@ export default function PricingPage() {
           })),
         }}
       />
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            {
+              "@type": "ListItem",
+              position: 1,
+              name: "AppClimb",
+              item: absoluteUrl("/"),
+            },
+            {
+              "@type": "ListItem",
+              position: 2,
+              name: "Pricing",
+              item: absoluteUrl("/pricing"),
+            },
+          ],
+        }}
+      />
       <main className="marketing-page pricing-page">
         <section className="pricing-hero">
           <p className="eyebrow">Pricing</p>
@@ -110,6 +130,68 @@ export default function PricingPage() {
         <div className="marketing-container">
           <PricingPlans />
         </div>
+
+        <section className="pricing-comparison marketing-container" aria-label="Feature comparison">
+          <h2>Plan comparison</h2>
+          <div className="article-table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th scope="col">Feature</th>
+                  <th scope="col">Free Plan</th>
+                  <th scope="col">Pro ($8/mo · $64/yr)</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td><strong>Keyword Explorer searches</strong></td>
+                  <td>8 checks / day (guest)</td>
+                  <td><strong>Unlimited</strong></td>
+                </tr>
+                <tr>
+                  <td><strong>Official Apple Ads popularity</strong></td>
+                  <td>30 lookups / day</td>
+                  <td><strong>500 lookups / day</strong></td>
+                </tr>
+                <tr>
+                  <td><strong>Tracked iOS apps &amp; keywords</strong></td>
+                  <td>1 app · 25 keywords (free sign-in)</td>
+                  <td><strong>Unlimited apps &amp; keywords</strong></td>
+                </tr>
+                <tr>
+                  <td><strong>Rank history &amp; trend charts</strong></td>
+                  <td>30-day history in browser</td>
+                  <td><strong>90-day history &amp; trends</strong></td>
+                </tr>
+                <tr>
+                  <td><strong>ASO AI assistant</strong></td>
+                  <td>5 messages / day (free sign-in)</td>
+                  <td><strong>200 messages / day</strong></td>
+                </tr>
+                <tr>
+                  <td><strong>100ch App Store keyword optimizer</strong></td>
+                  <td>Included</td>
+                  <td><strong>Included</strong></td>
+                </tr>
+                <tr>
+                  <td><strong>Cloud sync across devices</strong></td>
+                  <td>Local browser only</td>
+                  <td><strong>Encrypted cloud sync</strong></td>
+                </tr>
+                <tr>
+                  <td><strong>CSV export &amp; JSON backups</strong></td>
+                  <td>Included</td>
+                  <td><strong>Included</strong></td>
+                </tr>
+                <tr>
+                  <td><strong>Payment &amp; cancellation</strong></td>
+                  <td>No card required</td>
+                  <td><strong>Cancel anytime</strong> (runs to period end)</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
 
         <section className="pricing-faq marketing-container" aria-label="Pricing FAQ">
           <h2>Questions, answered honestly</h2>

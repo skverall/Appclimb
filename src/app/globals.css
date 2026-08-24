@@ -5078,6 +5078,16 @@ img {
   color: var(--teal-700);
 }
 
+.pricing-comparison {
+  margin-top: 56px;
+  max-width: 800px;
+}
+
+.pricing-comparison h2 {
+  font-size: var(--text-2xl);
+  margin-bottom: 16px;
+}
+
 .pricing-faq {
   margin-top: 56px;
   max-width: 720px;
@@ -5332,6 +5342,35 @@ img {
 .keyword-search-form > input::placeholder {
   color: var(--n-400);
   font-weight: var(--weight-normal);
+}
+
+.keyword-search-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 6px;
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+  font-weight: var(--weight-medium);
+  color: var(--n-600);
+  background: var(--n-100);
+  border: 1px solid var(--n-200);
+  border-radius: 6px;
+  line-height: 1;
+  pointer-events: none;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .keyword-search-kbd {
+    display: none;
+  }
+}
+
+.explorer-scorecards {
+  margin-top: 20px;
+  margin-bottom: 20px;
 }
 
 .keyword-search-form > button[type="submit"] {

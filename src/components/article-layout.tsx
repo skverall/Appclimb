@@ -6,6 +6,18 @@ import { MarketingShell } from "@/components/marketing-shell";
 import { iconUrl } from "@/lib/brand";
 import { absoluteUrl } from "@/lib/site";
 
+function formatArticleDate(dateStr: string) {
+  try {
+    return new Date(`${dateStr}T12:00:00Z`).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
 export function ArticleLayout({
   title,
   description,
@@ -26,6 +38,7 @@ export function ArticleLayout({
   children: React.ReactNode;
 }) {
   const articleUrl = absoluteUrl(`/blog/${slug}`);
+  const formattedDate = formatArticleDate(updated);
 
   return (
     <MarketingShell>
@@ -101,7 +114,7 @@ export function ArticleLayout({
           <div className="article-meta">
             <span>
               <CalendarDays size={15} aria-hidden="true" /> Updated{" "}
-              <time dateTime={updated}>July 25, 2026</time>
+              <time dateTime={updated}>{formattedDate}</time>
             </span>
             <span>
               <Clock3 size={15} aria-hidden="true" /> {readingTime}
@@ -122,8 +135,8 @@ export function ArticleLayout({
               Open the keyword explorer <ArrowRight size={15} aria-hidden="true" />
             </Link>
             <small>
-              Popularity and difficulty are estimates from public App Store
-              data, clearly labeled in the UI.
+              Popularity is Apple Ads official (1–100) or an estimate from public signals;
+              difficulty is an estimate. Both are labeled in the UI.
             </small>
           </aside>
         </div>

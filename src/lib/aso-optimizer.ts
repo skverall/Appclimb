@@ -42,7 +42,7 @@ export function cleanWord(raw: string): string {
 }
 
 /**
- * Splits raw input (which may contain commas, newlines, or spaces) into unique individual keyword tokens.
+ * Splits raw input (which may contain commas, newlines, or spaces) into individual keyword tokens.
  */
 export function extractKeywordTokens(rawInput: string | string[]): string[] {
   const rawArray = Array.isArray(rawInput) ? rawInput : rawInput.split(/[\n,]+/);
@@ -51,9 +51,14 @@ export function extractKeywordTokens(rawInput: string | string[]): string[] {
   for (const chunk of rawArray) {
     const trimmed = chunk.trim();
     if (!trimmed) continue;
-    const cleaned = cleanWord(trimmed);
-    if (cleaned) {
-      tokens.push(cleaned);
+    // In ASO, Apple indexes individual words and automatically combines them.
+    // Multi-word phrases are split into individual word tokens.
+    const words = trimmed.split(/[\s,]+/);
+    for (const w of words) {
+      const cleaned = cleanWord(w);
+      if (cleaned) {
+        tokens.push(cleaned);
+      }
     }
   }
 
@@ -121,9 +126,7 @@ export function optimizeKeywordField(
   }
 
   for (const token of rawTokens) {
-    const subWords = token.split(/\s+/).filter(Boolean);
-    const tokenClean = subWords.join(stripSpaces ? "" : " ");
-
+    const tokenClean = cleanWord(token);
     if (!tokenClean) continue;
 
     if (seen.has(tokenClean)) {
@@ -131,8 +134,8 @@ export function optimizeKeywordField(
       continue;
     }
 
-    // Check if entire token or single word is in Title/Subtitle
-    if (removeTitleWords && (titleWords.has(tokenClean) || (subWords.length === 1 && titleWords.has(subWords[0])))) {
+    // Check if word is in Title/Subtitle
+    if (removeTitleWords && titleWords.has(tokenClean)) {
       redundantWordsRemoved.push(tokenClean);
       continue;
     }

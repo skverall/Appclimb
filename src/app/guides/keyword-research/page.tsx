@@ -101,6 +101,32 @@ export default function KeywordResearchGuide() {
           ],
         }}
       />
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            {
+              "@type": "ListItem",
+              position: 1,
+              name: "AppClimb",
+              item: absoluteUrl("/"),
+            },
+            {
+              "@type": "ListItem",
+              position: 2,
+              name: "Guides",
+              item: absoluteUrl("/guides/keyword-research"),
+            },
+            {
+              "@type": "ListItem",
+              position: 3,
+              name: "Keyword Research Guide",
+              item: absoluteUrl("/guides/keyword-research"),
+            },
+          ],
+        }}
+      />
       <main className="guide-page">
         <section className="guide-hero marketing-container">
           <div>

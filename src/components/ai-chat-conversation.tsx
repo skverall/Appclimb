@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import {
   Check,
@@ -410,6 +410,17 @@ export function AiChatConversation({
 
   const isThreadEmpty = messages.filter((m) => m.id !== "welcome").length === 0;
 
+  const suggestedPrompts = useMemo(() => {
+    const list: string[] = [];
+    if (contextLabel) {
+      list.push(`Analyze ${contextLabel} keyword rankings and find opportunities`);
+    }
+    for (const s of AI_SUGGESTIONS) {
+      if (!list.includes(s)) list.push(s);
+    }
+    return list.slice(0, variant === "page" ? 6 : 4);
+  }, [contextLabel, variant]);
+
   return (
     <div
       className={
@@ -593,7 +604,7 @@ export function AiChatConversation({
               <div className="ai-chat-suggestions-section">
                 <span className="ai-chat-suggestions-label">Suggested prompts</span>
                 <div className="ai-chat-suggestions-grid">
-                  {AI_SUGGESTIONS.slice(0, variant === "page" ? 6 : 4).map((item) => (
+                  {suggestedPrompts.map((item) => (
                     <button
                       key={item}
                       type="button"

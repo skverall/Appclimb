@@ -105,6 +105,37 @@ export default function KeywordResearchPage() {
           ],
         }}
       />
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@type": "FAQPage",
+          mainEntity: faq.map((item) => ({
+            "@type": "Question",
+            name: item.question,
+            acceptedAnswer: { "@type": "Answer", text: item.answer },
+          })),
+        }}
+      />
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            {
+              "@type": "ListItem",
+              position: 1,
+              name: "AppClimb",
+              item: absoluteUrl("/"),
+            },
+            {
+              "@type": "ListItem",
+              position: 2,
+              name: "App Store Keywords",
+              item: absoluteUrl("/app-store-keywords"),
+            },
+          ],
+        }}
+      />
       <main className="marketing-page">
         <section className="marketing-hero marketing-container">
           <div className="marketing-hero-copy">

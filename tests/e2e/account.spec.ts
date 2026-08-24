@@ -70,8 +70,8 @@ test("pricing page lists the free plan with honest limits and Pro at $8", async 
   await expect(page.getByRole("heading", { name: "Pro", exact: true })).toBeVisible();
 
   // The free plan states its real limits instead of "unlimited everything".
-  await expect(page.getByText(/8 keyword checks per day/i)).toBeVisible();
-  await expect(page.getByText(/5 messages/i)).toBeVisible();
+  await expect(page.getByText(/8 keyword checks per day/i).first()).toBeVisible();
+  await expect(page.getByText(/5 messages/i).first()).toBeVisible();
 
   // Monthly price first, then the yearly toggle shows the annual price.
   await expect(page.getByText(/\$8/i).first()).toBeVisible();

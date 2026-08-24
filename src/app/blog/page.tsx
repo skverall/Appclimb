@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import { ArrowRight, BookOpen, CalendarDays } from "lucide-react";
 import Link from "next/link";
 
+import { JsonLd } from "@/components/json-ld";
 import { MarketingShell } from "@/components/marketing-shell";
-import { ARTICLES, SITE_UPDATED } from "@/lib/site";
+import { ARTICLES, SITE_NAME, SITE_UPDATED, absoluteUrl } from "@/lib/site";
 
 export const metadata: Metadata = {
   title: "Field Notes on App Store Keywords and ASO",
@@ -29,6 +30,45 @@ const updatedDate = new Date(`${SITE_UPDATED}T12:00:00Z`).toLocaleDateString(
 export default function BlogPage() {
   return (
     <MarketingShell>
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@type": "CollectionPage",
+          name: "AppClimb Field Notes",
+          description:
+            "Practical notes for indie app builders on App Store keyword research, rankings, and ASO.",
+          url: absoluteUrl("/blog"),
+          mainEntity: {
+            "@type": "ItemList",
+            itemListElement: ARTICLES.map((article, idx) => ({
+              "@type": "ListItem",
+              position: idx + 1,
+              url: absoluteUrl(`/blog/${article.slug}`),
+              name: article.title,
+            })),
+          },
+        }}
+      />
+      <JsonLd
+        data={{
+          "@context": "https://schema.org",
+          "@type": "BreadcrumbList",
+          itemListElement: [
+            {
+              "@type": "ListItem",
+              position: 1,
+              name: SITE_NAME,
+              item: absoluteUrl("/"),
+            },
+            {
+              "@type": "ListItem",
+              position: 2,
+              name: "Field notes",
+              item: absoluteUrl("/blog"),
+            },
+          ],
+        }}
+      />
       <main className="blog-index">
         <section className="blog-index-hero marketing-container">
           <span className="marketing-eyebrow">AppClimb Field Notes</span>
