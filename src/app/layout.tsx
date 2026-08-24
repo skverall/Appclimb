@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 
 import { AccountProvider } from "@/components/account-provider";
 import { ToastProvider } from "@/components/toast";
@@ -127,6 +127,12 @@ export const metadata: Metadata = {
   verification: {
     yandex: "3d71c1eca65fe46d",
   },
+};
+
+/* Mobile browser chrome tint matches the app header (n-50 canvas). */
+export const viewport: Viewport = {
+  themeColor: "#f4f7f5",
+  colorScheme: "light",
 };
 
 export default function RootLayout({
