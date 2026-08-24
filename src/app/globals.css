@@ -7098,6 +7098,21 @@ img {
   .keyword-search-form {
     height: auto;
   }
+
+  .tracker-mode-switcher {
+    width: 100%;
+  }
+
+  .tracker-mode-tab {
+    flex: 1 1 0;
+    justify-content: center;
+    padding: 0 8px;
+    gap: 4px;
+  }
+
+  .tracker-mode-tab svg {
+    display: none;
+  }
 }
 
 /* ==========================================================================
