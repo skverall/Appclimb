@@ -7293,6 +7293,13 @@ img {
   gap: 12px;
 }
 
+/* Two side-by-side 30-char inputs overflow a phone viewport — stack them. */
+@media (max-width: 640px) {
+  .aso-optimizer-meta-inputs {
+    grid-template-columns: 1fr;
+  }
+}
+
 .aso-optimizer-field {
   display: flex;
   flex-direction: column;
