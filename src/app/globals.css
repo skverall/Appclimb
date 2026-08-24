@@ -2476,6 +2476,55 @@ img {
   padding-block: 48px 40px;
 }
 
+/* Tables inside articles: horizontal scroll wrapper + consistent chrome.
+   Without this the raw table squeezed into one word per column on mobile. */
+.article-table-wrap {
+  overflow-x: auto;
+  margin: 18px 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  -webkit-overflow-scrolling: touch;
+}
+
+.article-table-wrap table {
+  width: 100%;
+  min-width: 520px;
+  border-collapse: collapse;
+  font-size: var(--text-xs);
+}
+
+.article-table-wrap th {
+  text-align: left;
+  padding: 10px 14px;
+  font-size: 11px;
+  font-weight: var(--weight-bold);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--ink-muted);
+  background: var(--n-50);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+
+.article-table-wrap td {
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-secondary);
+  line-height: 1.55;
+  vertical-align: top;
+}
+
+.article-table-wrap tr:last-child td {
+  border-bottom: none;
+}
+
+.article-table-wrap tbody tr:hover {
+  background: rgba(20, 184, 166, 0.03);
+}
+
+/* The two-column article grid collapse lives after the base .article-layout
+   rule below (CSS order matters — same specificity, later wins). */
+
 .blog-index-hero h1,
 .article-hero h1 {
   font-size: var(--text-4xl);
@@ -2679,6 +2728,17 @@ img {
   flex-direction: column;
   gap: 12px;
   box-shadow: var(--shadow-sm);
+}
+
+@media (max-width: 1024px) {
+  .article-layout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 32px;
+  }
+
+  .article-aside {
+    position: static;
+  }
 }
 
 .article-aside h2 {
