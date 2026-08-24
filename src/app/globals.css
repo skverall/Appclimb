@@ -1709,7 +1709,7 @@ img {
   font-size: 9px;
   font-weight: var(--weight-bold);
   background: var(--n-100);
-  color: var(--ink-muted);
+  color: var(--n-800);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
