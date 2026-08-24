@@ -5149,6 +5149,33 @@ img {
   outline-offset: 2px;
 }
 
+/* First-tab target so keyboard users skip the marketing nav. */
+.skip-link {
+  position: absolute;
+  left: 12px;
+  top: 8px;
+  z-index: 200;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  background: var(--ink);
+  color: #fff;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  text-decoration: none;
+  transform: translateY(-160%);
+  transition: transform 0.15s ease;
+}
+
+.skip-link:focus {
+  transform: none;
+  outline: 2px solid var(--teal-400);
+  outline-offset: 2px;
+}
+
+#main-content:focus {
+  outline: none;
+}
+
 /* --- Hero ---------------------------------------------------------------- */
 
 .tool-page {

@@ -169,8 +169,13 @@ export function MarketingShell({
   const showFab = !hideAiFab && pathname === "/";
   return (
     <div className="marketing-site">
+      <a href="#main-content" className="skip-link">
+        Skip to content
+      </a>
       <MarketingHeader />
-      {children}
+      <div id="main-content" tabIndex={-1}>
+        {children}
+      </div>
       {!hideFooter && <MarketingFooter />}
       {showFab && <AiChatPanel />}
     </div>
