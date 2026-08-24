@@ -7542,6 +7542,18 @@ img {
   white-space: nowrap;
 }
 
+.tracker-chart-empty,
+.tracker-overview-empty {
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
+  color: var(--ink-muted);
+  background: var(--n-25);
+}
+
 .keyword-selection-actions {
   display: flex;
   align-items: center;
