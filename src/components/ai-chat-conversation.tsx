@@ -94,7 +94,13 @@ export function AiChatConversation({
   onClose?: () => void;
 }) {
   const [hydrated, setHydrated] = useState(false);
-  const [input, setInput] = useState("");
+  // Deep link from the "Ask AI" callouts: seed the draft with the keyword
+  // question (never auto-send). Lazy init reads ?ask once; the effect below
+  // only strips the param from the URL (an external-system update).
+  const [input, setInput] = useState(() => {
+    if (typeof window === "undefined") return "";
+    return new URLSearchParams(window.location.search).get("ask") ?? "";
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [remainingDay, setRemainingDay] = useState<number | null>(null);
@@ -229,18 +235,15 @@ export function AiChatConversation({
     }
   }, [variant, hydrated, activeId]);
 
-  // Deep link from the "Ask AI" callouts: prefill the draft with the
-  // keyword question (never auto-send) and clean the URL.
+  // Strip the ?ask deep-link param once the draft has been seeded.
   useEffect(() => {
-    if (variant !== "page" || !hydrated) return;
+    if (variant !== "page") return;
     const params = new URLSearchParams(window.location.search);
-    const ask = params.get("ask");
-    if (!ask) return;
-    setInput(ask.slice(0, AI_LIMITS.maxMessageChars));
+    if (!params.has("ask")) return;
     const url = new URL(window.location.href);
     url.searchParams.delete("ask");
     window.history.replaceState(null, "", url.pathname + url.search);
-  }, [variant, hydrated]);
+  }, [variant]);
 
   const onScroll = () => {
     const el = listRef.current;
