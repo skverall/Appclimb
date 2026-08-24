@@ -2638,6 +2638,24 @@ img {
   text-decoration: underline;
 }
 
+/* Guide check lists already carry a check icon per item — the default disc
+   bullet next to it is noise. */
+.guide-check-list {
+  list-style: none;
+  margin: 14px 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.guide-check-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
 .article-back:hover {
   color: var(--teal-600);
 }
