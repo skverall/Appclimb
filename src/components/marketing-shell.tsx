@@ -162,12 +162,17 @@ export function MarketingShell({
   /** Hide the marketing footer on app-like pages that fill the viewport. */
   hideFooter?: boolean;
 }) {
+  const pathname = usePathname();
+  // The FAB is a workspace affordance. On marketing/legal pages it sits on
+  // top of CTAs (pricing period toggle, article asides) with no extra value
+  // — the nav already links to the assistant.
+  const showFab = !hideAiFab && pathname === "/";
   return (
     <div className="marketing-site">
       <MarketingHeader />
       {children}
       {!hideFooter && <MarketingFooter />}
-      {!hideAiFab && <AiChatPanel />}
+      {showFab && <AiChatPanel />}
     </div>
   );
 }
