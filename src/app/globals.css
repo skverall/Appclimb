@@ -2575,7 +2575,8 @@ img {
 }
 
 .article-back {
-  display: inline-flex;
+  display: flex;
+  width: fit-content;
   align-items: center;
   gap: 6px;
   font-size: var(--text-xs);
@@ -2583,6 +2584,58 @@ img {
   color: var(--ink-muted);
   margin-bottom: 16px;
   text-decoration: none;
+}
+
+/* Formula callout: the span and the formula itself must not render glued
+   together as inline text. */
+.article-formula {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+  margin: 14px 0;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--teal-500);
+  border-radius: var(--radius-md);
+  background: var(--n-25);
+  font-size: var(--text-sm);
+}
+
+.article-formula span {
+  color: var(--ink-secondary);
+}
+
+.article-formula strong {
+  color: var(--ink);
+}
+
+/* Source lists under a bold lead-in: stack so the links never glue to the
+   label or to each other. */
+.article-sources {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 14px 0;
+  font-size: var(--text-sm);
+}
+
+.article-sources strong {
+  color: var(--ink);
+}
+
+.article-source-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--teal-700);
+  font-weight: var(--weight-semibold);
+  text-decoration: none;
+}
+
+.article-source-link:hover {
+  text-decoration: underline;
 }
 
 .article-back:hover {
