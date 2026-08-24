@@ -229,6 +229,19 @@ export function AiChatConversation({
     }
   }, [variant, hydrated, activeId]);
 
+  // Deep link from the "Ask AI" callouts: prefill the draft with the
+  // keyword question (never auto-send) and clean the URL.
+  useEffect(() => {
+    if (variant !== "page" || !hydrated) return;
+    const params = new URLSearchParams(window.location.search);
+    const ask = params.get("ask");
+    if (!ask) return;
+    setInput(ask.slice(0, AI_LIMITS.maxMessageChars));
+    const url = new URL(window.location.href);
+    url.searchParams.delete("ask");
+    window.history.replaceState(null, "", url.pathname + url.search);
+  }, [variant, hydrated]);
+
   const onScroll = () => {
     const el = listRef.current;
     if (!el) return;

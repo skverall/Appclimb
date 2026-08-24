@@ -253,7 +253,10 @@ export function KeywordDetail({
               <strong>ASO strategy for &ldquo;{keyword}&rdquo;</strong>
               <p>Ask the assistant how to rank for this term in your title or subtitle.</p>
             </div>
-            <Link href="/assistant" className="tracker-button-primary tracker-ask-ai-btn">
+            <Link
+              href={`/assistant?ask=${encodeURIComponent(`How can I rank for "${keyword}"? Review my title and subtitle ideas for it.`)}`}
+              className="tracker-button-primary tracker-ask-ai-btn"
+            >
               Ask AI
             </Link>
           </div>

@@ -252,7 +252,10 @@ export function TrackerDetail({
           <strong>Optimize for &ldquo;{keyword.keyword}&rdquo;</strong>
           <p>Ask the assistant to generate title, subtitle, or metadata strategies to climb higher.</p>
         </div>
-        <Link href="/assistant" className="tracker-button-primary tracker-ask-ai-btn">
+        <Link
+          href={`/assistant?ask=${encodeURIComponent(`How can I climb for "${keyword.keyword}"? Give me title, subtitle, and metadata strategies.`)}`}
+          className="tracker-button-primary tracker-ask-ai-btn"
+        >
           Ask AI
         </Link>
       </div>
