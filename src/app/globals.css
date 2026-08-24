@@ -7675,6 +7675,13 @@ img {
   margin-bottom: 16px;
 }
 
+/* auto-fit yields 3+1 orphan cards at tablet widths — force a balanced 2x2. */
+@media (min-width: 481px) and (max-width: 860px) {
+  .tracker-scorecard-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 .tracker-scorecard-card {
   background: var(--bg-card);
   border: 1px solid var(--line-strong);
