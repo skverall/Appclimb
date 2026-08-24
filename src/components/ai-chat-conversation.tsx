@@ -242,7 +242,13 @@ export function AiChatConversation({
     if (!el) return;
     stickToBottom.current = true;
     setShowJump(false);
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    const reduceMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    el.scrollTo({
+      top: el.scrollHeight,
+      behavior: reduceMotion ? "auto" : "smooth",
+    });
   };
 
   const send = useCallback(
