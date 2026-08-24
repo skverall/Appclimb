@@ -2846,6 +2846,9 @@ img {
 
 .tracker-modal-body {
   display: grid;
+  /* minmax(0,1fr): without it the auto track sizes to the search form's
+     max-content and overflows the card on phones. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   padding: 20px 24px 24px;
 }
