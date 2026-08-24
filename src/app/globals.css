@@ -4007,10 +4007,27 @@ img {
   letter-spacing: 0.01em;
 }
 
+/* Desktop: the close/scrim are only needed when the sidebar is an overlay. */
+.ai-chat-history-scrim,
+.ai-chat-history-close {
+  display: none;
+}
+
 /* Sidebar Responsive Overlay below 900px */
 @media (max-width: 899px) {
   .ai-chat-shell--page.has-sidebar-open {
     grid-template-columns: 1fr;
+  }
+
+  .ai-chat-history-scrim {
+    display: block;
+    position: absolute;
+    inset: 0;
+    z-index: 29;
+    border: none;
+    padding: 0;
+    background: rgba(17, 29, 45, 0.35);
+    cursor: pointer;
   }
 
   .ai-chat-shell--page .ai-chat-history-sidebar {
@@ -4023,6 +4040,32 @@ img {
     background: #ffffff;
     border-right: 1px solid var(--line-strong);
     box-shadow: 8px 0 32px rgba(23, 39, 45, 0.14);
+  }
+
+  .ai-chat-history-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    top: 10px;
+    right: 8px;
+    z-index: 1;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--ink-muted);
+  }
+
+  .ai-chat-history-close:hover {
+    background: var(--n-100);
+    color: var(--ink);
+  }
+
+  /* Leave room for the close button above "New chat". */
+  .ai-chat-shell--page .ai-chat-history-sidebar .ai-chat-history {
+    padding-top: 28px;
   }
 }
 

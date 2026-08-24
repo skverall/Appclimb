@@ -16,6 +16,7 @@ import {
   Sparkles,
   SquarePen,
   Trash2,
+  X,
 } from "lucide-react";
 
 import { AiChatHistory } from "@/components/ai-chat-history";
@@ -418,19 +419,35 @@ export function AiChatConversation({
       }
     >
       {variant === "page" && historyOpen && (
-        <aside
-          className="ai-chat-history-sidebar is-open"
-          aria-label="Chat history"
-        >
-          <AiChatHistory
-            conversations={conversations}
-            activeId={activeId}
-            disabled={busy}
-            onSelect={switchTo}
-            onNew={startNewChat}
-            onDelete={deleteChat}
+        <>
+          <button
+            type="button"
+            className="ai-chat-history-scrim"
+            aria-label="Close chat history"
+            onClick={() => setHistoryOpen(false)}
           />
-        </aside>
+          <aside
+            className="ai-chat-history-sidebar is-open"
+            aria-label="Chat history"
+          >
+            <button
+              type="button"
+              className="ai-chat-history-close"
+              onClick={() => setHistoryOpen(false)}
+              aria-label="Close chat history"
+            >
+              <X size={16} aria-hidden="true" />
+            </button>
+            <AiChatHistory
+              conversations={conversations}
+              activeId={activeId}
+              disabled={busy}
+              onSelect={switchTo}
+              onNew={startNewChat}
+              onDelete={deleteChat}
+            />
+          </aside>
+        </>
       )}
 
       <div className="ai-chat-shell-main">
