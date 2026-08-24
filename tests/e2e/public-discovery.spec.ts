@@ -208,7 +208,6 @@ test("crawl and agent discovery endpoints are public and coherent", async ({
     "/llms.txt",
     "/pricing.md",
     "/favicon.ico",
-    "/icon.svg",
     "/icons/v2/favicon.ico",
     "/icons/v2/icon.svg",
     "/icons/v2/icon-192.png",
