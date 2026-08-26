@@ -60,6 +60,24 @@ export const PUBLIC_PAGES = [
     lastModified: SITE_UPDATED,
   },
   {
+    path: "/blog/apptweak-free-alternative",
+    title: "AppTweak Alternative: Best Free App Store Keyword Tool for Indies (2026)",
+    description:
+      "Looking for a cost-effective alternative to AppTweak? Compare AppTweak's $99/mo starting price with AppClimb's free guest tier and $8/mo Pro plan for indie iOS developers.",
+    changeFrequency: "monthly" as const,
+    priority: 0.9,
+    lastModified: SITE_UPDATED,
+  },
+  {
+    path: "/blog/apple-search-ads-popularity-score-explained",
+    title: "Apple Search Ads Popularity Score (1–100) Explained: The Honest Guide",
+    description:
+      "Learn what Apple Search Ads search popularity (1–100) actually measures, how Apple calculates relative search volume, and why ASO tools that invent exact numbers are misleading.",
+    changeFrequency: "monthly" as const,
+    priority: 0.9,
+    lastModified: SITE_UPDATED,
+  },
+  {
     path: "/blog/sensor-tower-alternatives-free-2026",
     title: "Free App Store Keyword Tools in 2026: What Actually Works",
     description:
@@ -149,6 +167,26 @@ export const ARTICLES = [
     published: "2026-08-26",
     updated: "2026-08-26",
     readingTime: "7 min read",
+  },
+  {
+    slug: "apptweak-free-alternative",
+    title: "AppTweak Alternative: Best Free App Store Keyword Tool for Indies (2026)",
+    description:
+      "Why indie developers and bootstrap founders are switching from AppTweak’s $99/mo plan to AppClimb’s honest, free-first keyword workspace.",
+    category: "Competitors",
+    published: "2026-08-26",
+    updated: "2026-08-26",
+    readingTime: "5 min read",
+  },
+  {
+    slug: "apple-search-ads-popularity-score-explained",
+    title: "Apple Search Ads Popularity Score (1–100) Explained: The Honest Guide",
+    description:
+      "What Apple’s official 1–100 search metric actually means, how it compares to black-box search volume estimates, and how indie developers should interpret it.",
+    category: "Apple Ads",
+    published: "2026-08-26",
+    updated: "2026-08-26",
+    readingTime: "6 min read",
   },
   {
     slug: "sensor-tower-alternatives-free-2026",

@@ -55,6 +55,30 @@ export default function AstroAlternativeArticle() {
     ],
   };
 
+  const articleSchema = {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    headline: "Astro (tryastro.app) Alternative: Best Free App Store Keyword Tools in 2026",
+    description:
+      "A deep, honest comparison of Astro vs AppClimb: web vs Mac app, $8/mo vs $108/year upfront, official Apple Ads popularity, and AI metadata tools.",
+    url: absoluteUrl("/blog/astro-aso-alternative-2026"),
+    datePublished: "2026-08-26",
+    dateModified: "2026-08-26",
+    author: {
+      "@type": "Organization",
+      name: "AppClimb Editorial",
+      url: "https://appclimb.app",
+    },
+    publisher: {
+      "@type": "Organization",
+      name: "AppClimb",
+      logo: {
+        "@type": "ImageObject",
+        url: "https://appclimb.app/opengraph-image",
+      },
+    },
+  };
+
   return (
     <ArticleLayout
       title="Astro (tryastro.app) Alternative: Best Free App Store Keyword Tools in 2026"
@@ -66,6 +90,7 @@ export default function AstroAlternativeArticle() {
       slug="astro-aso-alternative-2026"
     >
       <JsonLd data={faqData} />
+      <JsonLd data={articleSchema} />
 
       <p className="article-answer">
         <strong>Quick Verdict:</strong> Astro (tryastro.app) is a solid native Mac keyword tool for indie iOS developers, but its $108/year upfront commitment, lack of a permanent free plan, Mac-only requirement, and absence of an AI metadata optimizer push many developers to seek alternatives. <strong>AppClimb</strong> provides instant browser access, a generous free-forever plan (no credit card or signup needed for 8 daily searches), official Apple Ads popularity (1–100), and an integrated AI ASO assistant for $8/month ($64/year).

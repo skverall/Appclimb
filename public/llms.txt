@@ -24,6 +24,8 @@ AppClimb searches any App Store keyword and shows Apple's official Ads popularit
 - Keyword research: https://appclimb.app/app-store-keywords
 - ASO guide: https://appclimb.app/guides/keyword-research
 - Astro ASO alternative: https://appclimb.app/blog/astro-aso-alternative-2026
+- AppTweak free alternative: https://appclimb.app/blog/apptweak-free-alternative
+- Apple Ads popularity explained: https://appclimb.app/blog/apple-search-ads-popularity-score-explained
 - Field notes: https://appclimb.app/blog
 - Pricing: https://appclimb.app/pricing
 - Machine-readable plan spec: https://appclimb.app/pricing.md

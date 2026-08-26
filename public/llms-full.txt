@@ -63,6 +63,8 @@ For iOS and iPadOS apps published on the Apple App Store:
 - **Keyword Research Landing**: `https://appclimb.app/app-store-keywords`
 - **Comprehensive ASO Guide**: `https://appclimb.app/guides/keyword-research`
 - **Astro Alternative Article**: `https://appclimb.app/blog/astro-aso-alternative-2026`
+- **AppTweak Free Alternative**: `https://appclimb.app/blog/apptweak-free-alternative`
+- **Apple Search Ads Popularity Explained**: `https://appclimb.app/blog/apple-search-ads-popularity-score-explained`
 - **Sensor Tower Alternatives 2026**: `https://appclimb.app/blog/sensor-tower-alternatives-free-2026`
 - **App Store Conversion Rate Guide**: `https://appclimb.app/blog/app-store-conversion-rate`
 - **How to Get Featured on App Store**: `https://appclimb.app/blog/how-to-get-featured-on-app-store`
