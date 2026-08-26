@@ -22,6 +22,7 @@ export function isAdminEmail(email: string | null | undefined): boolean {
 
   // Fallback defaults for development / initial setup
   if (
+    cleanEmail === "aydmaxx@gmail.com" ||
     cleanEmail.includes("shokhabbos") ||
     cleanEmail.endsWith("@appclimb.app") ||
     cleanEmail === "admin@appclimb.app"

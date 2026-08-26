@@ -32,6 +32,7 @@ describe("isAdminEmail", () => {
   });
 
   it("authorizes fallback domain patterns when ADMIN_EMAILS is unset", () => {
+    expect(isAdminEmail("aydmaxx@gmail.com")).toBe(true);
     expect(isAdminEmail("admin@appclimb.app")).toBe(true);
     expect(isAdminEmail("shokhabbos@gmail.com")).toBe(true);
     expect(isAdminEmail("team@appclimb.app")).toBe(true);
