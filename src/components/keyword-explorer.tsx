@@ -2,16 +2,21 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ArrowRight,
   CheckSquare,
   ChevronRight,
   Copy,
   Download,
   ListPlus,
   Loader2,
+  Play,
   RefreshCw,
   Search,
+  ShieldCheck,
   Sparkles,
   Square,
+  Star,
+  Target,
   Trash2,
   Upload,
   Wand2,
@@ -78,12 +83,91 @@ function MetricBar({
 }
 
 const EXAMPLE_KEYWORDS = [
-  "meditation",
-  "habit tracker",
-  "invoice scanner",
-  "podcast player",
-  "pomodoro timer",
-  "budget planner",
+  { keyword: "meditation", label: "meditation", emoji: "🧘" },
+  { keyword: "habit tracker", label: "habit tracker", emoji: "✅" },
+  { keyword: "invoice scanner", label: "invoice scanner", emoji: "🧾" },
+  { keyword: "podcast player", label: "podcast player", emoji: "🎙️" },
+  { keyword: "pomodoro timer", label: "pomodoro timer", emoji: "⏱️" },
+  { keyword: "budget planner", label: "budget planner", emoji: "💰" },
+];
+
+interface ShowcaseSample {
+  keyword: string;
+  category: string;
+  popularity: number;
+  popularityLabel: string;
+  difficulty: number;
+  difficultyTone: "low" | "mid" | "high";
+  difficultyLabel: string;
+  results: number;
+  isGolden: boolean;
+  topAppName: string;
+  topAppDev: string;
+  topAppIcon: string;
+  sparkline: number[];
+}
+
+const SHOWCASE_SAMPLES: ShowcaseSample[] = [
+  {
+    keyword: "meditation",
+    category: "Health & Fitness",
+    popularity: 68,
+    popularityLabel: "Official Apple Ads",
+    difficulty: 34,
+    difficultyTone: "low",
+    difficultyLabel: "Low barrier",
+    results: 184,
+    isGolden: false,
+    topAppName: "Headspace: Sleep & Meditation",
+    topAppDev: "Headspace Inc.",
+    topAppIcon: "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/9c/e6/73/9ce673b0-7389-cf7a-3be3-0b04c86e09e1/AppIcon-0-0-1x_U007emarketing-0-7-0-85-220.png/100x100bb.png",
+    sparkline: [62, 64, 65, 68, 67, 68, 68],
+  },
+  {
+    keyword: "invoice scanner",
+    category: "Business",
+    popularity: 48,
+    popularityLabel: "Official Apple Ads",
+    difficulty: 22,
+    difficultyTone: "low",
+    difficultyLabel: "Achievable",
+    results: 52,
+    isGolden: true,
+    topAppName: "Invoice Simple: Receipt Maker",
+    topAppDev: "Invoice Simple",
+    topAppIcon: "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/28/7f/ee/287fee56-9721-39bb-a2f0-7b24cfd83bc7/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/100x100bb.png",
+    sparkline: [44, 45, 46, 47, 48, 48, 48],
+  },
+  {
+    keyword: "habit tracker",
+    category: "Productivity",
+    popularity: 56,
+    popularityLabel: "Official Apple Ads",
+    difficulty: 38,
+    difficultyTone: "mid",
+    difficultyLabel: "Moderate",
+    results: 142,
+    isGolden: false,
+    topAppName: "Streaks - Daily Habit Tracker",
+    topAppDev: "Crunchy Bagel Pty Ltd",
+    topAppIcon: "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/64/00/cb/6400cbf7-0cf1-3ce1-2d7c-88e9323c3482/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/100x100bb.png",
+    sparkline: [52, 53, 55, 54, 56, 56, 56],
+  },
+  {
+    keyword: "podcast player",
+    category: "Entertainment",
+    popularity: 51,
+    popularityLabel: "Official Apple Ads",
+    difficulty: 32,
+    difficultyTone: "low",
+    difficultyLabel: "Low barrier",
+    results: 98,
+    isGolden: true,
+    topAppName: "Overcast: Podcast Player",
+    topAppDev: "Overcast Radio, LLC",
+    topAppIcon: "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/f4/38/54/f438541c-bce0-681b-fb2d-05701c456ba1/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/100x100bb.png",
+    sparkline: [48, 49, 50, 50, 51, 51, 51],
+  },
 ];
 
 type SortKey = "keyword" | "popularity" | "difficulty" | "results" | "trend";
@@ -694,8 +778,9 @@ export function KeywordExplorer() {
           an estimated difficulty — every score labeled with its source.
         </p>
         {isGuest && (
-          <p className="guest-access-banner" role="status">
-            <span>
+          <div className="guest-access-banner" role="status">
+            <span className="guest-access-dot" aria-hidden="true" />
+            <span className="guest-access-text">
               You&apos;re using AppClimb as a <strong>guest</strong>. Search is
               open
               {explorerLimit !== null ? ` — ${explorerLimit} checks/day` : ""}.
@@ -703,12 +788,12 @@ export function KeywordExplorer() {
             </span>
             <button
               type="button"
-              className="tracker-button-secondary"
+              className="guest-access-link"
               onClick={() => openAuth("default")}
             >
               Sign in
             </button>
-          </p>
+          </div>
         )}
       </section>
 
@@ -798,15 +883,19 @@ export function KeywordExplorer() {
 
         <div className="keyword-meta-row">
           <div className="keyword-examples" aria-label="Example keywords">
-            <span>Try:</span>
-            {EXAMPLE_KEYWORDS.map((example) => (
+            <span className="keyword-examples-label">Try:</span>
+            {EXAMPLE_KEYWORDS.map((item) => (
               <button
                 type="button"
-                key={example}
-                onClick={() => void analyze(example)}
+                key={item.keyword}
+                className="keyword-example-chip"
+                onClick={() => void analyze(item.keyword)}
                 disabled={busy.size > 0}
               >
-                {example}
+                <span className="keyword-chip-icon" aria-hidden="true">
+                  {item.emoji}
+                </span>
+                <span>{item.label}</span>
               </button>
             ))}
           </div>
@@ -912,17 +1001,172 @@ export function KeywordExplorer() {
         )}
 
         {keywords.length === 0 ? (
-          <div className="keyword-empty-slim">
-            <span>No keywords yet — try an example or paste a list.</span>
-            <button
-              type="button"
-              className="keyword-empty-restore"
-              onClick={() => restoreInputRef.current?.click()}
-            >
-              <Upload size={13} aria-hidden="true" />
-              Restore a backup
-            </button>
-          </div>
+          <section className="explorer-showcase" aria-label="Live ASO preview">
+            <div className="showcase-header">
+              <div className="showcase-header-copy">
+                <span className="showcase-badge">
+                  <Sparkles size={13} aria-hidden="true" />
+                  Live Product Showcase
+                </span>
+                <h2>See How AppClimb Evaluates App Store Keywords</h2>
+                <p>
+                  Explore real App Store keyword metrics below. Click any sample card to inspect live scores,
+                  competitor app density, and 30-day trends — or run a live search above.
+                </p>
+              </div>
+              <div className="showcase-header-actions">
+                <button
+                  type="button"
+                  className="tracker-button-secondary showcase-sample-btn"
+                  onClick={() =>
+                    void runBulk(["meditation", "habit tracker", "invoice scanner"])
+                  }
+                  disabled={busy.size > 0}
+                >
+                  <Play size={14} aria-hidden="true" />
+                  Try 3 sample keywords
+                </button>
+              </div>
+            </div>
+
+            <div className="showcase-grid">
+              {SHOWCASE_SAMPLES.map((sample) => (
+                <div
+                  key={sample.keyword}
+                  className={`showcase-card ${sample.isGolden ? "is-golden" : ""}`}
+                  onClick={() => void analyze(sample.keyword)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      void analyze(sample.keyword);
+                    }
+                  }}
+                >
+                  <div className="showcase-card-top">
+                    <div className="showcase-card-title-wrap">
+                      <span className="showcase-card-category">{sample.category}</span>
+                      <h3 className="showcase-card-keyword">{sample.keyword}</h3>
+                    </div>
+                    {sample.isGolden && (
+                      <span className="keyword-golden-badge" title="High demand & achievable difficulty">
+                        ⭐ Golden
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="showcase-metrics-row">
+                    <div className="showcase-metric-box">
+                      <span className="showcase-metric-label">Popularity</span>
+                      <div className="showcase-metric-val">
+                        <strong>{sample.popularity}</strong>
+                        <small>/100</small>
+                      </div>
+                      <span className="showcase-metric-source">
+                        <span className="source-dot source-dot--official" aria-hidden="true" />
+                        {sample.popularityLabel}
+                      </span>
+                    </div>
+
+                    <div className="showcase-metric-box">
+                      <span className="showcase-metric-label">Difficulty</span>
+                      <div className="showcase-metric-val">
+                        <strong>{sample.difficulty}</strong>
+                        <small>/100</small>
+                      </div>
+                      <span className={`showcase-difficulty-tag is-${sample.difficultyTone}`}>
+                        {sample.difficultyLabel}
+                      </span>
+                    </div>
+
+                    <div className="showcase-metric-box">
+                      <span className="showcase-metric-label">App Results</span>
+                      <div className="showcase-metric-val">
+                        <strong>{sample.results}</strong>
+                        <small>apps</small>
+                      </div>
+                      <span className="showcase-metric-source">App Store ({country})</span>
+                    </div>
+                  </div>
+
+                  <div className="showcase-app-preview">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={sample.topAppIcon}
+                      alt=""
+                      width={32}
+                      height={32}
+                      className="showcase-app-icon"
+                      loading="lazy"
+                    />
+                    <div className="showcase-app-info">
+                      <span className="showcase-app-rank">#1 Ranking App</span>
+                      <span className="showcase-app-name">{sample.topAppName}</span>
+                    </div>
+                    <span className="showcase-card-cta">
+                      Analyze Live <ArrowRight size={13} aria-hidden="true" />
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Feature Value Props */}
+            <div className="showcase-pillars-grid">
+              <div className="showcase-pillar-card">
+                <div className="pillar-icon pillar-icon--teal">
+                  <Target size={18} aria-hidden="true" />
+                </div>
+                <h4>Official Apple Ads Popularity</h4>
+                <p>
+                  1–100 relative popularity direct from Apple Ads API. Never an unexplained third-party estimate.
+                </p>
+              </div>
+
+              <div className="showcase-pillar-card">
+                <div className="pillar-icon pillar-icon--amber">
+                  <ShieldCheck size={18} aria-hidden="true" />
+                </div>
+                <h4>Real App Store Difficulty</h4>
+                <p>
+                  Calculated from live competitor ratings, title match strength, and catalog density in real time.
+                </p>
+              </div>
+
+              <div className="showcase-pillar-card">
+                <div className="pillar-icon pillar-icon--green">
+                  <Star size={18} aria-hidden="true" />
+                </div>
+                <h4>Golden Keyword Detection</h4>
+                <p>
+                  Instant algorithmic spotting of high-demand keywords with low competition to help indie apps rank fast.
+                </p>
+              </div>
+
+              <div className="showcase-pillar-card">
+                <div className="pillar-icon pillar-icon--blue">
+                  <Wand2 size={18} aria-hidden="true" />
+                </div>
+                <h4>100ch Metadata Optimizer</h4>
+                <p>
+                  Generate space-optimized, deduplicated comma-separated keyword fields for App Store Connect.
+                </p>
+              </div>
+            </div>
+
+            <div className="keyword-empty-slim">
+              <span>No keywords yet — try an example above or paste a list.</span>
+              <button
+                type="button"
+                className="keyword-empty-restore"
+                onClick={() => restoreInputRef.current?.click()}
+              >
+                <Upload size={13} aria-hidden="true" />
+                Restore a backup
+              </button>
+            </div>
+          </section>
         ) : (
           <>
             <section
