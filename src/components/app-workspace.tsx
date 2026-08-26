@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Cloud,
+  CloudOff,
   Compass,
   Loader2,
   Lock,
@@ -88,14 +90,15 @@ export function AppWorkspace() {
   const {
     account,
     signedIn,
-    isPro,
     accountsLive,
     role,
     loading: accountLoading,
+    isPro,
     openAuth,
     requireAccount,
     openUpgrade,
     signOut,
+    syncState,
     syncVersion,
   } = useAccount();
   const proOn = proEnabled();
@@ -576,6 +579,28 @@ export function AppWorkspace() {
                     </button>
                   );
                 })}
+              </div>
+            )}
+
+            {view === "app" && store.apps.length > 0 && signedIn && !isPro && (
+              <button
+                type="button"
+                className="tracker-sync-status-pill is-local"
+                onClick={openUpgrade}
+                title="Data saved in local browser storage. Upgrade to Pro for Cloud Sync across devices."
+              >
+                <CloudOff size={13} aria-hidden="true" />
+                <span>Local storage &middot; <strong className="sync-upgrade-text">Sync with Pro ↗</strong></span>
+              </button>
+            )}
+
+            {view === "app" && store.apps.length > 0 && signedIn && isPro && syncState !== "off" && (
+              <div
+                className="tracker-sync-status-pill is-synced"
+                title="Cloud sync active across all your devices."
+              >
+                <Cloud size={13} aria-hidden="true" />
+                <span>Cloud synced</span>
               </div>
             )}
 

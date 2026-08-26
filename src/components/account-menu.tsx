@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CreditCard, LogIn, LogOut, Sparkles } from "lucide-react";
+import { CloudOff, CreditCard, LogIn, LogOut, Sparkles } from "lucide-react";
 
 import { useAccount } from "@/components/account-provider";
 import { fetchPortalLinks } from "@/lib/account";
@@ -117,6 +117,15 @@ export function AccountMenu() {
                     ? "Cloud sync failed — data stays on this device"
                     : "Cloud sync on"}
               </span>
+            )}
+            {!isPro && (
+              <div className="account-menu-sync-hint">
+                <div className="account-menu-sync-badge">
+                  <CloudOff size={12} aria-hidden="true" />
+                  <span>Local storage</span>
+                </div>
+                <p>Data is stored in this browser. Cloud sync across devices is available on Pro.</p>
+              </div>
             )}
           </div>
 

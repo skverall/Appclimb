@@ -4426,6 +4426,71 @@ img {
   margin-top: 6px;
 }
 
+.account-menu-sync-hint {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+  border-radius: var(--radius-md);
+  background: var(--n-50);
+  border: 1px solid var(--line);
+  margin-top: 6px;
+}
+
+.account-menu-sync-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: var(--weight-bold);
+  color: var(--amber-800, #92400e);
+}
+
+.account-menu-sync-hint p {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--ink-muted);
+  margin: 0;
+}
+
+.tracker-sync-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: var(--weight-medium);
+  transition: all 0.15s ease;
+  border: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink-secondary);
+}
+
+.tracker-sync-status-pill.is-local {
+  cursor: pointer;
+  background: var(--amber-25, #fffdfa);
+  border-color: var(--amber-200, #fde68a);
+  color: var(--ink-secondary);
+}
+
+.tracker-sync-status-pill.is-local:hover {
+  background: var(--amber-50, #fef3c7);
+  border-color: var(--amber-300, #fcd34d);
+}
+
+.tracker-sync-status-pill .sync-upgrade-text {
+  color: var(--teal-700);
+  font-weight: var(--weight-semibold);
+}
+
+.tracker-sync-status-pill.is-synced {
+  background: var(--teal-50);
+  border-color: var(--teal-200);
+  color: var(--teal-800);
+}
+
 .account-menu-action {
   justify-content: center;
 }
