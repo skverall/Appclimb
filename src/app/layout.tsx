@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 
 import { AccountProvider } from "@/components/account-provider";
+import { AnalyticsBeacon } from "@/components/analytics-beacon";
 import { ToastProvider } from "@/components/toast";
 import { JsonLd } from "@/components/json-ld";
 import { iconUrl } from "@/lib/brand";
@@ -223,7 +224,10 @@ export default function RootLayout({
           }}
         />
         <AccountProvider>
-          <ToastProvider>{children}</ToastProvider>
+          <ToastProvider>
+            <AnalyticsBeacon />
+            {children}
+          </ToastProvider>
         </AccountProvider>
       </body>
     </html>
