@@ -8856,12 +8856,15 @@ img {
 }
 
 .admin-kpis-grid--6 {
+  display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 1280px) {
   .admin-kpis-grid--6 {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 14px;
   }
 }
 
@@ -8878,8 +8881,12 @@ img {
   .admin-kpis-grid--5 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+@media (max-width: 720px) {
   .admin-kpis-grid--6 {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
   }
 }
 
@@ -8893,19 +8900,45 @@ img {
 
 .admin-kpi-card {
   display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  padding: 16px 18px;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 16px;
   background: var(--card);
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-xs);
+  min-width: 0;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+
+.admin-kpi-card:hover {
+  border-color: var(--line-strong);
+}
+
+.admin-kpi-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+}
+
+.admin-kpi-label {
+  font-size: 11px;
+  font-weight: var(--weight-bold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--ink-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .admin-kpi-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: var(--radius-md);
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -8948,35 +8981,30 @@ img {
   border: 1px solid #ddd6fe;
 }
 
-.admin-kpi-body {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.admin-kpi-label {
-  font-size: 11px;
-  font-weight: var(--weight-semibold);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-caps);
-  color: var(--ink-muted);
-}
-
 .admin-kpi-val {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: var(--weight-heavy);
   color: var(--ink);
   font-variant-numeric: tabular-nums;
   line-height: 1.15;
+  margin: 2px 0 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-kpi-val--country,
+.admin-kpi-val--referrer {
+  font-size: 18px;
+  font-weight: var(--weight-bold);
 }
 
 .admin-kpi-hint {
   font-size: 11px;
   color: var(--ink-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.35;
+  white-space: normal;
+  word-break: break-word;
 }
 
 /* Common Admin Cards */

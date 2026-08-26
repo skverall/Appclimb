@@ -171,85 +171,87 @@ export function AdminDashboard() {
           {/* KPI Summary Cards */}
           <div className="admin-kpis-grid admin-kpis-grid--6">
             <div className="admin-kpi-card">
-              <div className="admin-kpi-icon admin-kpi-icon--blue">
-                <Users size={18} aria-hidden="true" />
-              </div>
-              <div className="admin-kpi-body">
+              <div className="admin-kpi-top">
                 <span className="admin-kpi-label">Unique Visitors</span>
-                <strong className="admin-kpi-val">{data.totalVisitors.toLocaleString()}</strong>
-                <span className="admin-kpi-hint">Real distinct people</span>
+                <div className="admin-kpi-icon admin-kpi-icon--blue">
+                  <Users size={15} aria-hidden="true" />
+                </div>
               </div>
+              <strong className="admin-kpi-val">{data.totalVisitors.toLocaleString()}</strong>
+              <span className="admin-kpi-hint">Real distinct people</span>
             </div>
 
             <div className="admin-kpi-card">
-              <div className="admin-kpi-icon admin-kpi-icon--green">
-                <Eye size={18} aria-hidden="true" />
-              </div>
-              <div className="admin-kpi-body">
+              <div className="admin-kpi-top">
                 <span className="admin-kpi-label">Pageviews</span>
-                <strong className="admin-kpi-val">{data.totalPageviews.toLocaleString()}</strong>
-                <span className="admin-kpi-hint">
-                  {data.totalVisitors > 0
-                    ? `${(data.totalPageviews / data.totalVisitors).toFixed(1)} views / visitor`
-                    : "0 views / visitor"}
-                </span>
+                <div className="admin-kpi-icon admin-kpi-icon--green">
+                  <Eye size={15} aria-hidden="true" />
+                </div>
               </div>
+              <strong className="admin-kpi-val">{data.totalPageviews.toLocaleString()}</strong>
+              <span className="admin-kpi-hint">
+                {data.totalVisitors > 0
+                  ? `${(data.totalPageviews / data.totalVisitors).toFixed(1)} / visitor`
+                  : "0 / visitor"}
+              </span>
             </div>
 
             <div className="admin-kpi-card">
-              <div className="admin-kpi-icon admin-kpi-icon--teal">
-                <UserCheck size={18} aria-hidden="true" />
+              <div className="admin-kpi-top">
+                <span className="admin-kpi-label">Registered</span>
+                <div className="admin-kpi-icon admin-kpi-icon--teal">
+                  <UserCheck size={15} aria-hidden="true" />
+                </div>
               </div>
-              <div className="admin-kpi-body">
-                <span className="admin-kpi-label">Registered Users</span>
-                <strong className="admin-kpi-val">
-                  {data.userAnalytics?.totalUsers?.toLocaleString() ?? 0}
-                </strong>
-                <span className="admin-kpi-hint">
-                  +{data.userAnalytics?.newUsersInRange ?? 0} in period · {data.userAnalytics?.conversionRate ?? 0}% conv
-                </span>
-              </div>
+              <strong className="admin-kpi-val">
+                {data.userAnalytics?.totalUsers?.toLocaleString() ?? 0}
+              </strong>
+              <span className="admin-kpi-hint">
+                +{data.userAnalytics?.newUsersInRange ?? 0} new · {data.userAnalytics?.conversionRate ?? 0}% conv
+              </span>
             </div>
 
             <div className="admin-kpi-card">
-              <div className="admin-kpi-icon admin-kpi-icon--ai">
-                <Bot size={18} aria-hidden="true" />
+              <div className="admin-kpi-top">
+                <span className="admin-kpi-label">AI Traffic</span>
+                <div className="admin-kpi-icon admin-kpi-icon--ai">
+                  <Bot size={15} aria-hidden="true" />
+                </div>
               </div>
-              <div className="admin-kpi-body">
-                <span className="admin-kpi-label">AI Referrals</span>
-                <strong className="admin-kpi-val">{data.aiTraffic?.totalVisits ?? 0}</strong>
-                <span className="admin-kpi-hint">
-                  {data.aiTraffic?.percentage ?? 0}% of all traffic
-                </span>
-              </div>
+              <strong className="admin-kpi-val">{data.aiTraffic?.totalVisits ?? 0}</strong>
+              <span className="admin-kpi-hint">
+                {data.aiTraffic?.percentage ?? 0}% of all visits
+              </span>
             </div>
 
             <div className="admin-kpi-card">
-              <div className="admin-kpi-icon admin-kpi-icon--amber">
-                <Globe size={18} aria-hidden="true" />
-              </div>
-              <div className="admin-kpi-body">
+              <div className="admin-kpi-top">
                 <span className="admin-kpi-label">Top Country</span>
-                <strong className="admin-kpi-val">
-                  {data.topCountry ? `${data.topCountry.flag} ${data.topCountry.code}` : "—"}
-                </strong>
-                <span className="admin-kpi-hint">
-                  {data.topCountry ? `${data.topCountry.name} (${data.topCountry.count})` : "No visits yet"}
-                </span>
+                <div className="admin-kpi-icon admin-kpi-icon--amber">
+                  <Globe size={15} aria-hidden="true" />
+                </div>
               </div>
+              <strong className="admin-kpi-val admin-kpi-val--country" title={data.topCountry ? `${data.topCountry.flag} ${data.topCountry.name}` : "—"}>
+                {data.topCountry ? `${data.topCountry.flag} ${data.topCountry.name}` : "—"}
+              </strong>
+              <span className="admin-kpi-hint">
+                {data.topCountry ? `${data.topCountry.count} visitors (${data.topCountry.code})` : "No visits yet"}
+              </span>
             </div>
 
             <div className="admin-kpi-card">
-              <div className="admin-kpi-icon admin-kpi-icon--purple">
-                <LinkIcon size={18} aria-hidden="true" />
-              </div>
-              <div className="admin-kpi-body">
+              <div className="admin-kpi-top">
                 <span className="admin-kpi-label">Top Referrer</span>
-                <strong className="admin-kpi-val">{data.topReferrer?.name ?? "Direct"}</strong>
-                <span className="admin-kpi-hint">
-                  {data.topReferrer ? `${data.topReferrer.count} views` : "Direct navigation"}
-                </span>
+                <div className="admin-kpi-icon admin-kpi-icon--purple">
+                  <LinkIcon size={15} aria-hidden="true" />
+                </div>
               </div>
+              <strong className="admin-kpi-val admin-kpi-val--referrer" title={data.topReferrer?.name ?? "Direct"}>
+                {data.topReferrer?.name ?? "Direct"}
+              </strong>
+              <span className="admin-kpi-hint">
+                {data.topReferrer ? `${data.topReferrer.count} views` : "Direct navigation"}
+              </span>
             </div>
           </div>
 
