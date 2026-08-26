@@ -102,8 +102,8 @@ interface ShowcaseSample {
   results: number;
   isGolden: boolean;
   topAppName: string;
-  topAppDev: string;
-  topAppIcon: string;
+  topAppIconEmoji: string;
+  topAppIconBg: string;
   sparkline: number[];
 }
 
@@ -119,8 +119,8 @@ const SHOWCASE_SAMPLES: ShowcaseSample[] = [
     results: 184,
     isGolden: false,
     topAppName: "Headspace: Sleep & Meditation",
-    topAppDev: "Headspace Inc.",
-    topAppIcon: "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/9c/e6/73/9ce673b0-7389-cf7a-3be3-0b04c86e09e1/AppIcon-0-0-1x_U007emarketing-0-7-0-85-220.png/100x100bb.png",
+    topAppIconEmoji: "🧘",
+    topAppIconBg: "linear-gradient(135deg, #ff9a44, #fc6076)",
     sparkline: [62, 64, 65, 68, 67, 68, 68],
   },
   {
@@ -134,8 +134,8 @@ const SHOWCASE_SAMPLES: ShowcaseSample[] = [
     results: 52,
     isGolden: true,
     topAppName: "Invoice Simple: Receipt Maker",
-    topAppDev: "Invoice Simple",
-    topAppIcon: "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/28/7f/ee/287fee56-9721-39bb-a2f0-7b24cfd83bc7/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/100x100bb.png",
+    topAppIconEmoji: "🧾",
+    topAppIconBg: "linear-gradient(135deg, #00c6ff, #0072ff)",
     sparkline: [44, 45, 46, 47, 48, 48, 48],
   },
   {
@@ -149,8 +149,8 @@ const SHOWCASE_SAMPLES: ShowcaseSample[] = [
     results: 142,
     isGolden: false,
     topAppName: "Streaks - Daily Habit Tracker",
-    topAppDev: "Crunchy Bagel Pty Ltd",
-    topAppIcon: "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/64/00/cb/6400cbf7-0cf1-3ce1-2d7c-88e9323c3482/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/100x100bb.png",
+    topAppIconEmoji: "✅",
+    topAppIconBg: "linear-gradient(135deg, #0ba360, #3cba92)",
     sparkline: [52, 53, 55, 54, 56, 56, 56],
   },
   {
@@ -164,8 +164,8 @@ const SHOWCASE_SAMPLES: ShowcaseSample[] = [
     results: 98,
     isGolden: true,
     topAppName: "Overcast: Podcast Player",
-    topAppDev: "Overcast Radio, LLC",
-    topAppIcon: "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/f4/38/54/f438541c-bce0-681b-fb2d-05701c456ba1/AppIcon-0-0-1x_U007emarketing-0-8-0-85-220.png/100x100bb.png",
+    topAppIconEmoji: "🎙️",
+    topAppIconBg: "linear-gradient(135deg, #ff5858, #f09819)",
     sparkline: [48, 49, 50, 50, 51, 51, 51],
   },
 ];
@@ -774,24 +774,21 @@ export function KeywordExplorer() {
         </span>
         <h1>Popularity from Apple. Not a black box.</h1>
         <p className="keyword-hero-deck">
-          Type a keyword to see Apple&apos;s official Ads popularity (1–100) and
-          an estimated difficulty — every score labeled with its source.
+          Apple&apos;s official Ads popularity (1–100) &amp; difficulty for any App Store keyword — labeled with its source.
         </p>
         {isGuest && (
           <div className="guest-access-banner" role="status">
             <span className="guest-access-dot" aria-hidden="true" />
             <span className="guest-access-text">
-              You&apos;re using AppClimb as a <strong>guest</strong>. Search is
-              open
-              {explorerLimit !== null ? ` — ${explorerLimit} checks/day` : ""}.
-              Sign in free to track an app or use the assistant.
+              You&apos;re using AppClimb as a <strong>guest</strong> &middot; Search is open
+              {explorerLimit !== null ? ` (${explorerLimit} checks/day)` : ""} &middot; No login required
             </span>
             <button
               type="button"
               className="guest-access-link"
               onClick={() => openAuth("default")}
             >
-              Sign in
+              Sign in free &rarr;
             </button>
           </div>
         )}
@@ -1005,14 +1002,10 @@ export function KeywordExplorer() {
             <div className="showcase-header">
               <div className="showcase-header-copy">
                 <span className="showcase-badge">
-                  <Sparkles size={13} aria-hidden="true" />
-                  Live Product Showcase
+                  <Sparkles size={12} aria-hidden="true" />
+                  Live Preview
                 </span>
-                <h2>See How AppClimb Evaluates App Store Keywords</h2>
-                <p>
-                  Explore real App Store keyword metrics below. Click any sample card to inspect live scores,
-                  competitor app density, and 30-day trends — or run a live search above.
-                </p>
+                <h2>Popular App Store Keywords</h2>
               </div>
               <div className="showcase-header-actions">
                 <button
@@ -1023,7 +1016,7 @@ export function KeywordExplorer() {
                   }
                   disabled={busy.size > 0}
                 >
-                  <Play size={14} aria-hidden="true" />
+                  <Play size={13} aria-hidden="true" />
                   Try 3 sample keywords
                 </button>
               </div>
@@ -1091,15 +1084,13 @@ export function KeywordExplorer() {
                   </div>
 
                   <div className="showcase-app-preview">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={sample.topAppIcon}
-                      alt=""
-                      width={32}
-                      height={32}
-                      className="showcase-app-icon"
-                      loading="lazy"
-                    />
+                    <div
+                      className="showcase-app-icon-badge"
+                      style={{ background: sample.topAppIconBg }}
+                      aria-hidden="true"
+                    >
+                      <span>{sample.topAppIconEmoji}</span>
+                    </div>
                     <div className="showcase-app-info">
                       <span className="showcase-app-rank">#1 Ranking App</span>
                       <span className="showcase-app-name">{sample.topAppName}</span>

@@ -5239,13 +5239,13 @@ img {
 /* --- Hero ---------------------------------------------------------------- */
 
 .tool-page {
-  padding-block: 28px 56px;
+  padding-block: 14px 36px;
 }
 
 .keyword-hero {
   position: relative;
   text-align: center;
-  padding-block: 30px 34px;
+  padding-block: 10px 14px;
   /* The ::before glow bleeds ±80px sideways; on narrow viewports that
      right-side bleed created a horizontal page scrollbar. Clip only the x
      axis so the top bleed stays visible. */
@@ -5273,12 +5273,12 @@ img {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 14px;
+  padding: 5px 12px;
   border-radius: var(--radius-pill);
   background: var(--teal-50);
   border: 1px solid var(--teal-200);
   color: var(--teal-700);
-  font-size: var(--text-2xs);
+  font-size: 11px;
   font-weight: var(--weight-bold);
 }
 
@@ -5292,19 +5292,20 @@ img {
 }
 
 .keyword-hero h1 {
-  font-size: clamp(30px, 4.6vw, 46px);
+  font-size: clamp(24px, 3.4vw, 38px);
   font-weight: var(--weight-heavy);
   letter-spacing: -0.03em;
-  line-height: var(--leading-none);
+  line-height: var(--leading-tight);
   max-width: 21ch;
-  margin: 18px auto 14px;
+  margin: 10px auto 6px;
 }
 
 .keyword-hero-deck {
-  font-size: 17px;
-  line-height: 1.6;
-  max-width: 62ch;
+  font-size: 15px;
+  line-height: 1.5;
+  max-width: 52ch;
   margin-inline: auto;
+  color: var(--ink-secondary);
 }
 
 .keyword-estimate-note {
@@ -5937,59 +5938,56 @@ img {
 /* --- First-Time Interactive Showcase --- */
 .explorer-showcase {
   display: grid;
-  gap: 28px;
-  margin-top: 24px;
+  gap: 16px;
+  margin-top: 14px;
 }
 
 .showcase-header {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 12px;
   flex-wrap: wrap;
-  padding-bottom: 8px;
+  padding-bottom: 6px;
   border-bottom: 1px solid var(--line);
 }
 
 .showcase-header-copy {
-  max-width: 680px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .showcase-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
+  gap: 5px;
+  padding: 3px 8px;
   border-radius: var(--radius-pill);
   background: var(--teal-50);
   border: 1px solid var(--teal-200);
   color: var(--teal-700);
-  font-size: var(--text-2xs);
+  font-size: 10px;
   font-weight: var(--weight-bold);
   text-transform: uppercase;
   letter-spacing: var(--tracking-caps);
-  margin-bottom: 8px;
 }
 
 .showcase-header h2 {
-  font-size: clamp(20px, 2.6vw, 28px);
-  font-weight: var(--weight-heavy);
+  font-size: 17px;
+  font-weight: var(--weight-bold);
   letter-spacing: var(--tracking-tight);
   color: var(--ink);
-  margin-bottom: 6px;
-}
-
-.showcase-header p {
-  font-size: var(--text-sm);
-  line-height: var(--leading-relaxed);
-  color: var(--ink-secondary);
+  margin: 0;
 }
 
 .showcase-sample-btn {
-  height: 38px;
-  padding: 0 16px;
+  height: 32px;
+  padding: 0 12px;
   border-radius: var(--radius-pill);
-  gap: 8px;
+  gap: 6px;
+  font-size: var(--text-xs);
   font-weight: var(--weight-semibold);
 }
 
@@ -5997,7 +5995,7 @@ img {
 .showcase-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
+  gap: 14px;
 }
 
 @media (max-width: 1100px) {
@@ -6017,9 +6015,9 @@ img {
   flex-direction: column;
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: var(--radius-xl);
-  padding: 16px 16px 14px;
-  box-shadow: 0 2px 8px rgba(23, 39, 45, 0.04);
+  border-radius: var(--radius-lg);
+  padding: 14px 14px 12px;
+  box-shadow: 0 1px 4px rgba(23, 39, 45, 0.04);
   cursor: pointer;
   transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   outline: none;
@@ -6030,13 +6028,13 @@ img {
   border-color: var(--teal-400);
   transform: translateY(-2px);
   box-shadow:
-    0 4px 14px rgba(12, 142, 136, 0.12),
-    0 12px 28px rgba(23, 39, 45, 0.06);
+    0 4px 12px rgba(12, 142, 136, 0.1),
+    0 8px 20px rgba(23, 39, 45, 0.05);
 }
 
 .showcase-card.is-golden {
   border-color: var(--amber-300);
-  background: linear-gradient(180deg, var(--amber-50) 0%, var(--card) 40%);
+  background: linear-gradient(180deg, var(--amber-50) 0%, var(--card) 45%);
 }
 
 .showcase-card-top {
@@ -6044,7 +6042,7 @@ img {
   align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
 }
 
 .showcase-card-category {
@@ -6054,11 +6052,11 @@ img {
   text-transform: uppercase;
   letter-spacing: var(--tracking-caps);
   color: var(--teal-700);
-  margin-bottom: 2px;
+  margin-bottom: 1px;
 }
 
 .showcase-card-keyword {
-  font-size: var(--text-base);
+  font-size: 15px;
   font-weight: var(--weight-bold);
   color: var(--ink);
   letter-spacing: var(--tracking-tight);
@@ -6067,22 +6065,22 @@ img {
 .showcase-metrics-row {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  padding: 10px 8px;
+  gap: 6px;
+  padding: 8px 6px;
   background: var(--n-50);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
-  margin-bottom: 14px;
+  margin-bottom: 12px;
 }
 
 .showcase-metric-box {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
 }
 
 .showcase-metric-label {
-  font-size: 10px;
+  font-size: 9px;
   font-weight: var(--weight-semibold);
   color: var(--ink-muted);
   text-transform: uppercase;
@@ -6096,21 +6094,21 @@ img {
 }
 
 .showcase-metric-val strong {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: var(--weight-heavy);
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
 
 .showcase-metric-val small {
-  font-size: 10px;
+  font-size: 9px;
   color: var(--ink-muted);
 }
 
 .showcase-metric-source {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   font-size: 9px;
   color: var(--teal-700);
   font-weight: var(--weight-semibold);
@@ -6129,7 +6127,7 @@ img {
 
 .showcase-difficulty-tag {
   display: inline-block;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: var(--weight-bold);
   border-radius: 4px;
 }
@@ -6149,19 +6147,22 @@ img {
 .showcase-app-preview {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding-top: 10px;
+  gap: 8px;
+  padding-top: 8px;
   border-top: 1px dashed var(--line);
   margin-top: auto;
 }
 
-.showcase-app-icon {
-  width: 28px;
-  height: 28px;
+.showcase-app-icon-badge {
+  width: 26px;
+  height: 26px;
   border-radius: 6px;
-  object-fit: cover;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
   flex-shrink: 0;
-  border: 1px solid var(--line);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
 .showcase-app-info {
@@ -6172,7 +6173,7 @@ img {
 }
 
 .showcase-app-rank {
-  font-size: 9px;
+  font-size: 8px;
   font-weight: var(--weight-bold);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -6191,7 +6192,7 @@ img {
 .showcase-card-cta {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
   font-size: 11px;
   font-weight: var(--weight-bold);
   color: var(--teal-600);
