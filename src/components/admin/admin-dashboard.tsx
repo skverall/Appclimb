@@ -4,7 +4,9 @@ import { useCallback, useEffect, useState } from "react";
 import {
   Activity,
   BarChart3,
+  Bot,
   Clock,
+  Cpu,
   Eye,
   Globe,
   Laptop,
@@ -14,6 +16,7 @@ import {
   RefreshCw,
   ShieldCheck,
   Smartphone,
+  Sparkles,
   Tablet,
   Users,
 } from "lucide-react";
@@ -91,7 +94,7 @@ export function AdminDashboard() {
             <span>Real-time Insights</span>
           </div>
           <h1>AppClimb Pulse</h1>
-          <p>Zero-bot, privacy-first visitor analytics powered by Cloudflare D1.</p>
+          <p>Zero-bot, privacy-first visitor analytics & AI referral intelligence.</p>
         </div>
 
         <div className="admin-header-controls">
@@ -163,7 +166,7 @@ export function AdminDashboard() {
       {data && (
         <div className="admin-content-grid">
           {/* KPI Summary Cards */}
-          <div className="admin-kpis-grid">
+          <div className="admin-kpis-grid admin-kpis-grid--5">
             <div className="admin-kpi-card">
               <div className="admin-kpi-icon admin-kpi-icon--blue">
                 <Users size={18} aria-hidden="true" />
@@ -186,6 +189,19 @@ export function AdminDashboard() {
                   {data.totalVisitors > 0
                     ? `${(data.totalPageviews / data.totalVisitors).toFixed(1)} views / visitor`
                     : "0 views / visitor"}
+                </span>
+              </div>
+            </div>
+
+            <div className="admin-kpi-card">
+              <div className="admin-kpi-icon admin-kpi-icon--ai">
+                <Bot size={18} aria-hidden="true" />
+              </div>
+              <div className="admin-kpi-body">
+                <span className="admin-kpi-label">AI Referrals</span>
+                <strong className="admin-kpi-val">{data.aiTraffic?.totalVisits ?? 0}</strong>
+                <span className="admin-kpi-hint">
+                  {data.aiTraffic?.percentage ?? 0}% of all traffic
                 </span>
               </div>
             </div>
@@ -233,6 +249,9 @@ export function AdminDashboard() {
                 <span className="legend-item legend-item--views">
                   <span className="legend-dot" /> Pageviews
                 </span>
+                <span className="legend-item legend-item--ai">
+                  <span className="legend-dot" /> AI Search Visits
+                </span>
               </div>
             </div>
 
@@ -244,9 +263,12 @@ export function AdminDashboard() {
               ) : (
                 <div className="admin-timeline-bars">
                   {data.timeline.map((item) => {
-                    const maxVal = Math.max(...data.timeline.map((t) => Math.max(t.views, t.visitors, 1)));
+                    const maxVal = Math.max(
+                      ...data.timeline.map((t) => Math.max(t.views, t.visitors, t.aiViews || 0, 1)),
+                    );
                     const visitorHeight = (item.visitors / maxVal) * 100;
                     const viewHeight = (item.views / maxVal) * 100;
+                    const aiHeight = ((item.aiViews || 0) / maxVal) * 100;
                     return (
                       <div key={item.date} className="timeline-col">
                         <div className="timeline-bars-track">
@@ -260,6 +282,13 @@ export function AdminDashboard() {
                             style={{ height: `${Math.max(4, visitorHeight)}%` }}
                             title={`${item.date}: ${item.visitors} unique visitors`}
                           />
+                          {item.aiViews > 0 && (
+                            <div
+                              className="timeline-bar timeline-bar--ai"
+                              style={{ height: `${Math.max(4, aiHeight)}%` }}
+                              title={`${item.date}: ${item.aiViews} visits from AI engines`}
+                            />
+                          )}
                         </div>
                         <span className="timeline-date-label">
                           {item.date.slice(5)}
@@ -269,6 +298,77 @@ export function AdminDashboard() {
                   })}
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* AI Traffic Intelligence Card */}
+          <div className="admin-card admin-ai-card">
+            <div className="admin-card-header">
+              <div className="admin-card-title">
+                <Cpu size={16} aria-hidden="true" />
+                <h3>AI Referral Intelligence (LLM Searches & Citations)</h3>
+                <span className="admin-ai-pulse-badge">
+                  <Sparkles size={12} aria-hidden="true" /> {data.aiTraffic?.totalVisits ?? 0} AI visits ({data.aiTraffic?.percentage ?? 0}%)
+                </span>
+              </div>
+              <span className="admin-card-subtitle">ChatGPT · Perplexity · Claude · Gemini · Copilot · DeepSeek · Grok</span>
+            </div>
+
+            <div className="admin-ai-grid">
+              {/* Models Breakdown */}
+              <div className="admin-ai-col">
+                <h4 className="admin-subheading">AI Engines & Assistants</h4>
+                {(!data.aiTraffic?.models || data.aiTraffic.models.length === 0) ? (
+                  <div className="admin-empty-section compact">
+                    <span>No AI-referred visits recorded in this period yet. When users click citations in ChatGPT, Perplexity, or Claude, they will appear here.</span>
+                  </div>
+                ) : (
+                  <div className="admin-table-list">
+                    {data.aiTraffic.models.map((m) => (
+                      <div key={m.name} className="admin-table-row">
+                        <div className="referrer-row-left">
+                          <span className="ai-model-icon" aria-hidden="true">{m.icon}</span>
+                          <span className="referrer-domain">{m.name}</span>
+                          <span className="ai-domain-pill">{m.domain}</span>
+                        </div>
+                        <div className="referrer-row-right">
+                          <div className="admin-bar-wrap">
+                            <div
+                              className="admin-fill-bar admin-fill-bar--ai"
+                              style={{ width: `${Math.max(4, m.percentage)}%` }}
+                            />
+                          </div>
+                          <span className="referrer-views-count">{m.visits}</span>
+                          <span className="referrer-percent-label">{m.percentage}%</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Top AI Pages */}
+              <div className="admin-ai-col">
+                <h4 className="admin-subheading">Top Pages Recommended by AI</h4>
+                {(!data.aiTraffic?.topPages || data.aiTraffic.topPages.length === 0) ? (
+                  <div className="admin-empty-section compact">
+                    <span>Awaiting citations from LLM search results.</span>
+                  </div>
+                ) : (
+                  <div className="admin-table-list">
+                    {data.aiTraffic.topPages.map((p) => (
+                      <div key={p.path} className="admin-table-row">
+                        <div className="page-row-left">
+                          <code className="page-path">{p.path}</code>
+                        </div>
+                        <div className="page-row-right">
+                          <span className="page-views-badge">{p.visits} AI visits</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -334,12 +434,13 @@ export function AdminDashboard() {
                   {data.referrers.map((r) => (
                     <div key={r.domain} className="admin-table-row">
                       <div className="referrer-row-left">
+                        {r.isAi && <span className="referrer-ai-tag">AI</span>}
                         <span className="referrer-domain">{r.domain}</span>
                       </div>
                       <div className="referrer-row-right">
                         <div className="admin-bar-wrap">
                           <div
-                            className="admin-fill-bar admin-fill-bar--blue"
+                            className={`admin-fill-bar ${r.isAi ? "admin-fill-bar--ai" : "admin-fill-bar--blue"}`}
                             style={{ width: `${Math.max(4, r.percentage)}%` }}
                           />
                         </div>
@@ -470,7 +571,13 @@ export function AdminDashboard() {
                     </div>
                     <code className="recent-path">{item.path}</code>
                     <span className="recent-referrer">
-                      {item.referrer !== "direct" ? `via ${item.referrer}` : "direct"}
+                      {item.isAi ? (
+                        <span className="recent-ai-badge">🤖 {item.aiName || "AI"}</span>
+                      ) : item.referrer !== "direct" ? (
+                        `via ${item.referrer}`
+                      ) : (
+                        "direct"
+                      )}
                     </span>
                     <span className="recent-device-badge">{item.device}</span>
                     <span className="recent-time">

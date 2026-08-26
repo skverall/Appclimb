@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   classifyBrowser,
   classifyDevice,
+  classifyReferrer,
   countryFlag,
   countryName,
   generateVisitorHash,
@@ -37,8 +38,71 @@ describe("analytics bot detection", () => {
   });
 });
 
-describe("analytics referrer sanitization", () => {
-  it("cleans and normalizes referrer URLs", () => {
+describe("analytics referrer & AI intelligence classification", () => {
+  it("classifies AI engine referrals accurately", () => {
+    expect(classifyReferrer("https://chatgpt.com/")).toEqual({
+      domain: "chatgpt.com",
+      category: "ai",
+      isAi: true,
+      aiName: "ChatGPT",
+    });
+    expect(classifyReferrer("android-app://com.openai.chat")).toEqual({
+      domain: "chatgpt.com",
+      category: "ai",
+      isAi: true,
+      aiName: "ChatGPT",
+    });
+    expect(classifyReferrer(null, "chatgpt")).toEqual({
+      domain: "chatgpt.com",
+      category: "ai",
+      isAi: true,
+      aiName: "ChatGPT",
+    });
+    expect(classifyReferrer("https://www.perplexity.ai/search")).toEqual({
+      domain: "perplexity.ai",
+      category: "ai",
+      isAi: true,
+      aiName: "Perplexity AI",
+    });
+    expect(classifyReferrer("https://claude.ai/chat/123")).toEqual({
+      domain: "claude.ai",
+      category: "ai",
+      isAi: true,
+      aiName: "Claude",
+    });
+    expect(classifyReferrer("https://gemini.google.com/app")).toEqual({
+      domain: "gemini.google.com",
+      category: "ai",
+      isAi: true,
+      aiName: "Google Gemini",
+    });
+    expect(classifyReferrer("https://copilot.microsoft.com/")).toEqual({
+      domain: "copilot.microsoft.com",
+      category: "ai",
+      isAi: true,
+      aiName: "Microsoft Copilot",
+    });
+    expect(classifyReferrer("https://chat.deepseek.com/")).toEqual({
+      domain: "chat.deepseek.com",
+      category: "ai",
+      isAi: true,
+      aiName: "DeepSeek",
+    });
+    expect(classifyReferrer("https://grok.com/")).toEqual({
+      domain: "grok.com",
+      category: "ai",
+      isAi: true,
+      aiName: "Grok",
+    });
+    expect(classifyReferrer("https://cursor.com/")).toEqual({
+      domain: "cursor.com",
+      category: "ai",
+      isAi: true,
+      aiName: "Developer AI",
+    });
+  });
+
+  it("cleans and normalizes standard search and social referrers", () => {
     expect(sanitizeReferrer(null)).toBe("direct");
     expect(sanitizeReferrer("")).toBe("direct");
     expect(sanitizeReferrer("invalid-url-string")).toBe("direct");
@@ -100,7 +164,7 @@ describe("analytics geography and visitor hashing", () => {
   });
 });
 
-describe("recordPageview and queryAnalyticsSummary", () => {
+describe("recordPageview and queryAnalyticsSummary with AI intelligence", () => {
   it("records pageview to database and rejects bots", async () => {
     const runMock = vi.fn().mockResolvedValue({});
     const bindMock = vi.fn().mockReturnValue({ run: runMock });
@@ -155,7 +219,7 @@ describe("recordPageview and queryAnalyticsSummary", () => {
     expect(result).toBe(false);
   });
 
-  it("queries analytics summary and formats response", async () => {
+  it("queries analytics summary and formats response with AI metrics", async () => {
     const prepareMock = vi.fn().mockImplementation((sql: string) => {
       return {
         bind: vi.fn().mockReturnValue({
@@ -164,8 +228,18 @@ describe("recordPageview and queryAnalyticsSummary", () => {
             if (sql.includes("country")) {
               return { results: [{ country: "US", visitors: 30, views: 80 }, { country: "DE", visitors: 12, views: 40 }] };
             }
-            if (sql.includes("referrer")) {
-              return { results: [{ referrer: "google.com", views: 60 }, { referrer: "direct", views: 60 }] };
+            if (sql.includes("referrer") && !sql.includes("LIKE '%chatgpt%'")) {
+              return {
+                results: [
+                  { referrer: "chatgpt.com", views: 25 },
+                  { referrer: "google.com", views: 60 },
+                  { referrer: "perplexity.ai", views: 15 },
+                  { referrer: "direct", views: 20 },
+                ],
+              };
+            }
+            if (sql.includes("LIKE '%chatgpt%'") && sql.includes("GROUP BY path")) {
+              return { results: [{ path: "/guides/keyword-research", visits: 20 }, { path: "/pricing", visits: 15 }] };
             }
             if (sql.includes("path")) {
               return { results: [{ path: "/", views: 90, visitors: 35 }, { path: "/pricing", views: 30, visitors: 15 }] };
@@ -174,7 +248,7 @@ describe("recordPageview and queryAnalyticsSummary", () => {
               return { results: [{ device: "desktop", count: 80 }, { device: "mobile", count: 40 }] };
             }
             if (sql.includes("ORDER BY date ASC")) {
-              return { results: [{ date: "2026-08-25", visitors: 20, views: 50 }, { date: "2026-08-26", visitors: 22, views: 70 }] };
+              return { results: [{ date: "2026-08-25", visitors: 20, views: 50, ai_views: 15 }, { date: "2026-08-26", visitors: 22, views: 70, ai_views: 25 }] };
             }
             return {
               results: [
@@ -182,7 +256,7 @@ describe("recordPageview and queryAnalyticsSummary", () => {
                   timestamp: Math.floor(Date.now() / 1000) - 30,
                   country: "US",
                   path: "/",
-                  referrer: "google.com",
+                  referrer: "chatgpt.com",
                   device: "desktop",
                   browser: "chrome",
                 },
@@ -196,7 +270,7 @@ describe("recordPageview and queryAnalyticsSummary", () => {
               timestamp: Math.floor(Date.now() / 1000) - 30,
               country: "US",
               path: "/",
-              referrer: "google.com",
+              referrer: "chatgpt.com",
               device: "desktop",
               browser: "chrome",
             },
@@ -210,15 +284,20 @@ describe("recordPageview and queryAnalyticsSummary", () => {
     expect(summaryToday.range).toBe("today");
     expect(summaryToday.totalVisitors).toBe(42);
     expect(summaryToday.totalPageviews).toBe(120);
+    expect(summaryToday.aiTraffic.totalVisits).toBe(40); // 25 (chatgpt) + 15 (perplexity)
+    expect(summaryToday.aiTraffic.models).toHaveLength(2);
+    expect(summaryToday.aiTraffic.topPages).toHaveLength(2);
     expect(summaryToday.topCountry?.code).toBe("US");
-    expect(summaryToday.topReferrer?.name).toBe("google.com");
+    expect(summaryToday.topReferrer?.name).toBe("chatgpt.com");
     expect(summaryToday.countries).toHaveLength(2);
-    expect(summaryToday.referrers).toHaveLength(2);
+    expect(summaryToday.referrers).toHaveLength(4);
     expect(summaryToday.pages).toHaveLength(2);
     expect(summaryToday.devices.desktop).toBe(80);
     expect(summaryToday.devices.mobile).toBe(40);
     expect(summaryToday.timeline).toHaveLength(2);
     expect(summaryToday.recent).toHaveLength(1);
+    expect(summaryToday.recent[0].isAi).toBe(true);
+    expect(summaryToday.recent[0].aiName).toBe("ChatGPT");
 
     const summary30d = await queryAnalyticsSummary(dbMock, "30d");
     expect(summary30d.range).toBe("30d");

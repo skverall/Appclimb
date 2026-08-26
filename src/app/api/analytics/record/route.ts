@@ -18,7 +18,12 @@ export async function POST(request: NextRequest) {
     return new NextResponse(null, { status: 204 });
   }
 
-  let body: { path?: string; referrer?: string | null; screenWidth?: number } = {};
+  let body: {
+    path?: string;
+    referrer?: string | null;
+    utmSource?: string | null;
+    screenWidth?: number;
+  } = {};
   try {
     const text = await request.text();
     if (text) {
@@ -65,6 +70,7 @@ export async function POST(request: NextRequest) {
   await recordPageview(db, {
     path,
     referrer: body.referrer ?? null,
+    utmSource: body.utmSource ?? null,
     userAgent,
     ip,
     country,

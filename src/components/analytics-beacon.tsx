@@ -45,9 +45,20 @@ export function AnalyticsBeacon() {
     if (lastTrackedPath.current === pathname) return;
     lastTrackedPath.current = pathname;
 
+    let utmSource: string | null = null;
+    if (typeof window !== "undefined" && window.location.search) {
+      try {
+        const params = new URLSearchParams(window.location.search);
+        utmSource = params.get("utm_source") || params.get("ref") || params.get("source") || null;
+      } catch {
+        // Ignore parsing errors
+      }
+    }
+
     const payload = JSON.stringify({
       path: pathname,
       referrer: document.referrer || null,
+      utmSource,
       screenWidth: window.innerWidth,
     });
 
