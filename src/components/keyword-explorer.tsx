@@ -84,11 +84,9 @@ function MetricBar({
 
 const EXAMPLE_KEYWORDS = [
   { keyword: "meditation", label: "meditation", emoji: "🧘" },
-  { keyword: "habit tracker", label: "habit tracker", emoji: "✅" },
   { keyword: "invoice scanner", label: "invoice scanner", emoji: "🧾" },
+  { keyword: "habit tracker", label: "habit tracker", emoji: "✅" },
   { keyword: "podcast player", label: "podcast player", emoji: "🎙️" },
-  { keyword: "pomodoro timer", label: "pomodoro timer", emoji: "⏱️" },
-  { keyword: "budget planner", label: "budget planner", emoji: "💰" },
 ];
 
 interface ShowcaseSample {
@@ -218,7 +216,7 @@ export function KeywordExplorer() {
   const undoTimeoutRef = useRef<number | null>(null);
   const shareInitRef = useRef(false);
 
-  const { account, signedIn, accountsLive, loading, openAuth, openUpgrade, syncVersion } =
+  const { account, signedIn, accountsLive, loading, openUpgrade, syncVersion } =
     useAccount();
   const explorerLimit =
     proEnabled() || accountsLive ? account.limits.explorerChecksPerDay : null;
@@ -783,13 +781,6 @@ export function KeywordExplorer() {
               You&apos;re using AppClimb as a <strong>guest</strong> &middot; Search is open
               {explorerLimit !== null ? ` (${explorerLimit} checks/day)` : ""} &middot; No login required
             </span>
-            <button
-              type="button"
-              className="guest-access-link"
-              onClick={() => openAuth("default")}
-            >
-              Sign in free &rarr;
-            </button>
           </div>
         )}
       </section>

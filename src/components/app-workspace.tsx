@@ -588,7 +588,7 @@ export function AppWorkspace() {
                 <Plus size={15} aria-hidden="true" />
                 Add App
               </button>
-            ) : accessReady && isGuest ? (
+            ) : accessReady && isGuest && view === "app" ? (
               <button
                 type="button"
                 className="tracker-button-primary tracker-topbar-add-btn"
@@ -705,7 +705,7 @@ export function AppWorkspace() {
                       onClick={() => openAuth("track")}
                     >
                       <LogIn size={16} aria-hidden="true" />
-                      Sign in free
+                      Sign in to track
                     </button>
                   ) : (
                     <>
