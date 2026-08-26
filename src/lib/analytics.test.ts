@@ -219,63 +219,99 @@ describe("recordPageview and queryAnalyticsSummary with AI intelligence", () => 
     expect(result).toBe(false);
   });
 
-  it("queries analytics summary and formats response with AI metrics", async () => {
+  it("queries analytics summary and formats response with AI metrics and user accounts", async () => {
     const prepareMock = vi.fn().mockImplementation((sql: string) => {
+      const handleFirst = async () => {
+        if (sql.includes("FROM users WHERE created_at")) return { count: 3 };
+        if (sql.includes("FROM users")) return { count: 5 };
+        if (sql.includes("FROM subscriptions WHERE plan = 'pro'")) return { count: 2 };
+        return { visitors: 42, views: 120 };
+      };
+
+      const handleAll = async () => {
+        if (sql.includes("FROM users u")) {
+          return {
+            results: [
+              {
+                id: "user-1",
+                email: "founder@appclimb.app",
+                name: "Founder",
+                google_sub: "google-123",
+                created_at: "2026-08-26 10:00:00",
+                last_seen_at: "2026-08-26 12:00:00",
+                plan: "pro",
+                subscription_status: "active",
+                sync_count: 2,
+              },
+            ],
+          };
+        }
+        if (sql.includes("FROM users u")) {
+          return {
+            results: [
+              {
+                id: "user-1",
+                email: "founder@appclimb.app",
+                name: "Founder",
+                google_sub: "google-123",
+                created_at: "2026-08-26 10:00:00",
+                last_seen_at: "2026-08-26 12:00:00",
+                plan: "pro",
+                subscription_status: "active",
+                sync_count: 2,
+              },
+            ],
+          };
+        }
+        if (sql.includes("GROUP BY country")) {
+          return { results: [{ country: "US", visitors: 30, views: 80 }, { country: "DE", visitors: 12, views: 40 }] };
+        }
+        if (sql.includes("GROUP BY referrer")) {
+          return {
+            results: [
+              { referrer: "chatgpt.com", views: 25 },
+              { referrer: "google.com", views: 60 },
+              { referrer: "perplexity.ai", views: 15 },
+              { referrer: "direct", views: 20 },
+            ],
+          };
+        }
+        if (sql.includes("LIKE '%chatgpt%'") && sql.includes("GROUP BY path")) {
+          return { results: [{ path: "/guides/keyword-research", visits: 20 }, { path: "/pricing", visits: 15 }] };
+        }
+        if (sql.includes("GROUP BY path")) {
+          return { results: [{ path: "/", views: 90, visitors: 35 }, { path: "/pricing", views: 30, visitors: 15 }] };
+        }
+        if (sql.includes("GROUP BY device")) {
+          return { results: [{ device: "desktop", count: 80 }, { device: "mobile", count: 40 }] };
+        }
+        if (sql.includes("ORDER BY date ASC")) {
+          return { results: [{ date: "2026-08-25", visitors: 20, views: 50, ai_views: 15 }, { date: "2026-08-26", visitors: 22, views: 70, ai_views: 25 }] };
+        }
+        if (sql.includes("ORDER BY timestamp DESC")) {
+          return {
+            results: [
+              {
+                timestamp: Math.floor(Date.now() / 1000) - 30,
+                country: "US",
+                path: "/",
+                referrer: "chatgpt.com",
+                device: "desktop",
+                browser: "chrome",
+              },
+            ],
+          };
+        }
+        return { results: [] };
+      };
+
       return {
         bind: vi.fn().mockReturnValue({
-          first: vi.fn().mockResolvedValue({ visitors: 42, views: 120 }),
-          all: vi.fn().mockImplementation(async () => {
-            if (sql.includes("country")) {
-              return { results: [{ country: "US", visitors: 30, views: 80 }, { country: "DE", visitors: 12, views: 40 }] };
-            }
-            if (sql.includes("referrer") && !sql.includes("LIKE '%chatgpt%'")) {
-              return {
-                results: [
-                  { referrer: "chatgpt.com", views: 25 },
-                  { referrer: "google.com", views: 60 },
-                  { referrer: "perplexity.ai", views: 15 },
-                  { referrer: "direct", views: 20 },
-                ],
-              };
-            }
-            if (sql.includes("LIKE '%chatgpt%'") && sql.includes("GROUP BY path")) {
-              return { results: [{ path: "/guides/keyword-research", visits: 20 }, { path: "/pricing", visits: 15 }] };
-            }
-            if (sql.includes("path")) {
-              return { results: [{ path: "/", views: 90, visitors: 35 }, { path: "/pricing", views: 30, visitors: 15 }] };
-            }
-            if (sql.includes("device")) {
-              return { results: [{ device: "desktop", count: 80 }, { device: "mobile", count: 40 }] };
-            }
-            if (sql.includes("ORDER BY date ASC")) {
-              return { results: [{ date: "2026-08-25", visitors: 20, views: 50, ai_views: 15 }, { date: "2026-08-26", visitors: 22, views: 70, ai_views: 25 }] };
-            }
-            return {
-              results: [
-                {
-                  timestamp: Math.floor(Date.now() / 1000) - 30,
-                  country: "US",
-                  path: "/",
-                  referrer: "chatgpt.com",
-                  device: "desktop",
-                  browser: "chrome",
-                },
-              ],
-            };
-          }),
+          first: vi.fn().mockImplementation(handleFirst),
+          all: vi.fn().mockImplementation(handleAll),
         }),
-        all: vi.fn().mockResolvedValue({
-          results: [
-            {
-              timestamp: Math.floor(Date.now() / 1000) - 30,
-              country: "US",
-              path: "/",
-              referrer: "chatgpt.com",
-              device: "desktop",
-              browser: "chrome",
-            },
-          ],
-        }),
+        first: vi.fn().mockImplementation(handleFirst),
+        all: vi.fn().mockImplementation(handleAll),
       };
     });
     const dbMock = { prepare: prepareMock } as unknown as D1Database;
@@ -298,6 +334,16 @@ describe("recordPageview and queryAnalyticsSummary with AI intelligence", () => 
     expect(summaryToday.recent).toHaveLength(1);
     expect(summaryToday.recent[0].isAi).toBe(true);
     expect(summaryToday.recent[0].aiName).toBe("ChatGPT");
+
+    // User Accounts Intelligence assertions
+    expect(summaryToday.userAnalytics.totalUsers).toBe(5);
+    expect(summaryToday.userAnalytics.newUsersInRange).toBe(3);
+    expect(summaryToday.userAnalytics.proUsersCount).toBe(2);
+    expect(summaryToday.userAnalytics.freeUsersCount).toBe(3);
+    expect(summaryToday.userAnalytics.conversionRate).toBe(7.1); // (3 / 42) * 100
+    expect(summaryToday.userAnalytics.recentUsers).toHaveLength(1);
+    expect(summaryToday.userAnalytics.recentUsers[0].email).toBe("founder@appclimb.app");
+    expect(summaryToday.userAnalytics.recentUsers[0].provider).toBe("google");
 
     const summary30d = await queryAnalyticsSummary(dbMock, "30d");
     expect(summary30d.range).toBe("30d");

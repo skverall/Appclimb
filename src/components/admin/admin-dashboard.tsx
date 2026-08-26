@@ -9,6 +9,7 @@ import {
   Cpu,
   Eye,
   Globe,
+  HardDrive,
   Laptop,
   Layers,
   Link as LinkIcon,
@@ -18,6 +19,8 @@ import {
   Smartphone,
   Sparkles,
   Tablet,
+  UserCheck,
+  UserPlus,
   Users,
 } from "lucide-react";
 
@@ -166,7 +169,7 @@ export function AdminDashboard() {
       {data && (
         <div className="admin-content-grid">
           {/* KPI Summary Cards */}
-          <div className="admin-kpis-grid admin-kpis-grid--5">
+          <div className="admin-kpis-grid admin-kpis-grid--6">
             <div className="admin-kpi-card">
               <div className="admin-kpi-icon admin-kpi-icon--blue">
                 <Users size={18} aria-hidden="true" />
@@ -189,6 +192,21 @@ export function AdminDashboard() {
                   {data.totalVisitors > 0
                     ? `${(data.totalPageviews / data.totalVisitors).toFixed(1)} views / visitor`
                     : "0 views / visitor"}
+                </span>
+              </div>
+            </div>
+
+            <div className="admin-kpi-card">
+              <div className="admin-kpi-icon admin-kpi-icon--teal">
+                <UserCheck size={18} aria-hidden="true" />
+              </div>
+              <div className="admin-kpi-body">
+                <span className="admin-kpi-label">Registered Users</span>
+                <strong className="admin-kpi-val">
+                  {data.userAnalytics?.totalUsers?.toLocaleString() ?? 0}
+                </strong>
+                <span className="admin-kpi-hint">
+                  +{data.userAnalytics?.newUsersInRange ?? 0} in period · {data.userAnalytics?.conversionRate ?? 0}% conv
                 </span>
               </div>
             </div>
@@ -452,6 +470,93 @@ export function AdminDashboard() {
                 </div>
               )}
             </div>
+          </div>
+
+          {/* User Accounts & Registration Intelligence */}
+          <div className="admin-card admin-users-card">
+            <div className="admin-card-header">
+              <div className="admin-card-title">
+                <UserPlus size={16} className="text-teal-600" aria-hidden="true" />
+                <h3>User Accounts & Signups</h3>
+              </div>
+              <div className="admin-users-header-badges">
+                <span className="user-stat-badge">
+                  Total Users: <strong>{data.userAnalytics?.totalUsers ?? 0}</strong>
+                </span>
+                <span className="user-stat-badge">
+                  Free: <strong>{data.userAnalytics?.freeUsersCount ?? 0}</strong>
+                </span>
+                <span className="user-stat-badge">
+                  Pro: <strong>{data.userAnalytics?.proUsersCount ?? 0}</strong>
+                </span>
+                <span className="user-stat-badge">
+                  Signup Rate: <strong>{data.userAnalytics?.conversionRate ?? 0}%</strong>
+                </span>
+              </div>
+            </div>
+
+            {!data.userAnalytics || data.userAnalytics.recentUsers.length === 0 ? (
+              <div className="admin-empty-section">
+                <Users size={24} className="text-muted-foreground mb-1" aria-hidden="true" />
+                <strong className="text-foreground text-sm">No registered user accounts yet</strong>
+                <p className="text-xs text-muted-foreground max-w-md text-center mt-1">
+                  Visitors currently browse in 100% Free Guest Mode (8 searches/day without signup). When a user signs in with Google or Email (to track apps or chat with the AI assistant), their profile, plan, and cloud sync status will appear here in real time.
+                </p>
+              </div>
+            ) : (
+              <div className="admin-users-table">
+                {data.userAnalytics.recentUsers.map((user) => (
+                  <div key={user.id} className="admin-user-row">
+                    <div className="user-avatar-circle" aria-hidden="true">
+                      {user.name ? user.name.charAt(0).toUpperCase() : user.email.charAt(0).toUpperCase()}
+                    </div>
+
+                    <div className="user-info-wrap">
+                      <span className="user-email-text" title={user.email}>
+                        {user.email}
+                      </span>
+                      <span className="user-name-text">
+                        {user.name || "No display name"}
+                      </span>
+                    </div>
+
+                    <div>
+                      {user.provider === "google" ? (
+                        <span className="user-badge-provider user-badge-provider--google">
+                          🔵 Google
+                        </span>
+                      ) : (
+                        <span className="user-badge-provider user-badge-provider--email">
+                          ✉️ Magic Link
+                        </span>
+                      )}
+                    </div>
+
+                    <div>
+                      {user.plan === "pro" ? (
+                        <span className="user-badge-plan user-badge-plan--pro">
+                          ⭐ Pro
+                        </span>
+                      ) : (
+                        <span className="user-badge-plan user-badge-plan--free">
+                          Free
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="user-sync-badge">
+                      <HardDrive size={13} aria-hidden="true" />
+                      <span>{user.syncCount > 0 ? `${user.syncCount} synced` : "Local only"}</span>
+                    </div>
+
+                    <div className="user-time-wrap">
+                      <span className="user-time-active">Active {user.lastSeenAgo}</span>
+                      <span>Joined {user.timeAgo}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* 2-Column Split: Top Pages & Devices */}

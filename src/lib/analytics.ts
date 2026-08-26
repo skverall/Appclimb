@@ -30,6 +30,29 @@ export interface AiTrafficSummary {
   }>;
 }
 
+export interface RegisteredUserSummary {
+  id: string;
+  email: string;
+  name: string | null;
+  provider: "google" | "email";
+  plan: string;
+  subscriptionStatus: string;
+  createdAt: string;
+  timeAgo: string;
+  lastSeenAt: string;
+  lastSeenAgo: string;
+  syncCount: number;
+}
+
+export interface UserAnalyticsSummary {
+  totalUsers: number;
+  newUsersInRange: number;
+  proUsersCount: number;
+  freeUsersCount: number;
+  conversionRate: number;
+  recentUsers: RegisteredUserSummary[];
+}
+
 export interface AnalyticsSummary {
   range: "today" | "7d" | "30d";
   totalVisitors: number;
@@ -37,6 +60,7 @@ export interface AnalyticsSummary {
   topCountry: { code: string; name: string; flag: string; count: number } | null;
   topReferrer: { name: string; count: number } | null;
   aiTraffic: AiTrafficSummary;
+  userAnalytics: UserAnalyticsSummary;
   countries: Array<{
     code: string;
     name: string;
@@ -320,6 +344,35 @@ const COUNTRY_NAMES: Record<string, string> = {
   KR: "South Korea",
   ID: "Indonesia",
   PL: "Poland",
+  VN: "Vietnam",
+  PH: "Philippines",
+  TH: "Thailand",
+  MY: "Malaysia",
+  MX: "Mexico",
+  AR: "Argentina",
+  IL: "Israel",
+  NG: "Nigeria",
+  EG: "Egypt",
+  ZA: "South Africa",
+  NZ: "New Zealand",
+  AT: "Austria",
+  BE: "Belgium",
+  NO: "Norway",
+  DK: "Denmark",
+  FI: "Finland",
+  PT: "Portugal",
+  IE: "Ireland",
+  GR: "Greece",
+  CZ: "Czech Republic",
+  RO: "Romania",
+  HU: "Hungary",
+  PK: "Pakistan",
+  BD: "Bangladesh",
+  CO: "Colombia",
+  CL: "Chile",
+  PE: "Peru",
+  HK: "Hong Kong",
+  TW: "Taiwan",
 };
 
 export function countryName(code: string): string {
@@ -647,6 +700,89 @@ export async function queryAnalyticsSummary(
     };
   });
 
+  // 9. User Accounts & Registration Intelligence
+  let totalUsers = 0;
+  let newUsersInRange = 0;
+  let proUsersCount = 0;
+  let recentUsers: RegisteredUserSummary[] = [];
+
+  try {
+    const totalUsersRes = await db
+      .prepare(`SELECT COUNT(*) as count FROM users`)
+      .first<{ count: number }>();
+    totalUsers = totalUsersRes?.count || 0;
+
+    const newUsersRes = await db
+      .prepare(`SELECT COUNT(*) as count FROM users WHERE created_at >= ?`)
+      .bind(startDateStr)
+      .first<{ count: number }>();
+    newUsersInRange = newUsersRes?.count || 0;
+
+    const proUsersRes = await db
+      .prepare(
+        `SELECT COUNT(*) as count FROM subscriptions WHERE plan = 'pro' AND status = 'active'`,
+      )
+      .first<{ count: number }>();
+    proUsersCount = proUsersRes?.count || 0;
+
+    const recentUsersRes = await db
+      .prepare(
+        `SELECT 
+           u.id,
+           u.email,
+           u.name,
+           u.google_sub,
+           u.created_at,
+           u.last_seen_at,
+           COALESCE(s.plan, 'free') as plan,
+           COALESCE(s.status, 'free') as subscription_status,
+           (SELECT COUNT(*) FROM sync_blobs sb WHERE sb.user_id = u.id) as sync_count
+         FROM users u
+         LEFT JOIN subscriptions s ON s.user_id = u.id
+         ORDER BY u.created_at DESC
+         LIMIT 15`,
+      )
+      .all<{
+        id: string;
+        email: string;
+        name: string | null;
+        google_sub: string | null;
+        created_at: string;
+        last_seen_at: string;
+        plan: string;
+        subscription_status: string;
+        sync_count: number;
+      }>();
+
+    recentUsers = (recentUsersRes?.results || []).map((u) => {
+      const cStr = u.created_at.includes("T") ? u.created_at : `${u.created_at.replace(" ", "T")}Z`;
+      const lStr = u.last_seen_at.includes("T") ? u.last_seen_at : `${u.last_seen_at.replace(" ", "T")}Z`;
+      const createdTs = Math.floor(new Date(cStr).getTime() / 1000) || nowSecs;
+      const lastSeenTs = Math.floor(new Date(lStr).getTime() / 1000) || nowSecs;
+
+      return {
+        id: u.id,
+        email: u.email,
+        name: u.name,
+        provider: u.google_sub ? "google" : "email",
+        plan: u.plan,
+        subscriptionStatus: u.subscription_status,
+        createdAt: u.created_at,
+        timeAgo: timeAgo(createdTs, nowSecs),
+        lastSeenAt: u.last_seen_at,
+        lastSeenAgo: timeAgo(lastSeenTs, nowSecs),
+        syncCount: u.sync_count || 0,
+      };
+    });
+  } catch (userErr) {
+    // If users table is not queried or fails, gracefully fallback
+    console.error("Failed to query user accounts for analytics:", userErr);
+  }
+
+  const freeUsersCount = Math.max(0, totalUsers - proUsersCount);
+  const conversionRate =
+    totalVisitors > 0 ? Math.round((newUsersInRange / totalVisitors) * 1000) / 10 : 0;
+
   return {
     range,
     totalVisitors,
@@ -658,6 +794,14 @@ export async function queryAnalyticsSummary(
       percentage: aiPercentage,
       models: aiModels,
       topPages: topAiPages,
+    },
+    userAnalytics: {
+      totalUsers,
+      newUsersInRange,
+      proUsersCount,
+      freeUsersCount,
+      conversionRate,
+      recentUsers,
     },
     countries,
     referrers,
