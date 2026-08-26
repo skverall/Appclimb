@@ -706,7 +706,20 @@ export function AppWorkspace() {
           </section>
         ) : view === "explorer" || !activeApp ? (
           <>
-            <KeywordExplorer />
+            <KeywordExplorer
+              onTrackApp={(app) => {
+                const catalog: CatalogApp = {
+                  appStoreId: String(app.appStoreId),
+                  name: app.name,
+                  bundleId: "",
+                  developer: app.developer || "",
+                  genre: app.genre || "Productivity",
+                  iconUrl: app.iconUrl || "",
+                  storeUrl: app.storeUrl || "",
+                };
+                void handleSelectCatalogApp(catalog, store.activeStorefront || "US");
+              }}
+            />
             {accessReady && store.apps.length === 0 && (
               <section
                 className="tracker-cta-strip marketing-container"

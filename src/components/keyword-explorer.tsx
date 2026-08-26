@@ -171,7 +171,18 @@ const SHOWCASE_SAMPLES: ShowcaseSample[] = [
 type SortKey = "keyword" | "popularity" | "difficulty" | "results" | "trend";
 type ExplorerFilterTab = "all" | "golden" | "official" | "high_demand" | "low_diff";
 
-export function KeywordExplorer() {
+export function KeywordExplorer({
+  onTrackApp,
+}: {
+  onTrackApp?: (app: {
+    appStoreId: number;
+    name: string;
+    iconUrl?: string;
+    developer?: string;
+    genre?: string;
+    storeUrl: string;
+  }) => void;
+} = {}) {
   const { showToast } = useToast();
   const [country, setCountry] = useState<string>("US");
   const [query, setQuery] = useState("");
@@ -1754,6 +1765,7 @@ export function KeywordExplorer() {
                   })
                 }
                 onAnalyze={(keyword) => void analyze(keyword)}
+                onTrackApp={onTrackApp}
               />
             )}
           </div>

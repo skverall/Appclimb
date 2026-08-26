@@ -6533,14 +6533,36 @@ img {
 
 .keyword-top-apps li {
   display: grid;
-  grid-template-columns: 18px 40px minmax(0, 1fr) auto;
-  gap: 10px;
+  grid-template-columns: 18px 40px minmax(0, 1fr) auto auto;
+  gap: 8px;
   align-items: center;
   padding: 6px 8px;
   background: var(--n-25);
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
   transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.top-app-track-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 8px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--teal-200);
+  background: var(--teal-50);
+  color: var(--teal-700);
+  font-size: 11px;
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.top-app-track-btn:hover {
+  background: var(--teal-500);
+  color: #ffffff;
+  border-color: var(--teal-600);
 }
 
 .keyword-top-apps li:hover {

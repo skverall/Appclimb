@@ -44,6 +44,7 @@ export function KeywordDetail({
   onClose,
   onRefresh,
   onAnalyze,
+  onTrackApp,
 }: {
   keyword: string;
   countryCode: string;
@@ -56,6 +57,14 @@ export function KeywordDetail({
   onClose: () => void;
   onRefresh: () => void;
   onAnalyze: (keyword: string) => void;
+  onTrackApp?: (app: {
+    appStoreId: number;
+    name: string;
+    iconUrl?: string;
+    developer?: string;
+    genre?: string;
+    storeUrl: string;
+  }) => void;
 }) {
   const { showToast } = useToast();
   const [copied, setCopied] = useState(false);
@@ -324,6 +333,25 @@ export function KeywordDetail({
                           : "no ratings"}
                       </small>
                     </span>
+                    {onTrackApp && (
+                      <button
+                        type="button"
+                        className="top-app-track-btn"
+                        onClick={() =>
+                          onTrackApp({
+                            appStoreId: app.appStoreId,
+                            name: app.name,
+                            iconUrl: app.iconUrl,
+                            developer: app.developer,
+                            genre: app.genre,
+                            storeUrl: app.storeUrl,
+                          })
+                        }
+                        title={`Track ${app.name} rankings`}
+                      >
+                        + Track
+                      </button>
+                    )}
                   </li>
                 ))}
               </ol>
