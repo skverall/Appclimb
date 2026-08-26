@@ -51,6 +51,15 @@ export const PUBLIC_PAGES = [
     lastModified: SITE_UPDATED,
   },
   {
+    path: "/blog/astro-aso-alternative-2026",
+    title: "Astro (tryastro.app) Alternative: Best Free App Store Keyword Tools in 2026",
+    description:
+      "Looking for an alternative to Astro (tryastro.app)? Compare pricing, web vs native Mac workflows, official Apple Ads popularity, and free tiers for indie iOS developers.",
+    changeFrequency: "monthly" as const,
+    priority: 0.9,
+    lastModified: SITE_UPDATED,
+  },
+  {
     path: "/blog/sensor-tower-alternatives-free-2026",
     title: "Free App Store Keyword Tools in 2026: What Actually Works",
     description:
@@ -131,6 +140,16 @@ export const PUBLIC_PAGES = [
 ] as const;
 
 export const ARTICLES = [
+  {
+    slug: "astro-aso-alternative-2026",
+    title: "Astro (tryastro.app) Alternative: Best Free App Store Keyword Tools in 2026",
+    description:
+      "A deep, honest comparison of Astro vs AppClimb: web vs Mac app, $8/mo vs $108/year upfront, official Apple Ads popularity, and AI metadata tools.",
+    category: "ASO Tools",
+    published: "2026-08-26",
+    updated: "2026-08-26",
+    readingTime: "7 min read",
+  },
   {
     slug: "sensor-tower-alternatives-free-2026",
     title: "Free App Store Keyword Tools in 2026: What Actually Works",
