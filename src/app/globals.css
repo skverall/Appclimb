@@ -1186,6 +1186,10 @@ img {
   padding: 0 0 40px;
 }
 
+.app-workspace .marketing-container {
+  width: min(1440px, 100% - 2 * 24px);
+}
+
 .tracker-workspace-topbar {
   display: flex;
   align-items: center;
@@ -1501,7 +1505,7 @@ img {
 }
 
 .tracker-table {
-  min-width: 1040px;
+  min-width: 1310px;
 }
 
 .keyword-table th {
@@ -1750,33 +1754,41 @@ img {
 
 /* Top App Icons in Table Row */
 .tracker-col-apps {
-  min-width: 140px;
+  min-width: 155px;
 }
 
 .tracker-top-icons {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
+  gap: 4px;
   vertical-align: middle;
+  flex-wrap: nowrap;
+  max-width: 100%;
 }
 
 .tracker-top-icon {
   display: inline-flex;
-  border-radius: 4px;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 5px;
   overflow: hidden;
   border: 1px solid var(--line);
   background: var(--n-50);
   flex-shrink: 0;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 
 .tracker-top-icon img {
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   object-fit: cover;
   display: block;
 }
 
-.tracker-top-icon-more {
+.tracker-top-icon-more,
+.tracker-top-more {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1785,17 +1797,19 @@ img {
   color: var(--ink-muted);
   padding: 0 4px;
   background: var(--n-100);
-  border-radius: 4px;
-  height: 20px;
+  border-radius: 5px;
+  height: 22px;
+  line-height: 1;
+  flex-shrink: 0;
 }
 
 .tracker-col-updated {
-  min-width: 135px;
+  min-width: 140px;
   text-align: left;
 }
 
 .tracker-updated-time {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--ink-secondary);
   font-variant-numeric: tabular-nums;
   display: inline-block;
@@ -1803,11 +1817,11 @@ img {
 }
 
 .tracker-col-notes {
-  min-width: 104px;
+  min-width: 140px;
 }
 
 .tracker-col-spark {
-  min-width: 85px;
+  min-width: 95px;
 }
 
 .tracker-col-actions {
@@ -4312,6 +4326,7 @@ img {
   border-radius: var(--radius-pill);
   background: var(--card);
   box-shadow: var(--shadow-xs);
+  cursor: pointer;
   transition: border-color 0.12s ease;
 }
 
@@ -7988,6 +8003,13 @@ img {
   align-items: center;
   gap: 4px;
   font-weight: 700;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--n-50);
+  border: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
 }
 
 .pos-icon--crown {

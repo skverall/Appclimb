@@ -1096,12 +1096,12 @@ export function KeywordExplorer() {
                 <table className="keyword-table">
                   <colgroup>
                     <col style={{ width: 44 }} />
-                    <col style={{ width: "auto", minWidth: 140 }} />
-                    <col style={{ width: 120 }} />
-                    <col style={{ width: 116 }} />
+                    <col style={{ width: "auto", minWidth: 160 }} />
+                    <col style={{ width: 130 }} />
+                    <col style={{ width: 125 }} />
                     <col style={{ width: 100 }} />
-                    <col style={{ width: 84 }} />
-                    <col style={{ width: 50 }} />
+                    <col style={{ width: 90 }} />
+                    <col style={{ width: 54 }} />
                   </colgroup>
                   <thead>
                     <tr>

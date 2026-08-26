@@ -982,17 +982,17 @@ export function TrackerView({
               <div className="tracker-table-scroll">
               <table className="keyword-table tracker-table">
                 <colgroup>
-                  <col style={{ width: "auto", minWidth: 160 }} />
-                  <col style={{ width: 76 }} />
-                  <col style={{ width: 120 }} />
-                  <col style={{ width: 110 }} />
-                  <col style={{ width: 88 }} />
-                  <col style={{ width: 88 }} />
-                  <col style={{ width: 88 }} />
-                  <col style={{ width: 110 }} />
-                  <col style={{ width: 100 }} />
-                  <col style={{ width: 130 }} />
-                  <col style={{ width: 68 }} />
+                  <col style={{ width: "auto", minWidth: 170 }} />
+                  <col style={{ width: 80 }} />
+                  <col style={{ width: 125 }} />
+                  <col style={{ width: 125 }} />
+                  <col style={{ width: 95 }} />
+                  <col style={{ width: 105 }} />
+                  <col style={{ width: 95 }} />
+                  <col style={{ width: 160 }} />
+                  <col style={{ width: 145 }} />
+                  <col style={{ width: 145 }} />
+                  <col style={{ width: 72 }} />
                 </colgroup>
                 <thead>
                   <tr>
