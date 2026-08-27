@@ -3,31 +3,13 @@
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 
-export const ADMIN_OPTOUT_KEY = "appclimb:admin:optout";
+import {
+  ADMIN_OPTOUT_KEY,
+  isLocalAdminOptedOut,
+  setLocalAdminOptOut,
+} from "@/lib/analytics-client";
 
-export function isLocalAdminOptedOut(): boolean {
-  if (typeof window === "undefined") return false;
-  try {
-    return window.localStorage.getItem(ADMIN_OPTOUT_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
-
-export function setLocalAdminOptOut(optOut: boolean): void {
-  if (typeof window === "undefined") return;
-  try {
-    if (optOut) {
-      window.localStorage.setItem(ADMIN_OPTOUT_KEY, "1");
-      document.cookie = "appclimb_admin_optout=1; path=/; max-age=31536000; SameSite=Lax";
-    } else {
-      window.localStorage.removeItem(ADMIN_OPTOUT_KEY);
-      document.cookie = "appclimb_admin_optout=; path=/; max-age=0; SameSite=Lax";
-    }
-  } catch {
-    // Ignore storage issues
-  }
-}
+export { ADMIN_OPTOUT_KEY, isLocalAdminOptedOut, setLocalAdminOptOut };
 
 export function AnalyticsBeacon() {
   const pathname = usePathname();

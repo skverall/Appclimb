@@ -4899,6 +4899,78 @@ img {
   color: var(--ink-muted);
 }
 
+/* Guest value nudge — shown after the first successful keyword analysis */
+.account-nudge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--teal-600);
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--teal-600) 6%, transparent);
+  color: var(--ink);
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
+}
+
+.account-nudge svg {
+  color: var(--teal-600);
+  flex-shrink: 0;
+}
+
+.account-nudge span {
+  flex: 1;
+}
+
+.account-nudge strong {
+  font-weight: 600;
+}
+
+.account-nudge-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.account-nudge-dismiss {
+  font-size: var(--text-3xs);
+  color: var(--ink-muted);
+  padding: 6px 8px;
+  border-radius: var(--radius-md);
+}
+
+.account-nudge-dismiss:hover {
+  color: var(--ink);
+}
+
+/* Auth modal benefit list */
+.auth-benefits {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: var(--teal-soft);
+  list-style: none;
+  font-size: var(--text-xs);
+  color: var(--ink-secondary);
+}
+
+.auth-benefits li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.auth-benefits li::before {
+  content: "✓";
+  color: var(--teal-600);
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
 .ai-chat-upgrade-link {
   color: var(--teal-600);
   font-weight: 600;
@@ -9068,6 +9140,47 @@ img {
   font-size: 11px;
   color: var(--ink-muted);
   font-weight: var(--weight-medium);
+}
+
+/* Signup funnel (admin) */
+.admin-funnel-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-funnel-step {
+  display: grid;
+  grid-template-columns: 170px 1fr 44px;
+  align-items: center;
+  gap: 10px;
+}
+
+.admin-funnel-label {
+  font-size: 12px;
+  color: var(--ink-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-funnel-bar-wrap {
+  height: 10px;
+  border-radius: 5px;
+  background: var(--n-100, #f1f1f4);
+  overflow: hidden;
+}
+
+.admin-funnel-bar {
+  height: 100%;
+  border-radius: 5px;
+  background: var(--teal-500);
+}
+
+.admin-funnel-val {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  color: var(--ink);
 }
 
 /* Timeline Chart */

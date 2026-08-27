@@ -27,6 +27,7 @@ import {
   resolveAccessRole,
 } from "@/lib/access";
 import { proEnabled } from "@/lib/flags";
+import { trackAppEvent } from "@/lib/analytics-client";
 import {
   clearLocalWorkspaceData,
   explorerHasData,
@@ -322,9 +323,18 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const role = resolveAccessRole({ signedIn, isPro });
 
   const openAuth = useCallback((intent: AuthIntent = "default") => {
+    trackAppEvent("signup_intent_shown", { intent }, { oncePerDay: intent });
     setAuthIntent(intent);
     setAuthOpen(true);
   }, []);
+
+  // One row per browser once a sign-in actually completes (per visitor, ever).
+  const authCompletedRef = useRef(false);
+  useEffect(() => {
+    if (!signedIn || authCompletedRef.current) return;
+    authCompletedRef.current = true;
+    trackAppEvent("auth_completed", null, { onceEver: "default" });
+  }, [signedIn]);
 
   const requireAccount = useCallback(
     (intent: AuthIntent = "default") => {

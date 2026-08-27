@@ -25,6 +25,7 @@ import {
 
 import { useAccount } from "@/components/account-provider";
 import { proEnabled } from "@/lib/flags";
+import { trackAppEvent } from "@/lib/analytics-client";
 import { notifySyncChange } from "@/lib/sync-client";
 import { consumeDayUsage, EXPLORER_DAY_KEY, peekDayUsage, refundDayUsage } from "@/lib/usage";
 import { useToast } from "@/components/toast";
@@ -175,7 +176,7 @@ export function KeywordExplorer({
   onTrackApp,
 }: {
   onTrackApp?: (app: {
-    appStoreId: number;
+    appStoreId: string;
     name: string;
     iconUrl?: string;
     developer?: string;
@@ -227,7 +228,7 @@ export function KeywordExplorer({
   const undoTimeoutRef = useRef<number | null>(null);
   const shareInitRef = useRef(false);
 
-  const { account, signedIn, accountsLive, loading, openUpgrade, syncVersion } =
+  const { account, signedIn, accountsLive, loading, openAuth, openUpgrade, syncVersion } =
     useAccount();
   const explorerLimit =
     proEnabled() || accountsLive ? account.limits.explorerChecksPerDay : null;
@@ -236,6 +237,24 @@ export function KeywordExplorer({
   const limitHit =
     explorerLimit !== null &&
     peekDayUsage(window.localStorage, EXPLORER_DAY_KEY) >= explorerLimit;
+
+  // Guest value nudge: one chance per browser until dismissed.
+  const NUDGE_DISMISS_KEY = "appclimb:nudge:v1:dismissed";
+  const [nudgeVisible, setNudgeVisible] = useState(false);
+  const isNudgeDismissed = () => {
+    try {
+      return window.localStorage.getItem(NUDGE_DISMISS_KEY) === "1";
+    } catch {
+      return true;
+    }
+  };
+
+  // Fire once per day while the guest is hard-stopped by the free limit.
+  useEffect(() => {
+    if (limitHit && isGuest) {
+      trackAppEvent("explorer_limit_hit", null, { oncePerDay: "default" });
+    }
+  }, [limitHit, isGuest]);
 
   const countryLabel =
     SUPPORTED_COUNTRIES.find((item) => item.code === country)?.label ?? country;
@@ -320,6 +339,13 @@ export function KeywordExplorer({
         setMetrics((previous) => new Map(previous).set(clean, nextMetrics));
         setRecords((previous) => new Map(previous).set(clean, record));
         if (options.open !== false) setSelected(clean);
+        // The "aha" moment: first completed analysis, and the one chance to
+        // pitch the free account while the value is fresh.
+        trackAppEvent("keyword_analyzed_first", null, { onceEver: "default" });
+        if (isGuest && !isNudgeDismissed()) {
+          setNudgeVisible(true);
+          trackAppEvent("account_nudge_shown", null, { onceEver: "default" });
+        }
       } catch (error) {
         if (!alreadyTracked) {
           setKeywords(
@@ -346,7 +372,7 @@ export function KeywordExplorer({
         setSuggestionsOpen(false);
       }
     },
-    [busy, country, explorerLimit],
+    [busy, country, explorerLimit, isGuest],
   );
 
   useEffect(() => {
@@ -937,8 +963,9 @@ export function KeywordExplorer({
             <Sparkles size={16} aria-hidden="true" />
             <span>
               You&apos;ve used your{" "}
-              <strong>{explorerLimit} free keyword checks</strong> for today.
-              Upgrade to Pro for unlimited checks, sync, and 90-day history.
+              <strong>{explorerLimit} free keyword checks</strong> for today —
+              they reset tomorrow. Upgrade to Pro for unlimited checks, sync,
+              and 90-day history.
             </span>
             <button
               type="button"
@@ -947,6 +974,44 @@ export function KeywordExplorer({
             >
               Upgrade to Pro
             </button>
+          </div>
+        )}
+
+        {nudgeVisible && (
+          <div className="account-nudge" role="status">
+            <Star size={16} aria-hidden="true" />
+            <span>
+              <strong>Keep what you just found.</strong> A free account tracks
+              1 app with 25 keywords, adds the ASO assistant, and keeps 30 days
+              of history — no card needed.
+            </span>
+            <div className="account-nudge-actions">
+              <button
+                type="button"
+                className="tracker-button-primary"
+                onClick={() => {
+                  trackAppEvent("account_nudge_cta", null, { onceEver: "default" });
+                  setNudgeVisible(false);
+                  openAuth("track");
+                }}
+              >
+                Create free account
+              </button>
+              <button
+                type="button"
+                className="account-nudge-dismiss"
+                onClick={() => {
+                  try {
+                    window.localStorage.setItem(NUDGE_DISMISS_KEY, "1");
+                  } catch {
+                    // Ignore storage failures.
+                  }
+                  setNudgeVisible(false);
+                }}
+              >
+                Not now
+              </button>
+            </div>
           </div>
         )}
 

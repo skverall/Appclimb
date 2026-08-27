@@ -8,6 +8,7 @@ import {
   Clock,
   Cpu,
   Eye,
+  Filter,
   Globe,
   HardDrive,
   Laptop,
@@ -252,6 +253,48 @@ export function AdminDashboard() {
               <span className="admin-kpi-hint">
                 {data.topReferrer ? `${data.topReferrer.count} views` : "Direct navigation"}
               </span>
+            </div>
+          </div>
+
+          {/* Signup funnel — where visitors become accounts */}
+          <div className="admin-card">
+            <div className="admin-card-header">
+              <div className="admin-card-title">
+                <Filter size={16} aria-hidden="true" />
+                <h3>Signup Funnel</h3>
+              </div>
+              <span className="admin-card-subtitle">
+                Unique visitors per step · guest → free account
+              </span>
+            </div>
+            <div className="admin-funnel-grid">
+              {(() => {
+                const f = data.signupFunnel;
+                const steps: Array<{ label: string; value: number }> = [
+                  { label: "First keyword analysis", value: f?.firstAnalyses ?? 0 },
+                  { label: "Auth modal opened", value: f?.signupIntents ?? 0 },
+                  { label: "Sign-in started", value: f?.authStarted ?? 0 },
+                  { label: "Signed in", value: f?.authCompleted ?? 0 },
+                  { label: "Nudge shown", value: f?.nudgeShown ?? 0 },
+                  { label: "Nudge clicked", value: f?.nudgeCta ?? 0 },
+                  { label: "Daily limit hit", value: f?.limitHits ?? 0 },
+                ];
+                const top = Math.max(steps[0].value, 1);
+                return steps.map((step) => (
+                  <div key={step.label} className="admin-funnel-step">
+                    <span className="admin-funnel-label">{step.label}</span>
+                    <div className="admin-funnel-bar-wrap">
+                      <div
+                        className="admin-funnel-bar"
+                        style={{
+                          width: `${Math.max((step.value / top) * 100, step.value > 0 ? 6 : 0)}%`,
+                        }}
+                      />
+                    </div>
+                    <strong className="admin-funnel-val">{step.value}</strong>
+                  </div>
+                ));
+              })()}
             </div>
           </div>
 

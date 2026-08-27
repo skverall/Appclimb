@@ -61,6 +61,7 @@ export interface AnalyticsSummary {
   topReferrer: { name: string; count: number } | null;
   aiTraffic: AiTrafficSummary;
   userAnalytics: UserAnalyticsSummary;
+  signupFunnel: SignupFunnelSummary;
   countries: Array<{
     code: string;
     name: string;
@@ -394,6 +395,159 @@ export async function generateVisitorHash(
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   const hex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
   return hex.slice(0, 16);
+}
+
+/**
+ * Whitelist of product events (signup funnel). Keeping this closed stops the
+ * table from filling with junk names from a stray client or script.
+ */
+export const APP_EVENT_NAMES = [
+  "signup_intent_shown",
+  "auth_started",
+  "auth_completed",
+  "explorer_limit_hit",
+  "keyword_analyzed_first",
+  "account_nudge_shown",
+  "account_nudge_cta",
+] as const;
+
+export type AppEventName = (typeof APP_EVENT_NAMES)[number];
+
+export function isAppEventName(name: unknown): name is AppEventName {
+  return (
+    typeof name === "string" &&
+    (APP_EVENT_NAMES as readonly string[]).includes(name)
+  );
+}
+
+export interface AppEventInput {
+  name: AppEventName;
+  path: string;
+  userAgent: string;
+  ip: string;
+  country: string;
+  screenWidth?: number;
+  meta?: Record<string, string | number | boolean> | null;
+}
+
+/** Record a product event in D1 (same anonymity model as pageviews). */
+export async function recordEvent(
+  db: D1Database,
+  input: AppEventInput,
+): Promise<boolean> {
+  if (isBotUserAgent(input.userAgent)) return false;
+
+  const now = new Date();
+  const dateStr = now.toISOString().slice(0, 10);
+  const timestamp = Math.floor(now.getTime() / 1000);
+  const visitorHash = await generateVisitorHash(
+    input.ip,
+    input.userAgent,
+    dateStr,
+  );
+  const country = (input.country || "US").toUpperCase().slice(0, 2);
+  const device = classifyDevice(input.userAgent, input.screenWidth);
+
+  let path = input.path.trim();
+  if (!path.startsWith("/")) path = `/${path}`;
+  path = path.split("?")[0].split("#")[0];
+  if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
+  if (path.length === 0) path = "/";
+
+  let meta = "{}";
+  if (input.meta && typeof input.meta === "object") {
+    try {
+      meta = JSON.stringify(input.meta).slice(0, 200);
+    } catch {
+      meta = "{}";
+    }
+  }
+
+  try {
+    await db
+      .prepare(
+        `INSERT INTO analytics_events (date, timestamp, visitor_hash, name, path, country, device, meta)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(dateStr, timestamp, visitorHash, input.name, path, country, device, meta)
+      .run();
+    return true;
+  } catch (err) {
+    console.error("Failed to record event:", err);
+    return false;
+  }
+}
+
+export interface SignupFunnelSummary {
+  /** Unique visitors who opened the auth modal for any reason. */
+  signupIntents: number;
+  /** Unique visitors who actually started a sign-in (Google or email). */
+  authStarted: number;
+  /** Unique visitors who finished sign-in. */
+  authCompleted: number;
+  /** Unique visitors who hit the free daily checks limit. */
+  limitHits: number;
+  /** Unique guests who completed their first keyword analysis. */
+  firstAnalyses: number;
+  /** Unique guests shown the account value nudge. */
+  nudgeShown: number;
+  /** Unique guests who clicked the nudge CTA. */
+  nudgeCta: number;
+}
+
+/** Unique visitors per funnel event inside the analytics range. */
+export async function querySignupFunnel(
+  db: D1Database,
+  range: "today" | "7d" | "30d" = "7d",
+): Promise<SignupFunnelSummary> {
+  const now = new Date();
+  const todayStr = now.toISOString().slice(0, 10);
+
+  let startDateStr = todayStr;
+  if (range === "7d") {
+    startDateStr = new Date(now.getTime() - 7 * 86400000)
+      .toISOString()
+      .slice(0, 10);
+  } else if (range === "30d") {
+    startDateStr = new Date(now.getTime() - 30 * 86400000)
+      .toISOString()
+      .slice(0, 10);
+  }
+
+  const zero: SignupFunnelSummary = {
+    signupIntents: 0,
+    authStarted: 0,
+    authCompleted: 0,
+    limitHits: 0,
+    firstAnalyses: 0,
+    nudgeShown: 0,
+    nudgeCta: 0,
+  };
+
+  try {
+    const { results } = await db
+      .prepare(
+        `SELECT name, count(DISTINCT visitor_hash) AS visitors
+         FROM analytics_events
+         WHERE date >= ? AND name IN ('signup_intent_shown','auth_started','auth_completed','explorer_limit_hit','keyword_analyzed_first','account_nudge_shown','account_nudge_cta')
+         GROUP BY name`,
+      )
+      .bind(startDateStr)
+      .all<{ name: string; visitors: number }>();
+
+    for (const row of results ?? []) {
+      if (row.name === "signup_intent_shown") zero.signupIntents = row.visitors;
+      else if (row.name === "auth_started") zero.authStarted = row.visitors;
+      else if (row.name === "auth_completed") zero.authCompleted = row.visitors;
+      else if (row.name === "explorer_limit_hit") zero.limitHits = row.visitors;
+      else if (row.name === "keyword_analyzed_first") zero.firstAnalyses = row.visitors;
+      else if (row.name === "account_nudge_shown") zero.nudgeShown = row.visitors;
+      else if (row.name === "account_nudge_cta") zero.nudgeCta = row.visitors;
+    }
+  } catch (err) {
+    console.error("Failed to query signup funnel:", err);
+  }
+  return zero;
 }
 
 /** Record a pageview in D1 */
@@ -783,6 +937,8 @@ export async function queryAnalyticsSummary(
   const conversionRate =
     totalVisitors > 0 ? Math.round((newUsersInRange / totalVisitors) * 1000) / 10 : 0;
 
+  const signupFunnel = await querySignupFunnel(db, range);
+
   return {
     range,
     totalVisitors,
@@ -803,6 +959,7 @@ export async function queryAnalyticsSummary(
       conversionRate,
       recentUsers,
     },
+    signupFunnel,
     countries,
     referrers,
     pages,

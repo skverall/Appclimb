@@ -717,7 +717,7 @@ export function AppWorkspace() {
                   iconUrl: app.iconUrl || "",
                   storeUrl: app.storeUrl || "",
                 };
-                void handleSelectCatalogApp(catalog, store.activeStorefront || "US");
+                void handleSelectCatalogApp(catalog, activeApp?.country || "US");
               }}
             />
             {accessReady && store.apps.length === 0 && (

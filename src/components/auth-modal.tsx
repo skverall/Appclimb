@@ -6,6 +6,7 @@ import { Loader2, Mail, X } from "lucide-react";
 import { useModalFocus } from "@/components/use-modal-focus";
 import { requestMagicLink } from "@/lib/account";
 import { AUTH_COPY, type AuthIntent } from "@/lib/access";
+import { trackAppEvent } from "@/lib/analytics-client";
 
 export function AuthModal({
   open,
@@ -74,6 +75,7 @@ export function AuthModal({
       setError(result.error ?? "Could not send the sign-in email.");
       return;
     }
+    trackAppEvent("auth_started", { method: "email" }, { oncePerDay: "email" });
     setSent(true);
     onSuccess?.();
   };
@@ -118,7 +120,13 @@ export function AuthModal({
             </div>
           ) : (
             <>
-              <a href={googleHref} className="auth-google-button">
+              <a
+                href={googleHref}
+                className="auth-google-button"
+                onClick={() => {
+                  trackAppEvent("auth_started", { method: "google" }, { oncePerDay: "google" });
+                }}
+              >
                 <svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true">
                   <path
                     fill="#FFC107"
@@ -180,10 +188,15 @@ export function AuthModal({
                 </div>
               )}
 
+              <ul className="auth-benefits">
+                <li>Track 1 app &amp; 25 keywords — free, no card</li>
+                <li>ASO assistant: 5 messages a day</li>
+                <li>30-day keyword history on this device</li>
+              </ul>
+
               <p className="auth-footnote">
                 No password needed. Keyword Explorer works without an account.
-                Tracking an app and the assistant need a free sign-in. We store
-                only your email and subscription status.
+                We store only your email and subscription status.
               </p>
             </>
           )}

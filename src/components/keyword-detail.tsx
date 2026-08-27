@@ -58,7 +58,7 @@ export function KeywordDetail({
   onRefresh: () => void;
   onAnalyze: (keyword: string) => void;
   onTrackApp?: (app: {
-    appStoreId: number;
+    appStoreId: string;
     name: string;
     iconUrl?: string;
     developer?: string;

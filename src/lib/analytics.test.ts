@@ -7,8 +7,11 @@ import {
   countryFlag,
   countryName,
   generateVisitorHash,
+  isAppEventName,
   isBotUserAgent,
   queryAnalyticsSummary,
+  querySignupFunnel,
+  recordEvent,
   recordPageview,
   sanitizeReferrer,
 } from "./analytics";
@@ -347,5 +350,127 @@ describe("recordPageview and queryAnalyticsSummary with AI intelligence", () => 
 
     const summary30d = await queryAnalyticsSummary(dbMock, "30d");
     expect(summary30d.range).toBe("30d");
+    // Signup funnel falls back to zeros when the events table has no rows.
+    expect(summary30d.signupFunnel.signupIntents).toBe(0);
+    expect(summary30d.signupFunnel.authCompleted).toBe(0);
+  });
+});
+
+describe("product event tracking (signup funnel)", () => {
+  const REAL_UA = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Chrome/120.0";
+
+  it("validates event names against the whitelist", () => {
+    expect(isAppEventName("signup_intent_shown")).toBe(true);
+    expect(isAppEventName("auth_completed")).toBe(true);
+    expect(isAppEventName("made_up_event")).toBe(false);
+    expect(isAppEventName(42)).toBe(false);
+    expect(isAppEventName(undefined)).toBe(false);
+  });
+
+  it("records an event with normalized path, device, and truncated meta", async () => {
+    const runMock = vi.fn().mockResolvedValue({});
+    const bindMock = vi.fn().mockReturnValue({ run: runMock });
+    const prepareMock = vi.fn().mockReturnValue({ bind: bindMock });
+    const dbMock = { prepare: prepareMock } as unknown as D1Database;
+
+    const result = await recordEvent(dbMock, {
+      name: "signup_intent_shown",
+      path: "/?utm_source=x#top",
+      userAgent: REAL_UA,
+      ip: "1.1.1.1",
+      country: "de",
+      screenWidth: 375,
+      meta: { intent: "track" },
+    });
+    expect(result).toBe(true);
+    expect(bindMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Number),
+      expect.any(String),
+      "signup_intent_shown",
+      "/",
+      "DE",
+      "mobile",
+      '{"intent":"track"}',
+    );
+  });
+
+  it("rejects bots and unknown event names", async () => {
+    const prepareMock = vi.fn();
+    const dbMock = { prepare: prepareMock } as unknown as D1Database;
+
+    expect(
+      await recordEvent(dbMock, {
+        name: "auth_completed",
+        path: "/",
+        userAgent: "curl/8.0",
+        ip: "1.1.1.1",
+        country: "US",
+      }),
+    ).toBe(false);
+    expect(prepareMock).not.toHaveBeenCalled();
+  });
+
+  it("handles db failures without throwing", async () => {
+    const prepareMock = vi.fn().mockImplementation(() => {
+      throw new Error("DB failure");
+    });
+    const dbMock = { prepare: prepareMock } as unknown as D1Database;
+
+    expect(
+      await recordEvent(dbMock, {
+        name: "explorer_limit_hit",
+        path: "/",
+        userAgent: REAL_UA,
+        ip: "1.1.1.1",
+        country: "US",
+      }),
+    ).toBe(false);
+  });
+
+  it("counts unique visitors per funnel event", async () => {
+    const prepareMock = vi.fn().mockReturnValue({
+      bind: vi.fn().mockReturnValue({
+        all: vi.fn().mockResolvedValue({
+          results: [
+            { name: "signup_intent_shown", visitors: 12 },
+            { name: "auth_started", visitors: 7 },
+            { name: "auth_completed", visitors: 3 },
+            { name: "keyword_analyzed_first", visitors: 30 },
+            { name: "account_nudge_shown", visitors: 9 },
+            { name: "account_nudge_cta", visitors: 4 },
+            { name: "explorer_limit_hit", visitors: 6 },
+          ],
+        }),
+      }),
+    });
+    const dbMock = { prepare: prepareMock } as unknown as D1Database;
+
+    const funnel = await querySignupFunnel(dbMock, "7d");
+    expect(funnel.signupIntents).toBe(12);
+    expect(funnel.authStarted).toBe(7);
+    expect(funnel.authCompleted).toBe(3);
+    expect(funnel.firstAnalyses).toBe(30);
+    expect(funnel.nudgeShown).toBe(9);
+    expect(funnel.nudgeCta).toBe(4);
+    expect(funnel.limitHits).toBe(6);
+  });
+
+  it("returns zeros when the events query fails", async () => {
+    const prepareMock = vi.fn().mockImplementation(() => {
+      throw new Error("no table yet");
+    });
+    const dbMock = { prepare: prepareMock } as unknown as D1Database;
+
+    const funnel = await querySignupFunnel(dbMock, "today");
+    expect(funnel).toEqual({
+      signupIntents: 0,
+      authStarted: 0,
+      authCompleted: 0,
+      limitHits: 0,
+      firstAnalyses: 0,
+      nudgeShown: 0,
+      nudgeCta: 0,
+    });
   });
 });
