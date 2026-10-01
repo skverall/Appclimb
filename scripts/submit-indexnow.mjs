@@ -1,21 +1,29 @@
 const siteUrl = "https://appclimb.app";
 const key = "b7e33997f6f0ea3c7353982140fcfc0c";
 const sitemapUrl = `${siteUrl}/sitemap.xml`;
+// Per-term pages built from Apple's weekly data; optional, so a data outage
+// never blocks notifying the core pages.
+const termSitemapUrl = `${siteUrl}/keywords/sitemap.xml`;
 
-const sitemapResponse = await fetch(sitemapUrl, {
-  headers: { "user-agent": "AppClimb-IndexNow/1.0" },
-});
-
-if (!sitemapResponse.ok) {
-  throw new Error(
-    `Could not read ${sitemapUrl}: HTTP ${sitemapResponse.status}`,
-  );
+async function sitemapUrls(url, { required }) {
+  const response = await fetch(url, {
+    headers: { "user-agent": "AppClimb-IndexNow/1.0" },
+  });
+  if (!response.ok) {
+    if (required) throw new Error(`Could not read ${url}: HTTP ${response.status}`);
+    console.warn(`Skipping ${url}: HTTP ${response.status}`);
+    return [];
+  }
+  const body = await response.text();
+  return [...body.matchAll(/<loc>([^<]+)<\/loc>/g)]
+    .map((match) => match[1].replaceAll("&amp;", "&"))
+    .filter((entry) => entry.startsWith(siteUrl));
 }
 
-const sitemap = await sitemapResponse.text();
-const urlList = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)]
-  .map((match) => match[1])
-  .filter((url) => url.startsWith(siteUrl));
+const urlList = [
+  ...(await sitemapUrls(sitemapUrl, { required: true })),
+  ...(await sitemapUrls(termSitemapUrl, { required: false })),
+].slice(0, 10_000);
 
 if (urlList.length === 0) {
   throw new Error("The production sitemap did not contain canonical URLs.");
