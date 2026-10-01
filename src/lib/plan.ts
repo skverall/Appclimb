@@ -6,7 +6,7 @@
  *
  * The free tier is a real product, not a demo; Pro is a convenience upgrade
  * under the founder's $10/month cap. Guests can search; tracking and the
- * assistant require a free account. See PRODUCT_DIRECTION.md.
+ * assistant require a free account. See AGENTS.md (Product direction).
  */
 
 export type PlanId = "free" | "pro";

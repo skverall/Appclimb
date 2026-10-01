@@ -310,7 +310,14 @@ export function KeywordExplorer({
     shareInitRef.current = true;
     const params = new URLSearchParams(window.location.search);
     const sharedKeyword = params.get("kw")?.trim();
-    if (!sharedKeyword) return;
+    if (!sharedKeyword) {
+      const onlyCountry = params.get("country")?.trim().toUpperCase() ?? "";
+      if (SUPPORTED_COUNTRIES.some((item) => item.code === onlyCountry)) {
+        window.history.replaceState(null, "", window.location.pathname);
+        void Promise.resolve().then(() => setCountry(onlyCountry));
+      }
+      return;
+    }
     const requested = params.get("country")?.trim().toUpperCase() ?? "";
     const requestedCountry = SUPPORTED_COUNTRIES.some((item) => item.code === requested)
       ? requested

@@ -3,7 +3,10 @@
 import { useEffect, useState } from "react";
 import { ArrowUpRight, Flame, Sparkles, TrendingUp } from "lucide-react";
 
+import Link from "next/link";
+
 import { formatWeek } from "@/components/keyword-charts";
+import { categoryPath, countryPath } from "@/lib/keyword-pages";
 import { DATASET_GENRES, GENRE_LABELS, type DatasetGenre } from "@/lib/search-terms";
 import { fetchTrendingTerms, type TrendingResponse, type TrendingTerm } from "@/lib/terms-client";
 
@@ -140,6 +143,14 @@ export function TrendingSearches({
             </li>
           ))}
         </ol>
+      )}
+      {!loading && data && country !== "RU" && (
+        <Link
+          className="trending-more"
+          href={genre ? categoryPath(country, genre) : countryPath(country)}
+        >
+          See the full top 100{genre ? ` for ${GENRE_LABELS[genre]}` : ""} →
+        </Link>
       )}
     </section>
   );

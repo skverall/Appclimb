@@ -4,15 +4,16 @@
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
 <!-- END:nextjs-agent-rules -->
 
-# Canonical product direction
+# Product direction
 
-Before any product, design, roadmap, positioning, data-model, integration, or
-architecture work, read `PRODUCT_DIRECTION.md` completely.
-
-Treat it as the product north star. AppClimb is a freemium App Store keyword
-tool: guests can search keywords (8 checks/day) with no login wall; a free
-account unlocks 1 tracked app and the ASO assistant (5 messages/day); Pro is
-$8/month ($64/year) with cloud sync. Not the Growth CI SaaS that preceded it.
+This section is the product north star (the old `PRODUCT_DIRECTION.md` was
+retired by the founder). AppClimb is a freemium App Store keyword tool that
+helps iOS developers find keywords they can actually rank for: Apple Ads
+popularity with Apple's weekly history, an explained difficulty estimate, and
+a verdict per keyword (see ADR 0005). Guests search with no login wall (8 new
+checks/day); a free account unlocks 1 tracked app and the ASO assistant
+(5 messages/day); Pro is $8/month ($64/year) with 52 weeks of Apple history,
+unlimited tracking, and cloud sync. Not the Growth CI SaaS that preceded it.
 If a request implies a login wall on search, user-connected connectors, team
 features, pricing above $10/month, or third-party analytics, surface the
 conflict instead of silently changing direction.

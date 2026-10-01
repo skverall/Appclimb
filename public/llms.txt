@@ -22,6 +22,8 @@ AppClimb helps iOS developers find App Store keywords they can actually rank for
 ## Key pages
 
 - Keyword explorer: https://appclimb.app/
+- Top App Store searches by country and category (Apple's weekly list): https://appclimb.app/keywords
+- Example category page: https://appclimb.app/keywords/us/health-fitness
 - Keyword research: https://appclimb.app/app-store-keywords
 - ASO guide: https://appclimb.app/guides/keyword-research
 - Astro ASO alternative: https://appclimb.app/blog/astro-aso-alternative-2026

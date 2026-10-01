@@ -16,6 +16,7 @@ import { Archivo, IBM_Plex_Mono, Instrument_Sans } from "next/font/google";
 
 import "./globals.css";
 import "./explorer.css";
+import "./keyword-pages.css";
 
 /*
  * Typography — same pairing as cardealertracker.app.

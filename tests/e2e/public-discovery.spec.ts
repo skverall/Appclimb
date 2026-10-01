@@ -222,6 +222,8 @@ test("crawl and agent discovery endpoints are public and coherent", async ({
 test("every canonical sitemap page returns a successful document", async ({
   request,
 }) => {
+  // ~260 URLs including every /keywords storefront and category page.
+  test.setTimeout(120_000);
   const sitemap = await (await request.get("/sitemap.xml")).text();
   const paths = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map(
     (match) => new URL(match[1]).pathname,
@@ -437,4 +439,31 @@ test("marketing pages render when /api/me is unavailable", async ({ page }) => {
       page.locator("nextjs-portal, [data-nextjs-dialog-overlay]"),
     ).toHaveCount(0);
   }
+});
+
+test("top-search pages render, link the explorer, and stay out of the index without data", async ({
+  page,
+  request,
+}) => {
+  // e2e runs without Apple Ads credentials: pages render a notice + noindex.
+  await page.goto("/keywords");
+  await expect(
+    page.getByRole("heading", { level: 1, name: /What people search on the App Store/i }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Health & Fitness" }).first().click();
+  await expect(page).toHaveURL(/\/keywords\/us\/health-fitness$/);
+  await expect(
+    page.getByRole("heading", { level: 1, name: /Top Health & Fitness keywords on the App Store in the United States/ }),
+  ).toBeVisible();
+  await expect(page.getByText(/isn.t available right now/i)).toBeVisible();
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
+  await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+    "href",
+    "https://appclimb.app/keywords/us/health-fitness",
+  );
+
+  // Unknown storefronts and categories are real 404s; RU has no Apple data.
+  expect((await request.get("/keywords/zz")).status()).toBe(404);
+  expect((await request.get("/keywords/us/not-a-category")).status()).toBe(404);
+  expect((await request.get("/keywords/ru")).status()).toBe(404);
 });

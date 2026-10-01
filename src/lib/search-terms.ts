@@ -396,7 +396,9 @@ export function moversFrom(
   const top = [...movers]
     .sort(
       (left, right) =>
-        right.popularity - left.popularity || left.term.localeCompare(right.term),
+        right.popularity - left.popularity ||
+        (left.rankInGenre ?? 9999) - (right.rankInGenre ?? 9999) ||
+        left.term.localeCompare(right.term),
     )
     .slice(0, limit);
   return { rising, newcomers, top };

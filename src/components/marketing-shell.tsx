@@ -11,11 +11,11 @@ import { BrandMark } from "@/components/brand-mark";
 
 const navigation = [
   { href: "/", label: "Keyword Explorer" },
+  { href: "/keywords", label: "Top Searches" },
   { href: "/assistant", label: "ASO Assistant" },
   { href: "/pricing", label: "Pricing" },
   { href: "/guides/keyword-research", label: "ASO Guide" },
   { href: "/blog", label: "Field Notes" },
-  { href: "/about", label: "About" },
 ] as const;
 
 export function MarketingHeader() {
@@ -118,6 +118,7 @@ export function MarketingFooter() {
         <div>
           <strong>Explore</strong>
           <Link href="/">Keyword Explorer</Link>
+          <Link href="/keywords">Top App Store searches</Link>
           <Link href="/assistant">ASO Assistant</Link>
           <Link href="/guides/keyword-research">ASO Guide</Link>
           <Link href="/blog">Field Notes</Link>
