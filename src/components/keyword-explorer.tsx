@@ -128,7 +128,12 @@ export function KeywordExplorer({
   const [filterTab, setFilterTab] = useState<FilterTab>("all");
   const [bulkOpen, setBulkOpen] = useState(false);
   const [optimizerOpen, setOptimizerOpen] = useState(false);
-  const [trendingUnavailable, setTrendingUnavailable] = useState(false);
+  // Storefronts where Apple publishes no search terms (e.g. RU) hide the panel.
+  const [trendingUnavailable, setTrendingUnavailable] = useState<Set<string>>(new Set());
+  const markTrendingUnavailable = useCallback(
+    () => setTrendingUnavailable((previous) => new Set(previous).add(country)),
+    [country],
+  );
   const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null);
   const [batchResult, setBatchResult] = useState<{ total: number; failed: string[] } | null>(null);
   const [undoState, setUndoState] = useState<{
@@ -870,13 +875,13 @@ export function KeywordExplorer({
 
         {!hasList ? (
           <>
-            {!trendingUnavailable && (
+            {!trendingUnavailable.has(country) && (
               <TrendingSearches
                 country={country}
                 countryLabel={countryLabel}
                 disabled={busy.size > 0}
                 onAnalyze={(term) => void analyze(term)}
-                onUnavailable={() => setTrendingUnavailable(true)}
+                onUnavailable={markTrendingUnavailable}
               />
             )}
             <section className="ex-how" aria-labelledby="ex-how-title">
