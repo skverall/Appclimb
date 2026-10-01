@@ -89,8 +89,8 @@ export default function SensorTowerAlternativesArticle() {
           <tbody>
             <tr>
               <td><strong>AppClimb</strong></td>
-              <td>Free plan (8 checks/day) · Pro $8/mo</td>
-              <td>✅ 8/day free · unlimited Pro</td>
+              <td>Free plan (30 checks/day; 8 without an account) · Pro $8/mo</td>
+              <td>✅ 8/day guest · 30/day free account · unlimited Pro</td>
               <td>✅ Charts</td>
               <td>Web</td>
               <td>Indie keyword research</td>
@@ -157,7 +157,7 @@ export default function SensorTowerAlternativesArticle() {
       </p>
       <p>What you get:</p>
       <ul>
-        <li>8 keyword checks per day free, unlimited on Pro, across 16 storefronts</li>
+        <li>8 keyword checks per day as a guest, 30 with a free account, unlimited on Pro, across 16 storefronts</li>
         <li>Official Apple Ads popularity (1–100) plus estimated difficulty</li>
         <li>Apple&apos;s weekly popularity history per keyword (12 weeks free, 52 on Pro)</li>
         <li>Related keywords and top-app breakdowns from public data</li>

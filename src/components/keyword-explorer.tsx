@@ -21,6 +21,7 @@ import {
 
 import { useAccount } from "@/components/account-provider";
 import { proEnabled } from "@/lib/flags";
+import { explorerChecksFor, PLAN_LIMITS, PRO_YEARLY_USD } from "@/lib/plan";
 import { trackAppEvent } from "@/lib/analytics-client";
 import { notifySyncChange } from "@/lib/sync-client";
 import { consumeDayUsage, EXPLORER_DAY_KEY, peekDayUsage, refundDayUsage } from "@/lib/usage";
@@ -151,15 +152,18 @@ export function KeywordExplorer({
   const shareInitRef = useRef(false);
   const loadedCountryRef = useRef<string | null>(null);
 
-  const { account, signedIn, accountsLive, loading, isPro, openAuth, openUpgrade, syncVersion } =
+  const { account, signedIn, accountsLive, loading, isPro, openAuth, openUpgrade, openUpgradeWith, syncVersion } =
     useAccount();
+  // Guests get a small daily allowance; a free account raises it, Pro lifts it.
   const explorerLimit =
-    proEnabled() || accountsLive ? account.limits.explorerChecksPerDay : null;
+    proEnabled() || accountsLive ? explorerChecksFor(account.limits, signedIn) : null;
   const historyDays = account.limits.historyDays;
   const historyWeeks = account.limits.historyWeeks;
   const isGuest = accountsLive && !signedIn && !loading;
   const usedToday = peekDayUsage(window.localStorage, EXPLORER_DAY_KEY);
-  const limitHit = explorerLimit !== null && usedToday >= explorerLimit;
+  // Wait for the account so a signed-in visitor never sees the guest wall flash.
+  const limitHit = !loading && explorerLimit !== null && usedToday >= explorerLimit;
+  const freeChecks = PLAN_LIMITS.free.explorerChecksPerDay ?? 0;
 
   const NUDGE_DISMISS_KEY = "appclimb:nudge:v1:dismissed";
   const [nudgeVisible, setNudgeVisible] = useState(false);
@@ -172,10 +176,11 @@ export function KeywordExplorer({
   };
 
   useEffect(() => {
-    if (limitHit && isGuest) {
-      trackAppEvent("explorer_limit_hit", null, { oncePerDay: "default" });
+    if (limitHit && !isPro) {
+      const role = isGuest ? "guest" : "free";
+      trackAppEvent("explorer_limit_hit", { role }, { oncePerDay: role });
     }
-  }, [limitHit, isGuest]);
+  }, [limitHit, isGuest, isPro]);
 
   const countryLabel =
     SUPPORTED_COUNTRIES.find((item) => item.code === country)?.label ?? country;
@@ -772,8 +777,21 @@ export function KeywordExplorer({
           <div className="ex-meta-right">
             {remaining !== null && (
               <span className={`ex-quota${remaining <= 2 ? " ex-quota--low" : ""}`}>
-                {remaining} of {explorerLimit} free checks left today
+                {remaining} of {explorerLimit} checks left today
               </span>
+            )}
+            {isGuest && remaining !== null && remaining <= 3 && remaining > 0 && (
+              <button
+                type="button"
+                className="ex-link"
+                onClick={() => {
+                  trackAppEvent("limit_signup_cta", { at: "quota" }, { oncePerDay: "quota" });
+                  openAuth("limit");
+                }}
+              >
+                <Sparkles size={14} aria-hidden="true" />
+                {freeChecks}/day with a free account
+              </button>
             )}
             <button type="button" className="ex-link" onClick={() => setBulkOpen(true)} disabled={busy.size > 0}>
               <ListPlus size={14} aria-hidden="true" />
@@ -788,15 +806,57 @@ export function KeywordExplorer({
       </section>
 
       <section className="ex-body marketing-container">
-        {limitHit && (
+        {limitHit && isGuest && (
+          <div className="ex-limit" role="status">
+            <div className="ex-limit-copy">
+              <strong>
+                You&apos;ve used today&apos;s {explorerLimit} guest checks.
+                {` Get ${Math.max(0, freeChecks - usedToday)} more right now, free.`}
+              </strong>
+              <span>
+                {`A free account raises the daily limit to ${freeChecks} checks, tracks your app’s rank for 25 keywords, and adds the ASO assistant. No card, no trial clock.`}
+              </span>
+              <span className="ex-limit-meter" aria-hidden="true">
+                {Array.from({ length: freeChecks }, (_, index) => (
+                  <i key={index} className={index < (explorerLimit ?? 0) ? "is-used" : undefined} />
+                ))}
+              </span>
+              <span className="ex-limit-legend" aria-hidden="true">
+                <span>
+                  <i className="is-used" /> Used as a guest
+                </span>
+                <span>
+                  <i /> Unlocked with a free account
+                </span>
+              </span>
+            </div>
+            <div className="ex-limit-actions">
+              <button
+                type="button"
+                className="ex-btn ex-btn--primary"
+                onClick={() => {
+                  trackAppEvent("limit_signup_cta", { at: "wall" }, { oncePerDay: "wall" });
+                  openAuth("limit");
+                }}
+              >
+                Get {Math.max(0, freeChecks - usedToday)} more checks free
+              </button>
+              <button type="button" className="ex-btn ex-btn--ghost" onClick={() => openUpgradeWith("yearly")}>
+                Or go unlimited with Pro
+              </button>
+            </div>
+          </div>
+        )}
+
+        {limitHit && !isGuest && (
           <div className="ex-banner ex-banner--limit" role="status">
             <Sparkles size={16} aria-hidden="true" />
             <span>
-              You&apos;ve used today&apos;s <strong>{explorerLimit} free checks</strong>. They reset
+              You&apos;ve used today&apos;s <strong>{explorerLimit} checks</strong>. They reset
               tomorrow — re-checking keywords already in your list is always free.
             </span>
-            <button type="button" className="ex-btn ex-btn--primary" onClick={openUpgrade}>
-              Unlimited with Pro
+            <button type="button" className="ex-btn ex-btn--primary" onClick={() => openUpgradeWith("yearly")}>
+              {`Unlimited with Pro · $${(PRO_YEARLY_USD / 12).toFixed(2)}/mo`}
             </button>
           </div>
         )}
@@ -805,8 +865,8 @@ export function KeywordExplorer({
           <div className="ex-banner" role="status">
             <Star size={16} aria-hidden="true" />
             <span>
-              <strong>Want to know where your app ranks for these?</strong> A free account tracks
-              your app&apos;s position for 25 keywords and adds the ASO assistant.
+              <strong>Want to know where your app ranks for these?</strong>
+              {` A free account tracks your app’s position for 25 keywords, adds the ASO assistant, and gives you ${freeChecks} checks a day instead of ${explorerLimit ?? freeChecks}.`}
             </span>
             <div className="ex-banner-actions">
               <button

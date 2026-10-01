@@ -30,6 +30,7 @@ import { useAccount } from "@/components/account-provider";
 import { canUseAssistant } from "@/lib/access";
 import { AI_LIMITS, AI_MODEL_LABEL, extractFollowups, type AiDataCard } from "@/lib/ai-chat";
 import { proEnabled } from "@/lib/flags";
+import { trackAppEvent } from "@/lib/analytics-client";
 import { explorerLink } from "@/lib/keyword-pages";
 import {
   AI_CONVERSATIONS_KEY,
@@ -495,6 +496,7 @@ export function AiChatConversation({
       }
       const content = text.trim().slice(0, AI_LIMITS.maxMessageChars);
       if (content.length < 2 || busy) return;
+      trackAppEvent("assistant_used", null, { oncePerDay: "default" });
 
       setError(null);
       const userMsg: UiMessage = {

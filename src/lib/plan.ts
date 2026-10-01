@@ -32,7 +32,7 @@ export interface PlanLimits {
 
 export const PLAN_LIMITS: Record<PlanId, PlanLimits> = {
   free: {
-    explorerChecksPerDay: 8,
+    explorerChecksPerDay: 30,
     aiMessagesPerDay: 5,
     popularityPerDay: 200,
     trackedApps: 1,
@@ -52,6 +52,23 @@ export const PLAN_LIMITS: Record<PlanId, PlanLimits> = {
     cloudSync: true,
   },
 };
+
+/**
+ * New keyword checks a day for a visitor with no account. Search never needs
+ * a sign-in; a free account just raises this to the free plan's limit.
+ */
+export const GUEST_EXPLORER_CHECKS_PER_DAY = 8;
+
+/** Free-plan limits as they apply to a visitor who has not signed in. */
+export function guestLimits(): PlanLimits {
+  return { ...PLAN_LIMITS.free, explorerChecksPerDay: GUEST_EXPLORER_CHECKS_PER_DAY };
+}
+
+/** Daily new-keyword checks for a guest, a free account, or Pro (`null`). */
+export function explorerChecksFor(limits: PlanLimits, signedIn: boolean): number | null {
+  if (!signedIn) return GUEST_EXPLORER_CHECKS_PER_DAY;
+  return limits.explorerChecksPerDay;
+}
 
 export const PRO_MONTHLY_USD = 8;
 export const PRO_YEARLY_USD = 64;

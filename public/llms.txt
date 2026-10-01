@@ -2,7 +2,7 @@
 
 > AppClimb is an App Store keyword explorer with a free plan and an optional Pro plan ($8/month). The lead feature is official Apple Ads popularity (1–100), labeled on every score — not a black-box search volume.
 
-AppClimb helps iOS developers find App Store keywords they can actually rank for. For any keyword in 16 storefronts it shows Apple's official Ads popularity (1–100) with up to 52 weeks of Apple's weekly history, a difficulty estimate that lists its evidence (median ratings in the top 10, the weakest app on page one, how many apps target the term in their name, big-brand presence), and a plain verdict: Worth targeting, Long-tail win, Competitive, Dominated, or Low demand. It also shows trending searches per category (rising, most searched, new this month), related searches and autocomplete from Apple's published list, and the top 10 apps for each term. Guests can search immediately (8 new keyword checks/day). A free account unlocks rank tracking for 1 app and the ASO assistant (5 messages/day). Pro lifts the limits and adds cloud sync. Guest keyword data never leaves the visitor's browser. No tracking scripts.
+AppClimb helps iOS developers find App Store keywords they can actually rank for. For any keyword in 16 storefronts it shows Apple's official Ads popularity (1–100) with up to 52 weeks of Apple's weekly history, a difficulty estimate that lists its evidence (median ratings in the top 10, the weakest app on page one, how many apps target the term in their name, big-brand presence), and a plain verdict: Worth targeting, Long-tail win, Competitive, Dominated, or Low demand. It also shows trending searches per category (rising, most searched, new this month), related searches and autocomplete from Apple's published list, and the top 10 apps for each term. Guests can search immediately (8 new keyword checks/day). A free account raises that to 30 checks/day and unlocks rank tracking for 1 app and the ASO assistant (5 messages/day). Pro lifts the limits and adds cloud sync. Guest keyword data never leaves the visitor's browser. No tracking scripts.
 
 ## Data honesty
 
@@ -16,7 +16,7 @@ AppClimb helps iOS developers find App Store keywords they can actually rank for
 ## Plans
 
 - Guest ($0, no account): 8 new keyword checks/day (re-checking saved keywords is free), Apple popularity with 12 weeks of history, difficulty evidence, verdicts, trending and related searches.
-- Free account ($0): plus rank tracking for 1 app with 25 keywords and the AI assistant (5 messages/day). Data stays local.
+- Free account ($0): 30 new keyword checks/day, plus rank tracking for 1 app with 25 keywords and the AI assistant (5 messages/day). Data stays local.
 - Pro ($8/month or $64/year): unlimited checks, 52 weeks of Apple popularity history, unlimited tracked apps and keywords, 90 days of rank history, AI assistant 200 messages/day, cloud sync across devices. Billing via Paddle (merchant of record); cancel anytime.
 
 ## Key pages

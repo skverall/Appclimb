@@ -6,7 +6,9 @@
  * live (the Pro UI flag is on, or GET /api/me reports configured:true).
  */
 
-export type AuthIntent = "default" | "track" | "assistant" | "upgrade";
+import { GUEST_EXPLORER_CHECKS_PER_DAY, PLAN_LIMITS } from "./plan";
+
+export type AuthIntent = "default" | "track" | "assistant" | "upgrade" | "limit";
 
 export type AccessRole = "guest" | "free" | "pro";
 
@@ -58,6 +60,10 @@ export const AUTH_COPY: Record<AuthIntent, { title: string; subtitle: string }> 
     title: "Sign in to use the assistant",
     subtitle:
       "The ASO assistant is part of a free account — 5 messages a day. Sign in so the limit follows you.",
+  },
+  limit: {
+    title: `Get ${PLAN_LIMITS.free.explorerChecksPerDay} keyword checks a day, free`,
+    subtitle: `Guests get ${GUEST_EXPLORER_CHECKS_PER_DAY} a day. A free account raises that to ${PLAN_LIMITS.free.explorerChecksPerDay}, tracks 1 app, and adds the ASO assistant. No card needed.`,
   },
   upgrade: {
     title: "Sign in to upgrade",

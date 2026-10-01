@@ -7,7 +7,7 @@ Search any keyword and get Apple's official Ads popularity
 (`searchPopularity1to100`, 1–100) with Apple's own weekly history, a
 difficulty estimate that shows its evidence, and a verdict (Worth targeting,
 Long-tail win, Competitive, Dominated, Low demand). Keyword Explorer works as a
-guest (8 new checks/day). A free account unlocks 1 tracked app and the ASO
+guest (8 new checks/day). A free account raises that to 30/day and unlocks 1 tracked app and the ASO
 assistant (5 messages/day). The optional Pro plan ($8/month, $64/year) lifts
 the limits, adds 52 weeks of Apple history, and cloud sync.
 

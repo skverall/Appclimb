@@ -35,7 +35,7 @@ test("guest can search keywords but must sign in to track or chat", async ({
   await expect(page.getByText("Guest", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: /^Sign in$/i }).first()).toBeVisible();
   // The guest sees the honest daily allowance up front.
-  await expect(page.getByText(/8 of 8 free checks left today/i)).toBeVisible();
+  await expect(page.getByText(/8 of 8 checks left today/i)).toBeVisible();
 
   // Explorer stays open — no login wall on search.
   await expect(page.getByRole("combobox", { name: "Search keywords" })).toBeVisible();
@@ -277,4 +277,42 @@ test("magic-link 429 at 320px: error shows and the trap holds", async ({
   }
   await page.keyboard.press("Escape");
   await expect(dialog).toHaveCount(0);
+});
+
+test("guest daily wall offers more free checks; a free account gets 30", async ({ page }) => {
+  await mockGuestAccount(page);
+  await page.goto("/");
+  await page.evaluate(() => {
+    const day = new Date().toISOString().slice(0, 10);
+    window.localStorage.setItem("appclimb:explorer:day", JSON.stringify({ day, count: 8 }));
+  });
+  await page.reload();
+
+  // The wall leads with the free step up, Pro second.
+  await expect(page.getByText(/used today's 8 guest checks/)).toBeVisible();
+  const getMore = page.getByRole("button", { name: "Get 22 more checks free" });
+  await expect(getMore).toBeVisible();
+  await expect(page.getByRole("button", { name: /Or go unlimited with Pro/ })).toBeVisible();
+  await getMore.click();
+  await expect(page.getByRole("dialog", { name: /Get 30 keyword checks a day, free/ })).toBeVisible();
+  await page.keyboard.press("Escape");
+
+  // Signed in on the free plan: the same 8 used checks leave 22 of 30.
+  await page.unroute("**/api/me");
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        user: { id: "u1", email: "free@example.com", name: "Free" },
+        plan: "free",
+        subscription: null,
+      }),
+    });
+  });
+  await page.reload();
+  await expect(page.getByText(/22 of 30 checks left today/i)).toBeVisible();
+  await expect(page.getByText(/used today's/)).toHaveCount(0);
+  await expect(page.getByRole("combobox", { name: "Search keywords" })).toBeEnabled();
 });

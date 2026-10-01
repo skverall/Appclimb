@@ -423,7 +423,7 @@ test("limit banner clears when the day rolls over", async ({ page }) => {
   }, day);
   await page.reload();
 
-  const banner = page.getByText(/used today's 8 free checks/);
+  const banner = page.getByText(/used today's 8 guest checks/);
   await expect(banner).toBeVisible();
 
   // A further attempt stays blocked while the cap is genuinely exhausted.
@@ -451,7 +451,7 @@ test("limit banner clears when the day rolls over", async ({ page }) => {
   await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
   // The fresh day's counter is now at 1: the remaining-checks indicator
   // returns and shows the honest budget.
-  await expect(page.getByText(/7 of 8 free checks left today/i)).toBeVisible();
+  await expect(page.getByText(/7 of 8 checks left today/i)).toBeVisible();
 });
 
 test("bulk analyze reports partial failures honestly", async ({ page }) => {
@@ -719,7 +719,7 @@ test("the quota gate blocks the 9th check before touching a slow iTunes", async 
   const requestsAfterEight = itunesRequests;
   expect(requestsAfterEight).toBeGreaterThan(requestsBefore);
   await expect(
-    page.getByText(/used today's 8 free checks/),
+    page.getByText(/used today's 8 guest checks/),
   ).toBeVisible();
 
   // Ninth attempt: blocked by the gate before any network activity.
@@ -730,7 +730,7 @@ test("the quota gate blocks the 9th check before touching a slow iTunes", async 
   expect(itunesRequests).toBe(requestsAtAttempt);
   await expect(page.locator(ROW)).toHaveCount(8);
   await expect(
-    page.getByText(/used today's 8 free checks/),
+    page.getByText(/used today's 8 guest checks/),
   ).toBeVisible();
 });
 
@@ -832,7 +832,7 @@ test("an upgrade mid-session lifts the explorer quota gate", async ({
     );
   });
   await page.reload();
-  await expect(page.getByText(/used today's 8 free checks/)).toBeVisible();
+  await expect(page.getByText(/used today's 8 guest checks/)).toBeVisible();
 
   // The user upgrades: /api/me reports Pro after the post-checkout refresh.
   await page.route("**/api/me", async (route) => {
@@ -857,7 +857,7 @@ test("an upgrade mid-session lifts the explorer quota gate", async ({
   await page.goto("/?checkout=success");
 
   // The gate banner clears and analysis works without limit.
-  await expect(page.getByText(/used today's 8 free checks/)).toHaveCount(0);
+  await expect(page.getByText(/used today's 8 guest checks/)).toHaveCount(0);
   const closeWelcome = page.getByRole("button", { name: /Close welcome dialog/i });
   try {
     await closeWelcome.waitFor({ state: "visible", timeout: 3_000 });
@@ -1049,7 +1049,7 @@ test("exhausted quota plus an unavailable overlay degrades honestly", async ({
 
   // The quota banner shows; a further check stays blocked (no row, no fetch
   // storm), and no Next.js error overlay appears from the failed popularity.
-  await expect(page.getByText(/used today's 8 free checks/)).toBeVisible();
+  await expect(page.getByText(/used today's 8 guest checks/)).toBeVisible();
   await page.getByRole("combobox", { name: "Search keywords" }).fill("yoga");
   await page.getByRole("button", { name: "Analyze", exact: true }).click();
   await expect(page.locator(ROW)).toHaveCount(0);

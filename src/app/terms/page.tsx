@@ -20,9 +20,10 @@ export default function TermsPage() {
             AppClimb provides an App Store keyword research tool. Difficulty
             comes from Apple&apos;s public iTunes Search API. Popularity is
             Apple Ads official (relative 1–100) when available, otherwise an
-            iTunes estimate. The free plan has daily limits (8 keyword checks,
-            5 assistant messages, one tracked app); the Pro plan lifts these
-            limits and adds cloud sync.
+            iTunes estimate. The free plan has daily limits (8 keyword checks
+            without an account, 30 with a free account, 5 assistant messages,
+            one tracked app); the Pro plan lifts these limits and adds cloud
+            sync.
           </p>
         </section>
         <section>

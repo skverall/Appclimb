@@ -440,6 +440,11 @@ describe("product event tracking (signup funnel)", () => {
             { name: "account_nudge_shown", visitors: 9 },
             { name: "account_nudge_cta", visitors: 4 },
             { name: "explorer_limit_hit", visitors: 6 },
+            { name: "pricing_viewed", visitors: 5 },
+            { name: "checkout_opened", visitors: 2 },
+            { name: "checkout_completed", visitors: 1 },
+            { name: "app_tracked", visitors: 4 },
+            { name: "not_a_real_event", visitors: 99 },
           ],
         }),
       }),
@@ -454,6 +459,11 @@ describe("product event tracking (signup funnel)", () => {
     expect(funnel.nudgeShown).toBe(9);
     expect(funnel.nudgeCta).toBe(4);
     expect(funnel.limitHits).toBe(6);
+    expect(funnel.pricingViewed).toBe(5);
+    expect(funnel.checkoutOpened).toBe(2);
+    expect(funnel.checkoutCompleted).toBe(1);
+    expect(funnel.appTracked).toBe(4);
+    expect(funnel.upgradeOpened).toBe(0);
   });
 
   it("returns zeros when the events query fails", async () => {
@@ -471,6 +481,13 @@ describe("product event tracking (signup funnel)", () => {
       firstAnalyses: 0,
       nudgeShown: 0,
       nudgeCta: 0,
+      limitSignupCta: 0,
+      pricingViewed: 0,
+      upgradeOpened: 0,
+      checkoutOpened: 0,
+      checkoutCompleted: 0,
+      appTracked: 0,
+      assistantUsed: 0,
     });
   });
 });

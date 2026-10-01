@@ -5541,6 +5541,25 @@ img {
 }
 
 /* Signup funnel (admin) */
+.admin-funnel-group {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-funnel-group + .admin-funnel-group {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.admin-funnel-group-title {
+  color: var(--n-700);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .admin-funnel-grid {
   display: grid;
   gap: 10px;

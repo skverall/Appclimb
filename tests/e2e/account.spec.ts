@@ -70,7 +70,7 @@ test("pricing page lists the free plan with honest limits and Pro at $8", async 
   await expect(page.getByRole("heading", { name: "Pro", exact: true })).toBeVisible();
 
   // The free plan states its real limits instead of "unlimited everything".
-  await expect(page.getByText(/8 new keyword checks per day/i).first()).toBeVisible();
+  await expect(page.getByText(/30 new keyword checks a day \(8 without signing in\)/i).first()).toBeVisible();
   // Pro's headline value is a full year of Apple history vs 12 weeks free.
   await expect(page.getByText(/12 weeks of Apple popularity history/i).first()).toBeVisible();
   await expect(page.getByText(/52 weeks of Apple popularity history/i).first()).toBeVisible();

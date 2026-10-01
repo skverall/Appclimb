@@ -5,6 +5,7 @@ import { Check, Loader2, LogIn, Sparkles, X } from "lucide-react";
 
 import { useModalFocus } from "@/components/use-modal-focus";
 import type { AccountUser } from "@/lib/account";
+import { trackAppEvent } from "@/lib/analytics-client";
 import { openProCheckout, proPriceIds } from "@/lib/paddle-client";
 import { PRO_MONTHLY_USD, PRO_YEARLY_USD } from "@/lib/plan";
 
@@ -84,7 +85,9 @@ export function UpgradeModal({
     if (!result.ok) {
       setBusy(false);
       setError(result.error ?? "Checkout failed to load.");
+      return;
     }
+    trackAppEvent("checkout_opened", { cycle }, { oncePerDay: cycle });
     // On success the Paddle overlay takes over; leave busy state as-is.
   };
 

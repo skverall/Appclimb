@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { isAdminEmail } from "@/lib/admin";
+import { adminOptOutResponse } from "@/lib/admin-server";
 import { isAppEventName, isBotUserAgent, recordEvent } from "@/lib/analytics";
 import { getDb } from "@/lib/db";
 import { getCurrentSession } from "@/lib/session";
@@ -46,7 +47,9 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getCurrentSession(request, db);
     if (session && isAdminEmail(session.user.email)) {
-      return new NextResponse(null, { status: 204 });
+      // Never record the founder, and remember this browser so signed-out
+      // visits from it stay excluded too.
+      return adminOptOutResponse();
     }
   } catch {
     // Continue if session check fails.

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  explorerChecksFor,
+  GUEST_EXPLORER_CHECKS_PER_DAY,
   isProEntitled,
   isUnlimited,
   limitsForPlan,
@@ -12,9 +14,9 @@ import {
 } from "@/lib/plan";
 
 describe("plan limits", () => {
-  it("free tier caps explorer checks at 8/day and AI at 5/day", () => {
+  it("free tier caps explorer checks at 30/day and AI at 5/day", () => {
     const free = limitsForPlan("free");
-    expect(free.explorerChecksPerDay).toBe(8);
+    expect(free.explorerChecksPerDay).toBe(30);
     expect(free.aiMessagesPerDay).toBe(5);
     expect(free.popularityPerDay).toBe(200);
     expect(free.trackedApps).toBe(1);
@@ -22,6 +24,13 @@ describe("plan limits", () => {
     expect(free.historyDays).toBe(30);
     expect(free.historyWeeks).toBe(12);
     expect(free.cloudSync).toBe(false);
+  });
+
+  it("guests get fewer daily checks than a free account, Pro has none", () => {
+    expect(explorerChecksFor(limitsForPlan("free"), false)).toBe(GUEST_EXPLORER_CHECKS_PER_DAY);
+    expect(GUEST_EXPLORER_CHECKS_PER_DAY).toBe(8);
+    expect(explorerChecksFor(limitsForPlan("free"), true)).toBe(30);
+    expect(explorerChecksFor(limitsForPlan("pro"), true)).toBeNull();
   });
 
   it("pro tier lifts limits and enables sync", () => {

@@ -6,6 +6,7 @@ import { Loader2, Mail, X } from "lucide-react";
 import { useModalFocus } from "@/components/use-modal-focus";
 import { requestMagicLink } from "@/lib/account";
 import { AUTH_COPY, type AuthIntent } from "@/lib/access";
+import { GUEST_EXPLORER_CHECKS_PER_DAY, PLAN_LIMITS } from "@/lib/plan";
 import { trackAppEvent } from "@/lib/analytics-client";
 
 export function AuthModal({
@@ -189,9 +190,9 @@ export function AuthModal({
               )}
 
               <ul className="auth-benefits">
+                <li>{`${PLAN_LIMITS.free.explorerChecksPerDay} keyword checks a day instead of ${GUEST_EXPLORER_CHECKS_PER_DAY}`}</li>
                 <li>Track 1 app &amp; 25 keywords — free, no card</li>
                 <li>ASO assistant: 5 messages a day</li>
-                <li>Daily rank checks for your app&apos;s keywords</li>
               </ul>
 
               <p className="auth-footnote">

@@ -496,6 +496,10 @@
   gap: 10px;
 }
 
+.pr-checks > div {
+  grid-template-columns: 44px minmax(0, 1fr) 58px;
+}
+
 .pr-apps > div {
   grid-template-columns: 38px minmax(0, 1fr);
 }
@@ -508,14 +512,12 @@
 }
 
 .pr-checks-row {
-  display: flex;
-  gap: 4px;
+  display: grid;
+  gap: 3px;
   overflow: hidden;
 }
 
 .pr-checks-row i {
-  flex-shrink: 0;
-  width: 10px;
   height: 18px;
   border-radius: 3px;
   background: var(--teal-300);

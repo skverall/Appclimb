@@ -25,13 +25,13 @@ import {
   HistoryIllustration,
   LimitMeter,
 } from "@/components/pricing-visuals";
-import { PLAN_LIMITS, PRO_MONTHLY_USD, PRO_YEARLY_USD } from "@/lib/plan";
+import { GUEST_EXPLORER_CHECKS_PER_DAY, PLAN_LIMITS, PRO_MONTHLY_USD, PRO_YEARLY_USD } from "@/lib/plan";
 import { absoluteUrl } from "@/lib/site";
 
 export const metadata = {
   title: "Pricing",
   description:
-    "AppClimb pricing: search App Store keywords free (8 checks/day, Apple Ads popularity, difficulty evidence). Pro is $8/month or $64/year: unlimited checks, 52 weeks of Apple history, unlimited tracking, cloud sync.",
+    "AppClimb pricing: search App Store keywords free (8 checks/day as a guest, 30 with a free account; Apple Ads popularity, difficulty evidence). Pro is $8/month or $64/year: unlimited checks, 52 weeks of Apple history, unlimited tracking, cloud sync.",
   alternates: { canonical: "/pricing" },
   openGraph: {
     title: "AppClimb Pricing",
@@ -51,12 +51,12 @@ const FAQ = [
   {
     question: "Do I need an account?",
     answer:
-      "Not to search keywords — Keyword Explorer is open as a guest (8 checks/day). Tracking an app and the ASO assistant need a free sign-in. Pro is optional after that.",
+      "Not to search keywords — Keyword Explorer is open as a guest (8 checks/day). A free sign-in raises that to 30 a day and adds app tracking and the ASO assistant. Pro is optional after that.",
   },
   {
     question: "Is the free plan real or a demo?",
     answer:
-      "It's the real tool with honest daily limits: 8 new keyword checks a day (re-checking your list is free), Apple Ads popularity with 12 weeks of history, difficulty with its evidence, trending searches, and — after a free sign-in — one tracked app and 5 AI messages. Your keyword data stays in your browser unless you upgrade to Pro sync.",
+      "It's the real tool with honest daily limits: 30 new keyword checks a day with a free account, 8 without one (re-checking your list is free), Apple Ads popularity with 12 weeks of history, difficulty with its evidence, trending searches, and — after a free sign-in — one tracked app and 5 AI messages. Your keyword data stays in your browser unless you upgrade to Pro sync.",
   },
   {
     question: "What does Pro unlock?",
@@ -106,7 +106,9 @@ const GROUPS: Array<{ title: string; icon: LucideIcon; rows: Row[] }> = [
     rows: [
       {
         label: "New keyword checks",
-        free: text(`${free.explorerChecksPerDay} a day`, { meter: { value: 8, max: 100 } }),
+        free: text(`${free.explorerChecksPerDay} a day · ${GUEST_EXPLORER_CHECKS_PER_DAY} as a guest`, {
+          meter: { value: free.explorerChecksPerDay ?? 0, max: 100 },
+        }),
         pro: text("Unlimited", { meter: { value: 1, max: 1, unlimited: true } }),
       },
       { label: "Apple Ads popularity on every keyword", free: yes, pro: yes },

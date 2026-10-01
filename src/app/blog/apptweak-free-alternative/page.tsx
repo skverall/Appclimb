@@ -117,7 +117,7 @@ export default function AppTweakAlternativeArticle() {
               </tr>
               <tr>
                 <td className="p-3 font-medium">Guest Search (No Login)</td>
-                <td className="p-3 font-semibold text-primary">✅ 8 checks/day</td>
+                <td className="p-3 font-semibold text-primary">✅ 8/day guest · 30/day free account</td>
                 <td className="p-3">❌ Requires credit card trial</td>
               </tr>
               <tr>

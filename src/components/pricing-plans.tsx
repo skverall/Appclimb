@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Check, Lock, Sparkles } from "lucide-react";
 import Link from "next/link";
 
 import { useAccount } from "@/components/account-provider";
-import { PLAN_LIMITS, PRO_MONTHLY_USD, PRO_YEARLY_USD } from "@/lib/plan";
+import { trackAppEvent } from "@/lib/analytics-client";
+import { GUEST_EXPLORER_CHECKS_PER_DAY, PLAN_LIMITS, PRO_MONTHLY_USD, PRO_YEARLY_USD } from "@/lib/plan";
 
 type BillingCycle = "monthly" | "yearly";
 
@@ -13,11 +14,11 @@ const free = PLAN_LIMITS.free;
 const pro = PLAN_LIMITS.pro;
 
 const FREE_FEATURES = [
-  `${free.explorerChecksPerDay} new keyword checks per day — no sign-up`,
+  `${free.explorerChecksPerDay} new keyword checks a day (${GUEST_EXPLORER_CHECKS_PER_DAY} without signing in)`,
   "Apple Ads popularity, difficulty evidence & verdict",
   `${free.historyWeeks} weeks of Apple popularity history per keyword`,
   "Trending, related & autocomplete searches",
-  `Free sign-in: track ${free.trackedApps} app · ${free.keywordsPerApp} keywords`,
+  `Track ${free.trackedApps} app · ${free.keywordsPerApp} keywords`,
   `ASO assistant — ${free.aiMessagesPerDay} messages a day`,
 ];
 
@@ -63,6 +64,10 @@ export function PricingPlans() {
   const { account, isPro, openUpgradeWith } = useAccount();
   const [cycle, setCycle] = useState<BillingCycle>("yearly");
   const yearly = cycle === "yearly";
+
+  useEffect(() => {
+    trackAppEvent("pricing_viewed", null, { oncePerDay: "default" });
+  }, []);
 
   return (
     <div className="pr-plans">

@@ -58,12 +58,12 @@ const faq = [
   {
     question: "Do I need an account?",
     answer:
-      "No. Searching works without one — 8 new keyword checks a day, with Apple popularity, 12 weeks of history, and difficulty evidence — and your keyword list lives in your browser's localStorage. A free account adds tracking for one app and the ASO assistant. Pro ($8/month) adds unlimited checks, a full year of Apple history, unlimited tracking, and cloud sync.",
+      "No. Searching works without one — 8 new keyword checks a day, with Apple popularity, 12 weeks of history, and difficulty evidence — and your keyword list lives in your browser's localStorage. A free account raises that to 30 checks a day and adds tracking for one app and the ASO assistant. Pro ($8/month) adds unlimited checks, a full year of Apple history, unlimited tracking, and cloud sync.",
   },
   {
     question: "Can I analyze a whole list at once?",
     answer:
-      "Yes. Paste up to 50 keywords — one per line or comma-separated — and AppClimb analyzes them in small paced batches so the public API doesn't rate-limit you. Each new keyword uses one of your daily checks (8/day on the free plan, unlimited on Pro). Rows that fail are reported in a summary while the rest of the queue keeps running.",
+      "Yes. Paste up to 50 keywords — one per line or comma-separated — and AppClimb analyzes them in small paced batches so the public API doesn't rate-limit you. Each new keyword uses one of your daily checks (8/day as a guest, 30/day with a free account, unlimited on Pro). Rows that fail are reported in a summary while the rest of the queue keeps running.",
   },
   {
     question: "Can I export or back up my keyword data?",

@@ -253,7 +253,7 @@ export default function AstroAlternativeArticle() {
         <div className="article-faq-item">
           <h3>Is there a limit on how many keywords I can search?</h3>
           <p>
-            Guests get 8 free keyword searches daily with zero account creation. Creating a free account unlocks 1 tracked app and the ASO assistant. Upgrading to Pro ($8/month) gives you unlimited keyword searches and tracking.
+            Guests get 8 free keyword searches daily with zero account creation. Creating a free account raises that to 30 a day and unlocks 1 tracked app and the ASO assistant. Upgrading to Pro ($8/month) gives you unlimited keyword searches and tracking.
           </p>
         </div>
       </div>

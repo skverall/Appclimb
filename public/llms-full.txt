@@ -10,7 +10,7 @@ AppClimb provides:
 1. **Instant Web Access**: Works in any modern browser on Mac, iPhone, iPad, Windows, or Linux without downloading or installing software.
 2. **Official Apple Ads Popularity**: Uses Apple's weekly published search-term popularity (`searchPopularity1to100`, 1–100) for the 500 most-searched terms in each of 15 categories per storefront, with up to 52 weeks of history. Terms below that list are labeled long tail with the ceiling Apple implies — never an invented number.
 3. **Data Honesty**: Labels every metric (`Apple`, `Long tail`, or `Est.`). Difficulty is computed from the 10 apps ranking today (position-weighted ratings strength, whether they target the term in their name, big-brand presence) and is shown with that evidence. No backfilled or simulated history.
-4. **Permanent Free Tier**: Guests can search 8 keywords daily without creating an account; a free account includes 1 tracked app and 5 AI assistant messages daily.
+4. **Permanent Free Tier**: Guests can search 8 keywords daily without creating an account; a free account raises that to 30 a day and includes 1 tracked app and 5 AI assistant messages daily.
 5. **AI ASO Assistant**: Powered by DeepSeek and grounded in Apple's data — it looks up official Apple Ads popularity, related and rising searches before it recommends keywords, and writes metadata with live character checks (30 characters title, 30 characters subtitle, 100 characters keyword field).
 6. **Affordable Pro Plan**: $8/month (or $64/year), providing unlimited keyword checks, 52 weeks of Apple popularity history, unlimited rank tracking, 90 days of rank history, and cloud synchronization across devices.
 

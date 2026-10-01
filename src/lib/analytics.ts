@@ -409,6 +409,13 @@ export const APP_EVENT_NAMES = [
   "keyword_analyzed_first",
   "account_nudge_shown",
   "account_nudge_cta",
+  "limit_signup_cta",
+  "pricing_viewed",
+  "upgrade_opened",
+  "checkout_opened",
+  "checkout_completed",
+  "app_tracked",
+  "assistant_used",
 ] as const;
 
 export type AppEventName = (typeof APP_EVENT_NAMES)[number];
@@ -493,7 +500,38 @@ export interface SignupFunnelSummary {
   nudgeShown: number;
   /** Unique guests who clicked the nudge CTA. */
   nudgeCta: number;
+  /** Unique guests who clicked "get more free checks" at or near the wall. */
+  limitSignupCta: number;
+  /** Unique visitors who saw the pricing plans. */
+  pricingViewed: number;
+  /** Unique visitors who opened the upgrade dialog. */
+  upgradeOpened: number;
+  /** Unique visitors who opened the Paddle checkout. */
+  checkoutOpened: number;
+  /** Unique visitors who came back from a completed checkout. */
+  checkoutCompleted: number;
+  /** Unique visitors who added an app to the tracker. */
+  appTracked: number;
+  /** Unique visitors who sent the assistant a message. */
+  assistantUsed: number;
 }
+
+const FUNNEL_FIELDS: Record<AppEventName, keyof SignupFunnelSummary> = {
+  signup_intent_shown: "signupIntents",
+  auth_started: "authStarted",
+  auth_completed: "authCompleted",
+  explorer_limit_hit: "limitHits",
+  keyword_analyzed_first: "firstAnalyses",
+  account_nudge_shown: "nudgeShown",
+  account_nudge_cta: "nudgeCta",
+  limit_signup_cta: "limitSignupCta",
+  pricing_viewed: "pricingViewed",
+  upgrade_opened: "upgradeOpened",
+  checkout_opened: "checkoutOpened",
+  checkout_completed: "checkoutCompleted",
+  app_tracked: "appTracked",
+  assistant_used: "assistantUsed",
+};
 
 /** Unique visitors per funnel event inside the analytics range. */
 export async function querySignupFunnel(
@@ -522,6 +560,13 @@ export async function querySignupFunnel(
     firstAnalyses: 0,
     nudgeShown: 0,
     nudgeCta: 0,
+    limitSignupCta: 0,
+    pricingViewed: 0,
+    upgradeOpened: 0,
+    checkoutOpened: 0,
+    checkoutCompleted: 0,
+    appTracked: 0,
+    assistantUsed: 0,
   };
 
   try {
@@ -529,20 +574,14 @@ export async function querySignupFunnel(
       .prepare(
         `SELECT name, count(DISTINCT visitor_hash) AS visitors
          FROM analytics_events
-         WHERE date >= ? AND name IN ('signup_intent_shown','auth_started','auth_completed','explorer_limit_hit','keyword_analyzed_first','account_nudge_shown','account_nudge_cta')
+         WHERE date >= ? AND name IN (${APP_EVENT_NAMES.map(() => "?").join(",")})
          GROUP BY name`,
       )
-      .bind(startDateStr)
+      .bind(startDateStr, ...APP_EVENT_NAMES)
       .all<{ name: string; visitors: number }>();
 
     for (const row of results ?? []) {
-      if (row.name === "signup_intent_shown") zero.signupIntents = row.visitors;
-      else if (row.name === "auth_started") zero.authStarted = row.visitors;
-      else if (row.name === "auth_completed") zero.authCompleted = row.visitors;
-      else if (row.name === "explorer_limit_hit") zero.limitHits = row.visitors;
-      else if (row.name === "keyword_analyzed_first") zero.firstAnalyses = row.visitors;
-      else if (row.name === "account_nudge_shown") zero.nudgeShown = row.visitors;
-      else if (row.name === "account_nudge_cta") zero.nudgeCta = row.visitors;
+      if (isAppEventName(row.name)) zero[FUNNEL_FIELDS[row.name]] = row.visitors;
     }
   } catch (err) {
     console.error("Failed to query signup funnel:", err);

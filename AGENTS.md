@@ -11,7 +11,7 @@ retired by the founder). AppClimb is a freemium App Store keyword tool that
 helps iOS developers find keywords they can actually rank for: Apple Ads
 popularity with Apple's weekly history, an explained difficulty estimate, and
 a verdict per keyword (see ADR 0005). Guests search with no login wall (8 new
-checks/day); a free account unlocks 1 tracked app and the ASO assistant
+checks/day); a free account raises that to 30/day and unlocks 1 tracked app and the ASO assistant
 (5 messages/day); Pro is $8/month ($64/year) with 52 weeks of Apple history,
 unlimited tracking, and cloud sync. Not the Growth CI SaaS that preceded it.
 If a request implies a login wall on search, user-connected connectors, team

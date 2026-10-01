@@ -1,7 +1,7 @@
 // Small illustrations for the pricing page. They explain plan differences
 // with shapes, not numbers, and are labeled as illustrations.
 
-import { PLAN_LIMITS } from "@/lib/plan";
+import { GUEST_EXPLORER_CHECKS_PER_DAY, PLAN_LIMITS } from "@/lib/plan";
 
 const free = PLAN_LIMITS.free;
 const pro = PLAN_LIMITS.pro;
@@ -59,24 +59,34 @@ export function HistoryIllustration() {
   );
 }
 
-/** Eight daily checks vs no ceiling. */
+/** Daily checks on one scale: guest, free account, and Pro's open end. */
 export function ChecksIllustration() {
+  const scale = free.explorerChecksPerDay ?? 30;
   return (
     <div className="pr-checks" aria-hidden="true">
       <div>
-        <span className="pr-checks-label">Free</span>
-        <span className="pr-checks-row">
-          {Array.from({ length: free.explorerChecksPerDay ?? 8 }, (_, index) => (
+        <span className="pr-checks-label">Guest</span>
+        <span className="pr-checks-row" style={{ gridTemplateColumns: `repeat(${scale}, minmax(0, 1fr))` }}>
+          {Array.from({ length: GUEST_EXPLORER_CHECKS_PER_DAY }, (_, index) => (
             <i key={index} />
           ))}
         </span>
-        <b>{free.explorerChecksPerDay}/day</b>
+        <b>{GUEST_EXPLORER_CHECKS_PER_DAY}/day</b>
+      </div>
+      <div>
+        <span className="pr-checks-label">Free</span>
+        <span className="pr-checks-row" style={{ gridTemplateColumns: `repeat(${scale}, minmax(0, 1fr))` }}>
+          {Array.from({ length: scale }, (_, index) => (
+            <i key={index} />
+          ))}
+        </span>
+        <b>{scale}/day</b>
       </div>
       <div>
         <span className="pr-checks-label">Pro</span>
-        <span className="pr-checks-row is-pro">
-          {Array.from({ length: 22 }, (_, index) => (
-            <i key={index} style={{ opacity: Math.max(0.12, 1 - index / 24) }} />
+        <span className="pr-checks-row is-pro" style={{ gridTemplateColumns: `repeat(${scale}, minmax(0, 1fr))` }}>
+          {Array.from({ length: scale }, (_, index) => (
+            <i key={index} style={{ opacity: Math.max(0.12, 1 - index / (scale + 2)) }} />
           ))}
         </span>
         <b>No limit</b>

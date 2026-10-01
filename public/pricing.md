@@ -16,7 +16,7 @@ Last updated: 2026-10-01
 - Price: USD 0
 - Card required: No
 - Account required: Yes (Google or email magic link)
-- Includes: everything in Guest, plus 1 tracked app with 25 keywords and the AI assistant (5 messages/day)
+- Includes: everything in Guest with 30 new keyword checks/day instead of 8, plus 1 tracked app with 25 keywords and the AI assistant (5 messages/day)
 - Data location: your browser only
 
 ## Pro

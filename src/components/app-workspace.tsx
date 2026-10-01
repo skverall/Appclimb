@@ -25,6 +25,7 @@ import { canTrackApps } from "@/lib/access";
 import { proEnabled } from "@/lib/flags";
 import type { CatalogApp } from "@/lib/itunes";
 import { notifySyncChange } from "@/lib/sync-client";
+import { trackAppEvent } from "@/lib/analytics-client";
 import { enrichAnalysisResult } from "@/lib/popularity";
 import {
   addKeywordsToStore,
@@ -337,6 +338,7 @@ export function AppWorkspace() {
         setBanner("This app is already tracked for that storefront.");
         return;
       }
+      trackAppEvent("app_tracked", null, { onceEver: "own" });
 
       const raw = {
         trackName: enriched.name,
@@ -404,6 +406,7 @@ export function AppWorkspace() {
         );
         return;
       }
+      trackAppEvent("app_tracked", { sample: true }, { onceEver: "sample" });
       await runKeywordAnalysis(app, [...STARTER_KEYWORDS]);
     } catch (err) {
       setBanner(humanizeItunesError(err));

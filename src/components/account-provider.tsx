@@ -244,6 +244,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       const checkout = params.get("checkout");
 
       if (checkout === "success") {
+        trackAppEvent("checkout_completed", null, { onceEver: "default" });
         setNotice("Welcome to Pro! Your upgrade is being activated.");
         cleanUrlParams("checkout");
         const email = account.user?.email ?? "";
@@ -363,10 +364,12 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       openAuth,
       requireAccount,
       openUpgrade: () => {
+        trackAppEvent("upgrade_opened", { cycle: "monthly" }, { oncePerDay: "default" });
         setUpgradeCycle("monthly");
         setUpgradeOpen(true);
       },
       openUpgradeWith: (cycle: "monthly" | "yearly") => {
+        trackAppEvent("upgrade_opened", { cycle }, { oncePerDay: "default" });
         setUpgradeCycle(cycle);
         setUpgradeOpen(true);
       },

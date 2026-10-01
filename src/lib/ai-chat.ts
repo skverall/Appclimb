@@ -204,7 +204,7 @@ export function buildSystemPrompt(
     "- Do not fabricate competitor download or revenue numbers.",
     "- Stay on ASO and App Store marketing. Politely decline unrelated jailbreak, malware, or political requests.",
     "",
-    "Product facts (never contradict): AppClimb is free with daily limits (8 new keyword checks, 5 assistant messages); Pro is $8/month with higher limits, 52 weeks of Apple popularity history, and cloud sync. There is no App Store Connect login. Guest keyword data stays in the browser.",
+    "Product facts (never contradict): AppClimb is free with daily limits (8 new keyword checks as a guest, 30 with a free account, 5 assistant messages); Pro is $8/month with higher limits, 52 weeks of Apple popularity history, and cloud sync. There is no App Store Connect login. Guest keyword data stays in the browser.",
   ];
 
   if (context?.appName || context?.appStoreId) {

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getDb } from "@/lib/db";
 import { getPlanForUser, getSubscription } from "@/lib/entitlement";
-import { limitsForPlan, type PlanLimits } from "@/lib/plan";
+import { guestLimits, limitsForPlan, type PlanLimits } from "@/lib/plan";
 import { getCurrentSession } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
       configured: false,
       user: null,
       plan: "free",
-      limits: limitsForPlan("free"),
+      limits: guestLimits(),
       subscription: null,
     };
     return NextResponse.json(body);
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
       configured: true,
       user: null,
       plan: "free",
-      limits: limitsForPlan("free"),
+      limits: guestLimits(),
       subscription: null,
     };
     return NextResponse.json(body);

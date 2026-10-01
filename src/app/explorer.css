@@ -387,6 +387,101 @@
   color: var(--amber-700);
 }
 
+/* Guest daily wall: one clear free step up, Pro as the alternative. */
+.ex-limit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px 28px;
+  margin-bottom: 14px;
+  padding: 18px 20px;
+  border: 1px solid var(--teal-200);
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--teal-25), var(--card) 70%);
+  color: var(--ink);
+}
+
+.ex-limit-copy {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.ex-limit-copy > strong {
+  font-size: var(--text-base);
+  line-height: 1.35;
+}
+
+.ex-limit-copy > span:not([class]) {
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.ex-limit-meter {
+  display: grid;
+  grid-template-columns: repeat(30, minmax(0, 1fr));
+  gap: 3px;
+  max-width: 460px;
+  margin-top: 6px;
+}
+
+.ex-limit-meter i,
+.ex-limit-legend i {
+  display: block;
+  height: 10px;
+  border: 1px solid var(--teal-300);
+  border-radius: 3px;
+  background: var(--card);
+}
+
+.ex-limit-meter i.is-used,
+.ex-limit-legend i.is-used {
+  border-color: var(--teal-700);
+  background: var(--teal-700);
+}
+
+.ex-limit-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  color: var(--n-700);
+  font-size: var(--text-xs);
+}
+
+.ex-limit-legend > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ex-limit-legend i {
+  width: 10px;
+}
+
+.ex-limit-actions {
+  display: grid;
+  gap: 8px;
+  justify-items: stretch;
+}
+
+.ex-limit-actions .ex-btn {
+  justify-content: center;
+  height: 38px;
+  padding: 0 16px;
+}
+
+@media (max-width: 720px) {
+  .ex-limit {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 16px;
+  }
+
+  .ex-limit-actions .ex-btn {
+    white-space: normal;
+  }
+}
+
 .ex-banner--error {
   border-color: var(--coral-200);
   background: var(--coral-25);
