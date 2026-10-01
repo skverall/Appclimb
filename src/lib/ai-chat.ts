@@ -33,6 +33,8 @@ export interface AppChatContext {
   keywords?: Array<{
     keyword: string;
     popularity?: number | null;
+    /** official = Apple Ads score; longtail = at or below this ceiling; estimated = rough. */
+    popularitySource?: "official" | "longtail" | "estimated";
     difficulty?: number | null;
     position?: number | null | string;
     note?: string;
@@ -45,9 +47,11 @@ export function buildSystemPrompt(context?: AppChatContext | null): string {
     "You help users pick keywords, interpret popularity/difficulty, plan title/subtitle/keyword field changes, and understand observed public search positions.",
     "",
     "Product truth (never contradict):",
-    "- AppClimb has a free plan with honest daily limits (8 keyword checks, 5 assistant messages) and an optional Pro plan ($8/month) that lifts limits and adds cloud sync. There is no App Store Connect login.",
-    "- Popularity is Apple Ads official relative score (1–100) when the founder-owned Platform API v1 lookup hits; otherwise an ESTIMATE from public iTunes signals. It is NOT search volume, downloads, or revenue.",
-    "- Difficulty is always an ESTIMATE from public iTunes Search signals (competition + top-result strength).",
+    "- AppClimb has a free plan with honest daily limits (8 new keyword checks, 5 assistant messages) and an optional Pro plan ($8/month) that lifts limits, adds 52 weeks of Apple popularity history, and cloud sync. There is no App Store Connect login.",
+    "- Popularity is Apple Ads' official relative score (1–100). Apple publishes it weekly for the 500 most-searched terms per category and storefront. A 'long tail' term is below that list: its popularity is AT OR BELOW the shown ceiling (written ≤N) — treat it as low traffic, often easy to rank. It is NOT search volume, downloads, or revenue.",
+    "- Difficulty is always an ESTIMATE (1–99) from the 10 apps ranking today: their ratings strength (position-weighted), whether they put the keyword in their name, and big-brand presence.",
+    "- Verdicts: 'Worth targeting' = Apple demand + beatable page one; 'Long-tail win' = low traffic but weak page one; 'Competitive' = real demand, strong incumbents; 'Dominated' = brand search or entrenched page one.",
+    "- Practical ASO: the App Store indexes title (30 chars), subtitle (30), and the hidden keyword field (100, comma-separated, no spaces needed). Don't repeat words across them; singular/plural usually both match.",
     "- Position is the observed rank in the public iTunes Search API results for a country (first 200 apps). Outside that window show >200. It is not an official universal rank.",
     "- Anonymous keyword history lives only in the visitor's browser localStorage; Pro subscribers can sync their own data to their account.",
     "",
@@ -66,7 +70,7 @@ export function buildSystemPrompt(context?: AppChatContext | null): string {
     "- Do NOT use markdown tables, raw HTML, or decorative heading lines like '##' alone.",
     "- Prefer '## Short title' at most once per section; avoid # / ### spam.",
     "- Prefer actionable keyword ideas, positioning, and measurement tips.",
-    "- When listing keywords with metrics, format like: - **keyword** — pos 78, pop 90 (Apple Ads) or pop ~90 (estimated).",
+    "- When listing keywords with metrics, format like: - **keyword** — pos 78, pop 56 (Apple), diff 40 — or pop ≤48 (long tail).",
     "- Label estimates clearly. Use English unless the user writes in another language.",
   ];
 
@@ -78,11 +82,17 @@ export function buildSystemPrompt(context?: AppChatContext | null): string {
     if (context.developer) lines.push(`- Developer: ${context.developer}`);
     if (context.genre) lines.push(`- Category: ${context.genre}`);
     if (context.keywords && context.keywords.length > 0) {
-      lines.push("- Tracked keywords (estimates / observed position):");
+      lines.push("- Tracked keywords (popularity source in brackets; difficulty is an estimate; pos = observed rank):");
       for (const row of context.keywords.slice(0, 40)) {
         const bits = [
           row.keyword,
-          row.popularity != null ? `pop~${row.popularity}` : null,
+          row.popularity != null
+            ? row.popularitySource === "official"
+              ? `pop=${row.popularity} (Apple)`
+              : row.popularitySource === "longtail"
+                ? `pop≤${row.popularity} (long tail)`
+                : `pop~${row.popularity} (estimate)`
+            : null,
           row.difficulty != null ? `diff~${row.difficulty}` : null,
           row.position != null && row.position !== ""
             ? `pos=${row.position}`
@@ -133,6 +143,12 @@ export function normalizeAppContext(raw: unknown): AppChatContext | null {
         keyword,
         popularity:
           typeof r.popularity === "number" ? r.popularity : null,
+        popularitySource:
+          r.popularitySource === "official" ||
+          r.popularitySource === "longtail" ||
+          r.popularitySource === "estimated"
+            ? (r.popularitySource as "official" | "longtail" | "estimated")
+            : undefined,
         difficulty:
           typeof r.difficulty === "number" ? r.difficulty : null,
         position:

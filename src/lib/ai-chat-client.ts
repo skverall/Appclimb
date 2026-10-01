@@ -376,6 +376,7 @@ export function loadTrackerContext(): AppChatContext | null {
           note?: string;
           currentMetrics?: {
             popularity?: number;
+            popularitySource?: "official" | "longtail" | "estimated";
             difficulty?: number;
             position?: number | null;
             unavailable?: boolean;
@@ -400,6 +401,7 @@ export function loadTrackerContext(): AppChatContext | null {
         popularity: row.currentMetrics?.unavailable
           ? null
           : row.currentMetrics?.popularity ?? null,
+        popularitySource: row.currentMetrics?.popularitySource,
         difficulty: row.currentMetrics?.unavailable
           ? null
           : row.currentMetrics?.difficulty ?? null,

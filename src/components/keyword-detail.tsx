@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Check,
   ExternalLink,
   Link2,
   Loader2,
+  Lock,
   RefreshCw,
   Sparkles,
   Star,
@@ -15,23 +16,32 @@ import {
 import { useToast } from "@/components/toast";
 
 import {
+  assessOpportunity,
+  formatRatings,
   recentHistory,
   relatedKeywords,
+  titleMatchScore,
   type KeywordMetrics,
   type KeywordRecord,
 } from "@/lib/aso";
 import {
+  formatPopularity,
   popularityCaption,
-  popularityShortLabel,
   popularitySourceOf,
 } from "@/lib/popularity";
-import { TrendChart } from "@/components/keyword-charts";
+import { genreLabel, historyDelta } from "@/lib/search-terms";
+import { fetchRelatedTerms, type RelatedTermResult } from "@/lib/terms-client";
+import { formatWeek, LineChart } from "@/components/keyword-charts";
+import { OpportunityPill, DeltaBadge } from "@/components/keyword-badges";
 
-function formatCount(value: number): string {
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
-  return String(value);
-}
+type TrackApp = {
+  appStoreId: string;
+  name: string;
+  iconUrl?: string;
+  developer?: string;
+  genre?: string;
+  storeUrl: string;
+};
 
 export function KeywordDetail({
   keyword,
@@ -41,10 +51,14 @@ export function KeywordDetail({
   record,
   busy,
   historyDays = 30,
+  historyWeeks = 12,
+  canSeeFullHistory = false,
+  onUpgrade,
   onClose,
   onRefresh,
   onAnalyze,
   onTrackApp,
+  trackTarget,
 }: {
   keyword: string;
   countryCode: string;
@@ -52,43 +66,59 @@ export function KeywordDetail({
   metrics: KeywordMetrics | null;
   record: KeywordRecord | null;
   busy: boolean;
-  /** Plan history window (30 free, 90 Pro) — drives the chart and labels. */
+  /** Local snapshot window (30 free, 90 Pro). */
   historyDays?: number;
+  /** Apple weekly history window (12 free, 52 Pro). */
+  historyWeeks?: number;
+  canSeeFullHistory?: boolean;
+  onUpgrade?: () => void;
   onClose: () => void;
   onRefresh: () => void;
   onAnalyze: (keyword: string) => void;
-  onTrackApp?: (app: {
-    appStoreId: string;
-    name: string;
-    iconUrl?: string;
-    developer?: string;
-    genre?: string;
-    storeUrl: string;
-  }) => void;
+  onTrackApp?: (app: TrackApp) => void;
+  /** The user's app in this storefront, to track this keyword's rank. */
+  trackTarget?: { name: string; iconUrl?: string; tracked: boolean; onTrack: () => void };
 }) {
   const { showToast } = useToast();
   const [copied, setCopied] = useState(false);
-  const history = useMemo(
+  const [related, setRelated] = useState<{ key: string; items: RelatedTermResult[] } | null>(
+    null,
+  );
+
+  const source = metrics ? popularitySourceOf(metrics) : "estimated";
+  const opportunity = metrics ? assessOpportunity(metrics) : null;
+  const appleHistory = useMemo(
+    () => (metrics?.popularityHistory ?? record?.popularityHistory ?? []).slice(-historyWeeks),
+    [metrics, record, historyWeeks],
+  );
+  const delta4w = historyDelta(appleHistory, 4);
+  const localHistory = useMemo(
     () => (record ? recentHistory(record, historyDays) : []),
     [record, historyDays],
   );
-  const related = useMemo(
+
+  const relatedKey = `${countryCode}:${keyword.toLocaleLowerCase()}`;
+  const genreHint = metrics?.appleGenre;
+  useEffect(() => {
+    let cancelled = false;
+    void fetchRelatedTerms(countryCode, keyword, genreHint).then((items) => {
+      if (!cancelled) setRelated({ key: relatedKey, items });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [countryCode, keyword, genreHint, relatedKey]);
+  const appleRelated = related?.key === relatedKey ? related.items : null;
+  const fallbackRelated = useMemo(
     () => (metrics ? relatedKeywords(metrics.topApps, keyword) : []),
     [metrics, keyword],
   );
 
-  const competition = !metrics
-    ? "—"
-    : metrics.saturated
-      ? "Heavy"
-      : metrics.results > 60
-        ? "Moderate"
-        : "Light";
-
-  const shareUrl = `${window.location.origin}${window.location.pathname}?kw=${encodeURIComponent(keyword)}&country=${encodeURIComponent(countryCode)}`;
-
+  const shareUrl = `${window.location.origin}/?kw=${encodeURIComponent(keyword)}&country=${encodeURIComponent(countryCode)}`;
   const copyShareLink = async () => {
-    const fallback = () => {
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+    } catch {
       const textarea = document.createElement("textarea");
       textarea.value = shareUrl;
       textarea.style.position = "fixed";
@@ -98,62 +128,44 @@ export function KeywordDetail({
       try {
         document.execCommand("copy");
       } catch {
-        // Clipboard unavailable; nothing else we can do in this browser.
+        // Clipboard unavailable in this browser.
       }
       textarea.remove();
-      setCopied(true);
-      showToast(`Copied share link for "${keyword}"`);
-    };
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(shareUrl);
-        setCopied(true);
-        showToast(`Copied share link for "${keyword}"`);
-      } else {
-        fallback();
-      }
-    } catch {
-      fallback();
     }
+    setCopied(true);
+    showToast(`Copied share link for "${keyword}"`);
     window.setTimeout(() => setCopied(false), 2000);
   };
 
+  const evidence = metrics?.evidence;
+  const genreName = metrics?.appleGenre ? genreLabel(metrics.appleGenre) : null;
+
   return (
-    <section className="keyword-detail" aria-labelledby="keyword-detail-title">
-      <header className="keyword-detail-header">
-        <div>
-          <span className="eyebrow">{countryLabel} · App Store</span>
+    <section className="kd" aria-labelledby="keyword-detail-title">
+      <header className="kd-head">
+        <div className="kd-title">
+          <span className="kd-eyebrow">
+            {countryLabel} App Store
+            {metrics?.dataWeek ? ` · Apple data for week of ${formatWeek(metrics.dataWeek)}` : ""}
+          </span>
           <h2 id="keyword-detail-title">{keyword}</h2>
         </div>
-        <div className="keyword-detail-actions">
-          <button
-            type="button"
-            className="keyword-detail-share"
-            onClick={() => void copyShareLink()}
-          >
-            {copied ? (
-              <Check size={15} aria-hidden="true" />
-            ) : (
-              <Link2 size={15} aria-hidden="true" />
-            )}
+        <div className="kd-actions">
+          <button type="button" className="kd-btn" onClick={() => void copyShareLink()}>
+            {copied ? <Check size={14} aria-hidden="true" /> : <Link2 size={14} aria-hidden="true" />}
             {copied ? "Copied" : "Share"}
           </button>
-          <button
-            type="button"
-            className="keyword-detail-refresh"
-            onClick={onRefresh}
-            disabled={busy}
-          >
+          <button type="button" className="kd-btn" onClick={onRefresh} disabled={busy}>
             {busy ? (
-              <Loader2 className="spin" size={15} aria-hidden="true" />
+              <Loader2 className="spin" size={14} aria-hidden="true" />
             ) : (
-              <RefreshCw size={15} aria-hidden="true" />
+              <RefreshCw size={14} aria-hidden="true" />
             )}
             {busy ? "Checking…" : "Check now"}
           </button>
           <button
             type="button"
-            className="keyword-detail-close"
+            className="kd-close"
             onClick={onClose}
             aria-label="Close keyword detail"
           >
@@ -162,201 +174,282 @@ export function KeywordDetail({
         </div>
       </header>
 
+      {!metrics && busy && <div className="kd-loading" aria-live="polite">Analyzing “{keyword}”…</div>}
       {!metrics && !busy && (
-        <p className="keyword-detail-pending">
-          This keyword is queued — it will be analyzed on the next check.
-        </p>
+        <p className="kd-muted">This keyword has not been checked yet.</p>
       )}
 
-      {metrics && (
+      {metrics && opportunity && (
         <>
-          <div className="keyword-stat-grid">
-            <div className="keyword-stat">
-              <span>Popularity</span>
-              <strong>{metrics.popularity}</strong>
-              <i className="stat-bar stat-bar--popularity">
-                <b style={{ width: `${metrics.popularity}%` }} />
-              </i>
-              <small>{popularityCaption(popularitySourceOf(metrics))}</small>
-            </div>
-            <div className="keyword-stat">
-              <span>Difficulty</span>
-              <strong>{metrics.difficulty}</strong>
-              <i className="stat-bar stat-bar--difficulty">
-                <b style={{ width: `${metrics.difficulty}%` }} />
-              </i>
-              <small>Harder to rank = higher</small>
-            </div>
-            <div className="keyword-stat">
-              <span>Results</span>
-              <strong>{metrics.results}</strong>
-              <i className="stat-bar stat-bar--neutral">
-                <b
-                  style={{ width: `${Math.min(100, metrics.results / 2)}%` }}
-                />
-              </i>
-              <small>
-                {metrics.saturated ? "Hit the 200-app cap" : "Apps in results"}
-              </small>
-            </div>
-            <div className="keyword-stat">
-              <span>Competition</span>
-              <strong>{competition}</strong>
-              <i className="stat-bar stat-bar--neutral">
-                <b
-                  style={{
-                    width: metrics.saturated
-                      ? "100%"
-                      : `${Math.min(100, metrics.results / 2)}%`,
-                  }}
-                />
-              </i>
-              <small>From result density</small>
-            </div>
+          <div className={`kd-verdict kd-verdict--${opportunity.verdict}`}>
+            <OpportunityPill opportunity={opportunity} />
+            <p>{opportunity.reason}</p>
           </div>
 
-          <div className="keyword-chart-grid">
-            <figure className="keyword-chart-card">
-              <figcaption>
-                <span>Popularity trend</span>
-                <small>
-                  {history.length} days ·{" "}
-                  {popularityShortLabel(popularitySourceOf(metrics))}
-                  {record?.backfilled ? " + estimated baseline" : ""}
-                </small>
-              </figcaption>
-              <TrendChart
-                points={history}
-                valueKey="popularity"
-                color="var(--teal-500)"
-              />
-            </figure>
-            <figure className="keyword-chart-card">
-              <figcaption>
-                <span>Difficulty trend</span>
-                <small>{history.length} days · estimated</small>
-              </figcaption>
-              <TrendChart
-                points={history}
-                valueKey="difficulty"
-                color="var(--coral-500)"
-              />
-            </figure>
-          </div>
-
-          {record?.backfilled && (
-            <p className="keyword-estimate-note keyword-estimate-note--detail">
-              The trend starts with an estimated baseline. Each day you check
-              this keyword, a real measurement is recorded
-              {popularitySourceOf(metrics) === "official"
-                ? " — today's popularity is Apple Ads official."
-                : " — today's popularity is the iTunes estimate."}
-            </p>
+          {trackTarget && (
+            <div className="kd-track">
+              {trackTarget.iconUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={trackTarget.iconUrl} alt="" width={28} height={28} />
+              ) : null}
+              <span>
+                {trackTarget.tracked ? (
+                  <>
+                    Tracking for <b>{trackTarget.name}</b> — see its rank under Tracked Apps.
+                  </>
+                ) : (
+                  <>
+                    Where does <b>{trackTarget.name}</b> rank for this?
+                  </>
+                )}
+              </span>
+              {!trackTarget.tracked && (
+                <button type="button" className="kd-track-btn" onClick={trackTarget.onTrack}>
+                  Track rank
+                </button>
+              )}
+            </div>
           )}
 
-          <div className="tracker-ask-ai-card">
-            <div className="tracker-ask-ai-icon">
-              <Sparkles size={16} aria-hidden="true" />
+          <div className="kd-stats">
+            <div className="kd-stat">
+              <span className="kd-stat-label">Popularity</span>
+              <div className="kd-stat-value">
+                <strong>{formatPopularity(metrics)}</strong>
+                <small>/100</small>
+                {source === "official" && <DeltaBadge delta={delta4w} suffix="4w" />}
+              </div>
+              <span className={`source-tag source-tag--${source}`}>
+                {source === "official" ? "Apple Ads" : source === "longtail" ? "Apple · long tail" : "Estimate"}
+              </span>
+              <p className="kd-stat-note">
+                {source === "official" && metrics.rankInGenre
+                  ? `#${metrics.rankInGenre} of the 500 most-searched terms in ${genreName ?? "its category"}.`
+                  : popularityCaption(source, metrics.appleGenre)}
+              </p>
             </div>
-            <div className="tracker-ask-ai-copy">
-              <strong>ASO strategy for &ldquo;{keyword}&rdquo;</strong>
-              <p>Ask the assistant how to rank for this term in your title or subtitle.</p>
+            <div className="kd-stat">
+              <span className="kd-stat-label">Difficulty</span>
+              <div className="kd-stat-value">
+                <strong>{metrics.difficulty}</strong>
+                <small>/100</small>
+              </div>
+              <span className="source-tag source-tag--estimated">Estimate</span>
+              <p className="kd-stat-note">From the apps ranking in today&apos;s top 10.</p>
             </div>
-            <Link
-              href={`/assistant?ask=${encodeURIComponent(`How can I rank for "${keyword}"? Review my title and subtitle ideas for it.`)}`}
-              className="tracker-button-primary tracker-ask-ai-btn"
-            >
-              Ask AI
-            </Link>
+            <div className="kd-stat kd-stat--evidence">
+              <span className="kd-stat-label">Why this difficulty</span>
+              {evidence ? (
+                <ul className="kd-evidence">
+                  <li>
+                    <b>{formatRatings(evidence.medianRatings)}</b> median ratings in the top {evidence.sampled}
+                  </li>
+                  {evidence.weakestPosition !== null && (
+                    <li>
+                      Weakest: <b>#{evidence.weakestPosition}</b> with{" "}
+                      <b>{formatRatings(evidence.weakestRatings)}</b> ratings
+                    </li>
+                  )}
+                  <li>
+                    <b>
+                      {evidence.titleMatches}/{evidence.sampled}
+                    </b>{" "}
+                    have the keyword in their name
+                  </li>
+                  {evidence.brandApps > 0 && (
+                    <li>
+                      <b>{evidence.brandApps}</b> from big-brand publishers
+                    </li>
+                  )}
+                </ul>
+              ) : (
+                <p className="kd-stat-note">Check again to see the top-10 breakdown.</p>
+              )}
+            </div>
           </div>
 
-          {related.length > 0 && (
-            <section className="keyword-related">
-              <h3>Related keywords</h3>
-              <div className="keyword-chip-row">
-                {related.map((phrase) => (
-                  <button
-                    type="button"
-                    key={phrase}
-                    onClick={() => onAnalyze(phrase)}
-                    disabled={busy}
-                  >
+          <figure className="kd-card">
+            <figcaption className="kd-card-head">
+              <div>
+                <h3>Apple search popularity</h3>
+                <small>
+                  {appleHistory.length > 1
+                    ? `Weekly, last ${appleHistory.length} weeks · Apple Ads Insights`
+                    : "Weekly history from Apple Ads Insights"}
+                </small>
+              </div>
+              {!canSeeFullHistory && appleHistory.length >= historyWeeks && onUpgrade && (
+                <button type="button" className="kd-link-btn" onClick={onUpgrade}>
+                  <Lock size={12} aria-hidden="true" /> 52 weeks with Pro
+                </button>
+              )}
+            </figcaption>
+            {appleHistory.length > 1 ? (
+              <LineChart
+                points={appleHistory.map((point) => ({
+                  label: formatWeek(point.week),
+                  value: point.popularity,
+                }))}
+                color="var(--teal-500)"
+                valueLabel="popularity"
+              />
+            ) : (
+              <p className="kd-empty">
+                {source === "official"
+                  ? "Apple has published only this week for this term so far."
+                  : source === "longtail"
+                    ? "Apple hasn't listed this term among the 500 most-searched in its category this past year, so there's no official trend. That's normal for long-tail keywords."
+                    : "Apple's data is unavailable right now."}
+              </p>
+            )}
+          </figure>
+
+          {localHistory.length >= 3 && (
+            <figure className="kd-card">
+              <figcaption className="kd-card-head">
+                <div>
+                  <h3>Difficulty over your checks</h3>
+                  <small>{localHistory.length} daily snapshots saved in this browser</small>
+                </div>
+              </figcaption>
+              <LineChart
+                points={localHistory.map((point) => ({ label: point.date.slice(5), value: point.difficulty }))}
+                color="var(--coral-500)"
+                valueLabel="difficulty"
+                height={130}
+              />
+            </figure>
+          )}
+
+          <section className="kd-card">
+            <div className="kd-card-head">
+              <div>
+                <h3>Related searches</h3>
+                <small>
+                  {appleRelated && appleRelated.length > 0
+                    ? "Real App Store searches from Apple, with popularity"
+                    : "Phrases from the top apps' names"}
+                </small>
+              </div>
+            </div>
+            {appleRelated === null ? (
+              <div className="kd-related-skeleton" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+              </div>
+            ) : appleRelated.length > 0 ? (
+              <ul className="kd-related">
+                {appleRelated.map((item) => (
+                  <li key={`${item.genre}:${item.term}`}>
+                    <button type="button" onClick={() => onAnalyze(item.term)} disabled={busy}>
+                      <span className="kd-related-term">{item.term}</span>
+                      <span className="kd-related-bar" aria-hidden="true">
+                        <i style={{ width: `${item.popularity}%` }} />
+                      </span>
+                      <span className="kd-related-pop">{item.popularity}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : fallbackRelated.length > 0 ? (
+              <div className="kd-chips">
+                {fallbackRelated.map((phrase) => (
+                  <button type="button" key={phrase} onClick={() => onAnalyze(phrase)} disabled={busy}>
                     {phrase}
                   </button>
                 ))}
               </div>
-            </section>
-          )}
+            ) : (
+              <p className="kd-empty">No related searches found.</p>
+            )}
+          </section>
 
-          {metrics.topApps.length > 0 && (
-            <section className="keyword-top-apps">
-              <h3>Top apps for this keyword</h3>
-              <ol>
-                {metrics.topApps.slice(0, 10).map((app) => (
-                  <li key={app.appStoreId}>
-                    <span className="top-app-rank">{app.position}</span>
-                    {app.iconUrl ? (
-                      <>
-                        {/* Remote iTunes artwork varies by storefront; next/image
-                          would require per-origin remote patterns for no gain. */}
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={app.iconUrl}
-                          alt=""
-                          width={40}
-                          height={40}
-                          loading="lazy"
-                        />
-                      </>
-                    ) : (
-                      <span className="top-app-fallback" aria-hidden="true">
-                        {app.name.charAt(0).toUpperCase()}
+          {metrics.topApps.length > 0 ? (
+            <section className="kd-card">
+              <div className="kd-card-head">
+                <div>
+                  <h3>Who ranks today</h3>
+                  <small>
+                    Top {Math.min(10, metrics.topApps.length)} of{" "}
+                    {metrics.saturated ? "200+" : metrics.results} results · public App Store search
+                  </small>
+                </div>
+              </div>
+              <ol className="kd-apps">
+                {metrics.topApps.slice(0, 10).map((app) => {
+                  const match = titleMatchScore(app.name, keyword);
+                  return (
+                    <li key={app.appStoreId}>
+                      <span className="kd-app-rank">{app.position}</span>
+                      {app.iconUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={app.iconUrl} alt="" width={36} height={36} loading="lazy" />
+                      ) : (
+                        <span className="kd-app-fallback" aria-hidden="true">
+                          {app.name.charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                      <div className="kd-app-meta">
+                        <a href={app.storeUrl} target="_blank" rel="noreferrer">
+                          {app.name}
+                          <ExternalLink size={11} aria-hidden="true" />
+                        </a>
+                        <small>
+                          {app.developer}
+                          {match >= 0.75 && <span className="kd-app-tag">keyword in name</span>}
+                        </small>
+                      </div>
+                      <span className="kd-app-ratings">
+                        <Star size={12} aria-hidden="true" />
+                        {app.ratingAverage > 0 ? app.ratingAverage.toFixed(1) : "—"}
+                        <small>{app.ratingsCount > 0 ? formatRatings(app.ratingsCount) : "no ratings"}</small>
                       </span>
-                    )}
-                    <div className="top-app-meta">
-                      <a href={app.storeUrl} target="_blank" rel="noreferrer">
-                        {app.name}
-                        <ExternalLink size={12} aria-hidden="true" />
-                      </a>
-                      <small>
-                        {app.developer} · {app.genre}
-                      </small>
-                    </div>
-                    <span className="top-app-ratings">
-                      <Star size={13} aria-hidden="true" />
-                      {app.ratingAverage > 0
-                        ? app.ratingAverage.toFixed(1)
-                        : "—"}
-                      <small>
-                        {app.ratingsCount > 0
-                          ? formatCount(app.ratingsCount)
-                          : "no ratings"}
-                      </small>
-                    </span>
-                    {onTrackApp && (
-                      <button
-                        type="button"
-                        className="top-app-track-btn"
-                        onClick={() =>
-                          onTrackApp({
-                            appStoreId: app.appStoreId,
-                            name: app.name,
-                            iconUrl: app.iconUrl,
-                            developer: app.developer,
-                            genre: app.genre,
-                            storeUrl: app.storeUrl,
-                          })
-                        }
-                        title={`Track ${app.name} rankings`}
-                      >
-                        + Track
-                      </button>
-                    )}
-                  </li>
-                ))}
+                      {onTrackApp && (
+                        <button
+                          type="button"
+                          className="kd-app-track"
+                          onClick={() =>
+                            onTrackApp({
+                              appStoreId: app.appStoreId,
+                              name: app.name,
+                              iconUrl: app.iconUrl,
+                              developer: app.developer,
+                              genre: app.genre,
+                              storeUrl: app.storeUrl,
+                            })
+                          }
+                          title={`Track ${app.name} rankings`}
+                        >
+                          + Track
+                        </button>
+                      )}
+                    </li>
+                  );
+                })}
               </ol>
             </section>
+          ) : (
+            metrics.restored && (
+              <p className="kd-muted">Check now to load today&apos;s top apps.</p>
+            )
           )}
+
+          <div className="kd-ask">
+            <Sparkles size={16} aria-hidden="true" />
+            <div>
+              <strong>Plan a title and subtitle around “{keyword}”</strong>
+              <p>The ASO assistant sees these numbers and suggests where to place the term.</p>
+            </div>
+            <Link
+              href={`/assistant?ask=${encodeURIComponent(
+                `Help me rank for "${keyword}" in the ${countryLabel} App Store. Popularity ${formatPopularity(metrics)} (${source === "official" ? "Apple Ads" : source === "longtail" ? "long tail, below Apple's top 500" : "estimate"}), difficulty ${metrics.difficulty}/100. Where should it go in my title, subtitle, and keyword field?`,
+              )}`}
+              className="kd-ask-btn"
+            >
+              Ask AI
+            </Link>
+          </div>
         </>
       )}
     </section>

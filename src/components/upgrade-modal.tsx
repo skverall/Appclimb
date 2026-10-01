@@ -12,11 +12,11 @@ type BillingCycle = "monthly" | "yearly";
 
 const PRO_FEATURES = [
   "Unlimited keyword checks",
+  "52 weeks of Apple popularity history",
   "Unlimited apps & keywords in My Apps",
+  "90 days of rank history",
   "Cloud sync across devices",
-  "90-day history and charts",
   "200 AI assistant messages / day",
-  "500 official popularity lookups / day",
 ];
 
 export function UpgradeModal({

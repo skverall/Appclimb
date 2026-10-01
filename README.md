@@ -1,39 +1,39 @@
 # AppClimb — App Store keyword explorer
 
-AppClimb is a **freemium App Store keyword tool**. The lead feature is official
-Apple Ads popularity — not a competitor model with no source.
+AppClimb is a **freemium App Store keyword tool** that answers one question:
+*which keywords can my app actually rank for?*
 
-Search any keyword and get Apple's official Ads score (`searchPopularity1to100`,
-1–100) when the term is in that storefront and genre; otherwise a labeled
-iTunes estimate. Difficulty and evidence still come from the public iTunes
-Search API. Keyword Explorer works as a guest (8 checks/day). A free account
-unlocks 1 tracked app and the ASO assistant (5 messages/day). The optional
-Pro plan ($8/month, $64/year) lifts the limits and adds cloud sync.
+Search any keyword and get Apple's official Ads popularity
+(`searchPopularity1to100`, 1–100) with Apple's own weekly history, a
+difficulty estimate that shows its evidence, and a verdict (Worth targeting,
+Long-tail win, Competitive, Dominated, Low demand). Keyword Explorer works as a
+guest (8 new checks/day). A free account unlocks 1 tracked app and the ASO
+assistant (5 messages/day). The optional Pro plan ($8/month, $64/year) lifts
+the limits, adds 52 weeks of Apple history, and cloud sync.
 
-> Popularity is either Apple Ads official (relative 1–100) or an estimate
-> from public signals. Difficulty is always an estimate. Neither is search
-> volume. Both are labeled in the UI. Competitors that sell unexplained
-> “search volume” are the thing we refuse to copy.
-
-The canonical product north star lives in
-[PRODUCT_DIRECTION.md](./PRODUCT_DIRECTION.md). Read it before changing product
-direction or expanding the feature set.
+> Popularity is Apple's relative score, or "≤N · Long tail" for terms below
+> Apple's published top 500 in their category, or (only if Apple is
+> unreachable) a labeled estimate. Difficulty is always an estimate. Nothing is
+> search volume, and no history is invented. See
+> [ADR 0005](./docs/adr/0005-apple-search-term-store.md).
 
 ## Product surface
 
-- **Keyword Explorer** (`/`) — zero-setup search with live suggestions, a
-  keyword table with estimated Popularity / Difficulty bars and Trend
-  sparklines, and a detail panel with 30-day charts, related keywords, and the
-  top 10 apps for the term. No app setup required.
+- **Keyword Explorer** (`/`) — search with autocomplete from Apple's list of
+  real App Store searches; a "What people search" panel (rising, most
+  searched, new this month, per category); a keyword table with popularity
+  (source-labeled), 12-week Apple trend, difficulty, and verdict; a detail
+  panel with the verdict reason, difficulty evidence, Apple's weekly
+  popularity chart, related Apple searches, and the top 10 apps.
 - **My Apps tracker** (`/`, sidebar) — add an iOS app by name, App Store URL, or
-  ID; get metadata-based keyword suggestions; track estimated scores, observed
-  position in public iTunes results (first 200), notes, opportunity heuristic,
+  ID; get metadata-based keyword suggestions; track scores, observed
+  position in public iTunes results (first 200), notes, opportunity score,
   status filters, CSV export, and real rank history locally per app + storefront.
 - **Storefronts** — 16 supported countries.
-- **Local history** — Keyword Explorer: one daily snapshot per keyword per
-  country in `appclimb:kw:v1:*` (first check seeds an estimated baseline with
-  `backfilled: true`). My Apps: real position/metrics snapshots in
-  `appclimb:tracker:v1` (rank history is never backfilled).
+- **Local history** — Keyword Explorer: one real snapshot per keyword per day
+  in `appclimb:kw:v1:*` (records from before Oct 2026 had an invented
+  baseline; those points are dropped on load). My Apps: real position/metrics
+  snapshots in `appclimb:tracker:v1`.
 - **Accounts & Pro (ADR 0004)** — passwordless sign-in (Google OAuth or email
   magic link), Paddle billing, plan-aware quotas, and Pro cloud sync. Guest
   search stays open. Tracking and the assistant require a free account. The
@@ -46,9 +46,11 @@ direction or expanding the feature set.
 
 A single Next.js app deployed as a Cloudflare Worker (OpenNext). The browser
 queries `itunes.apple.com` directly (Apple allows CORS `*` but blocks
-Cloudflare Worker IPs). Official popularity is one server hop:
-`POST /api/popularity` calls Apple Ads Platform API v1 with founder
-credentials. Keyword history lives in the visitor's browser by default.
+Cloudflare Worker IPs). Official popularity comes from the Worker's store of
+Apple's weekly published search terms (Apple Ads Platform API v1 with founder
+credentials, cached in D1; first use of a new storefront-week costs ~8
+sequential Apple calls, and `.github/workflows/warm-apple-terms.yml` preloads
+them). Keyword history lives in the visitor's browser by default.
 
 Monetization runs on the same Worker plus a **D1 database** (`appclimb-db`,
 staging `appclimb-db-staging`):
@@ -59,6 +61,8 @@ staging `appclimb-db-staging`):
 - `src/app/api/billing/webhook` — signed Paddle events → D1 subscriptions
 - `src/app/api/billing/portal` — Paddle subscription management URLs
 - `src/app/api/chat`, `src/app/api/popularity` — plan-aware quotas
+- `src/app/api/terms/{suggest,related,trending}` — Apple's published search
+  terms (D1-backed store in `src/lib/search-terms-store.ts`)
 - `migrations/` — D1 schema; `src/lib` — plan/auth/billing/sync/quota libs
 - `worker/`, `deploy/`, `compose.yml` — frozen rollback artifacts from earlier
   architectures; never the current backend

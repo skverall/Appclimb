@@ -12,7 +12,7 @@ export default function OpenGraphImage() {
     <ArticleOgImage
       eyebrow="Official Apple Ads data"
       title="Popularity from Apple. Not a black box."
-      description="Apple’s official Ads popularity (1–100) for any App Store keyword, labeled on every score — with estimated difficulty, bulk lists, and 30-day trends."
+      description="Apple Ads popularity (1–100) with weekly history for App Store keywords — plus difficulty with its evidence and a verdict on every keyword."
     />,
     ogImageSize,
   );

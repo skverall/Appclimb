@@ -35,8 +35,14 @@ export async function POST(request: NextRequest) {
   }
 
   const path = typeof body.path === "string" ? body.path : "/";
-  // Never record admin pages themselves or internal API endpoints
-  if (path.startsWith("/admin") || path.startsWith("/api")) {
+  // Never record admin pages themselves or internal API endpoints, and drop
+  // scanner noise such as literal route patterns ("/:path*").
+  if (
+    path.startsWith("/admin") ||
+    path.startsWith("/api") ||
+    path.length > 160 ||
+    !/^\/[\w\-./]*$/u.test(path)
+  ) {
     return new NextResponse(null, { status: 204 });
   }
 

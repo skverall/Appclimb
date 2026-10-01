@@ -28,6 +28,9 @@ export default defineConfig({
     url: `${appURL}/`,
     env: {
       NEXT_TELEMETRY_DISABLED: "1",
+      // Keep e2e deterministic: no live Apple Ads calls. Specs that need
+      // Apple data mock /api/popularity and /api/terms/* in the browser.
+      APPLE_ADS_CLIENT_ID: "",
     },
     reuseExistingServer: false,
     timeout: 180_000,

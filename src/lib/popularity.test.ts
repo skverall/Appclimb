@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   applyOfficialPopularity,
   enrichMetricsWithOfficialPopularity,
+  formatPopularity,
   fetchOfficialPopularity,
   officialLookupItemsFor,
   resetOfficialPopularityCache,
@@ -56,6 +57,36 @@ describe("applyOfficialPopularity", () => {
     expect(next.popularitySource).toBe("estimated");
   });
 
+  it("marks a term below Apple's published range as long tail with its ceiling", () => {
+    const next = applyOfficialPopularity(metrics(), {
+      term: "meditation",
+      found: false,
+      genre: "HEALTH_FITNESS",
+      ceiling: 48,
+      weekStart: "2026-09-20",
+    });
+    expect(next.popularitySource).toBe("longtail");
+    expect(next.popularity).toBe(48);
+    expect(next.popularityCeiling).toBe(48);
+    expect(next.dataWeek).toBe("2026-09-20");
+    expect(formatPopularity(next)).toBe("≤48");
+  });
+
+  it("carries Apple's weekly history onto official metrics", () => {
+    const next = applyOfficialPopularity(metrics(), {
+      term: "meditation",
+      found: true,
+      searchPopularity1to100: 52,
+      weekStart: "2026-09-20",
+      history: [
+        { week: "2026-09-13", popularity: 53 },
+        { week: "2026-09-20", popularity: 52 },
+      ],
+    });
+    expect(next.popularityHistory).toHaveLength(2);
+    expect(formatPopularity(next)).toBe("52");
+  });
+
   it("replaces the score when Apple returns an official 1–100", () => {
     const next = applyOfficialPopularity(metrics(), {
       term: "meditation",
@@ -80,19 +111,23 @@ describe("officialLookupItemsFor", () => {
     ]);
   });
 
-  it("returns nothing without a mappable genre", () => {
+  it("still looks the term up without a mappable genre", () => {
     expect(
       officialLookupItemsFor(metrics({ topApps: [app({ genre: "" })] })),
-    ).toEqual([]);
+    ).toEqual([{ term: "meditation" }]);
   });
 });
 
 describe("labels", () => {
   it("distinguishes official from estimated copy", () => {
     expect(popularitySourceOf({ popularitySource: "official" })).toBe("official");
+    expect(popularitySourceOf({ popularitySource: "longtail" })).toBe("longtail");
     expect(popularitySourceOf({})).toBe("estimated");
-    expect(popularityShortLabel("official")).toBe("Apple Ads");
+    expect(popularityShortLabel("official")).toBe("Apple");
+    expect(popularityShortLabel("longtail")).toBe("Long tail");
+    expect(popularityShortLabel("estimated")).toBe("Est.");
     expect(popularityCaption("official")).toMatch(/not search volume/i);
+    expect(popularityCaption("longtail", "HEALTH_FITNESS")).toMatch(/Health & Fitness/);
   });
 });
 

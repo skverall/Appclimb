@@ -32,6 +32,8 @@ import { AsoOptimizerModal } from "@/components/aso-optimizer-modal";
 import { optimizeKeywordField } from "@/lib/aso-optimizer";
 import {
   enrichAnalysisResult,
+  formatPopularity,
+  popularityCaption,
   popularityShortLabel,
   popularitySourceOf,
 } from "@/lib/popularity";
@@ -91,16 +93,19 @@ const STATUS_FILTERS: Array<{ id: KeywordStatusFilter; label: string }> = [
 function MetricBar({
   value,
   tone,
+  label,
 }: {
   value: number;
-  tone: "popularity" | "difficulty";
+  tone: "popularity" | "difficulty" | "muted";
+  /** Text shown instead of the raw value (e.g. "≤48" for long tail). */
+  label?: string;
 }) {
   return (
     <span className={`metric-bar metric-bar--${tone}`} aria-hidden="true">
       <span className="metric-bar-track">
         <i style={{ width: `${value}%` }} />
       </span>
-      <b>{value}</b>
+      <b>{label ?? value}</b>
     </span>
   );
 }
@@ -1001,15 +1006,15 @@ export function TrackerView({
                         Keyword
                       </button>
                     </th>
-                    <th title="Opportunity Score (0–100): High popularity + low difficulty">
+                    <th title="Opportunity (0–100): Apple popularity weighed against difficulty, boosted when your app is close to page one">
                       <button
                         type="button"
                         onClick={() => toggleSort("opportunity")}
                       >
-                        Opp. · Est.
+                        Opportunity
                       </button>
                     </th>
-                    <th title="Relative popularity score (1–100) from official Apple Ads or public search signals">
+                    <th title="Apple Ads popularity (1–100); long-tail terms show the ceiling Apple implies">
                       <button
                         type="button"
                         onClick={() => toggleSort("popularity")}
@@ -1118,19 +1123,12 @@ export function TrackerView({
                             <span className="metric-with-source">
                               <MetricBar
                                 value={metrics.popularity}
-                                tone="popularity"
+                                tone={popularitySourceOf(metrics) === "official" ? "popularity" : "muted"}
+                                label={formatPopularity(metrics)}
                               />
                               <span
-                                className={
-                                  popularitySourceOf(metrics) === "official"
-                                    ? "source-pill source-pill--official"
-                                    : "source-pill"
-                                }
-                                title={
-                                  popularitySourceOf(metrics) === "official"
-                                    ? "Official Apple Ads relative popularity (1–100)"
-                                    : "Estimated popularity derived from public search signals"
-                                }
+                                className={`source-tag source-tag--${popularitySourceOf(metrics)}`}
+                                title={popularityCaption(popularitySourceOf(metrics), metrics.appleGenre)}
                               >
                                 {popularityShortLabel(popularitySourceOf(metrics))}
                               </span>
@@ -1313,6 +1311,7 @@ export function TrackerView({
                 historyDays,
               )}
               historyDays={historyDays}
+              historyWeeks={account.limits.historyWeeks}
               allKeywords={keywords}
               busy={busyKeys.has(selectedRow.normalizedKeyword)}
               onClose={() => setSelected(null)}

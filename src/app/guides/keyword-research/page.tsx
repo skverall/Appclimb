@@ -95,7 +95,7 @@ export default function KeywordResearchGuide() {
             {
               "@type": "HowToStep",
               name: "Track daily rank snapshots",
-              text: "Record local daily snapshots to measure real rank trends over 30 days.",
+              text: "Watch Apple's weekly popularity history and record real daily rank snapshots for your app.",
               url: absoluteUrl("/guides/keyword-research#track"),
             },
           ],
@@ -350,10 +350,11 @@ export default function KeywordResearchGuide() {
               <span className="guide-step">Step 5</span>
               <h2>Track and iterate</h2>
               <p>
-                A keyword decision is only as good as its trend. AppClimb
-                records one snapshot per keyword per day in your browser; the
-                first check seeds an estimated 30-day baseline, and every visit
-                replaces estimates with real observations.
+                A keyword decision is only as good as its trend. For terms Apple
+                publishes, AppClimb shows Apple&apos;s own weekly popularity
+                history (12 weeks free, 52 on Pro). Your app&apos;s rank is
+                checked on demand and saved as one real snapshot per day —
+                nothing is backfilled.
               </p>
               <ul>
                 <li>

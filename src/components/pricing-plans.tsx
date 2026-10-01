@@ -10,19 +10,19 @@ import { PRO_MONTHLY_USD, PRO_YEARLY_USD } from "@/lib/plan";
 type BillingCycle = "monthly" | "yearly";
 
 const FREE_FEATURES = [
-  "8 keyword checks per day as a guest",
-  "Official Apple Ads popularity (30 lookups/day)",
-  "Free sign-in: 1 tracked app · 25 keywords",
+  "8 new keyword checks per day — no sign-up",
+  "Apple Ads popularity, difficulty evidence & verdict",
+  "12 weeks of Apple popularity history per keyword",
+  "Trending & related searches from Apple's list",
+  "Free sign-in: track 1 app · 25 keywords",
   "ASO assistant after sign-in — 5 messages/day",
-  "30-day trend history in this browser",
-  "No card required",
 ];
 
 const PRO_FEATURES = [
   "Unlimited keyword checks",
+  "52 weeks of Apple popularity history",
   "Unlimited apps & keywords in My Apps",
-  "500 official popularity lookups/day",
-  "90-day trend history",
+  "90 days of rank history",
   "AI assistant — 200 messages/day",
   "Cloud sync across devices",
   "Cancel anytime — Pro runs to period end",

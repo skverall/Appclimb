@@ -34,12 +34,11 @@ test("guest can search keywords but must sign in to track or chat", async ({
 
   await expect(page.getByText("Guest", { exact: true }).first()).toBeVisible();
   await expect(page.getByRole("button", { name: /^Sign in$/i }).first()).toBeVisible();
-  await expect(
-    page.getByText(/You're using AppClimb as a/i),
-  ).toBeVisible();
+  // The guest sees the honest daily allowance up front.
+  await expect(page.getByText(/8 of 8 free checks left today/i)).toBeVisible();
 
   // Explorer stays open — no login wall on search.
-  await expect(page.getByPlaceholder(/meditation/)).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Search keywords" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Analyze", exact: true })).toBeVisible();
 
   // Tracking is gated. The add-app dialog must not open for a guest.
@@ -227,7 +226,7 @@ test("pre-monetization mode shows no account chrome and no gates", async ({
 }) => {
   // No /api/me mock: the real route reports configured:false (accounts off).
   await page.goto("/");
-  await expect(page.getByPlaceholder(/meditation/)).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Search keywords" })).toBeVisible();
 
   // No sign-in chrome in the header.
   await expect(page.getByRole("button", { name: /^Sign in$/i })).toHaveCount(0);

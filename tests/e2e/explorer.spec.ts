@@ -47,8 +47,8 @@ const focusTimer = {
   averageUserRating: 4.0,
 };
 
-// Saturated result set (200 entries, zero ratings): high competition, weak
-// incumbents → estimated popularity ≥ 55 with difficulty ≤ 40 → "golden".
+// Saturated result set (200 entries, zero ratings): weak incumbents, so
+// difficulty is low; with Apple's popularity for "yoga" → "Worth targeting".
 const saturatedApps = Array.from({ length: 200 }, (_, index) => ({
   trackId: 1000 + index,
   trackName: `Utility App ${index + 1}`,
@@ -60,7 +60,79 @@ const saturatedApps = Array.from({ length: 200 }, (_, index) => ({
   averageUserRating: 0,
 }));
 
+const WEEKS = Array.from({ length: 52 }, (_, index) => {
+  const date = new Date(Date.UTC(2025, 8, 28 + index * 7));
+  return { week: date.toISOString().slice(0, 10), popularity: 48 + (index % 5) };
+});
+
+/**
+ * Deterministic stand-in for the Worker's Apple data: "yoga" and
+ * "meditation" are published terms (official), everything else is long tail
+ * below the Health & Fitness floor of 48.
+ */
+async function mockAppleData(page: import("@playwright/test").Page) {
+  await page.route("**/api/popularity", async (route) => {
+    const body = JSON.parse(route.request().postData() ?? "{}") as {
+      items?: Array<{ term: string }>;
+    };
+    const results = (body.items ?? []).map(({ term }) => {
+      const key = term.toLocaleLowerCase();
+      if (key === "yoga" || key === "meditation") {
+        return {
+          term,
+          found: true,
+          genre: "HEALTH_FITNESS",
+          searchPopularity1to100: key === "yoga" ? 58 : 52,
+          rankInGenre: key === "yoga" ? 120 : 241,
+          weekStart: "2026-09-20",
+          history: WEEKS.slice(-12),
+        };
+      }
+      return { term, found: false, genre: "HEALTH_FITNESS", ceiling: 48, weekStart: "2026-09-20" };
+    });
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ configured: true, country: "US", week: "2026-09-20", results }),
+    });
+  });
+  await page.route("**/api/terms/suggest?*", async (route) => {
+    const q = new URL(route.request().url()).searchParams.get("q") ?? "";
+    const all = [
+      { term: "meditation", genre: "HEALTH_FITNESS", popularity: 52 },
+      { term: "meditation app", genre: "HEALTH_FITNESS", popularity: 47 },
+      { term: "medical id", genre: "HEALTH_FITNESS", popularity: 45 },
+    ];
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        suggestions: all.filter((item) => item.term.startsWith(q.toLocaleLowerCase())),
+      }),
+    });
+  });
+  await page.route("**/api/terms/related?*", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        related: [{ term: "sleep meditation", genre: "HEALTH_FITNESS", popularity: 50, shared: 1 }],
+      }),
+    });
+  });
+  await page.route("**/api/terms/trending?*", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ configured: false }),
+    });
+  });
+}
+
 async function mockExplorer(page: import("@playwright/test").Page) {
+  await mockAppleData(page);
   await page.route(`${ITUNES}/**`, async (route) => {
     const url = new URL(route.request().url());
     if (!url.pathname.endsWith("/search")) {
@@ -90,8 +162,8 @@ async function mockExplorer(page: import("@playwright/test").Page) {
       return;
     }
 
-    // Rank searches: "yoga" is saturated and weak → golden. Everything else
-    // returns a small weak list → solid but not golden.
+    // Rank searches: "yoga" is saturated and weak; everything else returns a
+    // small list of modest apps.
     const body =
       term.includes("yoga") && !term.includes("meditation")
         ? searchPayload(saturatedApps)
@@ -104,15 +176,15 @@ async function mockExplorer(page: import("@playwright/test").Page) {
   });
 }
 
-const ROW = ".keyword-table tbody tr";
+const ROW = ".ex-table tbody tr";
 
-test("bulk analyze surfaces golden keywords and sortable scores", async ({
+test("bulk analyze sorts keywords into verdicts with sortable scores", async ({
   page,
 }) => {
   await mockExplorer(page);
   await page.goto("/");
 
-  await page.getByRole("button", { name: /Analyze list/i }).click();
+  await page.getByRole("button", { name: /Analyze a list/i }).click();
   await expect(page.getByRole("dialog", { name: "Analyze a list" })).toBeVisible();
   await page.getByLabel("Keywords to analyze").fill("meditation\nyoga\nzen");
   await page.getByRole("button", { name: /Analyze 3 keywords/i }).click();
@@ -123,23 +195,25 @@ test("bulk analyze surfaces golden keywords and sortable scores", async ({
   });
   await expect(page.locator(ROW)).toHaveCount(3);
 
-  // Only "yoga" (saturated, weak incumbents) earns the golden badge.
-  const yogaRow = page.locator(ROW).filter({
-    has: page.getByText("yoga", { exact: true }),
-  });
-  await expect(yogaRow.locator(".keyword-golden-badge")).toHaveText("Golden");
-  await expect(page.locator(ROW).filter({ has: page.locator(".keyword-golden-badge") })).toHaveCount(1);
+  // Apple-published terms read "Apple"; the rest are long tail with a ceiling.
+  const zenRow = page.locator(ROW).filter({ has: page.getByText("zen", { exact: true }) });
+  await expect(zenRow.locator(".ex-td-pop")).toContainText("≤48");
+  await expect(zenRow.locator(".ex-td-pop")).toContainText("Long tail");
+  await expect(zenRow.locator(".opp-pill")).toContainText("Long-tail win");
+  const yogaRow = page.locator(ROW).filter({ has: page.getByText("yoga", { exact: true }) });
+  await expect(yogaRow.locator(".ex-td-pop")).toContainText("58");
+  await expect(yogaRow.locator(".ex-td-pop")).toContainText("Apple");
 
-  // The Golden filter narrows the table and counts match.
-  await page.getByRole("tab", { name: /Golden/ }).click();
+  // The verdict filter narrows the table and counts match.
+  await page.getByRole("tab", { name: /Long-tail wins/ }).click();
   await expect(page.locator(ROW)).toHaveCount(1);
-  await expect(page.locator(".keyword-name").first()).toHaveText("yoga");
+  await expect(page.locator(".ex-td-keyword strong").first()).toHaveText("zen");
 
   // Back to all, then sort by popularity (descending): yoga is first.
-  await page.getByRole("tab", { name: /All/ }).click();
+  await page.getByRole("tab", { name: /^All/ }).click();
   await expect(page.locator(ROW)).toHaveCount(3);
   await page.getByRole("button", { name: "Popularity", exact: true }).click();
-  await expect(page.locator(".keyword-name").first()).toHaveText("yoga");
+  await expect(page.locator(".ex-td-keyword strong").first()).toHaveText("yoga");
 });
 
 test("explorer exports CSV, backs up, and restores history", async ({
@@ -148,7 +222,7 @@ test("explorer exports CSV, backs up, and restores history", async ({
   await mockExplorer(page);
   await page.goto("/");
 
-  await page.getByPlaceholder(/meditation/).fill("meditation");
+  await page.getByRole("combobox", { name: "Search keywords" }).fill("meditation");
   await page.getByRole("button", { name: "Analyze", exact: true }).click();
   await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
   await expect(page.locator(".metric-bar--popularity")).toBeVisible({
@@ -185,12 +259,12 @@ test("explorer exports CSV, backs up, and restores history", async ({
   // Wipe local storage, then restore from the downloaded backup file.
   await page.evaluate(() => window.localStorage.clear());
   await page.reload();
-  await expect(page.getByText(/No keywords yet/i)).toBeVisible();
+  await expect(page.getByRole("heading", { name: /How to read the numbers/i })).toBeVisible();
 
   await page.locator('input[type="file"]').setInputFiles(await backupDownload.path());
   await expect(page.getByText(/Restored 1 keyword record/i)).toBeVisible();
   await expect(page.locator(ROW)).toHaveCount(1);
-  await expect(page.locator(".keyword-name").first()).toHaveText("meditation");
+  await expect(page.locator(".ex-td-keyword strong").first()).toHaveText("meditation");
   // The native picker must not leave keyboard focus on the hidden input.
   await expect(page.getByLabel("Search keywords")).toBeFocused();
 });
@@ -199,7 +273,7 @@ test("explorer removal offers undo", async ({ page }) => {
   await mockExplorer(page);
   await page.goto("/");
 
-  await page.getByPlaceholder(/meditation/).fill("meditation");
+  await page.getByRole("combobox", { name: "Search keywords" }).fill("meditation");
   await page.getByRole("button", { name: "Analyze", exact: true }).click();
   await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
 
@@ -210,7 +284,7 @@ test("explorer removal offers undo", async ({ page }) => {
   // Undo restores the row and its metrics.
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(page.locator(ROW)).toHaveCount(1);
-  await expect(page.locator(".keyword-name").first()).toHaveText("meditation");
+  await expect(page.locator(".ex-td-keyword strong").first()).toHaveText("meditation");
   await expect(page.locator(".metric-bar--popularity").first()).toBeVisible();
 });
 
@@ -252,12 +326,12 @@ test("failed iTunes lookups refund the guest daily check", async ({ page }) => {
     });
 
   await page.goto("/");
-  await expect(page.getByPlaceholder(/meditation/)).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Search keywords" })).toBeVisible();
 
   // First attempt fails — the error surfaces and no row lingers.
-  await page.getByPlaceholder(/meditation/).fill("meditation");
+  await page.getByRole("combobox", { name: "Search keywords" }).fill("meditation");
   await page.getByRole("button", { name: "Analyze", exact: true }).click();
-  await expect(page.locator(".keyword-error")).toContainText(
+  await expect(page.locator(".ex-banner--error")).toContainText(
     /could not analyze/i,
     { timeout: 15_000 },
   );
@@ -268,13 +342,13 @@ test("failed iTunes lookups refund the guest daily check", async ({ page }) => {
 
   // Apple recovers: a real check now consumes exactly one unit.
   await mockExplorer(page);
-  await page.getByPlaceholder(/meditation/).fill("yoga");
+  await page.getByRole("combobox", { name: "Search keywords" }).fill("yoga");
   await page.getByRole("button", { name: "Analyze", exact: true }).click();
   await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
   expect(await readCount()).toMatchObject({ count: 1 });
 
   // A refresh of the same keyword (already tracked) is not a new check.
-  await page.getByRole("button", { name: /Refresh all/i }).click();
+  await page.getByRole("button", { name: /^Refresh$/ }).click();
   await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
   expect(await readCount()).toMatchObject({ count: 1 });
 });
@@ -284,8 +358,10 @@ test("share links analyze the keyword on load", async ({ page }) => {
   await page.goto("/?kw=yoga&country=US");
 
   await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
-  await expect(page.locator(".keyword-name").first()).toHaveText("yoga");
-  await expect(page.locator(".keyword-golden-badge").first()).toHaveText("Golden");
+  await expect(page.locator(".ex-td-keyword strong").first()).toHaveText("yoga");
+  await expect(page.locator(".opp-pill").first()).toContainText("Worth targeting");
+  // The shared keyword opens straight into its detail panel.
+  await expect(page.getByRole("heading", { name: "yoga", exact: true })).toBeVisible();
 });
 
 test("keyword suggestions close on Escape and on outside click", async ({
@@ -296,7 +372,7 @@ test("keyword suggestions close on Escape and on outside click", async ({
 
   const input = page.getByLabel("Search keywords");
   await input.fill("med");
-  const dropdown = page.locator(".keyword-suggestions");
+  const dropdown = page.locator(".ex-suggestions");
   await expect(dropdown).toBeVisible({ timeout: 10_000 });
   await expect(dropdown.getByRole("option").first()).toBeVisible();
 
@@ -306,10 +382,10 @@ test("keyword suggestions close on Escape and on outside click", async ({
   await expect(input).toHaveValue("med");
 
   // It reopens while typing, then a click outside the form dismisses it.
-  await input.press("m");
+  await input.press("i");
   await expect(dropdown).toBeVisible({ timeout: 10_000 });
   await page
-    .getByRole("heading", { level: 1, name: /Popularity from Apple/ })
+    .getByRole("heading", { level: 1, name: /Find App Store keywords/ })
     .click();
   await expect(dropdown).toHaveCount(0);
 
@@ -347,11 +423,11 @@ test("limit banner clears when the day rolls over", async ({ page }) => {
   }, day);
   await page.reload();
 
-  const banner = page.getByText(/You've used your 8 free keyword checks/);
+  const banner = page.getByText(/used today's 8 free checks/);
   await expect(banner).toBeVisible();
 
   // A further attempt stays blocked while the cap is genuinely exhausted.
-  await page.getByPlaceholder(/meditation/).fill("yoga");
+  await page.getByRole("combobox", { name: "Search keywords" }).fill("yoga");
   await page.getByRole("button", { name: "Analyze", exact: true }).click();
   await expect(page.locator(ROW)).toHaveCount(0);
 
@@ -367,7 +443,7 @@ test("limit banner clears when the day rolls over", async ({ page }) => {
       JSON.stringify({ day: yesterday, count: 8 }),
     );
   });
-  await page.getByPlaceholder(/meditation/).fill("yoga");
+  await page.getByRole("combobox", { name: "Search keywords" }).fill("yoga");
 
   await expect(banner).toHaveCount(0);
 
@@ -382,14 +458,14 @@ test("bulk analyze reports partial failures honestly", async ({ page }) => {
   await mockExplorer(page);
   await page.goto("/");
 
-  await page.getByRole("button", { name: /Analyze list/i }).click();
+  await page.getByRole("button", { name: /Analyze a list/i }).click();
   await page.getByLabel("Keywords to analyze").fill("meditation\nfail-bulk");
   await page.getByRole("button", { name: /Analyze 2 keywords/i }).click();
 
   // One succeeds, one is rate-limited: the banner names the failure instead
   // of pretending everything worked, and no failed row lingers.
   await expect(
-    page.getByText(/Done — 1 of 2 couldn’t be analyzed.*analyze them again/i),
+    page.getByText(/Done — 1 of 2 couldn’t be analyzed.*Try those again/i),
   ).toBeVisible({ timeout: 20_000 });
   await expect(page.locator(ROW)).toHaveCount(1);
   await expect(page.locator(ROW).filter({ hasText: "fail-bulk" })).toHaveCount(0);
@@ -400,7 +476,7 @@ test("bulk analyze reports partial failures honestly", async ({ page }) => {
   ).toHaveCount(1);
 });
 
-test("history window follows the plan: 30 days free, 90 on Pro", async ({
+test("history windows follow the plan: 12 weeks / 30 days free, 52 / 90 on Pro", async ({
   page,
 }) => {
   await mockExplorer(page);
@@ -419,6 +495,7 @@ test("history window follows the plan: 30 days free, 90 on Pro", async ({
       backfilled: false,
       history: points,
       lastCheck: { results: 42, saturated: false },
+      popularityHistory: WEEKS,
     };
     return {
       "appclimb:kw:v1:US:meditation": JSON.stringify(record),
@@ -459,7 +536,9 @@ test("history window follows the plan: 30 days free, 90 on Pro", async ({
   await page.reload();
   await expect(page.locator(ROW)).toHaveCount(1, { timeout: 10_000 });
   await openDetail();
-  await expect(page.getByText(/30 days · Est\./i)).toBeVisible();
+  await expect(page.getByText(/last 12 weeks/i)).toBeVisible();
+  await expect(page.getByText(/30 daily snapshots/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: /52 weeks with Pro/i })).toBeVisible();
 
   // Pro account: the same stored days show the full 60-day window. A Pro
   // mock activates the cloud-sync flow, so /api/sync must answer too.
@@ -491,7 +570,9 @@ test("history window follows the plan: 30 days free, 90 on Pro", async ({
   await page.reload();
   await expect(page.locator(ROW)).toHaveCount(1, { timeout: 10_000 });
   await openDetail();
-  await expect(page.getByText(/60 days · Est\./i)).toBeVisible();
+  await expect(page.getByText(/last 52 weeks/i)).toBeVisible();
+  await expect(page.getByText(/60 daily snapshots/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: /52 weeks with Pro/i })).toHaveCount(0);
 });
 
 test("a 60-character keyword does not overflow the page", async ({ page }) => {
@@ -499,7 +580,7 @@ test("a 60-character keyword does not overflow the page", async ({ page }) => {
   await page.goto("/");
 
   const longKeyword = "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghij";
-  await page.getByPlaceholder(/meditation/).fill(longKeyword);
+  await page.getByRole("combobox", { name: "Search keywords" }).fill(longKeyword);
   await page.getByRole("button", { name: "Analyze", exact: true }).click();
   await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
 
@@ -513,8 +594,8 @@ test("a 60-character keyword does not overflow the page", async ({ page }) => {
   expect(overflow, `horizontal overflow: ${overflow}px`).toBeLessThanOrEqual(0);
 
   // The keyword text itself stays within the table card.
-  const nameBox = await page.locator(".keyword-name").first().boundingBox();
-  const tableBox = await page.locator(".keyword-table").boundingBox();
+  const nameBox = await page.locator(".ex-td-keyword strong").first().boundingBox();
+  const tableBox = await page.locator(".ex-list").boundingBox();
   if (nameBox && tableBox) {
     expect(nameBox.x + nameBox.width).toBeLessThanOrEqual(
       tableBox.x + tableBox.width + 1,
@@ -561,7 +642,7 @@ test("keyboard removal moves focus to Undo and restores to the search box", asyn
   await mockExplorer(page);
   await page.goto("/");
 
-  await page.getByPlaceholder(/meditation/).fill("meditation");
+  await page.getByRole("combobox", { name: "Search keywords" }).fill("meditation");
   await page.getByRole("button", { name: "Analyze", exact: true }).click();
   await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
 
@@ -628,7 +709,7 @@ test("the quota gate blocks the 9th check before touching a slow iTunes", async 
   // Eight checks on a slow network: each consumes exactly one unit and the
   // row appears once the (slow) data arrives.
   for (let i = 1; i <= 8; i += 1) {
-    await page.getByPlaceholder(/meditation/).fill(`keyword ${i}`);
+    await page.getByRole("combobox", { name: "Search keywords" }).fill(`keyword ${i}`);
     await expect(
       page.getByRole("button", { name: "Analyze", exact: true }),
     ).toBeEnabled({ timeout: 10_000 });
@@ -638,18 +719,18 @@ test("the quota gate blocks the 9th check before touching a slow iTunes", async 
   const requestsAfterEight = itunesRequests;
   expect(requestsAfterEight).toBeGreaterThan(requestsBefore);
   await expect(
-    page.getByText(/You've used your 8 free keyword checks/),
+    page.getByText(/used today's 8 free checks/),
   ).toBeVisible();
 
   // Ninth attempt: blocked by the gate before any network activity.
   const requestsAtAttempt = itunesRequests;
-  await page.getByPlaceholder(/meditation/).fill("keyword 9");
+  await page.getByRole("combobox", { name: "Search keywords" }).fill("keyword 9");
   await page.getByRole("button", { name: "Analyze", exact: true }).click();
   await page.waitForTimeout(1_000);
   expect(itunesRequests).toBe(requestsAtAttempt);
   await expect(page.locator(ROW)).toHaveCount(8);
   await expect(
-    page.getByText(/You've used your 8 free keyword checks/),
+    page.getByText(/used today's 8 free checks/),
   ).toBeVisible();
 });
 
@@ -666,7 +747,7 @@ test("detail labels every score with its source, never claiming volume", async (
     });
   });
   await page.goto("/");
-  await page.getByPlaceholder(/meditation/).fill("meditation");
+  await page.getByRole("combobox", { name: "Search keywords" }).fill("meditation");
   await page.getByRole("button", { name: "Analyze", exact: true }).click();
   await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
 
@@ -676,15 +757,16 @@ test("detail labels every score with its source, never claiming volume", async (
     page.getByRole("heading", { name: "meditation", exact: true }),
   ).toBeVisible({ timeout: 10_000 });
 
-  // The popularity evidence is labeled as an estimate (not black-box volume).
+  // Without Apple data the popularity is labeled a rough estimate.
   await expect(
-    page.getByText(/Estimated demand from public iTunes signals/i),
+    page.getByText(/Apple data unavailable — rough estimate/i),
   ).toBeVisible();
-  // Difficulty is always an estimate.
-  await expect(page.getByText(/Harder to rank = higher/i)).toBeVisible();
-  // "search volume" appears only inside the disclaiming caption, never as a
-  // claim of data the tool provides.
-  const detail = await page.locator(".keyword-detail").textContent();
+  // Difficulty is always an estimate, with its evidence beside it.
+  await expect(page.locator(".kd").getByText("Estimate").first()).toBeVisible();
+  await expect(page.getByText(/median ratings in the top/i)).toBeVisible();
+  await expect(page.getByText(/have the keyword in their name/i)).toBeVisible();
+  // The tool never claims to provide search volume.
+  const detail = await page.locator(".kd").textContent();
   expect(detail).not.toMatch(/search volume/i);
 });
 
@@ -702,16 +784,16 @@ test("CJK and cyrillic keywords analyze and render intact", async ({
   await page.goto("/");
 
   // Japanese keyword.
-  await page.getByPlaceholder(/meditation/).fill("瞑想");
+  await page.getByRole("combobox", { name: "Search keywords" }).fill("瞑想");
   await page.getByRole("button", { name: "Analyze", exact: true }).click();
   await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
   await expect(
-    page.locator(".keyword-name").first(),
+    page.locator(".ex-td-keyword strong").first(),
   ).toHaveText("瞑想");
-  await expect(page.locator(".source-pill").first()).toContainText(/Est\./);
+  await expect(page.locator(".ex-td-pop .source-tag").first()).toContainText(/Est\./);
 
   // Cyrillic keyword.
-  await page.getByPlaceholder(/meditation/).fill("медитация");
+  await page.getByRole("combobox", { name: "Search keywords" }).fill("медитация");
   await page.getByRole("button", { name: "Analyze", exact: true }).click();
   await expect(page.locator(ROW)).toHaveCount(2, { timeout: 15_000 });
   await expect(page.locator(ROW).filter({ hasText: "медитация" })).toHaveCount(1);
@@ -750,7 +832,7 @@ test("an upgrade mid-session lifts the explorer quota gate", async ({
     );
   });
   await page.reload();
-  await expect(page.getByText(/You've used your 8 free keyword checks/)).toBeVisible();
+  await expect(page.getByText(/used today's 8 free checks/)).toBeVisible();
 
   // The user upgrades: /api/me reports Pro after the post-checkout refresh.
   await page.route("**/api/me", async (route) => {
@@ -775,7 +857,7 @@ test("an upgrade mid-session lifts the explorer quota gate", async ({
   await page.goto("/?checkout=success");
 
   // The gate banner clears and analysis works without limit.
-  await expect(page.getByText(/You've used your 8 free keyword checks/)).toHaveCount(0);
+  await expect(page.getByText(/used today's 8 free checks/)).toHaveCount(0);
   const closeWelcome = page.getByRole("button", { name: /Close welcome dialog/i });
   try {
     await closeWelcome.waitFor({ state: "visible", timeout: 3_000 });
@@ -783,7 +865,7 @@ test("an upgrade mid-session lifts the explorer quota gate", async ({
   } catch {
     // no onboarding modal
   }
-  await page.getByPlaceholder(/meditation/).fill("yoga");
+  await page.getByRole("combobox", { name: "Search keywords" }).fill("yoga");
   await page.getByRole("button", { name: "Analyze", exact: true }).click();
   await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
 });
@@ -794,7 +876,7 @@ test("explorer modals fit and stay centered at 1024px", async ({ page }) => {
   await page.goto("/");
 
   // Bulk-analyze modal.
-  await page.getByRole("button", { name: /Analyze list/i }).click();
+  await page.getByRole("button", { name: /Analyze a list/i }).click();
   const bulk = page.getByRole("dialog", { name: "Analyze a list" });
   await expect(bulk).toBeVisible();
   const bulkBox = await bulk.boundingBox();
@@ -834,9 +916,9 @@ test("a shared keyword containing HTML renders as literal text", async ({
   await page.goto(`/?kw=${encodeURIComponent(payload)}&country=US`);
 
   await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
-  await expect(page.locator(".keyword-name").first()).toHaveText(payload);
+  await expect(page.locator(".ex-td-keyword strong").first()).toHaveText(payload);
   // React escapes the payload — no live element is injected.
-  await expect(page.locator(".keyword-name img")).toHaveCount(0);
+  await expect(page.locator(".ex-td-keyword img")).toHaveCount(0);
 });
 
 test("explorer degrades gracefully when localStorage is blocked", async ({
@@ -863,11 +945,11 @@ test("explorer degrades gracefully when localStorage is blocked", async ({
   // Private mode: the tool still renders (empty state) and analysis works in
   // the session — no crash, no eternal spinner.
   await page.goto("/");
-  await expect(page.getByPlaceholder(/meditation/)).toBeVisible();
-  await page.getByPlaceholder(/meditation/).fill("yoga");
+  await expect(page.getByRole("combobox", { name: "Search keywords" })).toBeVisible();
+  await page.getByRole("combobox", { name: "Search keywords" }).fill("yoga");
   await page.getByRole("button", { name: "Analyze", exact: true }).click();
   await expect(page.locator(ROW)).toHaveCount(1, { timeout: 15_000 });
-  await expect(page.locator(".source-pill").first()).toContainText(/Est\./);
+  await expect(page.locator(".ex-td-pop .source-tag").first()).toContainText(/Est\./);
 });
 
 test("bulk modal traps focus and fits at 375px", async ({ page }) => {
@@ -875,7 +957,7 @@ test("bulk modal traps focus and fits at 375px", async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/");
 
-  const opener = page.getByRole("button", { name: /Analyze list/i });
+  const opener = page.getByRole("button", { name: /Analyze a list/i });
   await opener.focus();
   await opener.click();
   const dialog = page.getByRole("dialog", { name: "Analyze a list" });
@@ -920,7 +1002,7 @@ test("bulk modal keeps the focus trap when localStorage is blocked", async ({
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/");
 
-  const opener = page.getByRole("button", { name: /Analyze list/i });
+  const opener = page.getByRole("button", { name: /Analyze a list/i });
   await opener.focus();
   await opener.click();
   const dialog = page.getByRole("dialog", { name: "Analyze a list" });
@@ -967,8 +1049,8 @@ test("exhausted quota plus an unavailable overlay degrades honestly", async ({
 
   // The quota banner shows; a further check stays blocked (no row, no fetch
   // storm), and no Next.js error overlay appears from the failed popularity.
-  await expect(page.getByText(/You've used your 8 free keyword checks/)).toBeVisible();
-  await page.getByPlaceholder(/meditation/).fill("yoga");
+  await expect(page.getByText(/used today's 8 free checks/)).toBeVisible();
+  await page.getByRole("combobox", { name: "Search keywords" }).fill("yoga");
   await page.getByRole("button", { name: "Analyze", exact: true }).click();
   await expect(page.locator(ROW)).toHaveCount(0);
   await expect(

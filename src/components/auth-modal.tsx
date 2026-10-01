@@ -191,7 +191,7 @@ export function AuthModal({
               <ul className="auth-benefits">
                 <li>Track 1 app &amp; 25 keywords — free, no card</li>
                 <li>ASO assistant: 5 messages a day</li>
-                <li>30-day keyword history on this device</li>
+                <li>Daily rank checks for your app&apos;s keywords</li>
               </ul>
 
               <p className="auth-footnote">

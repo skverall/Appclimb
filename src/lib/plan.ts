@@ -22,8 +22,10 @@ export interface PlanLimits {
   trackedApps: number | null;
   /** Keywords per tracked app. `null` = unlimited. */
   keywordsPerApp: number | null;
-  /** Days of history kept and charted. */
+  /** Days of local snapshot history kept and charted. */
   historyDays: number;
+  /** Weeks of official Apple popularity history shown per keyword. */
+  historyWeeks: number;
   /** Whether cloud sync across devices is available. */
   cloudSync: boolean;
 }
@@ -32,19 +34,21 @@ export const PLAN_LIMITS: Record<PlanId, PlanLimits> = {
   free: {
     explorerChecksPerDay: 8,
     aiMessagesPerDay: 5,
-    popularityPerDay: 30,
+    popularityPerDay: 200,
     trackedApps: 1,
     keywordsPerApp: 25,
     historyDays: 30,
+    historyWeeks: 12,
     cloudSync: false,
   },
   pro: {
     explorerChecksPerDay: null,
     aiMessagesPerDay: 200,
-    popularityPerDay: 500,
+    popularityPerDay: 2000,
     trackedApps: null,
     keywordsPerApp: null,
     historyDays: 90,
+    historyWeeks: 52,
     cloudSync: true,
   },
 };

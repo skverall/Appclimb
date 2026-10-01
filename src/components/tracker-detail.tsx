@@ -14,7 +14,7 @@ import {
   X,
 } from "lucide-react";
 
-import { TrendChart } from "@/components/keyword-charts";
+import { formatWeek, LineChart, TrendChart } from "@/components/keyword-charts";
 import { useToast } from "@/components/toast";
 import {
   calculateCompetitorOverlap,
@@ -25,7 +25,7 @@ import {
   type TrackedApp,
   type TrackedKeyword,
 } from "@/lib/tracker";
-import { popularityCaption, popularitySourceOf } from "@/lib/popularity";
+import { formatPopularity, popularityCaption, popularitySourceOf } from "@/lib/popularity";
 
 function formatCount(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
@@ -38,6 +38,7 @@ export function TrackerDetail({
   keyword,
   snapshots,
   historyDays,
+  historyWeeks = 12,
   allKeywords = [],
   busy,
   onClose,
@@ -48,6 +49,8 @@ export function TrackerDetail({
   keyword: TrackedKeyword;
   snapshots: RankSnapshot[];
   historyDays: 7 | 30;
+  /** Apple weekly history window for the plan (12 free, 52 Pro). */
+  historyWeeks?: number;
   allKeywords?: TrackedKeyword[];
   busy: boolean;
   onClose: () => void;
@@ -57,6 +60,7 @@ export function TrackerDetail({
   const { showToast } = useToast();
   const [copied, setCopied] = useState(false);
   const metrics = keyword.currentMetrics;
+  const appleHistory = (metrics?.popularityHistory ?? []).slice(-(historyWeeks ?? 12));
   const competitorOverlap = useMemo(
     () => (allKeywords.length > 0 ? calculateCompetitorOverlap(app.appStoreId, allKeywords) : []),
     [app.appStoreId, allKeywords],
@@ -163,7 +167,7 @@ export function TrackerDetail({
         </div>
         <div className="keyword-stat">
           <span>Popularity</span>
-          <strong>{metrics && !metrics.unavailable ? metrics.popularity : "—"}</strong>
+          <strong>{metrics && !metrics.unavailable ? formatPopularity(metrics) : "—"}</strong>
           {metrics && !metrics.unavailable && (
             <i className="stat-bar stat-bar--popularity">
               <b style={{ width: `${metrics.popularity}%` }} />
@@ -171,7 +175,7 @@ export function TrackerDetail({
           )}
           <small>
             {metrics
-              ? popularityCaption(popularitySourceOf(metrics))
+              ? popularityCaption(popularitySourceOf(metrics), metrics.appleGenre)
               : "Demand score"}
           </small>
         </div>
@@ -191,7 +195,9 @@ export function TrackerDetail({
         <p className="keyword-estimate-note keyword-estimate-note--detail">
           {popularitySourceOf(metrics) === "official"
             ? "Popularity is Apple Ads official (relative 1–100, not search volume). "
-            : "Popularity is an estimate from public iTunes signals. "}
+            : popularitySourceOf(metrics) === "longtail"
+              ? `Apple doesn't list this term among the 500 most-searched in its category, so its popularity is at or below ${metrics.popularity}. `
+              : "Apple's popularity was unavailable; this is a rough estimate from App Store competition. "}
           Difficulty is always estimated from competition and top-result
           strength.
           {metrics.saturated
@@ -217,28 +223,36 @@ export function TrackerDetail({
         </figure>
         <figure className="keyword-chart-card">
           <figcaption>
-            <span>Popularity / Difficulty</span>
-            <small>{chartPoints.length} days · estimated</small>
+            <span>Apple search popularity</span>
+            <small>
+              {appleHistory.length > 1
+                ? `Weekly · last ${appleHistory.length} weeks · Apple Ads`
+                : "Weekly history from Apple Ads"}
+            </small>
           </figcaption>
-          {chartPoints.length === 0 ? (
-            <p className="tracker-chart-empty">
-              Charts fill in after the first successful check.
-            </p>
+          {appleHistory.length > 1 ? (
+            <LineChart
+              points={appleHistory.map((point) => ({
+                label: formatWeek(point.week),
+                value: point.popularity,
+              }))}
+              color="var(--teal-500)"
+              valueLabel="popularity"
+              height={130}
+            />
+          ) : chartPoints.length >= 2 ? (
+            <TrendChart
+              points={chartPoints}
+              valueKey="difficulty"
+              color="var(--coral-500)"
+              height={120}
+            />
           ) : (
-            <div className="tracker-dual-charts">
-              <TrendChart
-                points={chartPoints}
-                valueKey="popularity"
-                color="var(--teal-500)"
-                height={120}
-              />
-              <TrendChart
-                points={chartPoints}
-                valueKey="difficulty"
-                color="var(--coral-500)"
-                height={120}
-              />
-            </div>
+            <p className="tracker-chart-empty">
+              {metrics && popularitySourceOf(metrics) === "longtail"
+                ? "Apple doesn't publish weekly popularity for long-tail terms. Rank and difficulty history fill in with your daily checks."
+                : "Charts fill in after the first successful check."}
+            </p>
           )}
         </figure>
       </div>

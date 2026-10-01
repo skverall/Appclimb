@@ -54,3 +54,6 @@ next-env.d.ts
 .zcode/
 .claude/worktrees/
 .commandcode/
+
+# Local Worker secrets for wrangler dev
+.dev.vars*

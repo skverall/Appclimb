@@ -128,15 +128,15 @@ export function ArticleLayout({
             <span className="marketing-eyebrow">Try the tool</span>
             <h2>See keyword data yourself.</h2>
             <p>
-              Official Apple Ads popularity and estimated difficulty for any App Store keyword
-              and a 30-day trend. Search as a guest; sign in free to track an app.
+              Apple Ads popularity with weekly history, difficulty with its evidence, and a
+              verdict for any App Store keyword. Search as a guest; sign in free to track an app.
             </p>
             <Link href="/">
               Open the keyword explorer <ArrowRight size={15} aria-hidden="true" />
             </Link>
             <small>
-              Popularity is Apple Ads official (1–100) or an estimate from public signals;
-              difficulty is an estimate. Both are labeled in the UI.
+              Popularity is Apple Ads official (1–100); long-tail terms show Apple&apos;s
+              implied ceiling. Difficulty is an estimate. Both are labeled in the UI.
             </small>
           </aside>
         </div>

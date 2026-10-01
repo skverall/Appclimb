@@ -2,21 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowRight,
   CheckSquare,
   ChevronRight,
   Copy,
   Download,
   ListPlus,
   Loader2,
-  Play,
   RefreshCw,
   Search,
-  ShieldCheck,
   Sparkles,
   Square,
   Star,
-  Target,
   Trash2,
   Upload,
   Wand2,
@@ -31,189 +27,110 @@ import { consumeDayUsage, EXPLORER_DAY_KEY, peekDayUsage, refundDayUsage } from 
 import { useToast } from "@/components/toast";
 import { AsoOptimizerModal } from "@/components/aso-optimizer-modal";
 import { optimizeKeywordField } from "@/lib/aso-optimizer";
-
 import {
   SUPPORTED_COUNTRIES,
   addKeywordToList,
+  assessOpportunity,
   buildExplorerCsv,
   deleteRecord,
   estimateKeyword,
   exportExplorerBackup,
-  isGoldenKeyword,
   loadKeywordList,
   loadRecord,
   recordSnapshot,
-  recentHistory,
   removeKeywordFromList,
   restoreMetricsFromRecord,
   restoreExplorerBackup,
   runBatched,
   saveRecord,
-  suggestKeywords,
   toLocalDate,
-  trendDelta,
   type KeywordMetrics,
   type KeywordRecord,
+  type OpportunityVerdict,
 } from "@/lib/aso";
 import {
   enrichMetricsWithOfficialPopularity,
+  formatPopularity,
+  popularityCaption,
   popularityShortLabel,
   popularitySourceOf,
 } from "@/lib/popularity";
+import { GENRE_LABELS, historyDelta } from "@/lib/search-terms";
+import { fetchTermSuggestions, type SuggestedTerm } from "@/lib/terms-client";
 import { downloadTextFile } from "@/lib/file";
-import { searchAppStoreCatalog } from "@/lib/itunes";
 import { Sparkline } from "@/components/keyword-charts";
 import { KeywordDetail } from "@/components/keyword-detail";
 import { BulkKeywordsModal } from "@/components/bulk-keywords-modal";
+import { DeltaBadge, OpportunityPill } from "@/components/keyword-badges";
+import { TrendingSearches } from "@/components/trending-searches";
+import type { TrackedApp } from "@/lib/tracker";
 
-function MetricBar({
-  value,
-  tone,
-}: {
-  value: number;
-  tone: "popularity" | "difficulty";
-}) {
+const EXAMPLE_KEYWORDS = ["habit tracker", "meditation", "budget app", "photo editor"];
+
+type SortKey = "keyword" | "popularity" | "difficulty" | "opportunity" | "trend" | "results";
+type FilterTab = "all" | OpportunityVerdict;
+
+const FILTERS: Array<{ id: FilterTab; label: string; hint: string }> = [
+  { id: "all", label: "All", hint: "Every keyword in this list" },
+  { id: "target", label: "Worth targeting", hint: "Apple shows demand and the first page is beatable" },
+  { id: "longtail_win", label: "Long-tail wins", hint: "Low traffic, weak first page — easy ranks for newer apps" },
+  { id: "competitive", label: "Competitive", hint: "Real demand, strong competitors" },
+  { id: "dominated", label: "Dominated", hint: "Brand searches or entrenched first pages" },
+  { id: "low_demand", label: "Low demand", hint: "Below Apple's top searches and already crowded" },
+];
+
+function MetricBar({ value, tone }: { value: number; tone: "popularity" | "difficulty" | "muted" }) {
   return (
     <span className={`metric-bar metric-bar--${tone}`} aria-hidden="true">
       <span className="metric-bar-track">
-        <i style={{ width: `${value}%` }} />
+        <i style={{ width: `${Math.max(2, Math.min(100, value))}%` }} />
       </span>
-      <b>{value}</b>
     </span>
   );
 }
 
-const EXAMPLE_KEYWORDS = [
-  { keyword: "meditation", label: "meditation", emoji: "🧘" },
-  { keyword: "invoice scanner", label: "invoice scanner", emoji: "🧾" },
-  { keyword: "habit tracker", label: "habit tracker", emoji: "✅" },
-  { keyword: "podcast player", label: "podcast player", emoji: "🎙️" },
-];
-
-interface ShowcaseSample {
-  keyword: string;
-  category: string;
-  popularity: number;
-  popularityLabel: string;
-  difficulty: number;
-  difficultyTone: "low" | "mid" | "high";
-  difficultyLabel: string;
-  results: number;
-  isGolden: boolean;
-  topAppName: string;
-  topAppIconEmoji: string;
-  topAppIconBg: string;
-  sparkline: number[];
-}
-
-const SHOWCASE_SAMPLES: ShowcaseSample[] = [
-  {
-    keyword: "meditation",
-    category: "Health & Fitness",
-    popularity: 68,
-    popularityLabel: "Official Apple Ads",
-    difficulty: 34,
-    difficultyTone: "low",
-    difficultyLabel: "Low barrier",
-    results: 184,
-    isGolden: false,
-    topAppName: "Headspace: Sleep & Meditation",
-    topAppIconEmoji: "🧘",
-    topAppIconBg: "linear-gradient(135deg, #ff9a44, #fc6076)",
-    sparkline: [62, 64, 65, 68, 67, 68, 68],
-  },
-  {
-    keyword: "invoice scanner",
-    category: "Business",
-    popularity: 48,
-    popularityLabel: "Official Apple Ads",
-    difficulty: 22,
-    difficultyTone: "low",
-    difficultyLabel: "Achievable",
-    results: 52,
-    isGolden: true,
-    topAppName: "Invoice Simple: Receipt Maker",
-    topAppIconEmoji: "🧾",
-    topAppIconBg: "linear-gradient(135deg, #00c6ff, #0072ff)",
-    sparkline: [44, 45, 46, 47, 48, 48, 48],
-  },
-  {
-    keyword: "habit tracker",
-    category: "Productivity",
-    popularity: 56,
-    popularityLabel: "Official Apple Ads",
-    difficulty: 38,
-    difficultyTone: "mid",
-    difficultyLabel: "Moderate",
-    results: 142,
-    isGolden: false,
-    topAppName: "Streaks - Daily Habit Tracker",
-    topAppIconEmoji: "✅",
-    topAppIconBg: "linear-gradient(135deg, #0ba360, #3cba92)",
-    sparkline: [52, 53, 55, 54, 56, 56, 56],
-  },
-  {
-    keyword: "podcast player",
-    category: "Entertainment",
-    popularity: 51,
-    popularityLabel: "Official Apple Ads",
-    difficulty: 32,
-    difficultyTone: "low",
-    difficultyLabel: "Low barrier",
-    results: 98,
-    isGolden: true,
-    topAppName: "Overcast: Podcast Player",
-    topAppIconEmoji: "🎙️",
-    topAppIconBg: "linear-gradient(135deg, #ff5858, #f09819)",
-    sparkline: [48, 49, 50, 50, 51, 51, 51],
-  },
-];
-
-type SortKey = "keyword" | "popularity" | "difficulty" | "results" | "trend";
-type ExplorerFilterTab = "all" | "golden" | "official" | "high_demand" | "low_diff";
+type TrackAppInput = {
+  appStoreId: string;
+  name: string;
+  iconUrl?: string;
+  developer?: string;
+  genre?: string;
+  storeUrl: string;
+};
 
 export function KeywordExplorer({
   onTrackApp,
+  trackTargets,
+  isKeywordTracked,
+  onTrackKeyword,
 }: {
-  onTrackApp?: (app: {
-    appStoreId: string;
-    name: string;
-    iconUrl?: string;
-    developer?: string;
-    genre?: string;
-    storeUrl: string;
-  }) => void;
+  onTrackApp?: (app: TrackAppInput) => void;
+  /** The user's tracked apps; the one in the current storefront can adopt keywords. */
+  trackTargets?: TrackedApp[];
+  isKeywordTracked?: (app: TrackedApp, keyword: string) => boolean;
+  onTrackKeyword?: (app: TrackedApp, keyword: string) => void;
 } = {}) {
   const { showToast } = useToast();
   const [country, setCountry] = useState<string>("US");
   const [query, setQuery] = useState("");
   const [tableFilter, setTableFilter] = useState("");
-  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<SuggestedTerm[]>([]);
   const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [activeSuggestion, setActiveSuggestion] = useState(-1);
   const [keywords, setKeywords] = useState<string[]>([]);
   const [records, setRecords] = useState<Map<string, KeywordRecord>>(new Map());
-  const [metrics, setMetrics] = useState<Map<string, KeywordMetrics>>(
-    new Map(),
-  );
+  const [metrics, setMetrics] = useState<Map<string, KeywordMetrics>>(new Map());
   const [busy, setBusy] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [selectedSet, setSelectedSet] = useState<Set<string>>(new Set());
-  const [sort, setSort] = useState<{
-    key: SortKey;
-    dir: "asc" | "desc";
-  } | null>(null);
-  const [filterTab, setFilterTab] = useState<ExplorerFilterTab>("all");
+  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" } | null>(null);
+  const [filterTab, setFilterTab] = useState<FilterTab>("all");
   const [bulkOpen, setBulkOpen] = useState(false);
   const [optimizerOpen, setOptimizerOpen] = useState(false);
-  const [batchProgress, setBatchProgress] = useState<{
-    done: number;
-    total: number;
-  } | null>(null);
-  const [batchResult, setBatchResult] = useState<{
-    total: number;
-    failed: string[];
-  } | null>(null);
+  const [trendingUnavailable, setTrendingUnavailable] = useState(false);
+  const [batchProgress, setBatchProgress] = useState<{ done: number; total: number } | null>(null);
+  const [batchResult, setBatchResult] = useState<{ total: number; failed: string[] } | null>(null);
   const [undoState, setUndoState] = useState<{
     keyword: string;
     metrics: KeywordMetrics | null;
@@ -227,18 +144,18 @@ export function KeywordExplorer({
   const restoreInputRef = useRef<HTMLInputElement>(null);
   const undoTimeoutRef = useRef<number | null>(null);
   const shareInitRef = useRef(false);
+  const loadedCountryRef = useRef<string | null>(null);
 
-  const { account, signedIn, accountsLive, loading, openAuth, openUpgrade, syncVersion } =
+  const { account, signedIn, accountsLive, loading, isPro, openAuth, openUpgrade, syncVersion } =
     useAccount();
   const explorerLimit =
     proEnabled() || accountsLive ? account.limits.explorerChecksPerDay : null;
   const historyDays = account.limits.historyDays;
+  const historyWeeks = account.limits.historyWeeks;
   const isGuest = accountsLive && !signedIn && !loading;
-  const limitHit =
-    explorerLimit !== null &&
-    peekDayUsage(window.localStorage, EXPLORER_DAY_KEY) >= explorerLimit;
+  const usedToday = peekDayUsage(window.localStorage, EXPLORER_DAY_KEY);
+  const limitHit = explorerLimit !== null && usedToday >= explorerLimit;
 
-  // Guest value nudge: one chance per browser until dismissed.
   const NUDGE_DISMISS_KEY = "appclimb:nudge:v1:dismissed";
   const [nudgeVisible, setNudgeVisible] = useState(false);
   const isNudgeDismissed = () => {
@@ -249,7 +166,6 @@ export function KeywordExplorer({
     }
   };
 
-  // Fire once per day while the guest is hard-stopped by the free limit.
   useEffect(() => {
     if (limitHit && isGuest) {
       trackAppEvent("explorer_limit_hit", null, { oncePerDay: "default" });
@@ -276,10 +192,24 @@ export function KeywordExplorer({
         if (restored) nextMetrics.set(keyword, restored);
       }
       setRecords(nextRecords);
-      setMetrics(nextMetrics);
-      setSelected(null);
-      setSelectedSet(new Set());
-      setError(null);
+      const sameCountry = loadedCountryRef.current === country;
+      setMetrics((previous) => {
+        if (!sameCountry) return nextMetrics;
+        // Keep live results (top apps, related data) over the slimmer copy
+        // rebuilt from storage when this is just a sync/restore reload.
+        const merged = new Map(nextMetrics);
+        for (const [keyword, live] of previous) {
+          if (!live.restored && merged.has(keyword)) merged.set(keyword, live);
+        }
+        return merged;
+      });
+      // A sync/restore reload keeps the open keyword; a country switch closes it.
+      if (loadedCountryRef.current !== country) {
+        setSelected(null);
+        setSelectedSet(new Set());
+        setError(null);
+      }
+      loadedCountryRef.current = country;
     })();
     return () => {
       cancelled = true;
@@ -294,69 +224,57 @@ export function KeywordExplorer({
         reorder?: boolean;
         throwOnError?: boolean;
         country?: string;
-        clearInput?: boolean;
       } = {},
     ) => {
-      const clean = keyword.trim();
+      const clean = keyword.trim().replace(/\s+/gu, " ");
       const key = clean.toLocaleLowerCase();
-      if (!clean || busy.has(key)) return;
+      if (clean.length < 2 || busy.has(key)) return;
       const targetCountry = options.country ?? country;
+      setSuggestionsOpen(false);
 
-      const alreadyTracked = loadKeywordList(
-        window.localStorage,
-        targetCountry,
-      ).some((item) => item.toLocaleLowerCase() === key);
+      const existingList = loadKeywordList(window.localStorage, targetCountry);
+      const existingName = existingList.find((item) => item.toLocaleLowerCase() === key);
+      const alreadyTracked = existingName !== undefined;
+      const name = existingName ?? clean;
       let consumed = false;
       if (!alreadyTracked) {
-        const gate = consumeDayUsage(
-          window.localStorage,
-          EXPLORER_DAY_KEY,
-          explorerLimit,
-        );
+        const gate = consumeDayUsage(window.localStorage, EXPLORER_DAY_KEY, explorerLimit);
         consumed = gate.consumed;
+        // The limit banner explains what happened and offers Pro.
         if (!gate.allowed) return;
       }
 
       setBusy((previous) => new Set(previous).add(key));
       setError(null);
       if (!alreadyTracked) {
-        setKeywords(
-          addKeywordToList(window.localStorage, targetCountry, clean),
-        );
+        setKeywords(addKeywordToList(window.localStorage, targetCountry, name));
         notifySyncChange("explorer");
       }
+      if (options.open !== false) setSelected(name);
       try {
         const nextMetrics = await enrichMetricsWithOfficialPopularity(
-          await estimateKeyword(clean, targetCountry),
+          await estimateKeyword(name, targetCountry, { retryDelaysMs: [1500, 4000] }),
         );
         const record = recordSnapshot(window.localStorage, nextMetrics);
         if (options.reorder !== false) {
-          setKeywords(
-            addKeywordToList(window.localStorage, targetCountry, clean),
-          );
+          setKeywords(addKeywordToList(window.localStorage, targetCountry, name));
           notifySyncChange("explorer");
         }
-        setMetrics((previous) => new Map(previous).set(clean, nextMetrics));
-        setRecords((previous) => new Map(previous).set(clean, record));
-        if (options.open !== false) setSelected(clean);
-        // The "aha" moment: first completed analysis, and the one chance to
-        // pitch the free account while the value is fresh.
+        setMetrics((previous) => new Map(previous).set(name, nextMetrics));
+        setRecords((previous) => new Map(previous).set(name, record));
         trackAppEvent("keyword_analyzed_first", null, { onceEver: "default" });
         if (isGuest && !isNudgeDismissed()) {
           setNudgeVisible(true);
           trackAppEvent("account_nudge_shown", null, { onceEver: "default" });
         }
-      } catch (error) {
+      } catch (caught) {
         if (!alreadyTracked) {
-          setKeywords(
-            removeKeywordFromList(window.localStorage, targetCountry, clean),
-          );
-          if (consumed) {
-            refundDayUsage(window.localStorage, EXPLORER_DAY_KEY);
-          }
+          setKeywords(removeKeywordFromList(window.localStorage, targetCountry, name));
+          if (consumed) refundDayUsage(window.localStorage, EXPLORER_DAY_KEY);
           notifySyncChange("explorer");
+          setSelected((current) => (current === name ? null : current));
         }
-        if (options.throwOnError) throw error;
+        if (options.throwOnError) throw caught;
         setError(
           `Could not analyze “${clean}”. The App Store may be rate-limiting requests — try again in a moment.`,
         );
@@ -366,13 +284,20 @@ export function KeywordExplorer({
           next.delete(key);
           return next;
         });
-        if (options.clearInput !== false) {
-          setQuery((current) => (current.trim() === clean ? "" : current));
-        }
-        setSuggestionsOpen(false);
       }
     },
     [busy, country, explorerLimit, isGuest],
+  );
+
+  const submitSearch = useCallback(
+    (term: string) => {
+      setQuery("");
+      setSuggestions([]);
+      setSuggestionsOpen(false);
+      setActiveSuggestion(-1);
+      void analyze(term);
+    },
+    [analyze],
   );
 
   useEffect(() => {
@@ -382,54 +307,86 @@ export function KeywordExplorer({
     const sharedKeyword = params.get("kw")?.trim();
     if (!sharedKeyword) return;
     const requested = params.get("country")?.trim().toUpperCase() ?? "";
-    const requestedCountry = SUPPORTED_COUNTRIES.some(
-      (item) => item.code === requested,
-    )
+    const requestedCountry = SUPPORTED_COUNTRIES.some((item) => item.code === requested)
       ? requested
       : country;
     window.history.replaceState(null, "", window.location.pathname);
-    let cancelled = false;
-    void (async () => {
-      await Promise.resolve();
-      if (cancelled) return;
+    // Runs once (guarded by the ref), so no cancellation: under StrictMode's
+    // double effect a cleanup flag would swallow the only call.
+    void Promise.resolve().then(() => {
+      loadedCountryRef.current = requestedCountry;
       setCountry(requestedCountry);
       void analyze(sharedKeyword, { open: true, country: requestedCountry });
-    })();
-    return () => {
-      cancelled = true;
-    };
+    });
   }, [country, analyze]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const typing =
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.tagName === "SELECT" ||
+        Boolean(target?.isContentEditable);
       const isCmdK = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k";
-      const isSlash = event.key === "/" && !event.metaKey && !event.ctrlKey && !event.altKey;
-
-      const activeTag = document.activeElement?.tagName;
-      const isInput =
-        activeTag === "INPUT" ||
-        activeTag === "TEXTAREA" ||
-        activeTag === "SELECT" ||
-        Boolean((document.activeElement as HTMLElement)?.isContentEditable);
-
-      if (isCmdK || (isSlash && !isInput)) {
+      if (isCmdK || (event.key === "/" && !typing)) {
         event.preventDefault();
         searchRef.current?.focus();
         searchRef.current?.select();
+      } else if (event.key === "Escape") {
+        if (suggestionsOpen) setSuggestionsOpen(false);
+        else if (!document.querySelector("[role=dialog]")) setSelected(null);
       }
     };
-
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [suggestionsOpen]);
+
+  // Autocomplete from Apple's published search terms.
+  useEffect(() => {
+    const term = query.trim();
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void (async () => {
+        if (term.length < 2) {
+          setSuggestions([]);
+          setSuggestionsOpen(false);
+          return;
+        }
+        const found = await fetchTermSuggestions(country, term, controller.signal);
+        if (controller.signal.aborted) return;
+        setSuggestions(found);
+        setActiveSuggestion(-1);
+        setSuggestionsOpen(
+          found.length > 0 && document.activeElement === searchRef.current,
+        );
+      })();
+    }, 180);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [query, country]);
+
+  useEffect(() => {
+    if (!suggestionsOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && !searchFormRef.current?.contains(target)) setSuggestionsOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [suggestionsOpen]);
+
+  useEffect(() => {
+    if (!undoState) return undefined;
+    const frame = requestAnimationFrame(() => undoRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [undoState]);
 
   const refreshAll = useCallback(async () => {
     await runBatched(keywords, async (keyword) => {
-      await analyze(keyword, {
-        open: false,
-        reorder: false,
-        clearInput: false,
-      });
+      await analyze(keyword, { open: false, reorder: false });
     });
   }, [analyze, keywords]);
 
@@ -438,14 +395,11 @@ export function KeywordExplorer({
       setBulkOpen(false);
       setBatchResult(null);
       setBatchProgress({ done: 0, total: batch.length });
-      const { failed } = await runBatched(batch, async (keyword, index) => {
-        await analyze(keyword, {
-          open: false,
-          reorder: true,
-          throwOnError: true,
-          clearInput: false,
-        });
-        setBatchProgress({ done: index + 1, total: batch.length });
+      let done = 0;
+      const { failed } = await runBatched(batch, async (keyword) => {
+        await analyze(keyword, { open: false, reorder: true, throwOnError: true });
+        done += 1;
+        setBatchProgress({ done, total: batch.length });
       });
       setBatchProgress(null);
       setBatchResult({ total: batch.length, failed });
@@ -460,13 +414,9 @@ export function KeywordExplorer({
         metrics: metrics.get(keyword) ?? null,
         record: records.get(keyword) ?? null,
       });
-      if (undoTimeoutRef.current !== null) {
-        window.clearTimeout(undoTimeoutRef.current);
-      }
+      if (undoTimeoutRef.current !== null) window.clearTimeout(undoTimeoutRef.current);
       undoTimeoutRef.current = window.setTimeout(() => {
-        if (undoRef.current === document.activeElement) {
-          searchRef.current?.focus();
-        }
+        if (undoRef.current === document.activeElement) searchRef.current?.focus();
         setUndoState(null);
         undoTimeoutRef.current = null;
       }, 6000);
@@ -484,8 +434,8 @@ export function KeywordExplorer({
         return next;
       });
       setSelected((current) => (current === keyword ? null : current));
-      setSelectedSet((prev) => {
-        const next = new Set(prev);
+      setSelectedSet((previous) => {
+        const next = new Set(previous);
         next.delete(keyword);
         return next;
       });
@@ -499,22 +449,12 @@ export function KeywordExplorer({
       window.clearTimeout(undoTimeoutRef.current);
       undoTimeoutRef.current = null;
     }
-    const {
-      keyword,
-      metrics: stashedMetrics,
-      record: stashedRecord,
-    } = undoState;
-    if (stashedRecord) {
-      saveRecord(window.localStorage, stashedRecord);
-    }
+    const { keyword, metrics: stashedMetrics, record: stashedRecord } = undoState;
+    if (stashedRecord) saveRecord(window.localStorage, stashedRecord);
     setKeywords(addKeywordToList(window.localStorage, country, keyword));
     notifySyncChange("explorer");
-    if (stashedMetrics) {
-      setMetrics((previous) => new Map(previous).set(keyword, stashedMetrics));
-    }
-    if (stashedRecord) {
-      setRecords((previous) => new Map(previous).set(keyword, stashedRecord));
-    }
+    if (stashedMetrics) setMetrics((previous) => new Map(previous).set(keyword, stashedMetrics));
+    if (stashedRecord) setRecords((previous) => new Map(previous).set(keyword, stashedRecord));
     setUndoState(null);
     searchRef.current?.focus();
   }, [undoState, country]);
@@ -522,15 +462,16 @@ export function KeywordExplorer({
   const exportCsv = useCallback(
     (customKeywords?: string[]) => {
       const targets = customKeywords ?? keywords;
-      const rows = targets.map((keyword) => ({
-        keyword,
-        country,
-        metrics: metrics.get(keyword) ?? null,
-        record: records.get(keyword) ?? null,
-      }));
       downloadTextFile(
         `appclimb-keywords-${country.toLowerCase()}.csv`,
-        buildExplorerCsv(rows),
+        buildExplorerCsv(
+          targets.map((keyword) => ({
+            keyword,
+            country,
+            metrics: metrics.get(keyword) ?? null,
+            record: records.get(keyword) ?? null,
+          })),
+        ),
       );
       showToast(`Exported ${targets.length} keywords to CSV`);
     },
@@ -543,12 +484,11 @@ export function KeywordExplorer({
       exportExplorerBackup(window.localStorage),
       "application/json;charset=utf-8",
     );
-    showToast("Downloaded complete JSON history backup");
+    showToast("Downloaded a JSON backup of your keyword history");
   }, [showToast]);
 
   const handleRestoreFile = useCallback(async (file: File) => {
-    const text = await file.text();
-    const restored = restoreExplorerBackup(window.localStorage, text);
+    const restored = restoreExplorerBackup(window.localStorage, await file.text());
     setRestoreMessage(
       restored > 0
         ? `Restored ${restored} keyword record${restored === 1 ? "" : "s"}.`
@@ -562,302 +502,202 @@ export function KeywordExplorer({
     async (targetKeywords: string[]) => {
       const optimized = optimizeKeywordField(targetKeywords, { stripSpaces: true });
       try {
-        if (navigator.clipboard?.writeText) {
-          await navigator.clipboard.writeText(optimized.optimized);
-          showToast(`Copied ${optimized.charCount}ch ASO keyword field!`);
-        }
+        await navigator.clipboard?.writeText(optimized.optimized);
+        showToast(`Copied a ${optimized.charCount}-character keyword field`);
       } catch {
-        // Ignore clipboard failure
+        // Clipboard blocked; the optimizer modal offers a manual copy.
       }
     },
     [showToast],
   );
 
+  const assessed = useMemo(() => {
+    const map = new Map<string, ReturnType<typeof assessOpportunity>>();
+    for (const keyword of keywords) {
+      const metric = metrics.get(keyword);
+      if (metric) map.set(keyword, assessOpportunity(metric));
+    }
+    return map;
+  }, [keywords, metrics]);
+
+  const trendOf = useCallback(
+    (keyword: string) => {
+      const history = metrics.get(keyword)?.popularityHistory ?? records.get(keyword)?.popularityHistory;
+      return history ? historyDelta(history.slice(-historyWeeks), 4) : null;
+    },
+    [metrics, records, historyWeeks],
+  );
+
   const counts = useMemo(() => {
-    let golden = 0;
-    let official = 0;
-    let highDemand = 0;
-    let lowDiff = 0;
-
-    for (const kw of keywords) {
-      const m = metrics.get(kw);
-      if (!m) continue;
-      if (isGoldenKeyword(m)) golden++;
-      if (popularitySourceOf(m) === "official") official++;
-      if (m.popularity >= 50) highDemand++;
-      if (m.difficulty <= 35) lowDiff++;
-    }
-
-    return {
+    const out: Record<FilterTab, number> = {
       all: keywords.length,
-      golden,
-      official,
-      high_demand: highDemand,
-      low_diff: lowDiff,
+      target: 0,
+      longtail_win: 0,
+      competitive: 0,
+      dominated: 0,
+      low_demand: 0,
     };
-  }, [keywords, metrics]);
-
-  const avgMetrics = useMemo(() => {
-    let popSum = 0;
-    let diffSum = 0;
-    let count = 0;
-    for (const kw of keywords) {
-      const m = metrics.get(kw);
-      if (!m) continue;
-      popSum += m.popularity;
-      diffSum += m.difficulty;
-      count++;
+    let official = 0;
+    for (const keyword of keywords) {
+      const verdict = assessed.get(keyword)?.verdict;
+      if (verdict) out[verdict] += 1;
+      if (metrics.get(keyword)?.popularitySource === "official") official += 1;
     }
-    if (count === 0) return null;
-    return {
-      avgPop: Math.round(popSum / count),
-      avgDiff: Math.round(diffSum / count),
-    };
-  }, [keywords, metrics]);
+    return { ...out, official };
+  }, [keywords, assessed, metrics]);
 
   const displayKeywords = useMemo(() => {
     let rows = keywords;
-
-    // Instant table text filter
-    if (tableFilter.trim()) {
-      const needle = tableFilter.trim().toLowerCase();
-      rows = rows.filter((kw) => kw.toLowerCase().includes(needle));
-    }
-
-    // Filter tab
-    if (filterTab === "golden") {
-      rows = rows.filter((kw) => {
-        const m = metrics.get(kw);
-        return m ? isGoldenKeyword(m) : false;
-      });
-    } else if (filterTab === "official") {
-      rows = rows.filter((kw) => {
-        const m = metrics.get(kw);
-        return m ? popularitySourceOf(m) === "official" : false;
-      });
-    } else if (filterTab === "high_demand") {
-      rows = rows.filter((kw) => {
-        const m = metrics.get(kw);
-        return m ? m.popularity >= 50 : false;
-      });
-    } else if (filterTab === "low_diff") {
-      rows = rows.filter((kw) => {
-        const m = metrics.get(kw);
-        return m ? m.difficulty <= 35 : false;
-      });
-    }
-
+    const needle = tableFilter.trim().toLocaleLowerCase();
+    if (needle) rows = rows.filter((keyword) => keyword.toLocaleLowerCase().includes(needle));
+    if (filterTab !== "all") rows = rows.filter((keyword) => assessed.get(keyword)?.verdict === filterTab);
     if (!sort) return rows;
     const dir = sort.dir === "asc" ? 1 : -1;
-    const getTrend = (kw: string) => {
-      const rec = records.get(kw);
-      if (!rec || rec.history.length < 2) return -1_000_000;
-      return trendDelta(rec.history) ?? -1_000_000;
-    };
-    return [...rows].sort((left, right) => {
+    const value = (keyword: string): number => {
+      const metric = metrics.get(keyword);
       switch (sort.key) {
-        case "keyword":
-          return dir * left.localeCompare(right);
         case "popularity":
-          return (
-            dir *
-            ((metrics.get(left)?.popularity ?? -1) -
-              (metrics.get(right)?.popularity ?? -1))
-          );
+          return metric?.popularity ?? -1;
         case "difficulty":
-          return (
-            dir *
-            ((metrics.get(left)?.difficulty ?? -1) -
-              (metrics.get(right)?.difficulty ?? -1))
-          );
-        case "results":
-          return (
-            dir *
-            ((metrics.get(left)?.results ?? -1) -
-              (metrics.get(right)?.results ?? -1))
-          );
+          return metric?.difficulty ?? -1;
+        case "opportunity":
+          return assessed.get(keyword)?.score ?? -1;
         case "trend":
-          return dir * (getTrend(left) - getTrend(right));
+          return trendOf(keyword) ?? -1000;
+        case "results":
+          return metric?.results ?? -1;
+        default:
+          return 0;
       }
+    };
+    return [...rows].sort((left, right) =>
+      sort.key === "keyword" ? dir * left.localeCompare(right) : dir * (value(left) - value(right)),
+    );
+  }, [keywords, tableFilter, filterTab, assessed, metrics, sort, trendOf]);
+
+  const toggleSort = (key: SortKey) =>
+    setSort((current) => {
+      if (!current || current.key !== key) return { key, dir: key === "keyword" ? "asc" : "desc" };
+      if (current.dir === (key === "keyword" ? "asc" : "desc")) {
+        return { key, dir: key === "keyword" ? "desc" : "asc" };
+      }
+      return null;
     });
-  }, [keywords, tableFilter, filterTab, metrics, records, sort]);
 
-  const toggleSelectAll = () => {
-    if (selectedSet.size === displayKeywords.length) {
-      setSelectedSet(new Set());
-    } else {
-      setSelectedSet(new Set(displayKeywords));
-    }
-  };
-
-  const toggleSelectKeyword = (keyword: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setSelectedSet((prev) => {
-      const next = new Set(prev);
-      if (next.has(keyword)) {
-        next.delete(keyword);
-      } else {
-        next.add(keyword);
+  const sortHeader = (key: SortKey, label: string, title?: string) => (
+    <th
+      aria-sort={
+        sort?.key === key ? (sort.dir === "asc" ? "ascending" : "descending") : undefined
       }
+      className={`ex-th ex-th--${key}`}
+    >
+      <button type="button" onClick={() => toggleSort(key)} title={title}>
+        {label}
+        {sort?.key === key && <span aria-hidden="true">{sort.dir === "asc" ? " ▲" : " ▼"}</span>}
+      </button>
+    </th>
+  );
+
+  const allSelected = displayKeywords.length > 0 && selectedSet.size === displayKeywords.length;
+  const toggleSelectAll = () =>
+    setSelectedSet(allSelected ? new Set() : new Set(displayKeywords));
+  const toggleSelectKeyword = (keyword: string, event: React.MouseEvent) => {
+    event.stopPropagation();
+    setSelectedSet((previous) => {
+      const next = new Set(previous);
+      if (next.has(keyword)) next.delete(keyword);
+      else next.add(keyword);
       return next;
     });
   };
 
   const deleteSelectedKeywords = () => {
     if (selectedSet.size === 0) return;
-    if (
-      !window.confirm(
-        `Delete ${selectedSet.size} selected keyword${selectedSet.size === 1 ? "" : "s"}?`,
-      )
-    ) {
+    if (!window.confirm(`Delete ${selectedSet.size} selected keyword${selectedSet.size === 1 ? "" : "s"}?`)) {
       return;
     }
     const toDelete = Array.from(selectedSet);
-    for (const kw of toDelete) {
-      removeKeywordFromList(window.localStorage, country, kw);
-      deleteRecord(window.localStorage, kw, country);
+    for (const keyword of toDelete) {
+      removeKeywordFromList(window.localStorage, country, keyword);
+      deleteRecord(window.localStorage, keyword, country);
     }
-    setRefreshVersion((v) => v + 1);
+    setRefreshVersion((version) => version + 1);
     setSelectedSet(new Set());
     setSelected(null);
     notifySyncChange("explorer");
     showToast(`Removed ${toDelete.length} keywords`);
   };
 
-  useEffect(() => {
-    const onKey = (event: KeyboardEvent) => {
-      const target = event.target as HTMLElement | null;
-      const tag = target?.tagName;
-      const typing =
-        tag === "INPUT" ||
-        tag === "TEXTAREA" ||
-        tag === "SELECT" ||
-        Boolean(target?.isContentEditable);
-      if ((event.key === "/" || (event.key === "k" && (event.metaKey || event.ctrlKey))) && !typing) {
-        event.preventDefault();
-        searchRef.current?.focus();
-      } else if (event.key === "Escape") {
-        setSuggestionsOpen(false);
-        setSelected(null);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
-  useEffect(() => {
-    const term = query.trim();
-    const timer = window.setTimeout(() => {
-      void (async () => {
-        if (term.length < 2) {
-          setSuggestions([]);
-          setSuggestionsOpen(false);
-          return;
-        }
-        try {
-          const apps = await searchAppStoreCatalog(term, country);
-          setSuggestions(suggestKeywords(term, apps));
-          setSuggestionsOpen(true);
-        } catch {
-          setSuggestions([]);
-          setSuggestionsOpen(false);
-        }
-      })();
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, [query, country]);
-
-  useEffect(() => {
-    if (!suggestionsOpen) return;
-    const onPointerDown = (event: PointerEvent) => {
-      const target = event.target as HTMLElement | null;
-      if (target && !searchFormRef.current?.contains(target)) {
-        setSuggestionsOpen(false);
-      }
-    };
-    document.addEventListener("pointerdown", onPointerDown);
-    return () => document.removeEventListener("pointerdown", onPointerDown);
-  }, [suggestionsOpen]);
-
-  useEffect(() => {
-    if (!undoState) return undefined;
-    const frame = requestAnimationFrame(() => undoRef.current?.focus());
-    return () => cancelAnimationFrame(frame);
-  }, [undoState]);
-
-  const toggleSort = useCallback((key: SortKey) => {
-    setSort((current) => {
-      if (!current || current.key !== key) {
-        return { key, dir: key === "keyword" ? "asc" : "desc" };
-      }
-      if (current.dir === "asc") return { key, dir: "desc" };
-      return null;
-    });
-  }, []);
-
-  const selectedMetrics = selected ? metrics.get(selected) : null;
-  const selectedRecord = selected ? records.get(selected) : null;
-  const selectedBusy = selected
-    ? busy.has(selected.toLocaleLowerCase())
-    : false;
+  const selectedMetrics = selected ? metrics.get(selected) ?? null : null;
+  const selectedRecord = selected ? records.get(selected) ?? null : null;
+  const selectedBusy = selected ? busy.has(selected.toLocaleLowerCase()) : false;
+  const hasList = keywords.length > 0;
+  const trackTarget = trackTargets?.find((app) => app.country === country) ?? null;
+  const remaining = explorerLimit !== null ? Math.max(0, explorerLimit - usedToday) : null;
 
   return (
-    <main className="tool-page">
-      <section className="keyword-hero marketing-container">
-        <span className="marketing-eyebrow keyword-hero-eyebrow">
-          Official Apple Ads data
-        </span>
-        <h1>Popularity from Apple. Not a black box.</h1>
-        <p className="keyword-hero-deck">
-          Apple&apos;s official Ads popularity (1–100) &amp; difficulty for any App Store keyword — labeled with its source.
-        </p>
-        {isGuest && (
-          <div className="guest-access-banner" role="status">
-            <span className="guest-access-dot" aria-hidden="true" />
-            <span className="guest-access-text">
-              You&apos;re using AppClimb as a <strong>guest</strong> &middot; Search is open
-              {explorerLimit !== null ? ` (${explorerLimit} checks/day)` : ""} &middot; No login required
+    <main className={`tool-page ex${hasList ? " ex--has-list" : ""}`}>
+      <section className="ex-hero marketing-container">
+        {!hasList && (
+          <>
+            <span className="ex-eyebrow">
+              <span className="ex-eyebrow-dot" aria-hidden="true" />
+              Apple Ads popularity · updated weekly
             </span>
-          </div>
+            <h1>Find App Store keywords you can actually rank for.</h1>
+            <p className="ex-deck">
+              Popularity straight from Apple, difficulty you can see the reasons for, and a
+              plain verdict on every keyword. No sign-up to search.
+            </p>
+          </>
         )}
-      </section>
 
-      <section className="keyword-tool marketing-container">
         <form
-          className="keyword-search-form"
+          className="ex-search"
           role="search"
           ref={searchFormRef}
           onSubmit={(event) => {
             event.preventDefault();
-            void analyze(query);
+            const chosen =
+              suggestionsOpen && activeSuggestion >= 0 ? suggestions[activeSuggestion]?.term : null;
+            submitSearch(chosen ?? query);
           }}
         >
-          <Search size={17} aria-hidden="true" />
+          <Search size={18} aria-hidden="true" className="ex-search-icon" />
           <input
             ref={searchRef}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search a keyword, e.g. meditation"
+            onFocus={() => {
+              if (suggestions.length > 0 && query.trim().length >= 2) setSuggestionsOpen(true);
+            }}
+            onKeyDown={(event) => {
+              if (!suggestionsOpen || suggestions.length === 0) return;
+              if (event.key === "ArrowDown") {
+                event.preventDefault();
+                setActiveSuggestion((index) => (index + 1) % suggestions.length);
+              } else if (event.key === "ArrowUp") {
+                event.preventDefault();
+                setActiveSuggestion((index) => (index <= 0 ? suggestions.length - 1 : index - 1));
+              }
+            }}
+            placeholder={hasList ? "Add a keyword…" : "Type a keyword, e.g. habit tracker"}
             maxLength={80}
             aria-label="Search keywords"
             role="combobox"
             aria-expanded={suggestionsOpen && suggestions.length > 0}
             aria-controls="keyword-suggestions"
+            aria-activedescendant={
+              activeSuggestion >= 0 ? `keyword-suggestion-${activeSuggestion}` : undefined
+            }
             aria-autocomplete="list"
             autoComplete="off"
             spellCheck={false}
           />
-          <kbd className="keyword-search-kbd" title="Press ⌘K or / to search" aria-hidden="true">
+          <kbd className="ex-kbd" aria-hidden="true">
             ⌘K
           </kbd>
-          <label
-            className="keyword-country-chip"
-            title={
-              busy.size > 0
-                ? "Wait for the current analysis to finish"
-                : "App Store country"
-            }
-          >
+          <label className="ex-country" title={busy.size > 0 ? "Wait for the current analysis to finish" : "App Store country"}>
             <select
               value={country}
               onChange={(event) => setCountry(event.target.value)}
@@ -871,124 +711,95 @@ export function KeywordExplorer({
               ))}
             </select>
           </label>
-          <button
-            type="submit"
-            disabled={query.trim().length < 2 || busy.size > 0}
-          >
-            {busy.size > 0 ? (
-              <Loader2 className="spin" size={16} aria-hidden="true" />
-            ) : (
-              "Analyze"
-            )}
+          <button type="submit" className="ex-submit" disabled={query.trim().length < 2}>
+            Analyze
           </button>
-          {busy.size > 0 && (
-            <i className="keyword-busy-line" aria-hidden="true" />
-          )}
+          {busy.size > 0 && <i className="ex-busy-line" aria-hidden="true" />}
           {suggestionsOpen && suggestions.length > 0 && (
-            <div
-              className="keyword-suggestions"
-              role="listbox"
-              id="keyword-suggestions"
-            >
-              {suggestions.map((suggestion) => (
+            <div className="ex-suggestions" role="listbox" id="keyword-suggestions">
+              <div className="ex-suggestions-head">Popular App Store searches</div>
+              {suggestions.map((suggestion, index) => (
                 <button
                   type="button"
                   role="option"
-                  aria-selected={false}
-                  key={suggestion}
-                  onClick={() => void analyze(suggestion)}
+                  id={`keyword-suggestion-${index}`}
+                  aria-selected={index === activeSuggestion}
+                  className={index === activeSuggestion ? "is-active" : undefined}
+                  key={`${suggestion.genre}:${suggestion.term}`}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => submitSearch(suggestion.term)}
                 >
                   <Search size={13} aria-hidden="true" />
-                  {suggestion}
+                  <span className="ex-suggestion-term">{suggestion.term}</span>
+                  <small>{GENRE_LABELS[suggestion.genre]}</small>
+                  <span className="ex-suggestion-pop" title="Apple Ads popularity">
+                    {suggestion.popularity}
+                  </span>
                 </button>
               ))}
             </div>
           )}
         </form>
 
-        <div className="keyword-meta-row">
-          <div className="keyword-examples" aria-label="Example keywords">
-            <span className="keyword-examples-label">Try:</span>
-            {EXAMPLE_KEYWORDS.map((item) => (
-              <button
-                type="button"
-                key={item.keyword}
-                className="keyword-example-chip"
-                onClick={() => void analyze(item.keyword)}
-                disabled={busy.size > 0}
-              >
-                <span className="keyword-chip-icon" aria-hidden="true">
-                  {item.emoji}
-                </span>
-                <span>{item.label}</span>
-              </button>
-            ))}
-          </div>
-          <div className="keyword-meta-right">
-            {!limitHit &&
-              explorerLimit !== null &&
-              peekDayUsage(window.localStorage, EXPLORER_DAY_KEY) > 0 && (
-                <span className="explorer-checks-remaining">
-                  {Math.max(
-                    0,
-                    explorerLimit -
-                      peekDayUsage(window.localStorage, EXPLORER_DAY_KEY),
-                  )}{" "}
-                  of {explorerLimit} free checks left today
-                </span>
-              )}
-            <button
-              type="button"
-              className="keyword-meta-link keyword-meta-link--primary"
-              onClick={() => setOptimizerOpen(true)}
-              title="Optimize App Store 100-character keyword field"
-            >
-              <Wand2 size={14} aria-hidden="true" />
-              100ch Optimizer
-            </button>
-            <button
-              type="button"
-              className="keyword-meta-link"
-              onClick={() => setBulkOpen(true)}
-              disabled={busy.size > 0}
-            >
+        <div className="ex-meta">
+          {!hasList && (
+            <div className="ex-examples" aria-label="Example keywords">
+              <span>Try</span>
+              {EXAMPLE_KEYWORDS.map((keyword) => (
+                <button
+                  type="button"
+                  key={keyword}
+                  onClick={() => void analyze(keyword)}
+                  disabled={busy.size > 0}
+                >
+                  {keyword}
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="ex-meta-right">
+            {remaining !== null && (
+              <span className={`ex-quota${remaining <= 2 ? " ex-quota--low" : ""}`}>
+                {remaining} of {explorerLimit} free checks left today
+              </span>
+            )}
+            <button type="button" className="ex-link" onClick={() => setBulkOpen(true)} disabled={busy.size > 0}>
               <ListPlus size={14} aria-hidden="true" />
-              Analyze list
+              Analyze a list
+            </button>
+            <button type="button" className="ex-link" onClick={() => setOptimizerOpen(true)}>
+              <Wand2 size={14} aria-hidden="true" />
+              Keyword field builder
             </button>
           </div>
         </div>
+      </section>
 
+      <section className="ex-body marketing-container">
         {limitHit && (
-          <div className="explorer-limit-banner" role="status">
+          <div className="ex-banner ex-banner--limit" role="status">
             <Sparkles size={16} aria-hidden="true" />
             <span>
-              You&apos;ve used your{" "}
-              <strong>{explorerLimit} free keyword checks</strong> for today —
-              they reset tomorrow. Upgrade to Pro for unlimited checks, sync,
-              and 90-day history.
+              You&apos;ve used today&apos;s <strong>{explorerLimit} free checks</strong>. They reset
+              tomorrow — re-checking keywords already in your list is always free.
             </span>
-            <button
-              type="button"
-              className="tracker-button-primary"
-              onClick={openUpgrade}
-            >
-              Upgrade to Pro
+            <button type="button" className="ex-btn ex-btn--primary" onClick={openUpgrade}>
+              Unlimited with Pro
             </button>
           </div>
         )}
 
-        {nudgeVisible && (
-          <div className="account-nudge" role="status">
+        {nudgeVisible && !limitHit && (
+          <div className="ex-banner" role="status">
             <Star size={16} aria-hidden="true" />
             <span>
-              <strong>Keep what you just found.</strong> A free account tracks
-              1 app with 25 keywords, adds the ASO assistant, and keeps 30 days
-              of history — no card needed.
+              <strong>Want to know where your app ranks for these?</strong> A free account tracks
+              your app&apos;s position for 25 keywords and adds the ASO assistant.
             </span>
-            <div className="account-nudge-actions">
+            <div className="ex-banner-actions">
               <button
                 type="button"
-                className="tracker-button-primary"
+                className="ex-btn ex-btn--primary"
                 onClick={() => {
                   trackAppEvent("account_nudge_cta", null, { onceEver: "default" });
                   setNudgeVisible(false);
@@ -999,7 +810,7 @@ export function KeywordExplorer({
               </button>
               <button
                 type="button"
-                className="account-nudge-dismiss"
+                className="ex-btn ex-btn--ghost"
                 onClick={() => {
                   try {
                     window.localStorage.setItem(NUDGE_DISMISS_KEY, "1");
@@ -1016,666 +827,277 @@ export function KeywordExplorer({
         )}
 
         {batchProgress && (
-          <div className="keyword-batch-banner" role="status">
+          <div className="ex-banner ex-banner--info" role="status">
             <Loader2 className="spin" size={15} aria-hidden="true" />
             <span>
               Analyzing {batchProgress.done} of {batchProgress.total}…
             </span>
           </div>
         )}
-
         {batchResult && (
-          <div
-            className="keyword-batch-banner keyword-batch-banner--done"
-            role="status"
-          >
+          <div className="ex-banner ex-banner--info" role="status">
             <span>
               {batchResult.failed.length === 0
                 ? `Done — all ${batchResult.total} keywords analyzed.`
-                : `Done — ${batchResult.failed.length} of ${batchResult.total} couldn’t be analyzed (the App Store may be rate-limiting). Existing data was kept — wait a moment and analyze them again.`}
+                : `Done — ${batchResult.failed.length} of ${batchResult.total} couldn’t be analyzed (the App Store may be rate-limiting). Try those again in a moment.`}
             </span>
-            <button type="button" onClick={() => setBatchResult(null)}>
+            <button type="button" className="ex-btn ex-btn--ghost" onClick={() => setBatchResult(null)}>
               Dismiss
             </button>
           </div>
         )}
-
         {error && (
-          <div className="keyword-error" role="alert">
+          <div className="ex-banner ex-banner--error" role="alert">
             {error}
           </div>
         )}
-
         {undoState && (
-          <div className="keyword-undo-bar" role="status">
+          <div className="ex-banner ex-banner--info" role="status">
             <span>Removed “{undoState.keyword}”</span>
-            <button ref={undoRef} type="button" onClick={undoRemove}>
+            <button ref={undoRef} type="button" className="ex-btn ex-btn--ghost" onClick={undoRemove}>
               Undo
             </button>
           </div>
         )}
-
         {restoreMessage && (
-          <div className="keyword-undo-bar" role="status">
+          <div className="ex-banner ex-banner--info" role="status">
             <span>{restoreMessage}</span>
-            <button type="button" onClick={() => setRestoreMessage(null)}>
+            <button type="button" className="ex-btn ex-btn--ghost" onClick={() => setRestoreMessage(null)}>
               Dismiss
             </button>
           </div>
         )}
 
-        {keywords.length === 0 ? (
-          <section className="explorer-showcase" aria-label="Live ASO preview">
-            <div className="showcase-header">
-              <div className="showcase-header-copy">
-                <span className="showcase-badge">
-                  <Sparkles size={12} aria-hidden="true" />
-                  Live Preview
-                </span>
-                <h2>Popular App Store Keywords</h2>
+        {!hasList ? (
+          <>
+            {!trendingUnavailable && (
+              <TrendingSearches
+                country={country}
+                countryLabel={countryLabel}
+                disabled={busy.size > 0}
+                onAnalyze={(term) => void analyze(term)}
+                onUnavailable={() => setTrendingUnavailable(true)}
+              />
+            )}
+            <section className="ex-how" aria-labelledby="ex-how-title">
+              <h2 id="ex-how-title">How to read the numbers</h2>
+              <div className="ex-how-grid">
+                <article>
+                  <span className="ex-how-tag ex-how-tag--teal">Popularity</span>
+                  <h3>Straight from Apple</h3>
+                  <p>
+                    Apple Ads publishes a 1–100 popularity score for the 500 most-searched terms in
+                    each category, every week. Terms below that list are marked <b>long tail</b>{" "}
+                    with the ceiling Apple implies. It&apos;s a relative score, not search volume.
+                  </p>
+                </article>
+                <article>
+                  <span className="ex-how-tag ex-how-tag--coral">Difficulty</span>
+                  <h3>An estimate you can check</h3>
+                  <p>
+                    Built from the 10 apps ranking right now: their ratings, whether they target
+                    the keyword in their name, and big-brand presence. Every score shows its
+                    evidence.
+                  </p>
+                </article>
+                <article>
+                  <span className="ex-how-tag ex-how-tag--green">Verdict</span>
+                  <h3>Should you go after it?</h3>
+                  <p>
+                    <b>Worth targeting</b>, <b>Long-tail win</b>, <b>Competitive</b>, or{" "}
+                    <b>Dominated</b> — demand weighed against how beatable the first page is.
+                  </p>
+                </article>
               </div>
-              <div className="showcase-header-actions">
-                <button
-                  type="button"
-                  className="tracker-button-secondary showcase-sample-btn"
-                  onClick={() =>
-                    void runBulk(["meditation", "habit tracker", "invoice scanner"])
-                  }
-                  disabled={busy.size > 0}
-                >
-                  <Play size={13} aria-hidden="true" />
-                  Try 3 sample keywords
-                </button>
-              </div>
-            </div>
-
-            <div className="showcase-grid">
-              {SHOWCASE_SAMPLES.map((sample) => (
-                <div
-                  key={sample.keyword}
-                  className={`showcase-card ${sample.isGolden ? "is-golden" : ""}`}
-                  onClick={() => void analyze(sample.keyword)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      void analyze(sample.keyword);
-                    }
-                  }}
-                >
-                  <div className="showcase-card-top">
-                    <div className="showcase-card-title-wrap">
-                      <span className="showcase-card-category">{sample.category}</span>
-                      <h3 className="showcase-card-keyword">{sample.keyword}</h3>
-                    </div>
-                    {sample.isGolden && (
-                      <span className="keyword-golden-badge" title="High demand & achievable difficulty">
-                        ⭐ Golden
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="showcase-metrics-row">
-                    <div className="showcase-metric-box">
-                      <span className="showcase-metric-label">Popularity</span>
-                      <div className="showcase-metric-val">
-                        <strong>{sample.popularity}</strong>
-                        <small>/100</small>
-                      </div>
-                      <span className="showcase-metric-source">
-                        <span className="source-dot source-dot--official" aria-hidden="true" />
-                        {sample.popularityLabel}
-                      </span>
-                    </div>
-
-                    <div className="showcase-metric-box">
-                      <span className="showcase-metric-label">Difficulty</span>
-                      <div className="showcase-metric-val">
-                        <strong>{sample.difficulty}</strong>
-                        <small>/100</small>
-                      </div>
-                      <span className={`showcase-difficulty-tag is-${sample.difficultyTone}`}>
-                        {sample.difficultyLabel}
-                      </span>
-                    </div>
-
-                    <div className="showcase-metric-box">
-                      <span className="showcase-metric-label">App Results</span>
-                      <div className="showcase-metric-val">
-                        <strong>{sample.results}</strong>
-                        <small>apps</small>
-                      </div>
-                      <span className="showcase-metric-source">App Store ({country})</span>
-                    </div>
-                  </div>
-
-                  <div className="showcase-app-preview">
-                    <div
-                      className="showcase-app-icon-badge"
-                      style={{ background: sample.topAppIconBg }}
-                      aria-hidden="true"
-                    >
-                      <span>{sample.topAppIconEmoji}</span>
-                    </div>
-                    <div className="showcase-app-info">
-                      <span className="showcase-app-rank">#1 Ranking App</span>
-                      <span className="showcase-app-name">{sample.topAppName}</span>
-                    </div>
-                    <span className="showcase-card-cta">
-                      Analyze Live <ArrowRight size={13} aria-hidden="true" />
-                    </span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Feature Value Props */}
-            <div className="showcase-pillars-grid">
-              <div className="showcase-pillar-card">
-                <div className="pillar-icon pillar-icon--teal">
-                  <Target size={18} aria-hidden="true" />
-                </div>
-                <h4>Official Apple Ads Popularity</h4>
-                <p>
-                  1–100 relative popularity direct from Apple Ads API. Never an unexplained third-party estimate.
-                </p>
-              </div>
-
-              <div className="showcase-pillar-card">
-                <div className="pillar-icon pillar-icon--amber">
-                  <ShieldCheck size={18} aria-hidden="true" />
-                </div>
-                <h4>Real App Store Difficulty</h4>
-                <p>
-                  Calculated from live competitor ratings, title match strength, and catalog density in real time.
-                </p>
-              </div>
-
-              <div className="showcase-pillar-card">
-                <div className="pillar-icon pillar-icon--green">
-                  <Star size={18} aria-hidden="true" />
-                </div>
-                <h4>Golden Keyword Detection</h4>
-                <p>
-                  Instant algorithmic spotting of high-demand keywords with low competition to help indie apps rank fast.
-                </p>
-              </div>
-
-              <div className="showcase-pillar-card">
-                <div className="pillar-icon pillar-icon--blue">
-                  <Wand2 size={18} aria-hidden="true" />
-                </div>
-                <h4>100ch Metadata Optimizer</h4>
-                <p>
-                  Generate space-optimized, deduplicated comma-separated keyword fields for App Store Connect.
-                </p>
-              </div>
-            </div>
-
-            <div className="keyword-empty-slim">
-              <span>No keywords yet — try an example above or paste a list.</span>
               <button
                 type="button"
-                className="keyword-empty-restore"
+                className="ex-link ex-restore"
                 onClick={() => restoreInputRef.current?.click()}
               >
                 <Upload size={13} aria-hidden="true" />
-                Restore a backup
+                Restore a keyword backup
               </button>
-            </div>
-          </section>
-        ) : (
-          <>
-            <section
-              className="tracker-scorecard-grid explorer-scorecards"
-              aria-label="Keyword list summary"
-            >
-              <div className="tracker-scorecard-card">
-                <span className="tracker-scorecard-label">Keywords Analyzed</span>
-                <div className="tracker-scorecard-value">
-                  <strong>{counts.all}</strong>
-                  <small>in {country}</small>
-                </div>
-                <span className="tracker-scorecard-meta">Saved in local browser</span>
-              </div>
-
-              <div className="tracker-scorecard-card">
-                <span className="tracker-scorecard-label">Golden Opportunities</span>
-                <div className="tracker-scorecard-value">
-                  <strong>{counts.golden}</strong>
-                  {counts.golden > 0 && (
-                    <span className="tracker-badge-top1" title="High demand, achievable difficulty">
-                      ⭐ {Math.round((counts.golden / counts.all) * 100)}%
-                    </span>
-                  )}
-                </div>
-                <span className="tracker-scorecard-meta">Pop ≥55 & Diff ≤40</span>
-              </div>
-
-              <div className="tracker-scorecard-card">
-                <span className="tracker-scorecard-label">Official Apple Ads</span>
-                <div className="tracker-scorecard-value">
-                  <strong>{counts.official}</strong>
-                  <small>/ {counts.all}</small>
-                </div>
-                <span className="tracker-scorecard-meta">Verified Platform API v1</span>
-              </div>
-
-              <div className="tracker-scorecard-card">
-                <span className="tracker-scorecard-label">Avg Demand / Barrier</span>
-                <div className="tracker-scorecard-value">
-                  <strong>{avgMetrics ? avgMetrics.avgPop : "—"}</strong>
-                  <small>/ {avgMetrics ? avgMetrics.avgDiff : "—"}</small>
-                </div>
-                <span className="tracker-scorecard-meta">Pop (1–100) / Diff (1–100)</span>
-              </div>
             </section>
-
-            <div className={`explorer-split${selected ? " has-detail" : ""}`}>
-            <div className="keyword-table-wrap">
-              <div className="keyword-table-topbar">
-                <div
-                  className="keyword-status-filters"
-                  role="tablist"
-                  aria-label="Keyword filters"
-                >
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={filterTab === "all"}
-                    className={
-                      filterTab === "all"
-                        ? "keyword-status-chip is-active"
-                        : "keyword-status-chip"
-                    }
-                    onClick={() => setFilterTab("all")}
-                  >
-                    All <span>{counts.all}</span>
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={filterTab === "golden"}
-                    className={
-                      filterTab === "golden"
-                        ? "keyword-status-chip is-active"
-                        : "keyword-status-chip"
-                    }
-                    onClick={() => setFilterTab("golden")}
-                    title="Popularity ≥ 55 and Difficulty ≤ 40"
-                  >
-                    Golden <span>{counts.golden}</span>
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={filterTab === "official"}
-                    className={
-                      filterTab === "official"
-                        ? "keyword-status-chip is-active"
-                        : "keyword-status-chip"
-                    }
-                    onClick={() => setFilterTab("official")}
-                    title="Official Apple Ads verified popularity"
-                  >
-                    Apple Ads <span>{counts.official}</span>
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={filterTab === "high_demand"}
-                    className={
-                      filterTab === "high_demand"
-                        ? "keyword-status-chip is-active"
-                        : "keyword-status-chip"
-                    }
-                    onClick={() => setFilterTab("high_demand")}
-                    title="Popularity score ≥ 50"
-                  >
-                    High Demand <span>{counts.high_demand}</span>
-                  </button>
-                  <button
-                    type="button"
-                    role="tab"
-                    aria-selected={filterTab === "low_diff"}
-                    className={
-                      filterTab === "low_diff"
-                        ? "keyword-status-chip is-active"
-                        : "keyword-status-chip"
-                    }
-                    onClick={() => setFilterTab("low_diff")}
-                    title="Difficulty score ≤ 35"
-                  >
-                    Low Diff <span>{counts.low_diff}</span>
-                  </button>
+          </>
+        ) : (
+          <div className={`ex-split${selected ? " has-detail" : ""}`}>
+            <div className="ex-list">
+              <div className="ex-list-head">
+                <div className="ex-list-title">
+                  <h2>Your keywords</h2>
+                  <span>
+                    {keywords.length} in {countryLabel}
+                    {counts.official > 0 ? ` · ${counts.official} with Apple popularity` : ""}
+                  </span>
                 </div>
-
-                <div className="keyword-topbar-right">
-                  <div className="keyword-instant-search">
+                <div className="ex-list-tools">
+                  <div className="ex-filter-input">
                     <Search size={13} aria-hidden="true" />
                     <input
                       value={tableFilter}
-                      onChange={(e) => setTableFilter(e.target.value)}
-                      placeholder="Filter list…"
+                      onChange={(event) => setTableFilter(event.target.value)}
+                      placeholder="Filter…"
                       aria-label="Filter loaded keywords"
                     />
                     {tableFilter && (
-                      <button
-                        type="button"
-                        onClick={() => setTableFilter("")}
-                        aria-label="Clear filter"
-                      >
+                      <button type="button" onClick={() => setTableFilter("")} aria-label="Clear filter">
                         <X size={12} aria-hidden="true" />
                       </button>
                     )}
                   </div>
                   <button
                     type="button"
-                    className="refresh-all-button keyword-topbar-refresh"
+                    className="ex-btn ex-btn--ghost"
                     onClick={() => void refreshAll()}
-                    disabled={keywords.length === 0 || busy.size > 0}
-                    title="Refresh scores for all keywords"
+                    disabled={busy.size > 0}
+                    title="Re-check every keyword (doesn't use free checks)"
                   >
-                    <RefreshCw
-                      className={busy.size > 0 ? "spin" : ""}
-                      size={15}
-                      aria-hidden="true"
-                    />
-                    Refresh all
+                    <RefreshCw className={busy.size > 0 ? "spin" : ""} size={14} aria-hidden="true" />
+                    Refresh
                   </button>
                 </div>
               </div>
 
-              {filterTab === "golden" && (
-                <p className="keyword-heuristic-note">
-                  “Golden” means popularity ≥ 55 and estimated difficulty ≤ 40 —
-                  terms with solid demand and a low barrier, worth fighting for.
-                </p>
-              )}
+              <div className="ex-filters" role="tablist" aria-label="Keyword filters">
+                {FILTERS.filter((item) => item.id === "all" || counts[item.id] > 0 || filterTab === item.id).map(
+                  (item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={filterTab === item.id}
+                      className={`ex-filter ex-filter--${item.id}${filterTab === item.id ? " is-active" : ""}`}
+                      onClick={() => setFilterTab(item.id)}
+                      title={item.hint}
+                    >
+                      {item.label} <span>{counts[item.id]}</span>
+                    </button>
+                  ),
+                )}
+              </div>
 
-              <div className="keyword-table-scroll">
-                <table className="keyword-table">
-                  <colgroup>
-                    <col style={{ width: 44 }} />
-                    <col style={{ width: "auto", minWidth: 160 }} />
-                    <col style={{ width: 130 }} />
-                    <col style={{ width: 125 }} />
-                    <col style={{ width: 100 }} />
-                    <col style={{ width: 90 }} />
-                    <col style={{ width: 54 }} />
-                  </colgroup>
+              <div className="ex-table-scroll">
+                <table className="ex-table">
                   <thead>
                     <tr>
-                      <th className="keyword-th-select">
+                      <th className="ex-th ex-th--select">
                         <button
                           type="button"
-                          className="keyword-select-all-btn"
+                          className="ex-check"
                           onClick={toggleSelectAll}
-                          aria-label={
-                            selectedSet.size === displayKeywords.length
-                              ? "Deselect all"
-                              : "Select all"
-                          }
-                          title="Select / Deselect all"
+                          aria-label={allSelected ? "Deselect all" : "Select all"}
                         >
-                          {selectedSet.size > 0 &&
-                          selectedSet.size === displayKeywords.length ? (
-                            <CheckSquare size={16} className="keyword-checkbox-icon" />
-                          ) : (
-                            <Square size={16} className="keyword-checkbox-icon" />
-                          )}
+                          {allSelected ? <CheckSquare size={15} /> : <Square size={15} />}
                         </button>
                       </th>
-                      <th
-                        aria-sort={
-                          sort?.key === "keyword"
-                            ? sort.dir === "asc"
-                              ? "ascending"
-                              : "descending"
-                            : undefined
-                        }
-                      >
-                        <button
-                          type="button"
-                          onClick={() => toggleSort("keyword")}
-                        >
-                          Keyword
-                          {sort?.key === "keyword" &&
-                            (sort.dir === "asc" ? " ▲" : " ▼")}
-                        </button>
-                      </th>
-                      <th
-                        aria-sort={
-                          sort?.key === "popularity"
-                            ? sort.dir === "asc"
-                              ? "ascending"
-                              : "descending"
-                            : undefined
-                        }
-                      >
-                        <button
-                          type="button"
-                          onClick={() => toggleSort("popularity")}
-                        >
-                          Popularity
-                          {sort?.key === "popularity" &&
-                            (sort.dir === "asc" ? " ▲" : " ▼")}
-                        </button>
-                      </th>
-                      <th
-                        aria-sort={
-                          sort?.key === "difficulty"
-                            ? sort.dir === "asc"
-                              ? "ascending"
-                              : "descending"
-                            : undefined
-                        }
-                      >
-                        <button
-                          type="button"
-                          onClick={() => toggleSort("difficulty")}
-                        >
-                          Difficulty
-                          {sort?.key === "difficulty" &&
-                            (sort.dir === "asc" ? " ▲" : " ▼")}
-                        </button>
-                      </th>
-                      <th
-                        aria-sort={
-                          sort?.key === "trend"
-                            ? sort.dir === "asc"
-                              ? "ascending"
-                              : "descending"
-                            : undefined
-                        }
-                      >
-                        <button
-                          type="button"
-                          onClick={() => toggleSort("trend")}
-                        >
-                          Trend
-                          {sort?.key === "trend" &&
-                            (sort.dir === "asc" ? " ▲" : " ▼")}
-                        </button>
-                      </th>
-                      <th
-                        aria-sort={
-                          sort?.key === "results"
-                            ? sort.dir === "asc"
-                              ? "ascending"
-                              : "descending"
-                            : undefined
-                        }
-                      >
-                        <button
-                          type="button"
-                          onClick={() => toggleSort("results")}
-                        >
-                          Results
-                          {sort?.key === "results" &&
-                            (sort.dir === "asc" ? " ▲" : " ▼")}
-                        </button>
-                      </th>
-                      <th aria-label="Actions" />
+                      {sortHeader("keyword", "Keyword")}
+                      {sortHeader("popularity", "Popularity", "Apple Ads popularity, 1–100")}
+                      {sortHeader("trend", "12-wk trend", "Apple weekly popularity; change over 4 weeks")}
+                      {sortHeader("difficulty", "Difficulty", "Estimated from today's top 10")}
+                      {sortHeader("opportunity", "Verdict", "Demand weighed against difficulty")}
+                      {sortHeader("results", "Apps", "Apps returned by App Store search (max 200)")}
+                      <th aria-label="Actions" className="ex-th ex-th--actions" />
                     </tr>
                   </thead>
                   <tbody>
                     {displayKeywords.map((keyword) => {
-                      const record = records.get(keyword);
                       const metric = metrics.get(keyword);
-                      const history = record
-                        ? recentHistory(record, historyDays).map(
-                            (point) => point.popularity,
-                          )
-                        : [];
-                      const delta = record ? trendDelta(record.history) : null;
+                      const record = records.get(keyword);
+                      const opportunity = assessed.get(keyword);
                       const isBusy = busy.has(keyword.toLocaleLowerCase());
-                      const isSelected = selectedSet.has(keyword);
-
+                      const isChecked = selectedSet.has(keyword);
+                      const source = metric ? popularitySourceOf(metric) : "estimated";
+                      const weekly = (metric?.popularityHistory ?? record?.popularityHistory ?? [])
+                        .slice(-12)
+                        .map((point) => point.popularity);
+                      const delta = trendOf(keyword);
                       return (
                         <tr
                           key={keyword}
-                          className={`${selected === keyword ? "is-selected" : ""} ${
-                            isSelected ? "is-row-checked" : ""
-                          }`}
+                          className={`${selected === keyword ? "is-selected" : ""}${isChecked ? " is-checked" : ""}`}
                           onClick={() => setSelected(keyword)}
                         >
-                          <td
-                            className="keyword-td-select"
-                            onClick={(e) => toggleSelectKeyword(keyword, e)}
-                          >
+                          <td className="ex-td-select" onClick={(event) => toggleSelectKeyword(keyword, event)}>
                             <button
                               type="button"
-                              className="keyword-row-checkbox"
-                              aria-label={isSelected ? `Deselect ${keyword}` : `Select ${keyword}`}
+                              className="ex-check"
+                              aria-label={isChecked ? `Deselect ${keyword}` : `Select ${keyword}`}
                             >
-                              {isSelected ? (
-                                <CheckSquare size={16} className="keyword-checkbox-icon is-checked" />
-                              ) : (
-                                <Square size={16} className="keyword-checkbox-icon" />
-                              )}
+                              {isChecked ? <CheckSquare size={15} /> : <Square size={15} />}
                             </button>
                           </td>
-                          <td>
-                            <span className="keyword-name-row">
-                              <strong className="keyword-name">
-                                {keyword}
-                              </strong>
-                              {isBusy && (
-                                <span className="keyword-busy-chip">
-                                  <Loader2
-                                    className="spin"
-                                    size={11}
-                                    aria-hidden="true"
-                                  />
-                                  {metric ? "Re-checking" : "Analyzing"}
-                                </span>
-                              )}
-                              {metric && isGoldenKeyword(metric) && (
-                                <span className="keyword-golden-badge">
-                                  Golden
-                                </span>
-                              )}
-                            </span>
-                            <small>{countryLabel}</small>
+                          <td className="ex-td-keyword">
+                            <strong>{keyword}</strong>
+                            {isBusy && (
+                              <span className="ex-busy-chip">
+                                <Loader2 className="spin" size={11} aria-hidden="true" />
+                                {metric ? "Re-checking" : "Analyzing"}
+                              </span>
+                            )}
+                            {metric?.appleGenre && GENRE_LABELS[metric.appleGenre as keyof typeof GENRE_LABELS] && (
+                              <small>{GENRE_LABELS[metric.appleGenre as keyof typeof GENRE_LABELS]}</small>
+                            )}
                           </td>
-                          <td>
+                          <td className="ex-td-pop" data-label="Popularity">
                             {metric ? (
-                              <span className="metric-with-source">
-                                <MetricBar
-                                  value={metric.popularity}
-                                  tone="popularity"
-                                />
-                                <span
-                                  className={
-                                    popularitySourceOf(metric) === "official"
-                                      ? "source-pill source-pill--official"
-                                      : "source-pill"
-                                  }
-                                  title={
-                                    popularitySourceOf(metric) === "official"
-                                      ? "Official Apple Ads data"
-                                      : "Estimated from iTunes"
-                                  }
-                                >
-                                  {popularityShortLabel(
-                                    popularitySourceOf(metric),
-                                  )}
-                                  <span className="sr-only">
-                                    {popularitySourceOf(metric) === "official"
-                                      ? "Apple Ads"
-                                      : "Estimated"}
-                                  </span>
+                              <span className="ex-pop" title={popularityCaption(source, metric.appleGenre)}>
+                                <b className={source === "longtail" ? "is-muted" : undefined}>
+                                  {formatPopularity(metric)}
+                                </b>
+                                <MetricBar value={metric.popularity} tone={source === "official" ? "popularity" : "muted"} />
+                                <span className={`source-tag source-tag--${source}`}>
+                                  {popularityShortLabel(source)}
                                 </span>
                               </span>
                             ) : isBusy ? (
-                              <span className="metric-skeleton">
-                                <i className="skeleton-bar" />
-                                <i className="skeleton-pill" />
-                              </span>
+                              <span className="ex-skeleton" />
                             ) : (
-                              <em className="keyword-pending">Pending</em>
+                              <em className="ex-pending">—</em>
                             )}
                           </td>
-                          <td>
+                          <td className="ex-td-trend" data-label="Trend">
+                            {weekly.length >= 2 ? (
+                              <span className="ex-trend">
+                                <Sparkline values={weekly} width={64} height={22} label="Apple popularity, weekly" />
+                                <DeltaBadge delta={delta} />
+                              </span>
+                            ) : metric ? (
+                              <em className="ex-pending" title="Apple publishes weekly history only for its top searches">
+                                {source === "longtail" ? "n/a" : "—"}
+                              </em>
+                            ) : (
+                              <em className="ex-pending">—</em>
+                            )}
+                          </td>
+                          <td className="ex-td-diff" data-label="Difficulty">
                             {metric ? (
-                              <MetricBar
-                                value={metric.difficulty}
-                                tone="difficulty"
-                              />
+                              <span className="ex-diff">
+                                <b>{metric.difficulty}</b>
+                                <MetricBar value={metric.difficulty} tone="difficulty" />
+                              </span>
                             ) : isBusy ? (
-                              <span className="metric-skeleton">
-                                <i className="skeleton-bar" />
-                              </span>
+                              <span className="ex-skeleton" />
                             ) : (
-                              <em className="keyword-pending">—</em>
+                              <em className="ex-pending">—</em>
                             )}
                           </td>
-                          <td className="keyword-trend-cell">
-                            {record ? (
-                              <>
-                                <Sparkline values={history} width={64} height={22} />
-                                {delta !== null && delta !== 0 && (
-                                  <span
-                                    className={
-                                      delta > 0 ? "trend-up" : "trend-down"
-                                    }
-                                  >
-                                    {delta > 0 ? "▲" : "▼"} {Math.abs(delta)}
-                                  </span>
-                                )}
-                              </>
+                          <td className="ex-td-opp" data-label="Verdict">
+                            {opportunity ? (
+                              <OpportunityPill opportunity={opportunity} compact />
                             ) : isBusy ? (
-                              <span className="metric-skeleton">
-                                <i className="skeleton-spark" />
-                              </span>
+                              <span className="ex-skeleton" />
                             ) : (
-                              <em className="keyword-pending">—</em>
+                              <em className="ex-pending">—</em>
                             )}
                           </td>
-                          <td className="keyword-results-cell">
-                            {metric &&
-                            !(
-                              metric.restored &&
-                              record &&
-                              !record.lastCheck
-                            ) ? (
-                              <span>
-                                <b>{metric.results}</b>
-                                <small>
-                                  {metric.saturated ? "200+ found" : "apps"}
-                                </small>
-                              </span>
-                            ) : metric && isBusy ? (
-                              <span className="metric-skeleton">
-                                <i className="skeleton-num" />
-                              </span>
+                          <td className="ex-td-results" data-label="Apps">
+                            {metric && !(metric.restored && !record?.lastCheck) ? (
+                              <span>{metric.saturated ? "200+" : metric.results}</span>
                             ) : (
-                              <em className="keyword-pending">—</em>
+                              <em className="ex-pending">—</em>
                             )}
                           </td>
-                          <td className="keyword-row-actions">
+                          <td className="ex-td-actions">
                             <button
                               type="button"
                               aria-label={`Open ${keyword}`}
@@ -1689,13 +1111,13 @@ export function KeywordExplorer({
                             <button
                               type="button"
                               aria-label={`Remove ${keyword}`}
-                              className="keyword-remove"
+                              className="ex-remove"
                               onClick={(event) => {
                                 event.stopPropagation();
                                 removeRow(keyword);
                               }}
                             >
-                              <Trash2 size={15} aria-hidden="true" />
+                              <Trash2 size={14} aria-hidden="true" />
                             </button>
                           </td>
                         </tr>
@@ -1703,11 +1125,8 @@ export function KeywordExplorer({
                     })}
                     {displayKeywords.length === 0 && (
                       <tr>
-                        <td colSpan={7}>
-                          <em className="keyword-pending">
-                            No keywords match this filter yet — analyze more
-                            terms or switch the filter.
-                          </em>
+                        <td colSpan={8}>
+                          <em className="ex-pending">No keywords match this filter.</em>
                         </td>
                       </tr>
                     )}
@@ -1715,52 +1134,36 @@ export function KeywordExplorer({
                 </table>
               </div>
 
-              {/* Floating Multi-Select Action Bar */}
               {selectedSet.size > 0 && (
-                <div className="keyword-selection-bar" role="toolbar" aria-label="Selection actions">
-                  <div className="keyword-selection-info">
-                    <CheckSquare size={16} aria-hidden="true" />
-                    <span>
-                      <strong>{selectedSet.size}</strong> keyword{selectedSet.size === 1 ? "" : "s"} selected
-                    </span>
-                  </div>
-                  <div className="keyword-selection-actions">
+                <div className="ex-selection" role="toolbar" aria-label="Selection actions">
+                  <span>
+                    <strong>{selectedSet.size}</strong> selected
+                  </span>
+                  <div>
                     <button
                       type="button"
-                      className="tracker-button-primary"
+                      className="ex-btn ex-btn--primary"
                       onClick={() => void handleCopy100Ch(Array.from(selectedSet))}
-                      title="Copy selected keywords optimized for App Store 100ch field"
+                      title="Copy as an App Store Connect keyword field (100 characters)"
                     >
                       <Copy size={14} aria-hidden="true" />
-                      Copy 100ch
+                      Copy keyword field
                     </button>
-                    <button
-                      type="button"
-                      className="tracker-button-secondary"
-                      onClick={() => setOptimizerOpen(true)}
-                    >
+                    <button type="button" className="ex-btn" onClick={() => setOptimizerOpen(true)}>
                       <Wand2 size={14} aria-hidden="true" />
-                      Optimizer
+                      Builder
                     </button>
-                    <button
-                      type="button"
-                      className="tracker-button-secondary"
-                      onClick={() => exportCsv(Array.from(selectedSet))}
-                    >
+                    <button type="button" className="ex-btn" onClick={() => exportCsv(Array.from(selectedSet))}>
                       <Download size={14} aria-hidden="true" />
-                      Export CSV
+                      CSV
                     </button>
-                    <button
-                      type="button"
-                      className="tracker-button-secondary keyword-btn-danger"
-                      onClick={deleteSelectedKeywords}
-                    >
+                    <button type="button" className="ex-btn ex-btn--danger" onClick={deleteSelectedKeywords}>
                       <Trash2 size={14} aria-hidden="true" />
                       Delete
                     </button>
                     <button
                       type="button"
-                      className="keyword-selection-dismiss"
+                      className="ex-icon-btn"
                       onClick={() => setSelectedSet(new Set())}
                       aria-label="Clear selection"
                     >
@@ -1770,71 +1173,71 @@ export function KeywordExplorer({
                 </div>
               )}
 
-              <footer className="keyword-table-foot">
-                <div className="keyword-table-actions">
-                  <button
-                    type="button"
-                    className="refresh-all-button"
-                    onClick={() => exportCsv()}
-                    disabled={keywords.length === 0}
-                  >
+              <footer className="ex-foot">
+                <div className="ex-foot-actions">
+                  <button type="button" className="ex-btn ex-btn--ghost" onClick={() => exportCsv()}>
                     <Download size={14} aria-hidden="true" />
                     Export CSV
                   </button>
-                  <button
-                    type="button"
-                    className="refresh-all-button"
-                    onClick={backupJson}
-                    disabled={keywords.length === 0}
-                  >
+                  <button type="button" className="ex-btn ex-btn--ghost" onClick={backupJson}>
                     <Download size={14} aria-hidden="true" />
                     Backup
                   </button>
-                  <button
-                    type="button"
-                    className="refresh-all-button"
-                    onClick={() => restoreInputRef.current?.click()}
-                  >
+                  <button type="button" className="ex-btn ex-btn--ghost" onClick={() => restoreInputRef.current?.click()}>
                     <Upload size={14} aria-hidden="true" />
                     Restore
                   </button>
                 </div>
-                <div className="keyword-table-foot-meta">
-                  <span>
-                    Saved in your browser — history grows with one snapshot per
-                    day per keyword.
-                  </span>
-                  <span>
-                    {keywords.length} keyword{keywords.length === 1 ? "" : "s"}{" "}
-                    · {countryLabel}
-                  </span>
-                </div>
+                <span className="ex-foot-note">
+                  {isPro
+                    ? "Synced to your account."
+                    : "Saved in this browser. One real snapshot per keyword per day — nothing is backfilled."}
+                </span>
               </footer>
             </div>
 
             {selected && (
-              <KeywordDetail
-                keyword={selected}
-                countryCode={country}
-                countryLabel={countryLabel}
-                metrics={selectedMetrics ?? null}
-                record={selectedRecord ?? null}
-                busy={selectedBusy}
-                historyDays={historyDays}
-                onClose={() => setSelected(null)}
-                onRefresh={() =>
-                  void analyze(selected, {
-                    open: true,
-                    reorder: false,
-                    clearInput: false,
-                  })
-                }
-                onAnalyze={(keyword) => void analyze(keyword)}
-                onTrackApp={onTrackApp}
-              />
+              <>
+                <button
+                  type="button"
+                  className="ex-detail-backdrop"
+                  aria-label="Close keyword detail"
+                  onClick={() => setSelected(null)}
+                />
+                <div className="ex-detail">
+                  <KeywordDetail
+                    keyword={selected}
+                    countryCode={country}
+                    countryLabel={countryLabel}
+                    metrics={selectedMetrics}
+                    record={selectedRecord}
+                    busy={selectedBusy}
+                    historyDays={historyDays}
+                    historyWeeks={historyWeeks}
+                    canSeeFullHistory={isPro}
+                    onUpgrade={openUpgrade}
+                    onClose={() => setSelected(null)}
+                    onRefresh={() => void analyze(selected, { open: true, reorder: false })}
+                    onAnalyze={(keyword) => void analyze(keyword)}
+                    onTrackApp={onTrackApp}
+                    trackTarget={
+                      trackTarget && onTrackKeyword
+                        ? {
+                            name: trackTarget.name,
+                            iconUrl: trackTarget.iconUrl,
+                            tracked: isKeywordTracked?.(trackTarget, selected) ?? false,
+                            onTrack: () => {
+                              onTrackKeyword(trackTarget, selected);
+                              showToast(`Tracking “${selected}” for ${trackTarget.name}`);
+                            },
+                          }
+                        : undefined
+                    }
+                  />
+                </div>
+              </>
             )}
           </div>
-          </>
         )}
 
         <input
@@ -1854,9 +1257,8 @@ export function KeywordExplorer({
           open={bulkOpen}
           countryLabel={countryLabel}
           onClose={() => setBulkOpen(false)}
-          onConfirm={(keywords) => void runBulk(keywords)}
+          onConfirm={(batch) => void runBulk(batch)}
         />
-
         <AsoOptimizerModal
           open={optimizerOpen}
           initialKeywords={selectedSet.size > 0 ? Array.from(selectedSet) : keywords}

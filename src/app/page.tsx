@@ -6,7 +6,7 @@ import { MarketingShell } from "@/components/marketing-shell";
 export const metadata: Metadata = {
   title: "AppClimb — official Apple Ads keyword popularity",
   description:
-    "See Apple’s official Ads popularity (1–100) for any App Store keyword — labeled on every score. Estimated difficulty, bulk lists, 30-day trends. Free plan; Pro $8/month.",
+    "Find App Store keywords you can rank for. Apple Ads popularity with weekly history, difficulty that shows its evidence, trending searches by category, and a verdict on every keyword. Free to search.",
   alternates: {
     canonical: "/",
   },

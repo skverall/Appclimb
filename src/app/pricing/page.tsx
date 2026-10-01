@@ -6,12 +6,12 @@ import { absoluteUrl } from "@/lib/site";
 export const metadata = {
   title: "Pricing",
   description:
-    "AppClimb pricing: a free plan with honest daily limits (8 keyword checks, AI 5/day) and Pro at $8/month with unlimited checks, cloud sync, and 90-day history.",
+    "AppClimb pricing: search App Store keywords free (8 checks/day, Apple Ads popularity, difficulty evidence). Pro is $8/month: unlimited checks, 52 weeks of Apple history, unlimited tracking, cloud sync.",
   alternates: { canonical: "/pricing" },
   openGraph: {
     title: "AppClimb Pricing",
     description:
-      "Free plan with honest limits. Pro $8/month: unlimited keyword checks, cloud sync, 90-day history.",
+      "Free plan with honest limits. Pro $8/month: unlimited keyword checks, 52 weeks of Apple popularity history, cloud sync.",
     url: "/pricing",
   },
 };
@@ -25,17 +25,17 @@ const FAQ = [
   {
     question: "Is the free plan real or a demo?",
     answer:
-      "It's the real tool with honest daily limits: 8 keyword checks, 5 AI messages after you sign in, 30 official popularity lookups, and one tracked app. Your keyword data stays in your browser unless you upgrade to Pro sync.",
+      "It's the real tool with honest daily limits: 8 new keyword checks a day (re-checking your list is free), Apple Ads popularity with 12 weeks of history, difficulty with its evidence, trending searches, and — after a free sign-in — one tracked app and 5 AI messages. Your keyword data stays in your browser unless you upgrade to Pro sync.",
   },
   {
     question: "What does Pro unlock?",
     answer:
-      "Unlimited keyword checks and tracked apps, cloud sync across devices, 90-day history and charts, 200 AI messages/day, and 500 official popularity lookups/day.",
+      "Unlimited keyword checks and tracked apps, a full year (52 weeks) of Apple popularity history per keyword, 90 days of rank history, cloud sync across devices, and 200 AI messages/day.",
   },
   {
-    question: "Why is popularity still labeled 'Apple Ads' or 'Est.' on Pro?",
+    question: "Why do some keywords show “≤48 · Long tail” instead of a number?",
     answer:
-      "Because that's the truth: Apple Ads official scores are relative (1–100), and anything Apple doesn't cover is an estimate. Pro never relabels estimates as real volumes.",
+      "Apple publishes popularity for the 500 most-searched terms in each category. For anything below that list, the honest answer is “at or below the lowest published score” — so that's what we show, on every plan. Difficulty is always labeled as an estimate. Nothing is ever relabeled as search volume.",
   },
   {
     question: "Can I cancel?",
@@ -119,11 +119,11 @@ export default function PricingPage() {
       <main className="marketing-page pricing-page">
         <section className="pricing-hero">
           <p className="eyebrow">Pricing</p>
-          <h1>Honest limits on Free. Everything unlimited on Pro.</h1>
+          <h1>Search free. Go Pro when keywords become a habit.</h1>
           <p>
-            Official Apple Ads popularity stays labeled on every plan. Pro is
-            $8/month — the price of lunch — versus $89–$4,000/month for
-            black-box ASO suites.
+            Apple&apos;s own popularity data and an explained difficulty score on
+            every plan. Pro is $8/month — versus $89–$4,000/month for black-box
+            ASO suites.
           </p>
         </section>
 
@@ -144,14 +144,24 @@ export default function PricingPage() {
               </thead>
               <tbody>
                 <tr>
-                  <td><strong>Keyword Explorer searches</strong></td>
-                  <td>8 checks / day (guest)</td>
+                  <td><strong>New keyword checks</strong></td>
+                  <td>8 / day (no sign-up)</td>
                   <td><strong>Unlimited</strong></td>
                 </tr>
                 <tr>
-                  <td><strong>Official Apple Ads popularity</strong></td>
-                  <td>30 lookups / day</td>
-                  <td><strong>500 lookups / day</strong></td>
+                  <td><strong>Apple Ads popularity, difficulty evidence, verdict</strong></td>
+                  <td>Included</td>
+                  <td><strong>Included</strong></td>
+                </tr>
+                <tr>
+                  <td><strong>Apple popularity history per keyword</strong></td>
+                  <td>12 weeks</td>
+                  <td><strong>52 weeks</strong></td>
+                </tr>
+                <tr>
+                  <td><strong>Trending, related &amp; autocomplete searches</strong></td>
+                  <td>Included</td>
+                  <td><strong>Included</strong></td>
                 </tr>
                 <tr>
                   <td><strong>Tracked iOS apps &amp; keywords</strong></td>
@@ -159,9 +169,9 @@ export default function PricingPage() {
                   <td><strong>Unlimited apps &amp; keywords</strong></td>
                 </tr>
                 <tr>
-                  <td><strong>Rank history &amp; trend charts</strong></td>
-                  <td>30-day history in browser</td>
-                  <td><strong>90-day history &amp; trends</strong></td>
+                  <td><strong>Your daily checks &amp; rank history</strong></td>
+                  <td>30 days in this browser</td>
+                  <td><strong>90 days, synced</strong></td>
                 </tr>
                 <tr>
                   <td><strong>ASO AI assistant</strong></td>
@@ -169,14 +179,14 @@ export default function PricingPage() {
                   <td><strong>200 messages / day</strong></td>
                 </tr>
                 <tr>
-                  <td><strong>100ch App Store keyword optimizer</strong></td>
+                  <td><strong>100-character keyword field builder</strong></td>
                   <td>Included</td>
                   <td><strong>Included</strong></td>
                 </tr>
                 <tr>
                   <td><strong>Cloud sync across devices</strong></td>
                   <td>Local browser only</td>
-                  <td><strong>Encrypted cloud sync</strong></td>
+                  <td><strong>Cloud sync</strong></td>
                 </tr>
                 <tr>
                   <td><strong>CSV export &amp; JSON backups</strong></td>

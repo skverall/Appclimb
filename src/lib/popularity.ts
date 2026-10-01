@@ -1,16 +1,18 @@
 // Client-safe official popularity overlay.
 //
-// The browser never talks to Apple Ads. It posts keyword + inferred genre to
-// POST /api/popularity; the Worker holds the founder Ads credentials.
+// The browser never talks to Apple Ads. It posts keywords (with a genre hint
+// from the ranking apps) to POST /api/popularity; the Worker answers from
+// Apple's weekly published search terms.
 
+import type { KeywordMetrics, PopularityHistoryPoint, PopularitySource } from "@/lib/aso";
 import {
-  inferAppleGenre,
-  mapItunesGenre,
-  type AppleAdsGenre,
-} from "@/lib/apple-ads-genres";
-import type { KeywordMetrics } from "@/lib/aso";
+  datasetGenreFor,
+  genreLabel,
+  inferDatasetGenre,
+  normalizeTerm,
+} from "@/lib/search-terms";
 
-export type PopularitySource = "official" | "estimated";
+export type { PopularitySource };
 
 export interface OfficialPopularity {
   term: string;
@@ -22,50 +24,86 @@ export interface OfficialPopularity {
   rankInGenre?: number;
   weekStart?: string;
   weekEnd?: string;
+  /** Not published: popularity is at or below this genre floor. */
+  ceiling?: number;
+  /** Apple's weekly scores for the term, oldest first. */
+  history?: PopularityHistoryPoint[];
 }
 
 export interface PopularityLookupItem {
   term: string;
-  genre: string;
+  /** iTunes genre name or Ads token; sharpens the long-tail ceiling. */
+  genre?: string;
 }
 
 export function popularitySourceOf(
   metrics: Pick<KeywordMetrics, "popularitySource"> | null | undefined,
 ): PopularitySource {
-  return metrics?.popularitySource === "official" ? "official" : "estimated";
+  const source = metrics?.popularitySource;
+  return source === "official" || source === "longtail" ? source : "estimated";
 }
 
-export function popularityCaption(source?: PopularitySource): string {
-  return source === "official"
-    ? "Apple Ads popularity (relative 1–100, not search volume)"
-    : "Estimated demand from public iTunes signals";
+export function popularityCaption(source?: PopularitySource, genre?: string): string {
+  if (source === "official") {
+    return "Apple Ads popularity (relative 1–100, not search volume)";
+  }
+  if (source === "longtail") {
+    return `Below Apple's top 500 searches${genre ? ` in ${genreLabel(genre)}` : ""} — a long-tail term`;
+  }
+  return "Apple data unavailable — rough estimate from App Store competition";
 }
 
 export function popularityShortLabel(source?: PopularitySource): string {
-  return source === "official" ? "Apple Ads" : "Est.";
+  if (source === "official") return "Apple";
+  if (source === "longtail") return "Long tail";
+  return "Est.";
+}
+
+/** "52", "≤48" for long tail, so the number never overstates what Apple said. */
+export function formatPopularity(
+  metrics: Pick<KeywordMetrics, "popularity" | "popularitySource">,
+): string {
+  return metrics.popularitySource === "longtail"
+    ? `≤${metrics.popularity}`
+    : String(metrics.popularity);
 }
 
 export function applyOfficialPopularity(
   metrics: KeywordMetrics,
   official: OfficialPopularity | null | undefined,
 ): KeywordMetrics {
-  const score = official?.searchPopularity1to100;
-  if (!official?.found || typeof score !== "number" || !Number.isFinite(score)) {
+  if (!official) {
+    return { ...metrics, popularitySource: metrics.popularitySource ?? "estimated" };
+  }
+  const history =
+    official.history && official.history.length > 0 ? official.history : undefined;
+  const score = official.searchPopularity1to100;
+  if (official.found && typeof score === "number" && Number.isFinite(score)) {
     return {
       ...metrics,
-      popularitySource: metrics.popularitySource ?? "estimated",
+      popularity: Math.max(1, Math.min(100, Math.round(score))),
+      popularitySource: "official",
+      popularityCeiling: undefined,
+      appleGenre: official.genre,
+      searchPopularityInGenre: official.searchPopularityInGenre,
+      searchPopularity1to5: official.searchPopularity1to5,
+      rankInGenre: official.rankInGenre,
+      dataWeek: official.weekStart,
+      popularityHistory: history,
     };
   }
-  const clamped = Math.max(1, Math.min(100, Math.round(score)));
-  return {
-    ...metrics,
-    popularity: clamped,
-    popularitySource: "official",
-    appleGenre: official.genre,
-    searchPopularityInGenre: official.searchPopularityInGenre,
-    searchPopularity1to5: official.searchPopularity1to5,
-    rankInGenre: official.rankInGenre,
-  };
+  if (!official.found && typeof official.ceiling === "number" && official.ceiling > 0) {
+    return {
+      ...metrics,
+      popularity: Math.round(official.ceiling),
+      popularitySource: "longtail",
+      popularityCeiling: Math.round(official.ceiling),
+      appleGenre: official.genre,
+      dataWeek: official.weekStart,
+      popularityHistory: history,
+    };
+  }
+  return { ...metrics, popularitySource: metrics.popularitySource ?? "estimated" };
 }
 
 export function officialLookupItemsFor(
@@ -74,20 +112,16 @@ export function officialLookupItemsFor(
 ): PopularityLookupItem[] {
   const term = metrics.keyword.trim();
   if (!term) return [];
-  const mappedOverride = genreOverride ? mapItunesGenre(genreOverride) : null;
-  const genre = mappedOverride ?? inferAppleGenre(metrics.topApps);
-  if (!genre) return [];
-  return [{ term, genre }];
+  const genre =
+    (genreOverride ? datasetGenreFor(genreOverride) : null) ??
+    inferDatasetGenre(metrics.topApps);
+  return [genre ? { term, genre } : { term }];
 }
 
 interface PopularityApiResponse {
   results?: OfficialPopularity[];
   configured?: boolean;
   error?: string;
-}
-
-function normalizeTerm(term: string): string {
-  return term.trim().toLocaleLowerCase();
 }
 
 /** Session flag: skip further overlay calls after an unconfigured server. */
@@ -104,15 +138,15 @@ export function resetOfficialPopularityCache(): void {
 export async function fetchOfficialPopularity(
   items: readonly PopularityLookupItem[],
   country: string,
-  options: { fetchImpl?: typeof fetch; signal?: AbortSignal } = {},
+  options: { fetchImpl?: typeof fetch; signal?: AbortSignal; history?: boolean } = {},
 ): Promise<Map<string, OfficialPopularity>> {
   const out = new Map<string, OfficialPopularity>();
   const clean = items
     .map((item) => ({
       term: item.term.trim(),
-      genre: item.genre.trim().toUpperCase(),
+      ...(item.genre ? { genre: item.genre.trim() } : {}),
     }))
-    .filter((item) => item.term.length > 0 && item.genre.length > 0)
+    .filter((item) => item.term.length > 0)
     .slice(0, 25);
   if (clean.length === 0) return out;
   if (overlayConfigured === false) return out;
@@ -123,7 +157,7 @@ export async function fetchOfficialPopularity(
     const response = await fetchImpl("/api/popularity", {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ country, items: clean }),
+      body: JSON.stringify({ country, items: clean, history: options.history ?? true }),
       signal: options.signal,
     });
     if (!response.ok) return out;
@@ -176,4 +210,3 @@ export async function enrichMetricsWithOfficialPopularity(
   );
 }
 
-export type { AppleAdsGenre };

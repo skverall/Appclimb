@@ -36,11 +36,21 @@ conflict instead of silently changing direction.
   `configured:true`. Guest keyword data never leaves the browser; only a
   signed-in Pro user's own data may be synced to D1. Tracking and the
   assistant require a free sign-in once accounts are live.
-- Keyword data honesty rules: popularity is Apple Ads official relative 1–100
-  when `POST /api/popularity` hits, otherwise an iTunes estimate. Difficulty
-  is always an estimate. Both MUST be labeled with their source. Never claim
-  search volume. History lives in localStorage (`appclimb:kw:v1:*`) with an
-  estimated backfill flagged `backfilled: true`.
+- Keyword data (ADR 0005): Apple Ads Insights publishes, weekly, the top 500
+  search terms per genre (15 genres) per storefront with a 1–100 popularity
+  score. The Worker keeps those weeks in D1 (`search_term_*` tables,
+  `src/lib/search-terms-store.ts`) and serves `POST /api/popularity`
+  (exact terms + up to 52 weeks of Apple history) and `GET /api/terms/*`
+  (suggest, related, trending). Apple Ads rate-limits bursts: call it
+  sequentially with back-off. `.github/workflows/warm-apple-terms.yml`
+  preloads new weeks.
+- Keyword data honesty rules: popularity is `official` (Apple's score),
+  `longtail` (term not in Apple's list → shown as `≤N`, N = genre floor), or
+  `estimated` (Apple unreachable; rough iTunes stand-in, labeled `Est.`).
+  Difficulty is always an estimate and ships with its evidence. Never claim
+  search volume. Never invent history: local storage keeps one real
+  snapshot per keyword per day; legacy `backfilled` points are dropped on
+  load.
 - For any live-data claim, verify repository code and the deployed site
   separately; the site runs client-side logic that unit tests do not execute.
 - A push to `main` deploys to production immediately, so run `npm run check`

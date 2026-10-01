@@ -201,17 +201,21 @@ test("keyword explorer works without adding an app", async ({ page }) => {
   await expect(
     page.getByRole("heading", {
       level: 1,
-      name: /Popularity from Apple/,
+      name: /Find App Store keywords/,
     }),
   ).toBeVisible();
-  await expect(page.getByPlaceholder(/meditation/)).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Search keywords" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Keyword Explorer/i })).toBeVisible();
   await expect(page.getByRole("button", { name: /Add App/i }).first()).toBeVisible();
 
-  await page.getByPlaceholder(/meditation/).fill("meditation");
+  await page.getByRole("combobox", { name: "Search keywords" }).fill("meditation");
   await page.getByRole("button", { name: "Analyze", exact: true }).click();
   await expect(page.getByText("meditation").first()).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText(/Estimated/i).first()).toBeVisible();
+  // Without Apple data (e2e runs with no Ads credentials) popularity is
+  // labeled as an estimate.
+  await expect(page.locator(".ex-td-pop .source-tag").first()).toHaveText("Est.", {
+    timeout: 15_000,
+  });
 });
 
 test("onboarding walks a first-time user from CTA to tracked keywords", async ({
@@ -664,7 +668,7 @@ test("tracker labels every score honestly: no volume or downloads claims", async
   });
 
   // The opportunity and difficulty columns are labeled as estimates.
-  await expect(page.getByText("Opp. · Est.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Opportunity", exact: true })).toBeVisible();
   await expect(page.getByText("Difficulty · Est.")).toBeVisible();
 
   // The keyword detail note names the source honestly and never claims
@@ -673,7 +677,7 @@ test("tracker labels every score honestly: no volume or downloads claims", async
   const note = page.locator(".keyword-estimate-note--detail");
   await expect(note).toBeVisible({ timeout: 10_000 });
   const noteText = (await note.textContent()) ?? "";
-  expect(noteText).toMatch(/not search volume|estimate from public iTunes signals/i);
+  expect(noteText).toMatch(/not search volume|at or below|rough estimate from App Store competition/i);
   expect(noteText).not.toMatch(/downloads|revenue/i);
   await page.getByRole("button", { name: /Close keyword detail/i }).click();
 

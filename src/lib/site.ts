@@ -1,15 +1,15 @@
 export const SITE_URL = "https://appclimb.app";
 export const SITE_NAME = "AppClimb";
 export const SITE_DESCRIPTION =
-  "App Store keyword popularity from Apple Ads — official 1–100 scores, labeled source, not a black-box volume. Estimated difficulty, bulk lists, and 30-day trends. Free plan with honest daily limits; Pro at $8/month adds cloud sync.";
-export const SITE_UPDATED = "2026-08-17";
+  "Find App Store keywords you can rank for: Apple Ads popularity (1–100) with up to a year of weekly history, a difficulty score that shows its evidence, and a plain verdict per keyword. Free to search; Pro $8/month.";
+export const SITE_UPDATED = "2026-10-01";
 
 export const PUBLIC_PAGES = [
   {
     path: "/",
     title: "AppClimb — Apple Ads keyword popularity",
     description:
-      "Official Apple Ads popularity (1–100) for any App Store keyword — not a mystery volume. Estimated difficulty, bulk lists, and local trends. Free plan with honest limits; Pro adds cloud sync.",
+      "Apple Ads popularity (1–100) and weekly trends for App Store keywords, difficulty you can verify, trending searches by category, and a clear verdict on every keyword. Free to search; Pro $8/month.",
     changeFrequency: "weekly" as const,
     priority: 1,
     lastModified: SITE_UPDATED,
@@ -117,7 +117,7 @@ export const PUBLIC_PAGES = [
     path: "/pricing",
     title: "Pricing",
     description:
-      "AppClimb pricing: a free plan with honest daily limits and Pro at $8/month — unlimited checks, cloud sync, 90-day history.",
+      "AppClimb pricing: free keyword search with honest daily limits; Pro at $8/month — unlimited checks, 52 weeks of Apple history, unlimited tracking, cloud sync.",
     changeFrequency: "monthly" as const,
     priority: 0.75,
     lastModified: SITE_UPDATED,

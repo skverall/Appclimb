@@ -35,6 +35,7 @@ import {
   buildKeywordSuggestions,
   emptyStore,
   humanizeItunesError,
+  keywordKey,
   loadAppMetadata,
   loadTrackerStore,
   listKeywordsForApp,
@@ -512,9 +513,26 @@ export function AppWorkspace() {
   };
 
   if (!hydrated) {
+    // Server-rendered shell of the explorer hero: gives crawlers the real H1
+    // and keeps the layout steady until local data is read.
     return (
       <div className="app-workspace app-workspace--loading" aria-busy="true">
-        <div className="tracker-skeleton-row" />
+        <main className="tool-page ex">
+          <section className="ex-hero marketing-container">
+            <span className="ex-eyebrow">
+              <span className="ex-eyebrow-dot" aria-hidden="true" />
+              Apple Ads popularity · updated weekly
+            </span>
+            <h1>Find App Store keywords you can actually rank for.</h1>
+            <p className="ex-deck">
+              Popularity straight from Apple, difficulty you can see the reasons for, and a
+              plain verdict on every keyword. No sign-up to search.
+            </p>
+            <div className="ex-search ex-search--shell" aria-hidden="true">
+              <span className="ex-search-placeholder">Type a keyword, e.g. habit tracker</span>
+            </div>
+          </section>
+        </main>
       </div>
     );
   }
@@ -707,6 +725,17 @@ export function AppWorkspace() {
         ) : view === "explorer" || !activeApp ? (
           <>
             <KeywordExplorer
+              trackTargets={trackingAllowed ? store.apps : undefined}
+              isKeywordTracked={(app, keyword) =>
+                Boolean(store.keywords[keywordKey(app.appStoreId, app.country, keyword)])
+              }
+              onTrackKeyword={(app, keyword) => {
+                if (!trackingAllowed) {
+                  openAuth("track");
+                  return;
+                }
+                void runKeywordAnalysis(app, [keyword]);
+              }}
               onTrackApp={(app) => {
                 const catalog: CatalogApp = {
                   appStoreId: String(app.appStoreId),

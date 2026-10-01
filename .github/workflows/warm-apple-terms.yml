@@ -1,0 +1,43 @@
+name: Warm · Apple search terms
+
+# Apple Ads publishes a new week of search-term popularity a few days after
+# each Sun–Sat week. The Worker loads a storefront-week lazily on first use
+# (~8 sequential Apple calls); this job makes that first use happen here
+# instead of in a visitor's request. Each call also loads the comparison
+# week four weeks back for the "Rising" list. Safe to run any time: weeks
+# already stored in D1 return immediately.
+
+on:
+  schedule:
+    - cron: "15 6 * * 1,3,5"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: warm-apple-terms
+  cancel-in-progress: true
+
+jobs:
+  warm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Load each storefront's latest week
+        run: |
+          set -u
+          failed=0
+          for country in US GB DE FR RU JP CA AU IN BR MX KR IT ES NL SE; do
+            status=$(curl --silent --show-error --output /tmp/body.json \
+              --write-out "%{http_code}" --max-time 120 \
+              "https://appclimb.app/api/terms/trending?country=${country}&limit=1" || echo "000")
+            week=$(grep -o '"week":"[0-9-]*"' /tmp/body.json | head -1 || true)
+            echo "${country}: HTTP ${status} ${week}"
+            if [ "${status}" != "200" ]; then failed=$((failed + 1)); fi
+            sleep 3
+          done
+          if [ "${failed}" -gt 4 ]; then
+            echo "Too many storefronts failed (${failed})."
+            exit 1
+          fi

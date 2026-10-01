@@ -14,12 +14,12 @@ beforeAll(async () => {
 
 describe("daily limit helpers", () => {
   it("free tier caps popularity and AI", () => {
-    expect(popularityDailyLimit("free")).toBe(30);
+    expect(popularityDailyLimit("free")).toBe(200);
     expect(aiDailyLimit("free")).toBe(5);
   });
 
   it("pro tier raises both", () => {
-    expect(popularityDailyLimit("pro")).toBe(500);
+    expect(popularityDailyLimit("pro")).toBe(2000);
     expect(aiDailyLimit("pro")).toBe(200);
   });
 });

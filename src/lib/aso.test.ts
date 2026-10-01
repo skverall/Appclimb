@@ -1,11 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
-  BACKFILL_DAYS,
   MAX_STORED_HISTORY_DAYS,
   SEARCH_LIMIT,
   addKeywordToList,
-  backfillHistory,
+  assessOpportunity,
   buildExplorerCsv,
   deleteRecord,
   estimateKeyword,
@@ -13,8 +12,6 @@ import {
   exportExplorerBackup,
   fetchKeywordResults,
   formatAsoKeywordField,
-  isGoldenKeyword,
-  keywordJitter,
   loadKeywordList,
   loadRecord,
   parseKeywordBatch,
@@ -27,7 +24,9 @@ import {
   runBatched,
   saveKeywordList,
   saveRecord,
+  scoreDifficulty,
   suggestKeywords,
+  titleMatchScore,
   toLocalDate,
   trendDelta,
   type KeywordMetrics,
@@ -83,11 +82,12 @@ function metricsFor(
 }
 
 describe("estimateMetrics", () => {
-  it("scores empty results as 2/2 (no demand, nothing to beat)", () => {
+  it("scores empty results as 1/1 (no demand, nothing to beat)", () => {
     const metrics = metricsFor("nobody searches this", []);
-    expect(metrics.popularity).toBe(2);
-    expect(metrics.difficulty).toBe(2);
+    expect(metrics.popularity).toBe(1);
+    expect(metrics.difficulty).toBe(1);
     expect(metrics.results).toBe(0);
+    expect(metrics.evidence?.sampled).toBe(0);
   });
 
   it("scores a saturated list with strong incumbents as high", () => {
@@ -120,7 +120,7 @@ describe("estimateMetrics", () => {
     );
   });
 
-  it("keeps scores inside the 2–98 band", () => {
+  it("keeps scores inside the 1–99 band", () => {
     const apps = Array.from({ length: 200 }, (_, index) =>
       makeApp({ position: index + 1, ratingsCount: 999_999 }),
     );
@@ -130,33 +130,158 @@ describe("estimateMetrics", () => {
   });
 
   it("bumps difficulty when mega-brands dominate the top 10", () => {
-    const brandApps = Array.from({ length: 10 }, (_, index) =>
-      makeApp({
-        position: index + 1,
-        developer: "Google",
-        ratingsCount: 300_000,
-      }),
-    );
-    const indieApps = Array.from({ length: 10 }, (_, index) =>
-      makeApp({
-        position: index + 1,
-        developer: "Small Studio",
-        ratingsCount: 300_000,
-      }),
-    );
-    const withBrands = metricsFor("term", brandApps);
-    const withoutBrands = metricsFor("term", indieApps);
+    const top10 = (developer: string) =>
+      Array.from({ length: 10 }, (_, index) =>
+        makeApp({ position: index + 1, developer, ratingsCount: 800 }),
+      );
+    const withBrands = metricsFor("term", top10("Google"));
+    const withoutBrands = metricsFor("term", top10("Small Studio"));
     expect(withBrands.difficulty).toBeGreaterThan(withoutBrands.difficulty);
+    expect(withBrands.evidence?.brandApps).toBe(10);
+  });
+
+  it("never adds noise: different keywords with the same results score the same", () => {
+    const apps = [makeApp({ name: "Generic App" }), makeApp({ position: 2, name: "Other" })];
+    expect(metricsFor("alpha one", apps).difficulty).toBe(metricsFor("beta two", apps).difficulty);
   });
 });
 
-describe("keywordJitter", () => {
-  it("is deterministic and bounded to -4..+4", () => {
-    const first = keywordJitter("meditation");
-    expect(keywordJitter("meditation")).toBe(first);
-    expect(first).toBeGreaterThanOrEqual(-4);
-    expect(first).toBeLessThanOrEqual(4);
-    expect(keywordJitter("yoga")).not.toBe(first);
+describe("scoreDifficulty", () => {
+  const top = (count: number, overrides: Partial<TopApp> = {}) =>
+    Array.from({ length: count }, (_, index) =>
+      makeApp({ position: index + 1, appStoreId: String(index + 1), ...overrides }),
+    );
+
+  it("rises when incumbents target the keyword in their names", () => {
+    const targeted = scoreDifficulty("sleep sounds", top(10, { name: "Sleep Sounds Pro" }));
+    const untargeted = scoreDifficulty("sleep sounds", top(10, { name: "Rain Radio" }));
+    expect(targeted.difficulty).toBeGreaterThan(untargeted.difficulty);
+    expect(targeted.evidence.titleMatches).toBe(10);
+    expect(untargeted.evidence.titleMatches).toBe(0);
+  });
+
+  it("weights the top positions most", () => {
+    const strongFirst = top(10, { ratingsCount: 50 });
+    strongFirst[0] = makeApp({ position: 1, ratingsCount: 500_000 });
+    const strongLast = top(10, { ratingsCount: 50 });
+    strongLast[9] = makeApp({ position: 10, ratingsCount: 500_000 });
+    expect(scoreDifficulty("x y", strongFirst).difficulty).toBeGreaterThan(
+      scoreDifficulty("x y", strongLast).difficulty,
+    );
+  });
+
+  it("treats a dominant app named after the term as a brand search", () => {
+    const apps = top(10, { name: "Something", ratingsCount: 2_000 });
+    apps[0] = makeApp({ position: 1, name: "Instagram", ratingsCount: 25_000_000 });
+    const result = scoreDifficulty("instagram", apps);
+    expect(result.evidence.navigational).toBe(true);
+    expect(result.difficulty).toBeGreaterThanOrEqual(92);
+  });
+
+  it("reports the median and the weakest ranking app", () => {
+    const apps = [
+      makeApp({ position: 1, ratingsCount: 9_000 }),
+      makeApp({ position: 2, ratingsCount: 120 }),
+      makeApp({ position: 3, ratingsCount: 3_000 }),
+    ];
+    const { evidence } = scoreDifficulty("timer", apps);
+    expect(evidence.medianRatings).toBe(3_000);
+    expect(evidence.weakestRatings).toBe(120);
+    expect(evidence.weakestPosition).toBe(2);
+    expect(evidence.sampled).toBe(3);
+  });
+
+  it("counts missing slots as empty when fewer than 10 apps rank", () => {
+    const few = scoreDifficulty("rare", top(3, { ratingsCount: 100_000 }));
+    const full = scoreDifficulty("rare", top(10, { ratingsCount: 100_000 }));
+    expect(few.difficulty).toBeLessThan(full.difficulty);
+  });
+});
+
+describe("titleMatchScore", () => {
+  it("scores phrase, all-words, and partial matches", () => {
+    expect(titleMatchScore("Habit Tracker - Daily Goals", "habit tracker")).toBe(1);
+    expect(titleMatchScore("Tracker for every Habit", "habit tracker")).toBe(0.75);
+    expect(titleMatchScore("Habits: Tracker & Planner", "habit tracker")).toBe(0.75);
+    expect(titleMatchScore("Daily Habit Planner", "habit tracker")).toBeCloseTo(0.175);
+    expect(titleMatchScore("Calm", "habit tracker")).toBe(0);
+  });
+
+  it("ignores accents and punctuation", () => {
+    expect(titleMatchScore("Café-Finder!", "cafe finder")).toBe(1);
+  });
+});
+
+describe("assessOpportunity", () => {
+  it("calls official demand with a beatable first page worth targeting", () => {
+    const result = assessOpportunity({ popularity: 58, popularitySource: "official", difficulty: 40 });
+    expect(result.verdict).toBe("target");
+    expect(result.score).toBeGreaterThan(50);
+  });
+
+  it("marks strong incumbents as competitive and entrenched pages as dominated", () => {
+    expect(
+      assessOpportunity({ popularity: 56, popularitySource: "official", difficulty: 68 }).verdict,
+    ).toBe("competitive");
+    expect(
+      assessOpportunity({ popularity: 70, popularitySource: "official", difficulty: 90 }).verdict,
+    ).toBe("dominated");
+  });
+
+  it("separates easy long-tail wins from crowded low-demand terms", () => {
+    expect(
+      assessOpportunity({ popularity: 48, popularitySource: "longtail", difficulty: 30 }).verdict,
+    ).toBe("longtail_win");
+    expect(
+      assessOpportunity({ popularity: 48, popularitySource: "longtail", difficulty: 60 }).verdict,
+    ).toBe("low_demand");
+  });
+
+  it("flags brand searches as dominated regardless of difficulty", () => {
+    const result = assessOpportunity({
+      popularity: 80,
+      popularitySource: "official",
+      difficulty: 60,
+      evidence: {
+        sampled: 10,
+        medianRatings: 1,
+        weakestRatings: 1,
+        weakestPosition: 9,
+        titleMatches: 1,
+        brandApps: 1,
+        navigational: true,
+      },
+    });
+    expect(result.verdict).toBe("dominated");
+  });
+
+  it("points out a weak app already on page one", () => {
+    const result = assessOpportunity({
+      popularity: 59,
+      popularitySource: "official",
+      difficulty: 77,
+      evidence: {
+        sampled: 10,
+        medianRatings: 46_000,
+        weakestRatings: 41,
+        weakestPosition: 10,
+        titleMatches: 9,
+        brandApps: 0,
+        navigational: false,
+      },
+    });
+    expect(result.verdict).toBe("dominated");
+    expect(result.reason).toMatch(/#10 has only 41 ratings/);
+  });
+
+  it("scores higher demand and lower difficulty higher", () => {
+    const base = assessOpportunity({ popularity: 50, popularitySource: "official", difficulty: 50 });
+    expect(
+      assessOpportunity({ popularity: 60, popularitySource: "official", difficulty: 50 }).score,
+    ).toBeGreaterThan(base.score);
+    expect(
+      assessOpportunity({ popularity: 50, popularitySource: "official", difficulty: 30 }).score,
+    ).toBeGreaterThan(base.score);
   });
 });
 
@@ -217,55 +342,69 @@ describe("fetchKeywordResults", () => {
   });
 });
 
-describe("history backfill", () => {
-  const metrics = metricsFor("meditation", [makeApp()]);
-
-  it("produces days+1 ascending points ending on the measured values", () => {
-    const history = backfillHistory(metrics);
-    expect(history).toHaveLength(BACKFILL_DAYS + 1);
-    const last = history[history.length - 1];
-    expect(last.date).toBe(toLocalDate());
-    expect(last.popularity).toBe(metrics.popularity);
-    expect(last.difficulty).toBe(metrics.difficulty);
-    const dates = history.map((point) => point.date);
-    expect([...dates].sort()).toEqual(dates);
-  });
-
-  it("is deterministic for the same keyword", () => {
-    expect(backfillHistory(metrics)).toEqual(backfillHistory(metrics));
-  });
-
-  it("stays inside the 2–98 band", () => {
-    for (const point of backfillHistory(metrics)) {
-      expect(point.popularity).toBeGreaterThanOrEqual(2);
-      expect(point.popularity).toBeLessThanOrEqual(98);
-      expect(point.difficulty).toBeGreaterThanOrEqual(2);
-      expect(point.difficulty).toBeLessThanOrEqual(98);
-    }
-  });
-});
-
 describe("record persistence", () => {
-  it("creates a backfilled record on first check", () => {
+  it("records only the real measurement on first check — nothing invented", () => {
     const storage = makeStorage();
     const metrics = metricsFor("meditation", [makeApp()]);
     const record = recordSnapshot(storage, metrics);
     expect(record.keyword).toBe("meditation");
-    expect(record.backfilled).toBe(true);
-    expect(record.history).toHaveLength(BACKFILL_DAYS + 1);
+    expect(record.backfilled).toBe(false);
+    expect(record.history).toHaveLength(1);
+    expect(record.history[0].date).toBe(toLocalDate());
     expect(loadRecord(storage, "meditation", "US")?.keyword).toBe("meditation");
   });
 
-  it("keeps one snapshot per day and appends later days", () => {
+  it("keeps one snapshot per day", () => {
     const storage = makeStorage();
     const metrics = metricsFor("meditation", [makeApp()]);
     recordSnapshot(storage, metrics);
-    recordSnapshot(storage, metrics); // same day: replace, not append
+    recordSnapshot(storage, { ...metrics, popularity: 61 }); // same day: replace
     const record = loadRecord(storage, "meditation", "US");
-    expect(record?.history).toHaveLength(BACKFILL_DAYS + 1);
-    expect(record?.history[record.history.length - 1].popularity).toBe(
-      metrics.popularity,
-    );
+    expect(record?.history).toHaveLength(1);
+    expect(record?.history[0].popularity).toBe(61);
+  });
+
+  it("drops the invented baseline from records saved before Oct 2026", () => {
+    const storage = makeStorage();
+    saveRecord(storage, {
+      keyword: "meditation",
+      country: "US",
+      firstSeen: "2026-08-01",
+      backfilled: true,
+      history: [
+        { date: "2026-07-03", popularity: 44, difficulty: 50 },
+        { date: "2026-07-04", popularity: 47, difficulty: 52 },
+        { date: "2026-08-01", popularity: 52, difficulty: 75, popularitySource: "official" },
+      ],
+    });
+    const record = loadRecord(storage, "meditation", "US");
+    expect(record?.backfilled).toBe(false);
+    expect(record?.history).toEqual([
+      { date: "2026-08-01", popularity: 52, difficulty: 75, popularitySource: "official" },
+    ]);
+  });
+
+  it("keeps Apple's weekly history and difficulty evidence across reloads", () => {
+    const storage = makeStorage();
+    const metrics: KeywordMetrics = {
+      ...metricsFor("meditation", [makeApp()]),
+      popularity: 52,
+      popularitySource: "official",
+      appleGenre: "HEALTH_FITNESS",
+      rankInGenre: 241,
+      dataWeek: "2026-09-20",
+      popularityHistory: [
+        { week: "2026-09-13", popularity: 53 },
+        { week: "2026-09-20", popularity: 52 },
+      ],
+    };
+    recordSnapshot(storage, metrics);
+    const restored = restoreMetricsFromRecord(loadRecord(storage, "meditation", "US")!);
+    expect(restored?.popularityHistory).toHaveLength(2);
+    expect(restored?.rankInGenre).toBe(241);
+    expect(restored?.appleGenre).toBe("HEALTH_FITNESS");
+    expect(restored?.dataWeek).toBe("2026-09-20");
+    expect(restored?.evidence?.sampled).toBe(1);
   });
 
   it("persists lastCheck and restores metrics for a reload", () => {
@@ -468,18 +607,6 @@ describe("estimateKeyword and list corruption", () => {
         fetchImpl: (async () => new Response()) as typeof fetch,
       }),
     ).rejects.toThrow(/invalid_keyword_search/);
-  });
-});
-
-describe("isGoldenKeyword", () => {
-  it("flags solid demand with a low barrier", () => {
-    expect(isGoldenKeyword({ popularity: 60, difficulty: 30 })).toBe(true);
-  });
-
-  it("rejects weak demand or a high barrier", () => {
-    expect(isGoldenKeyword({ popularity: 54, difficulty: 30 })).toBe(false);
-    expect(isGoldenKeyword({ popularity: 60, difficulty: 41 })).toBe(false);
-    expect(isGoldenKeyword({ popularity: 55, difficulty: 40 })).toBe(true);
   });
 });
 

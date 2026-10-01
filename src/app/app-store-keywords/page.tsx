@@ -29,17 +29,17 @@ const steps = [
   },
   {
     title: "Read Apple’s score",
-    text: "Popularity is Apple Ads official (1–100) when Apple has the term — labeled on the row. Difficulty stays an estimate of the barrier, with result count, top apps, and ratings next to it.",
+    text: "Popularity is Apple Ads official (1–100) for the 500 most-searched terms per category; long-tail terms show the ceiling Apple implies. Difficulty is an estimate with its evidence beside it: median ratings, the weakest app on page one, and who targets the term.",
     icon: Eye,
   },
   {
-    title: "Track the trend",
-    text: "One daily snapshot per keyword builds a 30-day chart in your browser. The first check gets an estimated baseline so the chart is useful immediately.",
+    title: "See the real trend",
+    text: "Apple publishes popularity weekly, so every published term comes with its actual history — 12 weeks free, a full year on Pro. Nothing is backfilled or simulated.",
     icon: TrendingUp,
   },
   {
     title: "Filter, export, back up",
-    text: "Paste up to 50 keywords at once, filter for golden opportunities (solid demand, low barrier), export rows to CSV, and keep a local JSON backup you can restore on any browser.",
+    text: "Paste up to 50 keywords at once, filter by verdict — Worth targeting, Long-tail win, Competitive, Dominated — export rows to CSV, and keep a local JSON backup you can restore on any browser.",
     icon: ListPlus,
   },
 ];
@@ -48,17 +48,17 @@ const faq = [
   {
     question: "Where does the keyword data come from?",
     answer:
-      "Difficulty, top apps, and observed position come from Apple's public iTunes Search API, queried from your browser. Popularity is Apple Ads official (relative 1–100) when the term appears in that storefront and genre, via a founder-owned Platform API v1 lookup — visitors never connect an Ads account. If Apple has no row, AppClimb falls back to the iTunes estimate.",
+      "Popularity comes from Apple Ads Insights: every week Apple publishes a relative 1–100 score for the 500 most-searched terms in each of 15 categories per storefront. AppClimb keeps that list (and each term's weekly history) through a founder-owned Platform API v1 connection — visitors never connect an Ads account. Difficulty, top apps, and your app's position come from Apple's public iTunes Search API, queried from your browser.",
   },
   {
     question: "Is popularity the same as search volume?",
     answer:
-      "No. Search volume (query counts) is still private. AppClimb shows Apple's official relative popularity (1–100) when available, or an iTunes estimate otherwise. The UI labels the source. Neither number is volume.",
+      "No. Search volume (query counts) is private to Apple. AppClimb shows Apple's relative popularity (1–100). For terms Apple doesn't publish, it shows “≤ ceiling · Long tail” rather than inventing a number. Neither is volume, and the UI labels which one you're looking at.",
   },
   {
     question: "Do I need an account?",
     answer:
-      "No. The free plan works without one — 8 keyword checks, 5 assistant messages, and 30 official popularity lookups per day — and your keyword list and history live in your browser's localStorage. An optional account unlocks Pro ($8/month): unlimited checks, cloud sync, and 90-day history.",
+      "No. Searching works without one — 8 new keyword checks a day, with Apple popularity, 12 weeks of history, and difficulty evidence — and your keyword list lives in your browser's localStorage. A free account adds tracking for one app and the ASO assistant. Pro ($8/month) adds unlimited checks, a full year of Apple history, unlimited tracking, and cloud sync.",
   },
   {
     question: "Can I analyze a whole list at once?",

@@ -1,14 +1,18 @@
-// App Store keyword estimation, entirely client-side.
+// App Store keyword scoring, client-side.
 //
-// Apple's public iTunes Search API is the only free source that works from a
-// browser (CORS *). Difficulty is always an estimate from competition pressure
-// and top-result strength. Popularity is Apple Ads official relative 1–100
-// when POST /api/popularity returns a hit, otherwise the same iTunes estimate.
-// The UI labels the source. Neither number is search volume.
+// Difficulty is always an estimate, computed from the apps that rank for the
+// term in Apple's public iTunes Search API (the only catalog source a browser
+// can reach). It is explainable: the evidence behind it travels with it.
 //
-// History is kept in localStorage: one daily snapshot per keyword per country,
-// plus an estimated backfill so the 30-day trend chart is useful on first
-// check. Backfilled points are flagged and labeled as estimates.
+// Popularity comes from Apple: POST /api/popularity returns Apple Ads'
+// official relative score (1–100) for terms Apple publishes, or a ceiling for
+// long-tail terms below Apple's published range. Only when that service is
+// unreachable does a rough iTunes-based estimate stand in, labeled "Est.".
+// None of these numbers is search volume.
+//
+// Local history: one real snapshot per keyword per day. Nothing is
+// backfilled or invented; the long-range popularity trend is Apple's own
+// weekly history.
 
 import {
   boundedStorefront,
@@ -57,15 +61,51 @@ export interface TopApp {
   position: number;
 }
 
-export type PopularitySource = "official" | "estimated";
+/**
+ * official  — Apple Ads published score for this exact term.
+ * longtail  — Apple does not publish the term: popularity is at or below
+ *             `popularityCeiling` (the lowest published score in its genre).
+ * estimated — Apple data unavailable; rough iTunes-based stand-in.
+ */
+export type PopularitySource = "official" | "longtail" | "estimated";
+
+export interface PopularityHistoryPoint {
+  /** Sunday that starts the Apple Ads week (YYYY-MM-DD). */
+  week: string;
+  popularity: number;
+}
+
+/** What the difficulty score is made of — shown next to it in the UI. */
+export interface DifficultyEvidence {
+  /** Top results considered (at most 10). */
+  sampled: number;
+  medianRatings: number;
+  /** Fewest ratings among the top 10 — the weakest app already ranking. */
+  weakestRatings: number;
+  weakestPosition: number | null;
+  /** Top-10 apps whose name contains the phrase or every word of it. */
+  titleMatches: number;
+  /** Top-10 apps from big-brand publishers. */
+  brandApps: number;
+  /** #1 is an entrenched app named after the term (a brand search). */
+  navigational: boolean;
+}
 
 export interface KeywordMetrics {
   keyword: string;
   country: string;
-  /** 1–100. Official Apple Ads score, or the iTunes estimate. */
+  /**
+   * 1–100. Official Apple Ads score; for long-tail terms the ceiling it sits
+   * at or below; otherwise the rough estimate. See popularitySource.
+   */
   popularity: number;
-  /** official = Apple Ads Platform API; estimated = iTunes heuristic. */
   popularitySource?: PopularitySource;
+  /** Long-tail only: Apple's lowest published score in the term's genre. */
+  popularityCeiling?: number;
+  /** Apple's weekly popularity for this term, oldest first (real data). */
+  popularityHistory?: PopularityHistoryPoint[];
+  /** Apple Ads week the official numbers describe (Sunday, YYYY-MM-DD). */
+  dataWeek?: string;
   /** Apple Ads genre token used for the official lookup, if any. */
   appleGenre?: string;
   searchPopularityInGenre?: number;
@@ -73,6 +113,8 @@ export interface KeywordMetrics {
   rankInGenre?: number;
   /** Estimated 0–100 difficulty (barrier to rank in top results). */
   difficulty: number;
+  /** Inputs behind the difficulty estimate. Absent on restored rows. */
+  evidence?: DifficultyEvidence;
   /** Number of apps returned by the search (capped at 200 by iTunes). */
   results: number;
   /** True when the result list hit the 200-item cap (heavy competition). */
@@ -99,9 +141,13 @@ export interface KeywordRecord {
   keyword: string;
   country: string;
   firstSeen: string;
-  /** True when the leading history points are estimated backfill. */
+  /**
+   * Legacy flag: records written before October 2026 started with an
+   * invented 29-day baseline. Those points are dropped on load and this is
+   * always false for new records.
+   */
   backfilled: boolean;
-  /** Sorted ascending by date; the last point is a real measurement. */
+  /** Real daily measurements, sorted ascending by date. */
   history: KeywordHistoryPoint[];
   /**
    * Results/saturated of the most recent check. Kept alongside the history
@@ -111,14 +157,20 @@ export interface KeywordRecord {
   lastCheck?: {
     results: number;
     saturated: boolean;
+    popularityCeiling?: number;
+    dataWeek?: string;
+    evidence?: DifficultyEvidence;
+    appleGenre?: string;
+    rankInGenre?: number;
   };
+  /** Latest Apple weekly popularity history (official terms only). */
+  popularityHistory?: PopularityHistoryPoint[];
 }
 
 export const HISTORY_DAYS = 30;
 /** Stored history cap: 90-day Pro view plus a margin. */
 export const MAX_STORED_HISTORY_DAYS = 92;
 export const SEARCH_LIMIT = 200;
-export const BACKFILL_DAYS = 29; // 29 estimated days + today's real snapshot.
 
 /* ------------------------------------------------------------------ */
 /* Raw iTunes fetch                                                    */
@@ -241,22 +293,124 @@ const MEGA_BRANDS = new Set([
   "x corp",
 ]);
 
-/** Deterministic small variation so similar keywords do not score identically. */
-export function keywordJitter(keyword: string): number {
-  let hash = 0;
-  for (let index = 0; index < keyword.length; index += 1) {
-    hash = (hash * 31 + keyword.charCodeAt(index)) >>> 0;
-  }
-  return (hash % 9) - 4; // -4..+4
+function clampScore(value: number): number {
+  return Math.max(1, Math.min(99, Math.round(value)));
 }
 
-function clampScore(value: number): number {
-  return Math.max(2, Math.min(98, Math.round(value)));
+function normalizeForMatch(value: string): string {
+  return ` ${value
+    .toLocaleLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/gu, "")
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()} `;
 }
 
 /**
- * Estimate popularity and difficulty from raw search results. Pure — no
- * network, no randomness — so it is deterministic and testable.
+ * How well an app's name targets the keyword: 1 = the exact phrase,
+ * 0.75 = every word (plurals count), partial credit for some words.
+ */
+export function titleMatchScore(title: string, keyword: string): number {
+  const haystack = normalizeForMatch(title);
+  const phrase = normalizeForMatch(keyword).trim();
+  if (!phrase) return 0;
+  if (haystack.includes(` ${phrase} `)) return 1;
+  const words = phrase.split(" ");
+  const hits = words.filter(
+    (word) =>
+      haystack.includes(` ${word} `) ||
+      haystack.includes(` ${word}s `) ||
+      (word.endsWith("s") && haystack.includes(` ${word.slice(0, -1)} `)),
+  ).length;
+  if (hits === words.length) return 0.75;
+  return hits > 0 ? (0.35 * hits) / words.length : 0;
+}
+
+/** 0–1 strength of an incumbent from its lifetime ratings (log scale). */
+export function ratingStrength(ratingsCount: number): number {
+  // 10 ratings → 0, 1k → 0.44, 10k → 0.67, 100k → 0.89, ~300k+ → 1.
+  return Math.max(0, Math.min(1, (Math.log10(1 + Math.max(0, ratingsCount)) - 1) / 4.5));
+}
+
+const POSITION_WEIGHTS = Array.from({ length: 10 }, (_, index) => 1 / Math.sqrt(index + 1));
+const POSITION_WEIGHT_SUM = POSITION_WEIGHTS.reduce((sum, weight) => sum + weight, 0);
+
+/**
+ * Difficulty 1–99 from the top 10 results: each position is weighted
+ * (#1 counts most), and each incumbent scores by rating strength (or being a
+ * big brand), discounted when its name does not target the keyword. Fewer
+ * than 10 results leaves empty slots that count as zero.
+ */
+export function scoreDifficulty(
+  keyword: string,
+  apps: readonly TopApp[],
+): { difficulty: number; evidence: DifficultyEvidence } {
+  const top = apps.slice(0, 10);
+  let weighted = 0;
+  let titleMatches = 0;
+  let brandApps = 0;
+  top.forEach((app, index) => {
+    const brand = MEGA_BRANDS.has(app.developer.toLocaleLowerCase());
+    if (brand) brandApps += 1;
+    const match = titleMatchScore(app.name, keyword);
+    if (match >= 0.75) titleMatches += 1;
+    const strength = Math.max(ratingStrength(app.ratingsCount), brand ? 1 : 0);
+    weighted += POSITION_WEIGHTS[index] * strength * (0.6 + 0.4 * match);
+  });
+
+  const leader = top[0];
+  const navigational = Boolean(
+    leader &&
+      leader.ratingsCount >= 250_000 &&
+      normalizeForMatch(leader.name).startsWith(normalizeForMatch(keyword)),
+  );
+
+  const ratings = top.map((app) => app.ratingsCount).sort((left, right) => left - right);
+  const median =
+    ratings.length === 0
+      ? 0
+      : ratings.length % 2 === 1
+        ? ratings[(ratings.length - 1) / 2]
+        : Math.round((ratings[ratings.length / 2 - 1] + ratings[ratings.length / 2]) / 2);
+  let weakest: TopApp | null = null;
+  for (const app of top) {
+    if (!weakest || app.ratingsCount < weakest.ratingsCount) weakest = app;
+  }
+
+  let difficulty = top.length === 0 ? 1 : clampScore((100 * weighted) / POSITION_WEIGHT_SUM);
+  if (navigational) difficulty = Math.max(difficulty, 92);
+
+  return {
+    difficulty,
+    evidence: {
+      sampled: top.length,
+      medianRatings: median,
+      weakestRatings: weakest?.ratingsCount ?? 0,
+      weakestPosition: weakest?.position ?? null,
+      titleMatches,
+      brandApps,
+      navigational,
+    },
+  };
+}
+
+/**
+ * Rough popularity stand-in used only when Apple's data is unreachable:
+ * how crowded the term is and how strong the apps chasing it are. Labeled
+ * "Est." everywhere it appears.
+ */
+export function roughPopularity(apps: readonly TopApp[], saturated: boolean): number {
+  if (apps.length === 0) return 1;
+  const competition = saturated ? 1 : Math.sqrt(apps.length / SEARCH_LIMIT);
+  const top = apps.slice(0, 10);
+  const averageRatings = top.reduce((sum, app) => sum + app.ratingsCount, 0) / top.length;
+  const strength = Math.min(1, Math.log10(1 + averageRatings) / 5);
+  return clampScore(10 + competition * 45 + strength * 30);
+}
+
+/**
+ * Score raw search results. Pure — no network, no randomness — so the same
+ * results always give the same numbers.
  */
 export function estimateMetrics(
   keyword: string,
@@ -265,65 +419,17 @@ export function estimateMetrics(
   saturated: boolean,
   sampledAt = new Date().toISOString(),
 ): KeywordMetrics {
-  const topApps = apps.slice(0, 10);
-  const resultCount = apps.length;
-
-  // Competition: how many apps chase the term (capped at 200, sqrt-curved).
-  const competition = saturated ? 1 : Math.sqrt(resultCount / SEARCH_LIMIT);
-
-  // Strength of the top-10: average lifetime ratings, log-scaled so a term
-  // dominated by apps with 100k+ ratings reads as high.
-  const averageRatings =
-    topApps.length === 0
-      ? 0
-      : topApps.reduce((sum, app) => sum + app.ratingsCount, 0) /
-        topApps.length;
-  const topStrength = Math.min(1, Math.log10(1 + averageRatings) / 5);
-
-  // How many of the top 10 are known mega-brands (hard to displace).
-  const brandShare =
-    topApps.length === 0
-      ? 0
-      : topApps.filter((app) =>
-          MEGA_BRANDS.has(app.developer.toLocaleLowerCase()),
-        ).length / topApps.length;
-
-  // Relevance: how many top apps carry the keyword in their title.
-  const tokens = keyword.toLocaleLowerCase().split(/\s+/u);
-  const relevant = topApps.filter((app) => {
-    const title = app.name.toLocaleLowerCase();
-    return tokens.some((token) => title.includes(token));
-  }).length;
-  const relevance = topApps.length === 0 ? 0 : relevant / topApps.length;
-
-  const noResults = resultCount === 0;
-  const popularity = noResults
-    ? 2
-    : clampScore(
-        competition * 70 +
-          topStrength * 20 +
-          relevance * 10 +
-          keywordJitter(keyword) * 0.6,
-      );
-  const difficulty = noResults
-    ? 2
-    : clampScore(
-        competition * 40 +
-          topStrength * 35 +
-          brandShare * 15 +
-          relevance * 10 +
-          keywordJitter(keyword) * 0.4,
-      );
-
+  const { difficulty, evidence } = scoreDifficulty(keyword, apps);
   return {
     keyword: keyword.trim(),
     country,
-    popularity,
+    popularity: roughPopularity(apps, saturated),
     popularitySource: "estimated",
     difficulty,
-    results: resultCount,
+    evidence,
+    results: apps.length,
     saturated,
-    topApps,
+    topApps: apps.slice(0, 10),
     sampledAt,
   };
 }
@@ -332,14 +438,27 @@ export function estimateMetrics(
 export async function estimateKeyword(
   keyword: string,
   country: string,
-  options: { fetchImpl?: typeof fetch; signal?: AbortSignal } = {},
+  options: {
+    fetchImpl?: typeof fetch;
+    signal?: AbortSignal;
+    /** Waits before each retry; Apple rate-limits bursts briefly. */
+    retryDelaysMs?: readonly number[];
+  } = {},
 ): Promise<KeywordMetrics> {
-  const { apps, saturated } = await fetchKeywordResults(
-    keyword,
-    country,
-    options,
-  );
-  return estimateMetrics(keyword, country, apps, saturated);
+  const delays = options.retryDelaysMs ?? [];
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      const { apps, saturated } = await fetchKeywordResults(keyword, country, options);
+      return estimateMetrics(keyword, country, apps, saturated);
+    } catch (error) {
+      const delay = delays[attempt];
+      const transient =
+        error instanceof TypeError ||
+        /app_store_catalog_unavailable:(429|403|5\d\d)/u.test(String(error));
+      if (delay === undefined || !transient || options.signal?.aborted) throw error;
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -387,53 +506,17 @@ export function toLocalDate(date = new Date()): string {
 }
 
 /**
- * Deterministic pseudo-random walk ending exactly on the measured values.
- * Used to backfill the leading days of a trend chart; every point is labeled
- * "estimated" in the UI.
+ * Records saved before October 2026 began with 29 invented "baseline" days
+ * (a pseudo-random walk). Those points carry no popularitySource; real
+ * measurements always do. Keep only real points.
  */
-export function backfillHistory(
-  metrics: KeywordMetrics,
-  days = BACKFILL_DAYS,
-): KeywordHistoryPoint[] {
-  const today = toLocalDate();
-  const points: KeywordHistoryPoint[] = [];
-  let popularity = metrics.popularity;
-  let difficulty = metrics.difficulty;
-  // Walk backwards from today, varying by ±6% per step with a deterministic
-  // seed so the same keyword always produces the same estimated shape.
-  let step = 0;
-  const seedLength = Math.max(1, metrics.keyword.length);
-  for (let offset = days; offset >= 1; offset -= 1) {
-    step =
-      ((step * 31 +
-        (metrics.keyword.charCodeAt(Math.abs(step) % seedLength) || 7) +
-        offset) >>>
-        0) %
-      997;
-    const wobble = ((step % 13) - 6) / 100; // -0.06..+0.06
-    popularity = Math.max(
-      2,
-      Math.min(98, Math.round(popularity - popularity * wobble)),
-    );
-    difficulty = Math.max(
-      2,
-      Math.min(98, Math.round(difficulty - difficulty * wobble * 0.7)),
-    );
-    const date = new Date();
-    date.setDate(date.getDate() - offset);
-    points.push({
-      date: toLocalDate(date),
-      popularity,
-      difficulty,
-    });
-  }
-  points.push({
-    date: today,
-    popularity: metrics.popularity,
-    difficulty: metrics.difficulty,
-    popularitySource: metrics.popularitySource,
-  });
-  return points;
+export function dropLegacyBackfill(record: KeywordRecord): KeywordRecord {
+  if (!record.backfilled) return record;
+  return {
+    ...record,
+    backfilled: false,
+    history: record.history.filter((point) => point.popularitySource !== undefined),
+  };
 }
 
 export function loadRecord(
@@ -451,7 +534,7 @@ export function loadRecord(
   if (!raw) return null;
   try {
     const parsed = JSON.parse(raw) as unknown;
-    return isKeywordRecord(parsed) ? parsed : null;
+    return isKeywordRecord(parsed) ? dropLegacyBackfill(parsed) : null;
   } catch {
     return null;
   }
@@ -506,21 +589,26 @@ export function recordSnapshot(
     keyword: metrics.keyword.trim(),
     country: metrics.country,
     firstSeen: existing?.firstSeen ?? today,
-    backfilled: existing?.backfilled ?? history.length <= 2,
+    backfilled: false,
     history,
     lastCheck: {
       results: metrics.results,
       saturated: metrics.saturated,
+      popularityCeiling: metrics.popularityCeiling,
+      dataWeek: metrics.dataWeek,
+      evidence: metrics.evidence,
+      appleGenre: metrics.appleGenre,
+      rankInGenre: metrics.rankInGenre,
     },
+    popularityHistory:
+      metrics.popularityHistory && metrics.popularityHistory.length > 0
+        ? metrics.popularityHistory
+        : existing?.popularityHistory,
   };
-  if (record.backfilled && history.length === 1) {
-    record.history = backfillHistory(metrics);
-  }
   saveRecord(storage, record);
   return record;
 }
 
-/** Trim history to the trailing window, newest last. */
 /**
  * Rebuild display metrics from a stored record's latest snapshot so the
  * table survives a page reload. Top apps are not persisted: they come back
@@ -537,6 +625,12 @@ export function restoreMetricsFromRecord(
     popularity: last.popularity,
     difficulty: last.difficulty,
     popularitySource: last.popularitySource,
+    popularityCeiling: record.lastCheck?.popularityCeiling,
+    popularityHistory: record.popularityHistory,
+    dataWeek: record.lastCheck?.dataWeek,
+    evidence: record.lastCheck?.evidence,
+    appleGenre: record.lastCheck?.appleGenre,
+    rankInGenre: record.lastCheck?.rankInGenre,
     results: record.lastCheck?.results ?? 0,
     saturated: record.lastCheck?.saturated ?? false,
     topApps: [],
@@ -690,20 +784,102 @@ export function suggestKeywords(term: string, apps: CatalogApp[]): string[] {
 }
 
 /* ------------------------------------------------------------------ */
-/* Golden keywords                                                     */
+/* Opportunity                                                         */
 /* ------------------------------------------------------------------ */
 
-/** A keyword is "golden" when demand is solid and the barrier is low. */
-export const GOLDEN_POPULARITY_MIN = 55;
-export const GOLDEN_DIFFICULTY_MAX = 40;
+export type OpportunityVerdict =
+  | "target"
+  | "longtail_win"
+  | "competitive"
+  | "low_demand"
+  | "dominated";
 
-export function isGoldenKeyword(
-  metrics: Pick<KeywordMetrics, "popularity" | "difficulty">,
-): boolean {
-  return (
-    metrics.popularity >= GOLDEN_POPULARITY_MIN &&
-    metrics.difficulty <= GOLDEN_DIFFICULTY_MAX
-  );
+export interface Opportunity {
+  /** 0–100: balance of demand and ease. A ranking aid, not a forecast. */
+  score: number;
+  verdict: OpportunityVerdict;
+  label: string;
+  reason: string;
+}
+
+export const OPPORTUNITY_LABELS: Record<OpportunityVerdict, string> = {
+  target: "Worth targeting",
+  longtail_win: "Long-tail win",
+  competitive: "Competitive",
+  low_demand: "Low demand",
+  dominated: "Dominated",
+};
+
+/** Difficulty at or below this is a first page a newer app can break into. */
+export const TARGET_DIFFICULTY_MAX = 50;
+export const LONGTAIL_DIFFICULTY_MAX = 45;
+export const DOMINATED_DIFFICULTY_MIN = 75;
+
+function compactCount(value: number): string {
+  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1)}M`;
+  if (value >= 1_000) return `${(value / 1_000).toFixed(value >= 10_000 ? 0 : 1)}k`;
+  return String(value);
+}
+
+export function formatRatings(value: number): string {
+  return compactCount(Math.max(0, Math.round(value)));
+}
+
+/**
+ * Plain-language call on whether a keyword is worth fighting for, from
+ * Apple's popularity and the estimated difficulty.
+ */
+export function assessOpportunity(
+  metrics: Pick<KeywordMetrics, "popularity" | "popularitySource" | "difficulty" | "evidence">,
+): Opportunity {
+  const source = metrics.popularitySource ?? "estimated";
+  const demand =
+    source === "longtail"
+      ? 0.2
+      : source === "official"
+        ? Math.max(0, Math.min(1, (metrics.popularity - 35) / 35))
+        : Math.max(0, Math.min(1, (metrics.popularity - 30) / 60)) * 0.8;
+  const ease = 1 - metrics.difficulty / 100;
+  const score = Math.round(100 * Math.sqrt(Math.max(0, demand * ease)));
+  const median = metrics.evidence?.medianRatings;
+  const medianText = median !== undefined ? ` (median ${formatRatings(median)} ratings)` : "";
+
+  let verdict: OpportunityVerdict;
+  let reason: string;
+  if (metrics.evidence?.navigational) {
+    verdict = "dominated";
+    reason = "A brand search — people typing this want one specific app.";
+  } else if (metrics.difficulty >= DOMINATED_DIFFICULTY_MIN) {
+    verdict = "dominated";
+    reason = `The first page is held by entrenched apps${medianText}.`;
+  } else if (source === "longtail") {
+    if (metrics.difficulty <= LONGTAIL_DIFFICULTY_MAX) {
+      verdict = "longtail_win";
+      reason = "Below Apple's top searches, but the first page is weak — an easy rank for a newer app.";
+    } else {
+      verdict = "low_demand";
+      reason = "Below Apple's top searches and the first page is already crowded.";
+    }
+  } else if (metrics.difficulty <= TARGET_DIFFICULTY_MAX) {
+    verdict = "target";
+    reason =
+      source === "official"
+        ? "Apple shows real search demand and the first page is beatable."
+        : "Looks beatable; Apple's popularity was unavailable, so demand is a rough estimate.";
+  } else {
+    verdict = "competitive";
+    reason = `Real demand, but you'll need ratings and a strong title to break in${medianText}.`;
+  }
+  // A weak app already on page one means the door isn't closed.
+  const weakest = metrics.evidence;
+  if (
+    (verdict === "competitive" || (verdict === "dominated" && !weakest?.navigational)) &&
+    weakest?.weakestPosition &&
+    weakest.weakestRatings < 1_000
+  ) {
+    reason += ` Still, #${weakest.weakestPosition} has only ${formatRatings(weakest.weakestRatings)} ratings — page one isn't closed.`;
+  }
+  return { score, verdict, label: OPPORTUNITY_LABELS[verdict], reason };
 }
 
 /* ------------------------------------------------------------------ */

@@ -64,13 +64,16 @@ test("pricing page lists the free plan with honest limits and Pro at $8", async 
   await page.goto("/pricing");
 
   await expect(
-    page.getByRole("heading", { name: /Honest limits on Free/i }),
+    page.getByRole("heading", { name: /Search free. Go Pro/i }),
   ).toBeVisible();
   await expect(page.getByRole("heading", { name: "Free", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Pro", exact: true })).toBeVisible();
 
   // The free plan states its real limits instead of "unlimited everything".
-  await expect(page.getByText(/8 keyword checks per day/i).first()).toBeVisible();
+  await expect(page.getByText(/8 new keyword checks per day/i).first()).toBeVisible();
+  // Pro's headline value is a full year of Apple history vs 12 weeks free.
+  await expect(page.getByText(/12 weeks of Apple popularity history/i).first()).toBeVisible();
+  await expect(page.getByText(/52 weeks of Apple popularity history/i).first()).toBeVisible();
   await expect(page.getByText(/5 messages/i).first()).toBeVisible();
 
   // Monthly price first, then the yearly toggle shows the annual price.
@@ -606,7 +609,7 @@ test("a mid-session downgrade stops sync but preserves local data", async ({
 test("pricing and upgrade copy stay honest and next-step", async ({ page }) => {
   await page.goto("/pricing");
   await expect(
-    page.getByRole("heading", { level: 1, name: /Honest limits on Free/i }),
+    page.getByRole("heading", { level: 1, name: /Search free. Go Pro/i }),
   ).toBeVisible();
   // Prices match the founder cap ($8/month, $64/year ≤ $10/mo).
   await expect(page.getByText(/\$8/i).first()).toBeVisible();
@@ -641,9 +644,9 @@ test("pricing and upgrade copy stay honest and next-step", async ({ page }) => {
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText(/Unlimited keyword checks/i)).toBeVisible();
   await expect(dialog.getByText(/Cloud sync across devices/i)).toBeVisible();
-  await expect(dialog.getByText(/90-day history and charts/i)).toBeVisible();
+  await expect(dialog.getByText(/52 weeks of Apple popularity history/i)).toBeVisible();
+  await expect(dialog.getByText(/90 days of rank history/i)).toBeVisible();
   await expect(dialog.getByText(/200 AI assistant messages \/ day/i)).toBeVisible();
-  await expect(dialog.getByText(/500 official popularity lookups \/ day/i)).toBeVisible();
   // The CTA names the action and the price.
   await expect(
     dialog.getByRole("button", { name: /Upgrade — \$8\/month/i }),

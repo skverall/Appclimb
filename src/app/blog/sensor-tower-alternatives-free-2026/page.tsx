@@ -159,7 +159,7 @@ export default function SensorTowerAlternativesArticle() {
       <ul>
         <li>8 keyword checks per day free, unlimited on Pro, across 16 storefronts</li>
         <li>Official Apple Ads popularity (1–100) plus estimated difficulty</li>
-        <li>30-day trend charts that grow with daily snapshots (90 days on Pro)</li>
+        <li>Apple&apos;s weekly popularity history per keyword (12 weeks free, 52 on Pro)</li>
         <li>Related keywords and top-app breakdowns from public data</li>
       </ul>
       <p>

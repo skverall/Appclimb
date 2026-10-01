@@ -15,6 +15,7 @@ import {
 import { Archivo, IBM_Plex_Mono, Instrument_Sans } from "next/font/google";
 
 import "./globals.css";
+import "./explorer.css";
 
 /*
  * Typography — same pairing as cardealertracker.app.
@@ -213,8 +214,9 @@ export default function RootLayout({
                 ],
                 featureList: [
                   "Official Apple Ads Popularity (1–100)",
-                  "App Store Keyword Difficulty Estimates",
-                  "30-day and 90-day Local Trend Charts",
+                  "Up to 52 Weeks of Apple Popularity History",
+                  "Trending App Store Searches by Category",
+                  "Keyword Difficulty with Visible Evidence",
                   "100-Character App Store Connect Keyword Field Optimizer",
                   "Multi-storefront iOS App Rank Tracking",
                   "ASO AI Assistant",

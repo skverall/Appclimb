@@ -5,11 +5,11 @@ import {
   APPLE_ADS_POPULARITY_PATH,
   APPLE_ADS_TOKEN_URL,
   buildClientSecretPayload,
-  buildPopularityQuery,
+  buildTermsQuery,
   clearAppleAdsTokenCache,
   getAppleAdsAccessToken,
   lastCompleteUtcWeek,
-  lookupSearchTermPopularity,
+  queryPopularityRows,
   shiftUtcWeek,
   normalizePrivateKeyPem,
   readAppleAdsCredentials,
@@ -131,33 +131,40 @@ describe("client secret payload", () => {
   });
 });
 
-describe("buildPopularityQuery", () => {
-  it("filters by country and genre and asks for popularity fields", () => {
-    const query = buildPopularityQuery({
+describe("buildTermsQuery", () => {
+  it("pages a whole storefront week without a genre filter", () => {
+    const query = buildTermsQuery({
       country: "US",
-      genre: "PRODUCTIVITY_UTILITIES",
-      week: { start: "2026-08-02", end: "2026-08-08" },
+      range: { start: "2026-08-02", end: "2026-08-08" },
+      offset: 2000,
     });
     expect(query).toMatchObject({
-      timeRange: {
-        start: "2026-08-02",
-        end: "2026-08-08",
-        granularity: "WEEKLY_SUN_SAT",
-      },
+      timeRange: { start: "2026-08-02", end: "2026-08-08", granularity: "WEEKLY_SUN_SAT" },
+      pagination: { offset: 2000, pageSize: 1000 },
     });
     expect(query.fields).toEqual(
       expect.arrayContaining(["searchPopularity1to100", "rankInGenre"]),
     );
-    const filters = query.filters as Array<{ field: string; value: unknown }>;
-    expect(filters).toEqual([
+    expect(query.filters).toEqual([
       { field: "countryOrRegion", operator: "EQUALS", value: "US" },
-      { field: "genre", operator: "EQUALS", value: "PRODUCTIVITY_UTILITIES" },
+    ]);
+  });
+
+  it("asks for exact terms with an IN filter", () => {
+    const query = buildTermsQuery({
+      country: "DE",
+      range: { start: "2025-09-28", end: "2026-09-26" },
+      terms: ["schlaf", "meditation"],
+    });
+    expect(query.filters).toEqual([
+      { field: "countryOrRegion", operator: "EQUALS", value: "DE" },
+      { field: "searchTerm", operator: "IN", value: ["schlaf", "meditation"] },
     ]);
   });
 });
 
-describe("lookupSearchTermPopularity", () => {
-  it("mints a token then returns official rows for matching terms", async () => {
+describe("queryPopularityRows", () => {
+  it("mints a token, sends the account context, and returns rows", async () => {
     const creds = await generateTestCreds();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
@@ -176,12 +183,10 @@ describe("lookupSearchTermPopularity", () => {
             rows: [
               {
                 searchTerm: "meditation",
-                genre: "HEALTH_AND_FITNESS",
-                searchPopularity1to100: 77,
-                searchPopularityInGenre: 82,
-                searchPopularity1to5: 4,
-                rankInGenre: 6,
-                week: "2026-08-09",
+                genre: "HEALTH_FITNESS",
+                searchPopularity1to100: 52,
+                rankInGenre: 241,
+                week: "2026-09-20",
               },
             ],
           },
@@ -189,106 +194,60 @@ describe("lookupSearchTermPopularity", () => {
       }
       throw new Error(`unexpected ${url}`);
     });
-
-    const rows = await lookupSearchTermPopularity(
+    const rows = await queryPopularityRows(
       creds,
-      {
-        country: "US",
-        genre: "HEALTH_AND_FITNESS",
-        terms: ["meditation"],
-        now: new Date("2026-08-16T12:00:00Z"),
-      },
-      { fetchImpl: fetchImpl as unknown as typeof fetch },
+      buildTermsQuery({ country: "US", range: { start: "2026-09-20", end: "2026-09-26" } }),
+      { fetchImpl: fetchImpl as unknown as typeof fetch, now: new Date("2026-10-01T12:00:00Z") },
     );
-
     expect(rows).toEqual([
-      expect.objectContaining({
-        term: "meditation",
-        found: true,
-        searchPopularity1to100: 77,
-        genre: "HEALTH_AND_FITNESS",
-      }),
+      expect.objectContaining({ searchTerm: "meditation", searchPopularity1to100: 52 }),
     ]);
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     const cached = await getAppleAdsAccessToken(creds, {
       fetchImpl: fetchImpl as unknown as typeof fetch,
-      now: new Date("2026-08-16T12:01:00Z"),
+      now: new Date("2026-10-01T12:01:00Z"),
     });
     expect(cached).toBe("tok");
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
-  it("retries once after a 401 and skips empty weeks", async () => {
+  it("refreshes the token once after a 401", async () => {
     const creds = await generateTestCreds();
     let tokenCalls = 0;
     let popularityCalls = 0;
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url === APPLE_ADS_TOKEN_URL) {
+      if (String(input) === APPLE_ADS_TOKEN_URL) {
         tokenCalls += 1;
-        return Response.json({
-          access_token: tokenCalls === 1 ? "tok-old" : "tok-new",
-          expires_in: 3600,
-        });
+        return Response.json({ access_token: `tok-${tokenCalls}`, expires_in: 3600 });
       }
       popularityCalls += 1;
-      if (popularityCalls === 1) {
-        return new Response("nope", { status: 401 });
-      }
-      if (popularityCalls === 2) {
-        return Response.json({ result: { rows: [] } });
-      }
-      return Response.json({
-        result: {
-          rows: [
-            {
-              searchTerm: "meditation",
-              searchPopularity1to100: 40,
-              genre: "HEALTH_FITNESS",
-            },
-          ],
-        },
-      });
+      if (popularityCalls === 1) return new Response("nope", { status: 401 });
+      return Response.json({ result: { rows: [{ searchTerm: "x", searchPopularity1to100: 44 }] } });
     });
-    const rows = await lookupSearchTermPopularity(
+    const rows = await queryPopularityRows(
       creds,
-      {
-        country: "US",
-        genre: "HEALTH_FITNESS",
-        terms: ["meditation"],
-        now: new Date("2026-08-16T12:00:00Z"),
-      },
+      buildTermsQuery({ country: "US", range: { start: "2026-09-20", end: "2026-09-26" } }),
       { fetchImpl: fetchImpl as unknown as typeof fetch },
     );
-    expect(rows[0]?.searchPopularity1to100).toBe(40);
+    expect(rows).toHaveLength(1);
     expect(tokenCalls).toBe(2);
-    expect(popularityCalls).toBe(3);
+    expect(popularityCalls).toBe(2);
   });
 
-  it("returns no rows when Apple omits the term", async () => {
+  it("surfaces Apple rate limiting as a 429 error", async () => {
     const creds = await generateTestCreds();
-    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      if (url === APPLE_ADS_TOKEN_URL) {
-        return Response.json({ access_token: "tok", expires_in: 3600 });
-      }
-      return Response.json({
-        result: {
-          rows: [{ searchTerm: "other", searchPopularity1to100: 10 }],
-        },
-      });
-    });
-    const rows = await lookupSearchTermPopularity(
-      creds,
-      {
-        country: "US",
-        genre: "TRAVEL",
-        terms: ["obscure phrase"],
-        now: new Date("2026-08-16T12:00:00Z"),
-      },
-      { fetchImpl: fetchImpl as unknown as typeof fetch },
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) =>
+      String(input) === APPLE_ADS_TOKEN_URL
+        ? Response.json({ access_token: "tok", expires_in: 3600 })
+        : new Response("slow down", { status: 429 }),
     );
-    expect(rows).toEqual([]);
+    await expect(
+      queryPopularityRows(
+        creds,
+        buildTermsQuery({ country: "US", range: { start: "2026-09-20", end: "2026-09-26" } }),
+        { fetchImpl: fetchImpl as unknown as typeof fetch },
+      ),
+    ).rejects.toMatchObject({ status: 429 });
   });
 });
 
@@ -324,21 +283,12 @@ describe.skipIf(!process.env.LIVE_APPLE_ADS)("live Apple Ads", () => {
     clearAppleAdsTokenCache();
     const token = await getAppleAdsAccessToken(creds);
     expect(token.length).toBeGreaterThan(20);
-    const rows = await lookupSearchTermPopularity(creds, {
-      country: "US",
-      genre: "HEALTH_AND_FITNESS",
-      terms: ["meditation"],
-    });
-    expect(Array.isArray(rows)).toBe(true);
-    console.log(
-      "live popularity",
-      rows[0]
-        ? {
-            found: rows[0].found,
-            score: rows[0].searchPopularity1to100,
-            genre: rows[0].genre,
-          }
-        : { found: false },
+    const week = lastCompleteUtcWeek();
+    const rows = await queryPopularityRows(
+      creds,
+      buildTermsQuery({ country: "US", range: week, terms: ["meditation"] }),
     );
+    expect(Array.isArray(rows)).toBe(true);
+    console.log("live popularity", rows[0] ?? { found: false });
   });
 });

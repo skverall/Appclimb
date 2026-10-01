@@ -39,15 +39,16 @@ test("home page renders the keyword explorer without an account", async ({
   await expect(
     page.getByRole("heading", {
       level: 1,
-      name: /Popularity from Apple/,
+      name: /Find App Store keywords/,
     }),
   ).toBeVisible();
   await expect(
-    page.getByPlaceholder(/meditation/),
+    page.getByRole("combobox", { name: "Search keywords" }),
   ).toBeVisible();
-  await expect(
-    page.getByText(/Official Apple Ads scores, labeled/i),
-  ).toBeVisible();
+  await expect(page.getByText(/Popularity straight from Apple/i)).toBeVisible();
+  // The hero H1 is server-rendered (crawlers see it before hydration).
+  const html = await (await page.request.get("/")).text();
+  expect(html).toContain("Find App Store keywords you can actually rank for.");
 });
 
 test("core surfaces have no horizontal overflow at 320px", async ({
@@ -73,7 +74,7 @@ test("core surfaces have no horizontal overflow at 320px", async ({
 
     // The primary interactive surface must still be reachable at this width.
     if (path === "/") {
-      await expect(page.getByPlaceholder(/meditation/)).toBeVisible();
+      await expect(page.getByRole("combobox", { name: "Search keywords" })).toBeVisible();
     } else if (path === "/assistant") {
       await expect(page.getByLabel("Message the ASO assistant")).toBeVisible();
     } else {
@@ -413,7 +414,7 @@ test("marketing navigation and CTA work interactively at 1920px", async ({
     .click();
   await expect(page).toHaveURL(/\/pricing$/);
   await expect(
-    page.getByRole("heading", { level: 1, name: /Honest limits on Free/i }),
+    page.getByRole("heading", { level: 1, name: /Search free. Go Pro/i }),
   ).toBeVisible();
 });
 
@@ -425,7 +426,7 @@ test("marketing pages render when /api/me is unavailable", async ({ page }) => {
   for (const [path, heading] of [
     ["/app-store-keywords", /Popularity from Apple/i],
     ["/guides/keyword-research", /practical guide/i],
-    ["/pricing", /Honest limits on Free/i],
+    ["/pricing", /Search free. Go Pro/i],
   ] as const) {
     await page.goto(path);
     await expect(

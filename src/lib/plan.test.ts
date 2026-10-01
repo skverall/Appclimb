@@ -16,10 +16,11 @@ describe("plan limits", () => {
     const free = limitsForPlan("free");
     expect(free.explorerChecksPerDay).toBe(8);
     expect(free.aiMessagesPerDay).toBe(5);
-    expect(free.popularityPerDay).toBe(30);
+    expect(free.popularityPerDay).toBe(200);
     expect(free.trackedApps).toBe(1);
     expect(free.keywordsPerApp).toBe(25);
     expect(free.historyDays).toBe(30);
+    expect(free.historyWeeks).toBe(12);
     expect(free.cloudSync).toBe(false);
   });
 
@@ -27,10 +28,11 @@ describe("plan limits", () => {
     const pro = limitsForPlan("pro");
     expect(pro.explorerChecksPerDay).toBeNull();
     expect(pro.aiMessagesPerDay).toBe(200);
-    expect(pro.popularityPerDay).toBe(500);
+    expect(pro.popularityPerDay).toBe(2000);
     expect(pro.trackedApps).toBeNull();
     expect(pro.keywordsPerApp).toBeNull();
     expect(pro.historyDays).toBe(90);
+    expect(pro.historyWeeks).toBe(52);
     expect(pro.cloudSync).toBe(true);
   });
 

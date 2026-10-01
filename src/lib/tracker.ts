@@ -6,15 +6,18 @@
 //
 // Position is measured from a single public iTunes Search response (up to 200
 // apps). Difficulty reuses estimateMetrics. Popularity is Apple Ads official
-// when the Worker overlay hits, otherwise the iTunes estimate. Rank history
-// is never backfilled.
+// (or Apple's long-tail ceiling) when the Worker overlay answers, otherwise a
+// labeled estimate. Rank history is never backfilled.
 
 import {
+  assessOpportunity,
   estimateMetrics,
   fetchKeywordResults,
   toLocalDate,
   type KeywordMetrics,
+  type DifficultyEvidence,
   type KeywordStorage,
+  type PopularityHistoryPoint,
   type PopularitySource,
   type TopApp,
 } from "@/lib/aso";
@@ -84,8 +87,13 @@ export interface TrackedApp {
 export interface TrackedKeywordMetrics {
   popularity: number;
   popularitySource?: PopularitySource;
+  /** Long-tail only: popularity is at or below this. */
+  popularityCeiling?: number;
+  popularityHistory?: PopularityHistoryPoint[];
+  dataWeek?: string;
   appleGenre?: string;
   difficulty: number;
+  evidence?: DifficultyEvidence;
   results: number;
   saturated: boolean;
   topApps: TopApp[];
@@ -873,8 +881,12 @@ export function applyAnalysisToStore(
   const currentMetrics: TrackedKeywordMetrics = {
     popularity: analysis.metrics.popularity,
     popularitySource: analysis.metrics.popularitySource,
+    popularityCeiling: analysis.metrics.popularityCeiling,
+    popularityHistory: analysis.metrics.popularityHistory,
+    dataWeek: analysis.metrics.dataWeek,
     appleGenre: analysis.metrics.appleGenre,
     difficulty: analysis.metrics.difficulty,
+    evidence: analysis.metrics.evidence,
     results: analysis.metrics.results,
     saturated: analysis.metrics.saturated,
     topApps: analysis.topApps,
@@ -964,6 +976,9 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 export function isTransientItunesError(error: unknown): boolean {
+  // Apple's 429 carries no CORS header, so the browser reports it as a
+  // network failure (TypeError: Failed to fetch) rather than a status.
+  if (error instanceof TypeError) return true;
   const message = error instanceof Error ? error.message : String(error);
   return /app_store_catalog_unavailable:(429|5\d\d|403)/u.test(message);
 }
@@ -1117,26 +1132,25 @@ export type KeywordStatusFilter =
   | "opportunity";
 
 /**
- * Estimated "worth watching" score 0–100.
- * Higher = better estimated demand vs difficulty, with a boost when the app is
- * outside the observed top 200 (room to enter) or already ranking mid-pack.
- * Always a heuristic from public signals — never real search volume.
+ * "Worth working on" score 0–100 for a tracked keyword: the explorer's
+ * opportunity score (Apple demand × ease), nudged by where the app already
+ * ranks — room to climb from #11–200 counts for more than holding the top 10.
+ * A heuristic from public signals, never search volume.
  */
 export function opportunityScore(
-  metrics: Pick<TrackedKeywordMetrics, "popularity" | "difficulty" | "position" | "unavailable"> | null,
+  metrics: Pick<
+    TrackedKeywordMetrics,
+    "popularity" | "popularitySource" | "difficulty" | "evidence" | "position" | "unavailable"
+  > | null,
 ): number | null {
   if (!metrics || metrics.unavailable) return null;
-  const demand = metrics.popularity;
-  const barrier = metrics.difficulty;
-  // Sweet spot: solid demand, not maxed-out difficulty.
-  let score = demand * 0.55 + (100 - barrier) * 0.45;
-  if (metrics.position === null) {
-    // Outside top 200: still interesting if demand exists.
-    score += demand >= 40 ? 8 : 0;
-  } else if (metrics.position > 50) {
-    score += 6; // ranked but room to climb
-  } else if (metrics.position <= 10) {
-    score -= 4; // already strong — less "opportunity", still track
+  let score = assessOpportunity(metrics).score;
+  if (metrics.position !== null && metrics.position > 10 && metrics.position <= 50) {
+    score += 8; // close to page one
+  } else if (metrics.position !== null && metrics.position > 50) {
+    score += 4;
+  } else if (metrics.position !== null && metrics.position <= 3) {
+    score -= 6; // already winning this one
   }
   return Math.max(0, Math.min(100, Math.round(score)));
 }
@@ -1160,7 +1174,7 @@ export function matchesStatusFilter(
       return !metrics || Boolean(metrics.unavailable);
     case "opportunity": {
       const score = opportunityScore(metrics);
-      return score !== null && score >= 55;
+      return score !== null && score >= 45;
     }
     default:
       return true;

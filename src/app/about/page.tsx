@@ -123,9 +123,10 @@ export default function AboutPage() {
                 data subscription they can&apos;t verify.
               </p>
               <p>
-                The tool records one daily snapshot per keyword in your browser,
-                so a 30-day trend builds itself over time — and the first check
-                gets an estimated baseline so the chart is useful immediately.
+                Popularity comes from Apple: the weekly Apple Ads score for the
+                500 most-searched terms in each category, with up to a year of
+                history. Terms below that list are marked as long tail instead
+                of being given an invented number.
               </p>
             </div>
           </div>
@@ -136,10 +137,10 @@ export default function AboutPage() {
             <span className="marketing-eyebrow">Current status</span>
             <h2>The keyword explorer is live.</h2>
             <p>
-              Official Apple Ads popularity when Apple has the term, estimated
-              difficulty, 30-day trend charts, related keywords, and top-app
-              breakdowns. Free plan with honest daily limits; optional Pro at
-              $8/month with cloud sync. No tracking scripts, ever.
+              Apple Ads popularity with weekly history, trending and related
+              searches from Apple&apos;s own list, difficulty with its evidence,
+              a verdict on every keyword, and rank tracking for your app. Free
+              to search; optional Pro at $8/month. No tracking scripts, ever.
             </p>
             <div className="marketing-hero-actions">
               <Link href="/" className="marketing-primary-action large">

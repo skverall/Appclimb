@@ -182,14 +182,21 @@ describe("assistant honesty contract", () => {
   it("system prompt labels every metric and forbids volume claims", () => {
     const prompt = buildSystemPrompt({
       appName: "Calm Focus",
-      keywords: [{ keyword: "meditation", popularity: 70, difficulty: 40 }],
+      keywords: [
+        { keyword: "meditation", popularity: 52, popularitySource: "official", difficulty: 75 },
+        { keyword: "white noise baby", popularity: 48, popularitySource: "longtail", difficulty: 30 },
+        { keyword: "focus timer", popularity: 40, difficulty: 50 },
+      ],
     });
     // The model is told popularity is official-or-estimate and never volume.
     expect(prompt).toMatch(/NOT search volume/i);
     expect(prompt).toMatch(/ESTIMATE/i);
     expect(prompt).toMatch(/difficulty is always an ESTIMATE/i);
     expect(prompt).toMatch(/Do not claim search volume, downloads, or revenue/i);
-    // Context rows are labeled as estimates / observed positions.
-    expect(prompt).toMatch(/estimates \/ observed position/i);
+    // Context rows carry their popularity source.
+    expect(prompt).toContain("pop=52 (Apple)");
+    expect(prompt).toContain("pop≤48 (long tail)");
+    expect(prompt).toContain("pop~40 (estimate)");
+    expect(prompt).toMatch(/AT OR BELOW/);
   });
 });

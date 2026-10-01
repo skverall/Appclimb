@@ -6,11 +6,6 @@
 
 import { createPrivateKey } from "node:crypto";
 
-import {
-  appleInsightsGenreCandidates,
-  isAppleAdsGenre,
-} from "@/lib/apple-ads-genres";
-import type { OfficialPopularity } from "@/lib/popularity";
 
 export const APPLE_ADS_TOKEN_URL =
   "https://appleid.apple.com/auth/oauth2/token";
@@ -39,7 +34,7 @@ interface CachedToken {
   expiresAt: number;
 }
 
-interface PopularityRow {
+export interface PopularityRow {
   searchTerm?: string;
   genre?: string;
   countryOrRegion?: string;
@@ -217,9 +212,11 @@ export async function getAppleAdsAccessToken(
     body,
   });
   if (!response.ok) {
+    // Apple's body names the cause (invalid_client, …); logged server-side only.
+    const detail = (await response.text().catch(() => "")).slice(0, 200);
     throw new AppleAdsError(
       `token_${response.status}`,
-      `Apple Ads token request failed (${response.status}).`,
+      `Apple Ads token request failed (${response.status}). ${detail}`.trim(),
       response.status,
     );
   }
@@ -251,29 +248,45 @@ export class AppleAdsError extends Error {
   }
 }
 
-export function buildPopularityQuery(input: {
+export const POPULARITY_FIELDS = [
+  "rankInGenre",
+  "searchPopularityInGenre",
+  "searchPopularity1to100",
+  "searchPopularity1to5",
+] as const;
+
+/**
+ * Search Term Popularity query. Without `terms` it pages through the whole
+ * storefront (Apple publishes the top 500 terms per genre per week); with
+ * `terms` it asks for exactly those terms in any genre. Genre is never
+ * required — Apple returns the genre each term belongs to.
+ */
+export function buildTermsQuery(input: {
   country: string;
-  genre: string;
-  week: { start: string; end: string };
+  range: { start: string; end: string };
+  terms?: readonly string[];
+  offset?: number;
   pageSize?: number;
 }): Record<string, unknown> {
+  const filters: Array<Record<string, unknown>> = [
+    { field: "countryOrRegion", operator: "EQUALS", value: input.country },
+  ];
+  if (input.terms && input.terms.length > 0) {
+    filters.push({
+      field: "searchTerm",
+      operator: "IN",
+      value: [...input.terms],
+    });
+  }
   return {
-    fields: [
-      "rankInGenre",
-      "searchPopularityInGenre",
-      "searchPopularity1to100",
-      "searchPopularity1to5",
-    ],
-    filters: [
-      { field: "countryOrRegion", operator: "EQUALS", value: input.country },
-      { field: "genre", operator: "EQUALS", value: input.genre },
-    ],
+    fields: [...POPULARITY_FIELDS],
+    filters,
     timeRange: {
-      start: input.week.start,
-      end: input.week.end,
+      start: input.range.start,
+      end: input.range.end,
       granularity: "WEEKLY_SUN_SAT",
     },
-    pagination: { offset: 0, pageSize: input.pageSize ?? 200 },
+    pagination: { offset: input.offset ?? 0, pageSize: input.pageSize ?? 1000 },
   };
 }
 
@@ -289,39 +302,12 @@ function rowsFromPayload(payload: unknown): PopularityRow[] {
   return [];
 }
 
-function toOfficial(
-  row: PopularityRow,
-  week: { start: string; end: string },
-): OfficialPopularity | null {
-  const term = typeof row.searchTerm === "string" ? row.searchTerm.trim() : "";
-  const score = Number(row.searchPopularity1to100);
-  if (!term || !Number.isFinite(score)) return null;
-  return {
-    term,
-    found: true,
-    genre: typeof row.genre === "string" ? row.genre : undefined,
-    searchPopularity1to100: Math.max(1, Math.min(100, Math.round(score))),
-    searchPopularityInGenre:
-      typeof row.searchPopularityInGenre === "number"
-        ? row.searchPopularityInGenre
-        : undefined,
-    searchPopularity1to5:
-      typeof row.searchPopularity1to5 === "number"
-        ? row.searchPopularity1to5
-        : undefined,
-    rankInGenre:
-      typeof row.rankInGenre === "number" ? row.rankInGenre : undefined,
-    weekStart: typeof row.week === "string" ? row.week : week.start,
-    weekEnd: week.end,
-  };
-}
-
 async function postPopularityQuery(
   creds: AppleAdsCredentials,
   token: string,
   query: Record<string, unknown>,
   fetchImpl: typeof fetch,
-): Promise<{ status: number; rows: PopularityRow[] }> {
+): Promise<PopularityRow[]> {
   const response = await fetchImpl(
     `${APPLE_ADS_API_ORIGIN}${APPLE_ADS_POPULARITY_PATH}`,
     {
@@ -349,83 +335,30 @@ async function postPopularityQuery(
       response.status >= 400 && response.status < 500 ? response.status : 502,
     );
   }
-  const payload = (await response.json()) as unknown;
-  return { status: response.status, rows: rowsFromPayload(payload) };
+  return rowsFromPayload((await response.json()) as unknown);
 }
 
-export async function lookupSearchTermPopularity(
+/** Run one popularity query, refreshing the access token once on a 401. */
+export async function queryPopularityRows(
   creds: AppleAdsCredentials,
-  input: {
-    country: string;
-    genre: string;
-    terms: string[];
-    now?: Date;
-  },
-  options: { fetchImpl?: typeof fetch } = {},
-): Promise<OfficialPopularity[]> {
+  query: Record<string, unknown>,
+  options: { fetchImpl?: typeof fetch; now?: Date } = {},
+): Promise<PopularityRow[]> {
   const fetchImpl = options.fetchImpl ?? fetch;
-  const week = lastCompleteUtcWeek(input.now);
-  const country = input.country.trim().toUpperCase();
-  const terms = [...new Set(input.terms.map((term) => term.trim()).filter(Boolean))];
-  if (terms.length === 0) return [];
-
-  const genres = isAppleAdsGenre(input.genre)
-    ? appleInsightsGenreCandidates(input.genre)
-    : [input.genre];
-
-  let token = await getAppleAdsAccessToken(creds, { fetchImpl, now: input.now });
-  const found: OfficialPopularity[] = [];
-  const remaining = new Set(terms.map((term) => term.toLocaleLowerCase()));
-  let lastError: unknown;
-  const weeks = [week, shiftUtcWeek(week, -1)];
-
-  for (const genre of genres) {
-    if (remaining.size === 0) break;
-    for (const window of weeks) {
-      if (remaining.size === 0) break;
-      const query = buildPopularityQuery({
-        country,
-        genre,
-        week: window,
-        pageSize: 500,
-      });
-      let rows: PopularityRow[];
-      try {
-        ({ rows } = await postPopularityQuery(creds, token, query, fetchImpl));
-        lastError = null;
-      } catch (error) {
-        if (error instanceof AppleAdsError && error.status === 401) {
-          clearAppleAdsTokenCache();
-          token = await getAppleAdsAccessToken(creds, {
-            fetchImpl,
-            now: input.now,
-            forceRefresh: true,
-          });
-          ({ rows } = await postPopularityQuery(creds, token, query, fetchImpl));
-          lastError = null;
-        } else if (
-          error instanceof AppleAdsError &&
-          error.status >= 400 &&
-          error.status < 500
-        ) {
-          lastError = error;
-          continue;
-        } else {
-          throw error;
-        }
-      }
-      for (const row of rows) {
-        const official = toOfficial(row, window);
-        if (!official) continue;
-        const key = official.term.toLocaleLowerCase();
-        if (!remaining.has(key)) continue;
-        found.push({ ...official, genre: official.genre ?? genre });
-        remaining.delete(key);
-      }
-      if (rows.length > 0) break;
-    }
+  const token = await getAppleAdsAccessToken(creds, {
+    fetchImpl,
+    now: options.now,
+  });
+  try {
+    return await postPopularityQuery(creds, token, query, fetchImpl);
+  } catch (error) {
+    if (!(error instanceof AppleAdsError) || error.status !== 401) throw error;
+    clearAppleAdsTokenCache();
+    const fresh = await getAppleAdsAccessToken(creds, {
+      fetchImpl,
+      now: options.now,
+      forceRefresh: true,
+    });
+    return postPopularityQuery(creds, fresh, query, fetchImpl);
   }
-
-  if (found.length === 0 && lastError) throw lastError;
-  return found;
 }
