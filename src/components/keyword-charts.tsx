@@ -53,16 +53,21 @@ export function Sparkline({
   height = 24,
   label = "Trend",
   tone = "teal",
+  bounds = [0, 100],
+  minSpan = 10,
 }: {
   values: number[];
   width?: number;
   height?: number;
   label?: string;
   tone?: "teal" | "coral" | "ink";
+  /** Value range the domain may not leave (defaults to Apple's 0–100). */
+  bounds?: [number, number];
+  minSpan?: number;
 }) {
   const gradientId = useId();
   if (values.length < 2) return <span className="sparkline-empty">—</span>;
-  const domain = chartDomain(values, 10);
+  const domain = chartDomain(values, minSpan, bounds);
   const { line, points } = pathFor(values, width, height, domain);
   const last = points[points.length - 1];
   const color =

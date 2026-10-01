@@ -61,9 +61,16 @@ describe("rankBucketSeries", () => {
       "2026-09-30",
       "2026-10-01",
     ]);
-    expect(series[0]).toMatchObject({ top10: 0, top50: 0, top200: 1, outside: 1, averagePosition: 94 });
+    expect(series[0]).toMatchObject({
+      top10: 0,
+      top50: 0,
+      top200: 1,
+      outside: 1,
+      averagePosition: 94,
+      best: 94,
+    });
     // "dealer tracker" joins on its first check; earlier days don't count it.
-    expect(series[1]).toMatchObject({ top10: 1, top200: 1, outside: 1 });
+    expect(series[1]).toMatchObject({ top10: 1, top200: 1, outside: 1, best: 1 });
     expect(series[2]).toMatchObject({ top10: 1, top50: 1, outside: 1, averagePosition: 20.5 });
     expect(series[3]).toMatchObject({ top10: 1, top50: 1, top200: 1, outside: 0 });
   });

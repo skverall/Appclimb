@@ -635,7 +635,8 @@ test("tracker layout has no overflow and stays usable at 1024px", async ({
   // The rankings overview summarizes where keywords rank, visually.
   const overview = page.getByRole("region", { name: "Rankings" });
   await expect(overview).toBeVisible();
-  await expect(overview.getByText(/of 7 keywords rank in the top 200/)).toBeVisible();
+  await expect(overview.getByText("In the top 200")).toBeVisible();
+  await expect(overview.getByText("of 7", { exact: true })).toBeVisible();
   await expect(overview.getByRole("group", { name: "History period" })).toBeVisible();
   await expect(page.getByRole("img", { name: /Keyword map: 7 keywords/ })).toBeVisible();
   await expect(

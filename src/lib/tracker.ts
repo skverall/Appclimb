@@ -1565,6 +1565,8 @@ export interface RankBucketPoint {
   outside: number;
   /** Mean position of the ranked keywords that day, or null. */
   averagePosition: number | null;
+  /** Best (lowest) position that day, or null when nothing ranked. */
+  best: number | null;
 }
 
 function shiftLocalDate(date: string, days: number): string {
@@ -1604,6 +1606,7 @@ export function rankBucketSeries(
       top200: 0,
       outside: 0,
       averagePosition: null,
+      best: null,
     };
     let positionSum = 0;
     let ranked = 0;
@@ -1621,6 +1624,7 @@ export function rankBucketSeries(
       }
       ranked += 1;
       positionSum += position;
+      if (point.best === null || position < point.best) point.best = position;
       if (position <= 10) point.top10 += 1;
       else if (position <= 50) point.top50 += 1;
       else point.top200 += 1;

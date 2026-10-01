@@ -814,6 +814,8 @@ export const OPPORTUNITY_LABELS: Record<OpportunityVerdict, string> = {
 export const TARGET_DIFFICULTY_MAX = 50;
 export const LONGTAIL_DIFFICULTY_MAX = 45;
 export const DOMINATED_DIFFICULTY_MIN = 75;
+/** Apple popularity at or below this counts as no real demand. */
+export const DEMAND_POPULARITY_FLOOR = 35;
 
 function compactCount(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(value >= 10_000_000 ? 0 : 1)}M`;
@@ -837,7 +839,7 @@ export function assessOpportunity(
     source === "longtail"
       ? 0.2
       : source === "official"
-        ? Math.max(0, Math.min(1, (metrics.popularity - 35) / 35))
+        ? Math.max(0, Math.min(1, (metrics.popularity - DEMAND_POPULARITY_FLOOR) / 35))
         : Math.max(0, Math.min(1, (metrics.popularity - 30) / 60)) * 0.8;
   const ease = 1 - metrics.difficulty / 100;
   const score = Math.round(100 * Math.sqrt(Math.max(0, demand * ease)));
