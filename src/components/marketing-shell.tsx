@@ -121,6 +121,7 @@ export function MarketingFooter() {
           <Link href="/keywords">Top App Store searches</Link>
           <Link href="/assistant">ASO Assistant</Link>
           <Link href="/guides/keyword-research">ASO Guide</Link>
+          <Link href="/tools/keyword-field-checker">Keyword field checker</Link>
           <Link href="/blog">Field Notes</Link>
         </div>
         <div>

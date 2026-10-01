@@ -466,4 +466,39 @@ test("top-search pages render, link the explorer, and stay out of the index with
   expect((await request.get("/keywords/zz")).status()).toBe(404);
   expect((await request.get("/keywords/us/not-a-category")).status()).toBe(404);
   expect((await request.get("/keywords/ru")).status()).toBe(404);
+  expect((await request.get("/keywords/us/not-a-category/habit-tracker")).status()).toBe(404);
+
+  // A term page without data stays out of the index and still offers the explorer.
+  await page.goto("/keywords/us/health-fitness/habit-tracker");
+  await expect(page.getByRole("heading", { level: 1, name: /habit tracker/ })).toBeVisible();
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", /noindex/);
+  await expect(page.getByRole("link", { name: /Check “habit tracker” in the explorer/ })).toHaveAttribute(
+    "href",
+    "/?kw=habit%20tracker&country=US",
+  );
+
+  // The term sitemap is always valid XML, even when Apple's data is unavailable.
+  const termSitemap = await request.get("/keywords/sitemap.xml");
+  expect(termSitemap.ok()).toBe(true);
+  expect(await termSitemap.text()).toContain("<urlset");
+  expect(await (await request.get("/robots.txt")).text()).toContain(
+    "Sitemap: https://appclimb.app/keywords/sitemap.xml",
+  );
+});
+
+test("the keyword field checker counts, flags, fixes, and lists matchable words", async ({ page }) => {
+  await page.goto("/tools/keyword-field-checker");
+  await expect(page.getByRole("heading", { level: 1, name: /keyword field checker/i })).toBeVisible();
+  await page.getByRole("button", { name: /Clear to paste yours/ }).click();
+  await page.getByLabel(/App name/i).fill("Ritual: Habit Tracker");
+  await page.getByLabel(/Keyword field/i).fill("habit, todo,journal");
+  await expect(page.getByText("Already in your app name: habit")).toBeVisible();
+  await expect(page.getByText(/Spaces after commas waste 1 character/)).toBeVisible();
+  await page.getByRole("button", { name: /Fix the keyword field/ }).click();
+  await expect(page.getByLabel(/Keyword field/i)).toHaveValue("todo,journal");
+  await expect(page.getByText("5 words Apple can match")).toBeVisible();
+  await expect(page.getByRole("link", { name: /^journal/ })).toHaveAttribute(
+    "href",
+    "/?kw=journal&country=US",
+  );
 });

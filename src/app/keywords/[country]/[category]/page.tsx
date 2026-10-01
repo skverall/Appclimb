@@ -164,7 +164,7 @@ export default async function CategoryKeywordsPage({ params }: { params: Params 
           </h1>
           <p className="kp-deck">
             {data
-              ? `Apple's list of the ${data.termCount} most-searched ${label} terms this week, ranked by Apple Ads popularity — plus what's climbing and what's new. Click any term to see its difficulty and the apps that rank for it.`
+              ? `Apple's list of the ${data.termCount} most-searched ${label} terms this week, ranked by Apple Ads popularity — plus what's climbing and what's new. Click a term for its weekly Apple history, or Analyze to see its difficulty and the apps that rank for it.`
               : `Apple's weekly list of the most-searched ${label} terms, ranked by Apple Ads popularity.`}
           </p>
         </header>

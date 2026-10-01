@@ -7,8 +7,15 @@ import {
   categoryPath,
   countryFromSlug,
   countryInText,
+  buildTermPageData,
+  decodeTermSlug,
   explorerLink,
   genreFromSlug,
+  historyNeighbors,
+  resolveTermSlug,
+  termPath,
+  termSitemapEntries,
+  termSlug,
 } from "@/lib/keyword-pages";
 import { DATASET_GENRES, buildDataset } from "@/lib/search-terms";
 
@@ -76,5 +83,88 @@ describe("buildKeywordPageData", () => {
 
   it("returns null for a category Apple published nothing for", () => {
     expect(buildKeywordPageData(current, previous, "TRAVEL")).toBeNull();
+  });
+});
+
+describe("per-term pages", () => {
+  const current = buildDataset("US", "2026-09-20", [
+    { term: "habit tracker", genre: "HEALTH_FITNESS", popularity: 62, rankInGenre: 14 },
+    { term: "habit tracker", genre: "PRODUCTIVITY_UTILITIES", popularity: 55, rankInGenre: 30 },
+    { term: "habit", genre: "HEALTH_FITNESS", popularity: 48, rankInGenre: 40 },
+    { term: "daily habit tracker", genre: "HEALTH_FITNESS", popularity: 40, rankInGenre: 88 },
+    { term: "to-do list", genre: "PRODUCTIVITY_UTILITIES", popularity: 50, rankInGenre: 31 },
+    { term: "café", genre: "FOOD_DRINK", popularity: 45, rankInGenre: 5 },
+  ]);
+  const previous = buildDataset("US", "2026-08-23", [
+    { term: "habit tracker", genre: "HEALTH_FITNESS", popularity: 57, rankInGenre: 20 },
+  ]);
+
+  it("builds readable, encodable paths", () => {
+    expect(termSlug("Habit  Tracker")).toBe("habit-tracker");
+    expect(termPath("US", "HEALTH_FITNESS", "habit tracker")).toBe(
+      "/keywords/us/health-fitness/habit-tracker",
+    );
+    expect(termPath("US", "FOOD_DRINK", "café")).toBe("/keywords/us/food-drink/caf%C3%A9");
+    expect(decodeTermSlug("caf%C3%A9")).toBe("café");
+    // A malformed escape never throws; it just won't match a term.
+    expect(decodeTermSlug("caf%E9%")).toBe("caf%e9%");
+  });
+
+  it("finds a term by slug, keeping its hyphens, and names its canonical category", () => {
+    const found = resolveTermSlug(current, "HEALTH_FITNESS", "habit-tracker");
+    expect(found).toMatchObject({ kind: "found", primaryGenre: "HEALTH_FITNESS" });
+    const other = resolveTermSlug(current, "PRODUCTIVITY_UTILITIES", "habit-tracker");
+    expect(other).toMatchObject({ kind: "found", primaryGenre: "HEALTH_FITNESS" });
+    expect(resolveTermSlug(current, "PRODUCTIVITY_UTILITIES", "to-do-list")).toMatchObject({
+      kind: "found",
+    });
+    expect(resolveTermSlug(current, "FOOD_DRINK", "caf%C3%A9")).toMatchObject({ kind: "found" });
+    expect(resolveTermSlug(current, "HEALTH_FITNESS", "nothing-here").kind).toBe("missing");
+    // Asked under a category that doesn't list it: still found, pointing home.
+    expect(resolveTermSlug(current, "FOOD_DRINK", "habit-tracker")).toMatchObject({
+      kind: "found",
+      primaryGenre: "HEALTH_FITNESS",
+    });
+  });
+
+  it("shapes the page from the week, the comparison week, and history", () => {
+    const row = current.rows[0];
+    const data = buildTermPageData(current, previous, row, [
+      { week: "2026-08-23", popularity: 57 },
+      { week: "2026-09-20", popularity: 62 },
+    ]);
+    expect(data).toMatchObject({
+      term: "habit tracker",
+      genre: "HEALTH_FITNESS",
+      popularity: 62,
+      rankInGenre: 14,
+      genreSize: 3,
+      previousPopularity: 57,
+    });
+    expect(data.otherGenres).toEqual([
+      { genre: "PRODUCTIVITY_UTILITIES", popularity: 55, rankInGenre: 30 },
+    ]);
+    expect(data.related.map((item) => item.term)).toContain("daily habit tracker");
+    expect(data.related.map((item) => item.term)).not.toContain("habit tracker");
+    expect(data.history).toHaveLength(2);
+  });
+
+  it("warms neighbours in the same category, never the term itself", () => {
+    const neighbours = historyNeighbors(current, current.rows[0], 24);
+    expect(neighbours).toEqual(expect.arrayContaining(["habit", "daily habit tracker"]));
+    expect(neighbours).not.toContain("habit tracker");
+    expect(neighbours).not.toContain("to-do list");
+    expect(
+      historyNeighbors(current, { term: "unlisted", genre: "HEALTH_FITNESS", popularity: 1 }),
+    ).toEqual([]);
+  });
+
+  it("lists each term once in the sitemap, under its canonical category", () => {
+    const paths = termSitemapEntries(current, 100);
+    expect(paths).toContain("/keywords/us/health-fitness/habit-tracker");
+    expect(paths).not.toContain("/keywords/us/productivity-utilities/habit-tracker");
+    expect(new Set(paths).size).toBe(paths.length);
+    // Productivity's #1 is canonical elsewhere, so only two categories list a term.
+    expect(termSitemapEntries(current, 1)).toHaveLength(2);
   });
 });

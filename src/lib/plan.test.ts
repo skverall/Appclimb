@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   explorerChecksFor,
   GUEST_EXPLORER_CHECKS_PER_DAY,
+  guestLimits,
   isProEntitled,
   isUnlimited,
   limitsForPlan,
@@ -31,6 +32,7 @@ describe("plan limits", () => {
     expect(GUEST_EXPLORER_CHECKS_PER_DAY).toBe(8);
     expect(explorerChecksFor(limitsForPlan("free"), true)).toBe(30);
     expect(explorerChecksFor(limitsForPlan("pro"), true)).toBeNull();
+    expect(guestLimits()).toEqual({ ...limitsForPlan("free"), explorerChecksPerDay: 8 });
   });
 
   it("pro tier lifts limits and enables sync", () => {

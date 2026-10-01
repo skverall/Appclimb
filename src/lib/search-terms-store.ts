@@ -339,12 +339,14 @@ async function readHistoryFromDb(
 
 /**
  * Up to 52 weeks of official popularity for each term, oldest first. Terms
- * Apple never published come back as an empty list.
+ * Apple never published come back as an empty list. With `live: false` only
+ * memory and D1 are read, and terms not stored yet are simply absent.
  */
 export async function termHistories(
   deps: StoreDeps,
   dataset: TermDataset,
   terms: readonly string[],
+  options: { live?: boolean } = {},
 ): Promise<Map<string, TermHistoryPoint[]>> {
   const throughWeek = dataset.week;
   const keys = [...new Set(terms.map(normalizeTerm).filter(Boolean))];
@@ -369,7 +371,7 @@ export async function termHistories(
       // Fall back to Apple below.
     }
   }
-  if (missing.length === 0) return out;
+  if (missing.length === 0 || options.live === false) return out;
 
   const range = {
     start: shiftUtcWeek(weekRange(throughWeek), -(HISTORY_WEEKS - 1)).start,

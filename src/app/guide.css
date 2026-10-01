@@ -1079,6 +1079,83 @@
   font-size: 11px;
 }
 
+.gd-index {
+  display: grid;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--teal-200);
+}
+
+.gd-index-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+}
+
+.gd-index-head strong {
+  font-size: var(--text-sm);
+}
+
+.gd-index-head span {
+  color: var(--n-700);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.gd-index ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.gd-index-word {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: var(--card);
+  color: var(--ink) !important;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  text-decoration: none !important;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.gd-index-word:hover {
+  border-color: var(--teal-400);
+  background: var(--teal-25);
+}
+
+.gd-index-word small {
+  color: var(--n-600);
+  font-size: 10px;
+  font-weight: var(--weight-medium);
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.gd-index-word.is-title {
+  border-color: var(--teal-300);
+}
+
+.gd-index-word.is-subtitle {
+  border-color: var(--teal-200);
+}
+
+.gd-index p {
+  margin: 0 !important;
+  color: var(--n-700) !important;
+  font-size: var(--text-2xs) !important;
+  line-height: 1.5;
+}
+
 /* ---------- Weekly loop ---------- */
 
 .gd-loop {
@@ -1328,5 +1405,171 @@
 
   .gd-scale-pin small {
     display: none;
+  }
+}
+
+/* ==========================================================================
+   Free tools (/tools/*) — share the guide's checker and visuals
+   ========================================================================== */
+
+.tl-hero {
+  padding: 52px 0 28px;
+}
+
+.tl-hero > * {
+  max-width: 820px;
+}
+
+.tl-hero h1 {
+  margin: 0;
+  color: var(--ink);
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: clamp(32px, 4.2vw, 48px);
+  font-weight: var(--weight-heavy);
+  letter-spacing: -0.03em;
+  line-height: 1.06;
+}
+
+.tl-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.5fr) minmax(280px, 1fr);
+  align-items: start;
+  gap: 32px;
+}
+
+.tl-tool .gd-checker {
+  margin-top: 0;
+}
+
+.tl-side {
+  position: sticky;
+  top: 88px;
+  display: grid;
+  gap: 4px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: var(--card);
+}
+
+.tl-side h2 {
+  margin: 0;
+  font-size: var(--text-base);
+  font-weight: var(--weight-bold);
+}
+
+.tl-side .gd-rules {
+  margin: 14px 0 18px;
+}
+
+.tl-side-cta {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--teal-800, #0b4f4b);
+  color: #fff;
+  text-decoration: none;
+  transition: transform 0.15s;
+}
+
+.tl-side-cta:hover {
+  transform: translateY(-1px);
+}
+
+.tl-side-cta span {
+  display: grid;
+  gap: 2px;
+}
+
+.tl-side-cta strong {
+  font-size: var(--text-sm);
+}
+
+.tl-side-cta small {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: var(--text-2xs);
+  line-height: 1.45;
+}
+
+.tl-section {
+  margin-top: 64px;
+}
+
+.tl-section > figure,
+.tl-section > .tl-faq {
+  max-width: 960px;
+}
+
+.tl-section figure {
+  margin: 0;
+}
+
+.tl-section figcaption {
+  margin-top: 10px;
+  color: var(--n-600);
+  font-size: var(--text-2xs);
+  line-height: 1.5;
+}
+
+.tl-section > h2 {
+  margin: 0 0 10px;
+  font-family: var(--font-display), system-ui, sans-serif;
+  font-size: var(--text-xl);
+  font-weight: var(--weight-heavy);
+}
+
+.tl-section > p {
+  max-width: 680px;
+  margin: 0 0 20px;
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+
+.tl-faq {
+  display: grid;
+  gap: 10px;
+}
+
+.tl-faq details {
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+}
+
+.tl-faq summary {
+  cursor: pointer;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+}
+
+.tl-faq details p {
+  margin: 10px 0 0;
+  color: var(--ink-secondary);
+  font-size: var(--text-sm);
+  line-height: 1.6;
+}
+
+@media (max-width: 900px) {
+  .tl-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .tl-side {
+    position: static;
+  }
+}
+
+@media (max-width: 720px) {
+  .tl-hero {
+    padding-top: 36px;
+  }
+
+  .tl-section {
+    margin-top: 48px;
   }
 }

@@ -8,6 +8,7 @@ import {
   countryPath,
   explorerLink,
   formatWeekLong,
+  termPath,
 } from "@/lib/keyword-pages";
 import { DATASET_GENRES, type DatasetGenre, type TermMover } from "@/lib/search-terms";
 
@@ -74,7 +75,7 @@ export function TermTable({
             <tr key={`${row.genre}:${row.term}`}>
               <td className="kp-rank">{index + 1}</td>
               <td className="kp-term">
-                <Link href={explorerLink(row.term, country)} prefetch={false}>
+                <Link href={termPath(country, row.genre, row.term)} prefetch={false}>
                   {row.term}
                 </Link>
               </td>
@@ -136,7 +137,7 @@ export function MoverList({
         <ol>
           {rows.map((row) => (
             <li key={`${row.genre}:${row.term}`}>
-              <Link href={explorerLink(row.term, country)} prefetch={false}>
+              <Link href={termPath(country, row.genre, row.term)} prefetch={false}>
                 {row.term}
               </Link>
               <span className="kp-movers-meta">

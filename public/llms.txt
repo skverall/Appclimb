@@ -26,6 +26,7 @@ AppClimb helps iOS developers find App Store keywords they can actually rank for
 - Example category page: https://appclimb.app/keywords/us/health-fitness
 - Keyword research: https://appclimb.app/app-store-keywords
 - ASO guide: https://appclimb.app/guides/keyword-research
+- Free App Store keyword field checker (name, subtitle, 100-character keyword field): https://appclimb.app/tools/keyword-field-checker
 - Astro ASO alternative: https://appclimb.app/blog/astro-aso-alternative-2026
 - AppTweak free alternative: https://appclimb.app/blog/apptweak-free-alternative
 - Apple Ads popularity explained: https://appclimb.app/blog/apple-search-ads-popularity-score-explained

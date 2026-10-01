@@ -42,6 +42,15 @@ export const PUBLIC_PAGES = [
     lastModified: SITE_UPDATED,
   },
   {
+    path: "/tools/keyword-field-checker",
+    title: "App Store Keyword Field Checker",
+    description:
+      "Free checker for the App Store app name, subtitle, and 100-character keyword field: counts, repeats, wasted spaces, and a one-click fix.",
+    changeFrequency: "monthly" as const,
+    priority: 0.85,
+    lastModified: SITE_UPDATED,
+  },
+  {
     path: "/blog",
     title: "AppClimb Field Notes",
     description:

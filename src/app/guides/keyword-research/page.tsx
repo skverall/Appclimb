@@ -303,6 +303,12 @@ export default function KeywordResearchGuide() {
                 <li>Name, subtitle, and keywords only change with an app update. Plan them together.</li>
               </ul>
               <MetadataChecker />
+              <p className="gd-try">
+                <Link href="/tools/keyword-field-checker">
+                  Open the full keyword field checker
+                </Link>
+                {" "}— it also lists every word Apple can match and links each one to its popularity.
+              </p>
             </section>
 
             <section id="track" className="gd-step">

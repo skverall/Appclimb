@@ -1,10 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Copy, Wand2 } from "lucide-react";
+import Link from "next/link";
+import { Check, Copy, Eraser, Wand2 } from "lucide-react";
 
 import { METADATA_LIMITS, type MetadataField } from "@/lib/ai-chat";
 import { checkMetadata } from "@/lib/ai-metadata";
+import { cleanWord, extractMetadataWords } from "@/lib/aso-optimizer";
+import { explorerLink } from "@/lib/keyword-pages";
 
 const FIELDS: Array<{ field: MetadataField; label: string; placeholder: string }> = [
   { field: "title", label: "App name", placeholder: "Ritual: Habit Tracker" },
@@ -12,17 +15,47 @@ const FIELDS: Array<{ field: MetadataField; label: string; placeholder: string }
   { field: "keywords", label: "Keyword field", placeholder: "todo,checklist,reminder,streak,journal" },
 ];
 
+const EXAMPLE: Record<MetadataField, string> = {
+  title: "Ritual: Habit Tracker",
+  subtitle: "Daily Habit Goals & Routines",
+  keywords: "habit, tracker,todo,checklist,reminder,streak,morning routine,journal",
+};
+
+const FIELD_SHORT: Record<MetadataField, string> = {
+  title: "Name",
+  subtitle: "Subtitle",
+  keywords: "Keywords",
+};
+
+/** Each distinct word Apple can match, tagged with the first field it came from. */
+export function indexedWords(values: Record<MetadataField, string>): Array<{ word: string; field: MetadataField }> {
+  const out = new Map<string, MetadataField>();
+  for (const field of ["title", "subtitle"] as const) {
+    for (const word of extractMetadataWords(values[field])) if (!out.has(word)) out.set(word, field);
+  }
+  for (const term of values.keywords.split(/[,\n]+/u)) {
+    for (const raw of term.split(/\s+/u)) {
+      const word = cleanWord(raw);
+      if (word.length > 1 && !out.has(word)) out.set(word, "keywords");
+    }
+  }
+  return [...out].map(([word, field]) => ({ word, field }));
+}
+
 /**
  * Live checker for the three indexed fields: character counts, words
  * repeated across fields, and wasted keyword-field characters, with a
- * one-click fix. Runs entirely in the browser.
+ * one-click fix. Runs entirely in the browser. `showIndex` adds the list of
+ * words Apple can match, each linking to its popularity in the explorer.
  */
-export function MetadataChecker() {
-  const [values, setValues] = useState<Record<MetadataField, string>>({
-    title: "Ritual: Habit Tracker",
-    subtitle: "Daily Habit Goals & Routines",
-    keywords: "habit, tracker,todo,checklist,reminder,streak,morning routine,journal",
-  });
+export function MetadataChecker({
+  showIndex = false,
+  country = "US",
+}: {
+  showIndex?: boolean;
+  country?: string;
+} = {}) {
+  const [values, setValues] = useState<Record<MetadataField, string>>(EXAMPLE);
   const [copied, setCopied] = useState(false);
 
   const checks = {
@@ -115,8 +148,46 @@ export function MetadataChecker() {
           {copied ? <Check size={14} aria-hidden="true" /> : <Copy size={14} aria-hidden="true" />}
           {copied ? "Copied" : "Copy keyword field"}
         </button>
+        {showIndex && (
+          <button
+            type="button"
+            className="gd-btn"
+            onClick={() => setValues({ title: "", subtitle: "", keywords: "" })}
+          >
+            <Eraser size={14} aria-hidden="true" /> Clear to paste yours
+          </button>
+        )}
       </div>
+      {showIndex && <IndexedWords values={values} country={country} />}
       <p className="gd-checker-note">Runs in your browser; nothing is sent anywhere.</p>
+    </div>
+  );
+}
+
+function IndexedWords({ values, country }: { values: Record<MetadataField, string>; country: string }) {
+  const words = indexedWords(values);
+  const free = Math.max(0, METADATA_LIMITS.keywords - [...values.keywords.trim()].length);
+  if (words.length === 0) return null;
+  return (
+    <div className="gd-index">
+      <div className="gd-index-head">
+        <strong>{`${words.length} words Apple can match`}</strong>
+        <span>{`${free} keyword-field characters left`}</span>
+      </div>
+      <ul>
+        {words.map(({ word, field }) => (
+          <li key={word}>
+            <Link href={explorerLink(word, country)} className={`gd-index-word is-${field}`} title={`Check “${word}” popularity`}>
+              {word}
+              <small>{FIELD_SHORT[field]}</small>
+            </Link>
+          </li>
+        ))}
+      </ul>
+      <p>
+        Apple combines these words into phrases on its own, so “habit” plus “tracker” also
+        matches “habit tracker”. Click any word to see its Apple popularity and who ranks for it.
+      </p>
     </div>
   );
 }
