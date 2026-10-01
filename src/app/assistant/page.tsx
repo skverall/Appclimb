@@ -8,7 +8,7 @@ import { SITE_NAME, absoluteUrl } from "@/lib/site";
 export const metadata: Metadata = {
   title: "ASO Assistant — App Store keyword chat",
   description:
-    "Chat with AppClimb’s ASO assistant (DeepSeek V4 Flash): keyword ideas, estimated popularity/difficulty guidance, and listing tips — 5 messages/day on the free plan, 200 on Pro.",
+    "An ASO assistant that checks Apple’s own popularity data before it suggests keywords, then writes app names, subtitles, and 100-character keyword fields with live character counts. 5 messages/day free, 200 on Pro.",
   alternates: {
     canonical: "/assistant",
   },
@@ -24,7 +24,7 @@ export default function AssistantPage() {
           name: "AppClimb ASO Assistant",
           url: absoluteUrl("/assistant"),
           description:
-            "AI-powered App Store optimization assistant for keyword ideas, listing copy rewrites, and rank optimization.",
+            "AI App Store optimization assistant grounded in Apple Ads popularity data: keyword ideas, rising searches, and metadata that fits App Store limits.",
           applicationCategory: "DeveloperApplication",
           operatingSystem: "Any",
         }}

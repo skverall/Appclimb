@@ -13,9 +13,14 @@ import {
   loadAiChatStore,
   loadChatState,
   loadStoredMessages,
+  listTrackedApps,
   loadTrackerContext,
   readClientDayCount,
+  readContextChoice,
+  ReplyStoppedError,
   requestAssistantReply,
+  resolveContextKey,
+  writeContextChoice,
   saveStoredMessages,
   setActiveConversation,
   writeClientDayCount,
@@ -631,5 +636,170 @@ describe("long CJK history", () => {
     saveStoredMessages(cjk);
     const state = loadChatState();
     expect(state.conversations[0].title).toContain("キーワード");
+  });
+});
+
+describe("streamed replies", () => {
+  const ndjson = (events: unknown[]) =>
+    new Response(events.map((event) => JSON.stringify(event)).join("\n"), {
+      status: 200,
+      headers: { "Content-Type": "application/x-ndjson" },
+    });
+  const card = {
+    tool: "lookup_keywords",
+    title: "Apple popularity",
+    country: "US",
+    week: "2026-09-20",
+    rows: [{ term: "habit tracker", popularity: 61 }],
+  };
+
+  it("forwards events and resolves with the final reply", async () => {
+    vi.stubGlobal("window", { localStorage: makeStorage() });
+    const fetchImpl = vi.fn(async () =>
+      ndjson([
+        { type: "meta", model: "m", remainingDay: 3 },
+        { type: "status", text: "Thinking" },
+        { type: "card", card },
+        { type: "delta", text: "Hi" },
+        { type: "done", message: "Hi there", followups: ["Next?"] },
+      ]),
+    );
+    vi.stubGlobal("fetch", fetchImpl);
+    const seen: string[] = [];
+    const result = await requestAssistantReply({
+      message: "hello",
+      history: [],
+      context: null,
+      onEvent: (event) => seen.push(event.type),
+    });
+    expect(seen).toEqual(["meta", "status", "card", "delta", "done"]);
+    expect(result).toEqual({
+      message: "Hi there",
+      followups: ["Next?"],
+      cards: [card],
+      remainingDay: 3,
+      remainingHour: undefined,
+    });
+    const body = JSON.parse(String((fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1].body));
+    expect(body.stream).toBe(true);
+    expect(readClientDayCount().count).toBe(1);
+  });
+
+  it("surfaces an error event and a cut-off stream", async () => {
+    vi.stubGlobal("window", { localStorage: makeStorage() });
+    vi.stubGlobal("fetch", vi.fn(async () => ndjson([{ type: "error", error: "Model down" }])));
+    await expect(
+      requestAssistantReply({ message: "hello", history: [], context: null, onEvent: () => undefined }),
+    ).rejects.toThrow("Model down");
+    vi.stubGlobal("fetch", vi.fn(async () => ndjson([{ type: "delta", text: "half" }])));
+    await expect(
+      requestAssistantReply({ message: "hello", history: [], context: null, onEvent: () => undefined }),
+    ).rejects.toThrow(/cut off/);
+    expect(readClientDayCount().count).toBe(0);
+  });
+
+  it("reports a user stop as ReplyStoppedError", async () => {
+    vi.stubGlobal("window", { localStorage: makeStorage() });
+    const controller = new AbortController();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        controller.abort();
+        throw new DOMException("aborted", "AbortError");
+      }),
+    );
+    await expect(
+      requestAssistantReply({
+        message: "hello",
+        history: [],
+        context: null,
+        signal: controller.signal,
+        onEvent: () => undefined,
+      }),
+    ).rejects.toBeInstanceOf(ReplyStoppedError);
+  });
+
+  it("keeps cards and follow-ups on stored assistant messages", () => {
+    const storage = makeStorage();
+    seedStore(storage, [
+      conversation("c1", [
+        { id: "u", role: "user", content: "q" },
+        {
+          id: "a",
+          role: "assistant",
+          content: "answer",
+          cards: [card, { tool: "bogus", title: "x", rows: [] }],
+          followups: ["One", 7, "Two", "Three", "Four"],
+          stopped: true,
+        } as unknown as UiMessage,
+      ]),
+    ]);
+    const stored = loadStoredMessages();
+    const reply = stored.find((message) => message.id === "a");
+    expect(reply?.cards).toEqual([card]);
+    expect(reply?.followups).toEqual(["One", "Two", "Three"]);
+    expect(reply?.stopped).toBe(true);
+  });
+});
+
+describe("assistant context choice", () => {
+  const today = new Date();
+  const day = (offset: number) => {
+    const date = new Date(today);
+    date.setDate(date.getDate() + offset);
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  };
+  const tracker = {
+    activeAppKey: "1:US",
+    apps: [
+      { appStoreId: "1", name: "First", country: "US", description: "About first" },
+      { appStoreId: "2", name: "Second", country: "DE" },
+    ],
+    keywords: {
+      "1:US:car dealer": {
+        appStoreId: "1",
+        country: "US",
+        keyword: "car dealer",
+        currentMetrics: { popularity: 61, position: 94 },
+      },
+      "2:DE:auto": { appStoreId: "2", country: "DE", keyword: "auto", currentMetrics: null },
+    },
+    snapshots: {
+      "1:US:car dealer": [
+        { date: day(-40), position: 150 },
+        { date: day(-20), position: null },
+        { date: day(0), position: 94 },
+      ],
+    },
+  };
+
+  it("lists apps, resolves the choice, and adds 30-day movement", () => {
+    vi.stubGlobal("window", {
+      localStorage: makeStorage({ "appclimb:tracker:v1": JSON.stringify(tracker) }),
+    });
+    const apps = listTrackedApps();
+    expect(apps).toEqual([
+      { key: "1:US", name: "First", country: "US", iconUrl: undefined, keywordCount: 1 },
+      { key: "2:DE", name: "Second", country: "DE", iconUrl: undefined, keywordCount: 1 },
+    ]);
+    expect(resolveContextKey("auto", apps)).toBe("1:US");
+    expect(resolveContextKey("2:DE", apps)).toBe("2:DE");
+    expect(resolveContextKey("9:XX", apps)).toBe("1:US");
+    expect(resolveContextKey("none", apps)).toBeNull();
+    expect(resolveContextKey("auto", [])).toBeNull();
+
+    const context = loadTrackerContext("1:US");
+    expect(context?.description).toBe("About first");
+    // The 40-day-old check is outside the window; the first inside it was >200.
+    expect(context?.keywords?.[0]).toMatchObject({ position: 94, previousPosition: ">200" });
+    expect(loadTrackerContext("2:DE")?.appName).toBe("Second");
+    expect(loadTrackerContext(null)).toBeNull();
+  });
+
+  it("remembers the choice", () => {
+    vi.stubGlobal("window", { localStorage: makeStorage() });
+    expect(readContextChoice()).toBe("auto");
+    writeContextChoice("none");
+    expect(readContextChoice()).toBe("none");
   });
 });

@@ -1,7 +1,12 @@
+import type { Page } from "@playwright/test";
+
 import { dismissExpectedConsoleErrors, expect, test } from "./runtime-test";
 
-const SUGGESTION =
-  "Which of my tracked keywords are worth focusing on first?";
+// A starter card shown when no app is tracked; clicking it sends this prompt.
+const SUGGESTION = "Find keyword ideas for a habit tracker app";
+const starter = (page: Page) =>
+  page.locator(".aic-starters").getByRole("button", { name: SUGGESTION });
+const userBubble = (page: Page) => page.locator(".ai-chat-bubble--user").getByText(SUGGESTION);
 
 test("assistant replies to a message and persists the thread", async ({
   page,
@@ -28,29 +33,29 @@ test("assistant replies to a message and persists the thread", async ({
   });
 
   await page.goto("/assistant");
-  await expect(page.getByText(/ASO assistant \(DeepSeek V4 Flash\)/i)).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Your ASO co-pilot" })).toBeVisible();
 
-  // Suggestion chips are offered before the first user message.
-  const chip = page.getByRole("button", { name: SUGGESTION });
+  // Starter cards are offered before the first user message.
+  const chip = starter(page);
   await expect(chip).toBeVisible();
   await chip.click();
 
   // The markdown reply renders and the server-reported quota is shown.
   await expect(page.getByText(/Start with/i)).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText(/19 of 60 messages left today/i)).toBeVisible();
-  await expect(page.getByText(SUGGESTION)).toBeVisible();
+  await expect(userBubble(page)).toBeVisible();
 
   // The thread survives a reload (stored in localStorage).
   await page.reload();
   await expect(page.getByText(/Start with/i)).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByText(SUGGESTION)).toBeVisible();
+  await expect(userBubble(page)).toBeVisible();
 
-  // Clearing resets to the welcome state (confirm dialog accepted).
+  // Deleting the chat resets to the welcome state (confirm dialog accepted).
   page.once("dialog", (dialog) => void dialog.accept());
-  await page.getByRole("button", { name: /Clear conversation/i }).click();
+  await page.getByRole("button", { name: "Delete this chat" }).click();
   await expect(page.getByText(/Start with/i)).toHaveCount(0);
   await expect(
-    page.getByRole("button", { name: SUGGESTION }),
+    starter(page),
   ).toBeVisible();
 });
 
@@ -72,19 +77,19 @@ test("conversation history: new chat, switch back, delete", async ({
   });
 
   await page.goto("/assistant");
-  await page.getByRole("button", { name: SUGGESTION }).click();
+  await starter(page).click();
   await expect(page.getByText(/reply 1/i)).toBeVisible({ timeout: 15_000 });
 
   // A new chat shows the welcome state; the old thread stays in history.
   await page.locator(".ai-chat-new-button").click();
   await expect(page.getByText(/reply 1/i)).toHaveCount(0);
-  await expect(page.getByRole("button", { name: SUGGESTION })).toBeVisible();
+  await expect(starter(page)).toBeVisible();
 
   // The sidebar lists the first chat, titled (truncated) from its first
   // user message.
   const historyList = page.locator(".ai-chat-history-list");
   const firstChat = historyList.getByRole("button", {
-    name: /^(?!Delete conversation: )Which of my tracked keywords are worth focusing/i,
+    name: /^(?!Delete conversation: )Find keyword ideas for a habit tracker/i,
   });
   await expect(firstChat).toBeVisible();
   await firstChat.click();
@@ -264,7 +269,7 @@ test("chat history drawer stays usable at 375px", async ({ page }) => {
 
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto("/assistant");
-  await page.getByRole("button", { name: SUGGESTION }).click();
+  await starter(page).click();
   await expect(page.getByText(/drawer reply/i)).toBeVisible({
     timeout: 15_000,
   });
@@ -553,4 +558,96 @@ test("an aborted chat request errors cleanly and keeps the draft", async ({
   // The draft survives a broken connection.
   await expect(input).toHaveValue("network gone");
   dismissExpectedConsoleErrors(page, [/Failed to load resource/]);
+});
+
+test("streamed replies show Apple data, a metadata card, and follow-ups", async ({
+  page,
+}) => {
+  let body: { stream?: boolean } = {};
+  await page.route("**/api/chat", async (route) => {
+    body = route.request().postDataJSON() as { stream?: boolean };
+    const events = [
+      { type: "meta", model: "deepseek-v4-flash", remainingDay: 18, remainingHour: 4 },
+      { type: "status", text: "Checking Apple popularity for 2 keywords" },
+      {
+        type: "card",
+        card: {
+          tool: "lookup_keywords",
+          title: "Apple popularity",
+          country: "US",
+          week: "2026-09-20",
+          rows: [
+            { term: "habit tracker", popularity: 61, change: 3, category: "Productivity & Utilities" },
+            { term: "habit app for adhd", popularity: 30, longTail: true },
+          ],
+        },
+      },
+      { type: "delta", text: "Target **habit tracker** first.\n\n" },
+      { type: "delta", text: "```keywords\nroutine, streak,goals\n```\n" },
+      {
+        type: "done",
+        message: "Target **habit tracker** first.\n\n```keywords\nroutine, streak,goals\n```",
+        followups: ["Write my subtitle", "Which keywords should I drop?"],
+      },
+    ];
+    await route.fulfill({
+      status: 200,
+      contentType: "application/x-ndjson",
+      body: events.map((event) => JSON.stringify(event)).join("\n"),
+    });
+  });
+
+  await page.goto("/assistant");
+  await page.getByLabel("Message the ASO assistant").fill("keywords for my habit app");
+  await page.getByRole("button", { name: "Send" }).click();
+
+  // The browser asked for a stream, and the reply rendered from it.
+  await expect(page.getByText(/Target/)).toBeVisible({ timeout: 15_000 });
+  expect(body.stream).toBe(true);
+
+  // Apple's numbers come from the data card, not the model's prose.
+  const card = page.getByRole("region", { name: "Apple popularity" });
+  await expect(card).toBeVisible();
+  await expect(card.getByRole("link", { name: "habit tracker" })).toHaveAttribute(
+    "href",
+    "/?kw=habit%20tracker&country=US",
+  );
+  await expect(card.getByText("≤30")).toBeVisible();
+
+  // The keyword-field block gets a character count and its waste flagged.
+  await expect(page.getByText("Keyword field")).toBeVisible();
+  await expect(page.getByText("21/100")).toBeVisible();
+  await expect(page.getByText(/Spaces after commas waste 1 character/)).toBeVisible();
+
+  // The model's follow-ups become one-click questions; quota updates.
+  await expect(page.getByRole("button", { name: "Write my subtitle" })).toBeVisible();
+  await expect(page.getByText(/18 of 60 messages left today/)).toBeVisible();
+
+  // The data card survives a reload with the thread.
+  await page.reload();
+  await expect(page.getByRole("region", { name: "Apple popularity" })).toBeVisible({
+    timeout: 10_000,
+  });
+});
+
+test("a stream that ends early is reported and the draft returns", async ({ page }) => {
+  await page.route("**/api/chat", async (route) => {
+    // Never finishes: a status and some text, then silence.
+    await route.fulfill({
+      status: 200,
+      contentType: "application/x-ndjson",
+      body: [
+        JSON.stringify({ type: "meta", model: "deepseek-v4-flash", remainingDay: 17 }),
+        JSON.stringify({ type: "delta", text: "Partial answer about keywords" }),
+      ].join("\n"),
+    });
+  });
+
+  await page.goto("/assistant");
+  await page.getByLabel("Message the ASO assistant").fill("tell me something long");
+  await page.getByRole("button", { name: "Send" }).click();
+
+  // A stream that ends without "done" is reported, and the draft returns.
+  await expect(page.locator(".ai-chat-error")).toContainText(/cut off/i, { timeout: 15_000 });
+  await expect(page.getByLabel("Message the ASO assistant")).toHaveValue("tell me something long");
 });

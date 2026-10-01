@@ -45,6 +45,11 @@ conflict instead of silently changing direction.
   (suggest, related, trending). Apple Ads rate-limits bursts: call it
   sequentially with back-off. `.github/workflows/warm-apple-terms.yml`
   preloads new weeks.
+- ASO assistant (ADR 0006): `POST /api/chat` streams NDJSON and lets
+  DeepSeek call four tools over the same search-term store (lookup,
+  related, autocomplete, trending). Daily message caps are durable in D1
+  (`ai_usage`); `GET /api/chat/usage` reports them. Chats live in
+  localStorage.
 - Keyword data honesty rules: popularity is `official` (Apple's score),
   `longtail` (term not in Apple's list → shown as `≤N`, N = genre floor), or
   `estimated` (Apple unreachable; rough iTunes stand-in, labeled `Est.`).

@@ -6,6 +6,7 @@ import {
   checkAndConsumeRateLimit,
   clientRateKey,
   emptyRateBucket,
+  extractFollowups,
   looksLikeSecretFishing,
   normalizeAppContext,
   normalizeClientMessages,
@@ -20,7 +21,7 @@ describe("ai-chat policy", () => {
       country: "US",
       keywords: [{ keyword: "meditation", popularity: 70, position: 12 }],
     });
-    expect(prompt).toMatch(/ESTIMATES/i);
+    expect(prompt).toMatch(/always an ESTIMATE/i);
     expect(prompt).toMatch(/Never invent.*API keys/i);
     expect(prompt).toContain("Calm Focus");
     expect(prompt).toContain("meditation");
@@ -163,7 +164,8 @@ describe("ai-chat policy", () => {
 
   it("builds a prompt without context and ignores non-string sanitize input", () => {
     const bare = buildSystemPrompt(null);
-    expect(bare).toMatch(/AppClimb Assistant/i);
+    expect(bare).toMatch(/AppClimb's ASO assistant/i);
+    expect(bare).toMatch(/No app is connected/i);
     expect(sanitizeUserText(null)).toBe("");
     expect(sanitizeUserText(12 as unknown as string)).toBe("");
     expect(normalizeClientMessages("nope")).toEqual([]);
@@ -191,12 +193,68 @@ describe("assistant honesty contract", () => {
     // The model is told popularity is official-or-estimate and never volume.
     expect(prompt).toMatch(/NOT search volume/i);
     expect(prompt).toMatch(/ESTIMATE/i);
-    expect(prompt).toMatch(/difficulty is always an ESTIMATE/i);
-    expect(prompt).toMatch(/Do not claim search volume, downloads, or revenue/i);
-    // Context rows carry their popularity source.
-    expect(prompt).toContain("pop=52 (Apple)");
-    expect(prompt).toContain("pop≤48 (long tail)");
-    expect(prompt).toContain("pop~40 (estimate)");
+    expect(prompt).toMatch(/Difficulty \(1–99\) is always an ESTIMATE/i);
+    expect(prompt).toMatch(/not search volume, downloads, installs, or revenue — never claim those/i);
+    // Context rows carry their popularity source and AppClimb's verdict.
+    expect(prompt).toContain("meditation | pop 52 (Apple) | difficulty ~75 | verdict: Dominated");
+    expect(prompt).toContain("white noise baby | pop ≤48 (long tail) | difficulty ~30 | verdict: Long-tail win");
+    expect(prompt).toContain("pop ~40 (estimate)");
     expect(prompt).toMatch(/AT OR BELOW/);
+  });
+
+  it("tells the model whether Apple-data tools exist", () => {
+    expect(buildSystemPrompt(null, { tools: true })).toMatch(/lookup_keywords, related_keywords/);
+    expect(buildSystemPrompt(null, { tools: false })).toMatch(/tools are unavailable/i);
+  });
+
+  it("shows 30-day rank movement, the description, and today's date", () => {
+    const prompt = buildSystemPrompt(
+      {
+        appName: "Car Dealer Tracker",
+        country: "US",
+        description: "Track   inventory\nand profit per car.",
+        keywords: [
+          { keyword: "car dealer", position: 94, previousPosition: ">200" },
+          { keyword: "dealer", position: 65, previousPosition: 65 },
+        ],
+      },
+      { today: "2026-10-01" },
+    );
+    expect(prompt).toContain("Today is 2026-10-01.");
+    expect(prompt).toContain("car dealer | rank #94 (30 days ago >200)");
+    expect(prompt).toContain("dealer | rank #65");
+    expect(prompt).not.toContain("rank #65 (30 days ago");
+    expect(prompt).toContain("Description excerpt: Track inventory and profit per car.");
+  });
+});
+
+describe("extractFollowups", () => {
+  it("splits the follow-up block off the visible reply", () => {
+    expect(
+      extractFollowups("Use **habit tracker**.\n\n```followups\n- Write my subtitle\n* What next?\n1. Drop which?\n- x\n```"),
+    ).toEqual({
+      body: "Use **habit tracker**.",
+      followups: ["Write my subtitle", "What next?", "Drop which?"],
+    });
+  });
+
+  it("handles a reply without follow-ups and an unterminated block while streaming", () => {
+    expect(extractFollowups("  plain  ")).toEqual({ body: "plain", followups: [] });
+    expect(extractFollowups("Answer\n```followups\n- Half")).toEqual({
+      body: "Answer",
+      followups: ["Half"],
+    });
+  });
+});
+
+describe("normalizeAppContext extras", () => {
+  it("keeps the description and the earlier position", () => {
+    const ctx = normalizeAppContext({
+      appName: "A",
+      description: "x".repeat(2000),
+      keywords: [{ keyword: "k", position: 3, previousPosition: ">200" }],
+    });
+    expect(ctx?.description).toHaveLength(800);
+    expect(ctx?.keywords?.[0]).toMatchObject({ position: 3, previousPosition: ">200" });
   });
 });
