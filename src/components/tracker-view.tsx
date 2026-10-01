@@ -2,25 +2,26 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  ArrowUp,
   Compass,
-  Copy,
   Crown,
-  Download,
   Lightbulb,
   Loader2,
   Plus,
   RefreshCw,
   Rocket,
+  Rows3,
+  Rows4,
   Search,
   Sparkles,
   Target,
   Trash2,
-  Wand2,
 } from "lucide-react";
 
 import { AddKeywordsModal } from "@/components/add-keywords-modal";
 import { RankingOverview } from "@/components/ranking-overview";
+import { RankingsOverview, type OverviewTotals } from "@/components/tracker-overview";
+import { TrackerMoreMenu } from "@/components/tracker-more-menu";
+import { KeywordMap, type KeywordMapPoint } from "@/components/keyword-map";
 import { SuggestionsModal } from "@/components/suggestions-modal";
 import { TrackerDetail } from "@/components/tracker-detail";
 import { Sparkline } from "@/components/keyword-charts";
@@ -63,6 +64,8 @@ import {
   normalizeKeyword,
   opportunityScore,
   positionSparklineValues,
+  rankBucketSeries,
+  rankMovers,
   removeKeywordFromStore,
   snapshotsFor,
   updateKeywordNote,
@@ -84,11 +87,20 @@ type Density = "comfortable" | "compact";
 const STATUS_FILTERS: Array<{ id: KeywordStatusFilter; label: string }> = [
   { id: "all", label: "All" },
   { id: "ranked", label: "In top 200" },
-  { id: "out", label: ">200" },
+  { id: "out", label: "Not in top 200" },
+  { id: "opportunity", label: "Opportunity" },
   { id: "new", label: "New" },
   { id: "unchecked", label: "Needs check" },
-  { id: "opportunity", label: "Opportunity" },
 ];
+
+const STATUS_TITLES: Record<KeywordStatusFilter, string> = {
+  all: "Every tracked keyword",
+  ranked: "Your app appears in the first 200 search results",
+  out: "Your app isn't in the first 200 results yet",
+  new: "Added recently — not enough checks for a trend",
+  unchecked: "Not checked yet, or the last check failed",
+  opportunity: "Apple demand against difficulty, boosted when you're close to page one",
+};
 
 function MetricBar({
   value,
@@ -589,6 +601,76 @@ export function TrackerView({
     showToast(`Removed “${label}”`);
   };
 
+  const bucketSeries = useMemo(
+    () => rankBucketSeries(store, app.appStoreId, app.country, historyDays),
+    [store, app.appStoreId, app.country, historyDays],
+  );
+  const movers = useMemo(
+    () => rankMovers(store, app.appStoreId, app.country, historyDays),
+    [store, app.appStoreId, app.country, historyDays],
+  );
+  const overviewTotals = useMemo<OverviewTotals>(() => {
+    const totals: OverviewTotals = {
+      tracked: keywords.length,
+      top10: 0,
+      top50: 0,
+      top200: 0,
+      outside: 0,
+      unchecked: 0,
+      averagePosition: health.averageRank,
+      best: null,
+    };
+    for (const row of keywords) {
+      const metrics = row.currentMetrics;
+      if (!metrics || metrics.unavailable) {
+        totals.unchecked += 1;
+        continue;
+      }
+      const position = metrics.position;
+      if (position === null || position > 200) {
+        totals.outside += 1;
+        continue;
+      }
+      if (position <= 10) totals.top10 += 1;
+      else if (position <= 50) totals.top50 += 1;
+      else totals.top200 += 1;
+      if (!totals.best || position < totals.best.position) {
+        totals.best = { keyword: row.keyword, normalizedKeyword: row.normalizedKeyword, position };
+      }
+    }
+    return totals;
+  }, [keywords, health.averageRank]);
+  const mapPoints = useMemo<KeywordMapPoint[]>(
+    () =>
+      keywords.flatMap((row) => {
+        const metrics = row.currentMetrics;
+        if (!metrics || metrics.unavailable || metrics.popularity <= 0) return [];
+        return [
+          {
+            keyword: row.keyword,
+            normalizedKeyword: row.normalizedKeyword,
+            popularity: metrics.popularity,
+            longTail: metrics.popularitySource === "longtail",
+            difficulty: metrics.difficulty,
+            position: metrics.position,
+          },
+        ];
+      }),
+    [keywords],
+  );
+  const lastCheckedLabel = useMemo(() => {
+    const latest = keywords.reduce<number>((max, row) => {
+      const at = row.lastCheckedAt ? Date.parse(row.lastCheckedAt) : 0;
+      return at > max ? at : max;
+    }, 0);
+    if (!latest) return null;
+    const date = new Date(latest);
+    const sameDay = date.toDateString() === new Date().toDateString();
+    return sameDay
+      ? `today ${date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`
+      : date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  }, [keywords]);
+
   const exportCsv = () => {
     const csv = buildKeywordsCsv(app, keywords, {
       snapshotsFor: (normalized) =>
@@ -623,232 +705,110 @@ export function TrackerView({
 
   return (
     <div className={`tracker-view tracker-view--${density}`}>
-      <header className="tracker-view-header">
-        <div className="tracker-view-app">
+      <header className="tv-head">
+        <div className="tv-app">
           {app.iconUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={app.iconUrl} alt="" width={44} height={44} className="tracker-app-avatar" />
+            <img src={app.iconUrl} alt="" width={52} height={52} className="tv-app-icon" />
           ) : (
-            <span className="tracker-app-icon-fallback" aria-hidden="true">
+            <span className="tv-app-icon tv-app-icon--fallback" aria-hidden="true">
               {app.name.charAt(0)}
             </span>
           )}
-          <div>
+          <div className="tv-app-text">
             <h1>{app.name}</h1>
-            <p>
-              {app.developer || "Unknown developer"}
-              {app.genre ? ` · ${app.genre}` : ""} · Tracked for{" "}
-              <strong>{countryLabel}</strong>
+            <p className="tv-app-meta">
+              <span className="tv-store">
+                <span aria-hidden="true">
+                  {SUPPORTED_COUNTRIES.find((c) => c.code === app.country)?.flag}
+                </span>{" "}
+                {countryLabel}
+              </span>
+              {app.genre && <span>{app.genre}</span>}
+              {lastCheckedLabel && <span>Checked {lastCheckedLabel}</span>}
+              {onTrackInStorefront && otherStorefronts.length > 0 && (
+                <label className="tv-add-store" title="Track this app in another country storefront">
+                  <Plus size={12} aria-hidden="true" />
+                  <span>Another country</span>
+                  <select
+                    defaultValue=""
+                    aria-label="Track this app in another storefront"
+                    onChange={(event) => {
+                      const code = event.target.value;
+                      if (!code) return;
+                      onTrackInStorefront(code);
+                      event.target.value = "";
+                    }}
+                  >
+                    <option value="" disabled>
+                      Choose storefront…
+                    </option>
+                    {otherStorefronts.map((item) => (
+                      <option key={item.code} value={item.code}>
+                        {item.flag} {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </p>
           </div>
         </div>
-        {onTrackInStorefront && otherStorefronts.length > 0 && (
-          <div className="tracker-track-storefront-wrap">
-            <span className="tracker-track-storefront-label">Also track in</span>
-            <label className="country-select tracker-track-storefront" title="Track this app in another country storefront">
-              <select
-                defaultValue=""
-                aria-label="Track this app in another storefront"
-                onChange={(event) => {
-                  const code = event.target.value;
-                  if (!code) return;
-                  onTrackInStorefront(code);
-                  event.target.value = "";
-                }}
-              >
-                <option value="" disabled>
-                  Choose storefront…
-                </option>
-                {otherStorefronts.map((item) => (
-                  <option key={item.code} value={item.code}>
-                    {item.flag} {item.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-        )}
-      </header>
-
-      {/* App Health Scorecard Strip */}
-      {keywords.length > 0 && (
-        <section className="tracker-scorecard-grid" aria-label="App ranking summary">
-          <div className="tracker-scorecard-card">
-            <span className="tracker-scorecard-label">Ranked Keywords</span>
-            <div className="tracker-scorecard-value">
-              <strong>{health.rankedKeywords}</strong>
-              <small>/ {health.totalKeywords}</small>
-            </div>
-            <span className="tracker-scorecard-meta">
-              {keywordLimit !== null ? `Plan: up to ${keywordLimit}` : "Unlimited on Pro"}
-            </span>
-          </div>
-
-          <div className="tracker-scorecard-card">
-            <span className="tracker-scorecard-label">Average Rank</span>
-            <div className="tracker-scorecard-value">
-              <strong>{health.averageRank !== null ? `#${health.averageRank}` : "—"}</strong>
-            </div>
-            <span className="tracker-scorecard-meta">Across top 200 results</span>
-          </div>
-
-          <div className="tracker-scorecard-card">
-            <span className="tracker-scorecard-label">Top 10 Rankings</span>
-            <div className="tracker-scorecard-value">
-              <strong>{health.top10Count}</strong>
-              {health.top1Count > 0 && (
-                <span className="tracker-badge-top1" title="Number 1 rankings">
-                  👑 {health.top1Count}
-                </span>
-              )}
-            </div>
-            <span className="tracker-scorecard-meta">High visibility positions</span>
-          </div>
-
-          <div className="tracker-scorecard-card">
-            <span className="tracker-scorecard-label">Visibility Score</span>
-            <div className="tracker-scorecard-value">
-              <strong>{health.visibilityScore}</strong>
-              <small>/ 100</small>
-            </div>
-            <span className="tracker-scorecard-meta">Position & demand index</span>
-          </div>
-
-          {health.gainers.length > 0 && (
-            <div className="tracker-scorecard-card tracker-scorecard-movers">
-              <span className="tracker-scorecard-label">Today&apos;s Gainers</span>
-              <div className="tracker-movers-list">
-                {health.gainers.map((g) => (
-                  <span key={g.keyword} className="tracker-mover-pill tracker-mover-pill--up" title={`Ranked +${g.surge} positions today`}>
-                    <ArrowUp size={12} aria-hidden="true" />
-                    <b>{g.keyword}</b> +{g.surge}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </section>
-      )}
-
-      <div className="tracker-toolbar" role="toolbar" aria-label="Keyword actions">
-        <div className="tracker-toolbar-actions">
-          <span className="tracker-store-pill" title={`Active storefront: ${countryLabel}`}>
-            {SUPPORTED_COUNTRIES.find((c) => c.code === app.country)?.flag}{" "}
-            {app.country}
-          </span>
-
+        <div className="tv-actions" role="toolbar" aria-label="Keyword actions">
           <button
             type="button"
-            className="tracker-button-primary"
-            onClick={() => setAddKeywordsOpen(true)}
-            title="Add new keywords to track for this app (or bulk paste)"
+            className="tv-btn"
+            onClick={() => void refreshKeywords(keywords.map((row) => row.keyword))}
+            disabled={keywords.length === 0 || busyKeys.size > 0}
+            title="Re-check this app's position for every keyword"
           >
-            <Plus size={15} aria-hidden="true" />
-            Add Keywords
+            <RefreshCw className={busyKeys.size > 0 ? "spin" : ""} size={15} aria-hidden="true" />
+            Check ranks
           </button>
           <button
             type="button"
-            className="tracker-button-accent"
+            className="tv-btn"
             onClick={() => void openSuggestions()}
             disabled={suggestionsBusy}
-            title="Generate keyword suggestions from App Store metadata and competitors"
+            title="Keyword ideas from your app's metadata and competitors"
           >
             {suggestionsBusy ? (
               <Loader2 className="spin" size={15} aria-hidden="true" />
             ) : (
               <Lightbulb size={15} aria-hidden="true" />
             )}
-            Get Suggestions
+            Get suggestions
           </button>
           <button
             type="button"
-            className="tracker-button-secondary"
-            onClick={() => setOptimizerOpen(true)}
+            className="tv-btn tv-btn--primary"
+            onClick={() => setAddKeywordsOpen(true)}
+            title="Add keywords to track (or paste a list)"
+          >
+            <Plus size={15} aria-hidden="true" />
+            Add keywords
+          </button>
+          <TrackerMoreMenu
             disabled={keywords.length === 0}
-            title="Open 100-character keyword field optimizer studio"
-          >
-            <Wand2 size={15} aria-hidden="true" />
-            100ch Optimizer
-          </button>
-          <button
-            type="button"
-            className="refresh-all-button"
-            onClick={() => void refreshKeywords(keywords.map((row) => row.keyword))}
-            disabled={keywords.length === 0 || busyKeys.size > 0}
-            title="Re-check search position and estimates for all keywords"
-          >
-            <RefreshCw
-              className={busyKeys.size > 0 ? "spin" : ""}
-              size={15}
-              aria-hidden="true"
-            />
-            Refresh All
-          </button>
-          <button
-            type="button"
-            className="refresh-all-button"
-            onClick={exportCsv}
-            disabled={keywords.length === 0}
-            aria-label="Export keywords as CSV"
-            title="Export all tracked keywords, scores, and positions to a CSV file"
-          >
-            <Download size={15} aria-hidden="true" />
-            Export CSV
-          </button>
-          <button
-            type="button"
-            className="refresh-all-button"
-            onClick={copy100Ch}
-            disabled={keywords.length === 0}
-            title="Copies up to 100 characters of comma-separated keywords for Apple App Store Connect keyword field"
-          >
-            <Copy size={15} aria-hidden="true" />
-            Copy 100ch
-          </button>
+            onBuilder={() => setOptimizerOpen(true)}
+            onCopy={() => void copy100Ch()}
+            onExport={exportCsv}
+          />
         </div>
+      </header>
 
-        <div className="tracker-toolbar-controls">
-          <label className="tracker-filter" title="Filter keywords by search text or tags">
-            <Search size={14} aria-hidden="true" />
-            <input
-              value={filter}
-              onChange={(event) => setFilter(event.target.value)}
-              placeholder="Filter keywords or tags…"
-              aria-label="Filter keywords"
-            />
-          </label>
+      {keywords.length > 0 && (
+        <RankingsOverview
+          totals={overviewTotals}
+          series={bucketSeries}
+          movers={movers}
+          days={historyDays}
+          onDaysChange={setHistoryDays}
+          onSelectKeyword={setSelected}
+        />
+      )}
 
-          <label className="country-select" title="Select historical chart trend period">
-            <span>History</span>
-            <select
-              value={historyDays}
-              onChange={(event) =>
-                setHistoryDays(Number(event.target.value) === 7 ? 7 : 30)
-              }
-              aria-label="History period"
-            >
-              <option value={7}>7 days</option>
-              <option value={30}>30 days</option>
-            </select>
-          </label>
-
-          <label className="country-select" title="Change table row density">
-            <span>Density</span>
-            <select
-              value={density}
-              onChange={(event) =>
-                setDensity(
-                  event.target.value === "compact" ? "compact" : "comfortable",
-                )
-              }
-              aria-label="Table density"
-            >
-              <option value="comfortable">Comfortable</option>
-              <option value="compact">Compact</option>
-            </select>
-          </label>
-        </div>
-      </div>
+      {mapPoints.length >= 2 && <KeywordMap points={mapPoints} onSelect={setSelected} />}
 
       {progress && (
         <div
@@ -885,21 +845,16 @@ export function TrackerView({
       )}
 
       {keywords.length > 0 && (
-        <div
-          className="tracker-status-filters"
-          role="tablist"
-          aria-label="Keyword status filters"
-        >
-          {STATUS_FILTERS.map((item) => {
-            const filterTitles: Record<KeywordStatusFilter, string> = {
-              all: "Show all tracked keywords",
-              ranked: "Keywords where this app is currently ranked in the top 200",
-              out: "Keywords where this app ranks below 200 or is not found",
-              new: "Newly added keywords without a previous snapshot baseline",
-              unchecked: "Keywords that have not been checked today",
-              opportunity: "Promising keywords with strong popularity and lower difficulty",
-            };
-            return (
+        <div className="tv-controls">
+          <div
+            className="tracker-status-filters"
+            role="tablist"
+            aria-label="Keyword status filters"
+          >
+            {STATUS_FILTERS.filter(
+              (item) =>
+                item.id === "all" || statusCounts[item.id] > 0 || statusFilter === item.id,
+            ).map((item) => (
               <button
                 key={item.id}
                 type="button"
@@ -911,13 +866,38 @@ export function TrackerView({
                     : "tracker-status-chip"
                 }
                 onClick={() => setStatusFilter(item.id)}
-                title={filterTitles[item.id] || item.label}
+                title={STATUS_TITLES[item.id]}
               >
                 {item.label}
                 <span>{statusCounts[item.id]}</span>
               </button>
-            );
-          })}
+            ))}
+          </div>
+          <div className="tv-controls-right">
+            <label className="tracker-filter" title="Filter keywords by text or tags">
+              <Search size={14} aria-hidden="true" />
+              <input
+                value={filter}
+                onChange={(event) => setFilter(event.target.value)}
+                placeholder="Filter keywords or tags…"
+                aria-label="Filter keywords"
+              />
+            </label>
+            <button
+              type="button"
+              className="tv-icon-btn"
+              aria-pressed={density === "compact"}
+              aria-label={density === "compact" ? "Comfortable rows" : "Compact rows"}
+              title={density === "compact" ? "Comfortable rows" : "Compact rows"}
+              onClick={() => setDensity(density === "compact" ? "comfortable" : "compact")}
+            >
+              {density === "compact" ? (
+                <Rows3 size={16} aria-hidden="true" />
+              ) : (
+                <Rows4 size={16} aria-hidden="true" />
+              )}
+            </button>
+          </div>
         </div>
       )}
 

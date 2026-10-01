@@ -430,21 +430,6 @@ img {
   flex-shrink: 0;
 }
 
-.tracker-store-pill {
-  height: var(--control-h-md);
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 0 12px;
-  border-radius: var(--radius-md);
-  background: var(--n-100);
-  border: 1px solid var(--line);
-  font-size: var(--text-xs);
-  font-weight: var(--weight-bold);
-  color: var(--ink);
-  white-space: nowrap;
-}
-
 /* ==========================================================================
    Shared Marketing Chrome (Header, Navigation & Footers)
    ========================================================================== */
@@ -1298,92 +1283,6 @@ img {
   gap: 18px;
   padding: 20px 0 0;
   width: 100%;
-}
-
-.tracker-view-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding-bottom: 14px;
-  border-bottom: 1px solid var(--line);
-}
-
-.tracker-view-app {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-width: 0;
-}
-
-.tracker-view-app img {
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  object-fit: cover;
-  background: var(--n-150);
-  flex-shrink: 0;
-}
-
-.tracker-view-app h1 {
-  font-size: var(--text-xl);
-  line-height: var(--leading-tight);
-}
-
-.tracker-view-app p {
-  color: var(--ink-muted);
-  font-size: var(--text-xs);
-  margin-top: 2px;
-}
-
-.tracker-track-storefront-wrap {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-shrink: 0;
-}
-
-.tracker-track-storefront-label {
-  font-size: 11px;
-  font-weight: var(--weight-bold);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--ink-muted);
-  white-space: nowrap;
-}
-
-.tracker-track-storefront {
-  min-width: 170px;
-  max-width: 260px;
-}
-
-.tracker-track-storefront select {
-  font-size: var(--text-xs);
-  font-weight: var(--weight-medium);
-  padding-right: 28px;
-}
-
-.tracker-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.tracker-toolbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.tracker-toolbar-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
 }
 
 .tracker-status-filters {
@@ -3997,16 +3896,6 @@ img {
   .marketing-footer-grid {
     grid-template-columns: 1fr;
   }
-
-  .tracker-toolbar {
-    gap: 6px;
-  }
-
-  .tracker-toolbar .tracker-button-primary,
-  .tracker-toolbar .tracker-button-accent,
-  .tracker-toolbar .refresh-all-button {
-    flex: 1 1 calc(50% - 6px);
-  }
 }
 
 /* Animations */
@@ -6513,109 +6402,7 @@ img {
    Tracker Scorecard & Rank Position Badges
    ========================================================================== */
 
-.tracker-scorecard-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
 /* auto-fit yields 3+1 orphan cards at tablet widths — force a balanced 2x2. */
-@media (min-width: 481px) and (max-width: 860px) {
-  .tracker-scorecard-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-.tracker-scorecard-card {
-  background: var(--bg-card);
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-md);
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.tracker-scorecard-card:hover {
-  border-color: var(--teal-400);
-  box-shadow: 0 4px 12px rgba(20, 184, 166, 0.08);
-}
-
-.tracker-scorecard-label {
-  font-size: 0.725rem;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--ink-muted);
-}
-
-.tracker-scorecard-value {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-
-.tracker-scorecard-value strong {
-  font-size: 1.35rem;
-  font-weight: 700;
-  color: var(--ink);
-  letter-spacing: -0.02em;
-}
-
-.tracker-scorecard-value small {
-  font-size: 0.8125rem;
-  color: var(--ink-muted);
-}
-
-.tracker-scorecard-meta {
-  font-size: 0.725rem;
-  color: var(--ink-muted);
-}
-
-.tracker-badge-top1 {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  background: linear-gradient(135deg, rgba(245, 158, 11, 0.15), rgba(234, 179, 8, 0.25));
-  border: 1px solid rgba(245, 158, 11, 0.4);
-  color: #7a5410;
-  font-size: 0.725rem;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: var(--radius-pill);
-}
-
-.tracker-scorecard-movers {
-  grid-column: span 2;
-}
-
-@media (max-width: 900px) {
-  .tracker-scorecard-movers {
-    grid-column: span 1;
-  }
-}
-
-.tracker-movers-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 4px;
-}
-
-.tracker-mover-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.725rem;
-  padding: 3px 8px;
-  border-radius: var(--radius-pill);
-  background: rgba(34, 197, 94, 0.12);
-  color: var(--green-700);
-  border: 1px solid rgba(34, 197, 94, 0.25);
-}
 
 /* Rank Position Badges in Table */
 .tracker-position-cell {

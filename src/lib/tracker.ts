@@ -1548,3 +1548,133 @@ export function calculateAppHealthSummary(
   };
 }
 
+
+/* ------------------------------------------------------------------ */
+/* Rankings overview: distribution over time and period movers         */
+/* ------------------------------------------------------------------ */
+
+export interface RankBucketPoint {
+  /** Local calendar day YYYY-MM-DD. */
+  date: string;
+  top10: number;
+  /** Positions 11–50. */
+  top50: number;
+  /** Positions 51–200. */
+  top200: number;
+  /** Checked, but outside the first 200 results. */
+  outside: number;
+  /** Mean position of the ranked keywords that day, or null. */
+  averagePosition: number | null;
+}
+
+function shiftLocalDate(date: string, days: number): string {
+  const [year, month, day] = date.split("-").map(Number);
+  const value = new Date(year, month - 1, day);
+  value.setDate(value.getDate() + days);
+  return toLocalDate(value);
+}
+
+/**
+ * How the app's tracked keywords were distributed across rank buckets on
+ * each day of the window. Checks happen on demand, so each keyword counts
+ * at its last measured position on or before that day — never an invented
+ * one; keywords not yet checked by that day are left out. Leading days with
+ * no data are dropped.
+ */
+export function rankBucketSeries(
+  store: TrackerStore,
+  appStoreId: string,
+  country: string,
+  days: number,
+  today: string = toLocalDate(),
+): RankBucketPoint[] {
+  const histories = listKeywordsForApp(store, appStoreId, country).map(
+    (row) =>
+      [...(store.snapshots[keywordKey(appStoreId, country, row.normalizedKeyword)] ?? [])].sort(
+        (left, right) => left.date.localeCompare(right.date),
+      ),
+  );
+  const points: RankBucketPoint[] = [];
+  for (let offset = days - 1; offset >= 0; offset -= 1) {
+    const date = shiftLocalDate(today, -offset);
+    const point: RankBucketPoint = {
+      date,
+      top10: 0,
+      top50: 0,
+      top200: 0,
+      outside: 0,
+      averagePosition: null,
+    };
+    let positionSum = 0;
+    let ranked = 0;
+    for (const snaps of histories) {
+      let latest: RankSnapshot | null = null;
+      for (const snap of snaps) {
+        if (snap.date > date) break;
+        latest = snap;
+      }
+      if (!latest) continue;
+      const position = latest.position;
+      if (position === null || position > 200) {
+        point.outside += 1;
+        continue;
+      }
+      ranked += 1;
+      positionSum += position;
+      if (position <= 10) point.top10 += 1;
+      else if (position <= 50) point.top50 += 1;
+      else point.top200 += 1;
+    }
+    point.averagePosition = ranked > 0 ? Number((positionSum / ranked).toFixed(1)) : null;
+    if (points.length === 0 && ranked === 0 && point.outside === 0) continue;
+    points.push(point);
+  }
+  return points;
+}
+
+export interface RankMover {
+  keyword: string;
+  normalizedKeyword: string;
+  /** Position at the start of the window (null = outside the top 200). */
+  from: number | null;
+  to: number | null;
+  /** Places gained (positive) or lost (negative); >200 counts as 201. */
+  change: number;
+}
+
+/**
+ * Keywords whose position moved the most within the window: the first
+ * measurement inside it against the latest one.
+ */
+export function rankMovers(
+  store: TrackerStore,
+  appStoreId: string,
+  country: string,
+  days: number,
+  options: { today?: string; limit?: number } = {},
+): { up: RankMover[]; down: RankMover[] } {
+  const today = options.today ?? toLocalDate();
+  const since = shiftLocalDate(today, -(days - 1));
+  const limit = options.limit ?? 3;
+  const movers: RankMover[] = [];
+  for (const row of listKeywordsForApp(store, appStoreId, country)) {
+    const snaps = (store.snapshots[keywordKey(appStoreId, country, row.normalizedKeyword)] ?? [])
+      .filter((snap) => snap.date >= since && snap.date <= today)
+      .sort((left, right) => left.date.localeCompare(right.date));
+    if (snaps.length < 2) continue;
+    const from = snaps[0].position;
+    const to = snaps[snaps.length - 1].position;
+    const change = (from ?? 201) - (to ?? 201);
+    if (change === 0) continue;
+    movers.push({ keyword: row.keyword, normalizedKeyword: row.normalizedKeyword, from, to, change });
+  }
+  const up = movers
+    .filter((mover) => mover.change > 0)
+    .sort((left, right) => right.change - left.change || left.keyword.localeCompare(right.keyword))
+    .slice(0, limit);
+  const down = movers
+    .filter((mover) => mover.change < 0)
+    .sort((left, right) => left.change - right.change || left.keyword.localeCompare(right.keyword))
+    .slice(0, limit);
+  return { up, down };
+}

@@ -625,9 +625,19 @@ test("tracker layout has no overflow and stays usable at 1024px", async ({
   await expect(
     page.getByRole("button", { name: /Add Keywords/i }).first(),
   ).toBeVisible();
+  await page.getByRole("button", { name: "More actions" }).click();
   await expect(
-    page.getByRole("button", { name: /Export keywords as CSV/i }),
+    page.getByRole("menuitem", { name: /Export keywords as CSV/i }),
   ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("menu")).toHaveCount(0);
+
+  // The rankings overview summarizes where keywords rank, visually.
+  const overview = page.getByRole("region", { name: "Rankings" });
+  await expect(overview).toBeVisible();
+  await expect(overview.getByText(/of 7 keywords rank in the top 200/)).toBeVisible();
+  await expect(overview.getByRole("group", { name: "History period" })).toBeVisible();
+  await expect(page.getByRole("img", { name: /Keyword map: 7 keywords/ })).toBeVisible();
   await expect(
     page.getByRole("heading", { name: /Best Position History/i }),
   ).toBeVisible();
@@ -681,11 +691,17 @@ test("tracker labels every score honestly: no volume or downloads claims", async
   expect(noteText).not.toMatch(/downloads|revenue/i);
   await page.getByRole("button", { name: /Close keyword detail/i }).click();
 
-  // The opportunity filter explains the heuristic and never claims volume.
-  await page.getByRole("tab", { name: /Opportunity/i }).click();
-  await expect(
-    page.getByText(/not Apple search volume or downloads/i),
-  ).toBeVisible();
+  // Empty filters are hidden; when the opportunity filter has keywords it
+  // explains the heuristic and never claims volume.
+  const opportunityTab = page.getByRole("tab", { name: /Opportunity/i });
+  if ((await opportunityTab.count()) > 0) {
+    await opportunityTab.click();
+    await expect(
+      page.getByText(/not Apple search volume or downloads/i),
+    ).toBeVisible();
+  } else {
+    await expect(page.getByRole("tab", { name: /^All/ })).toBeVisible();
+  }
 });
 
 test("free plan enforces the 25-keyword cap exactly", async ({ page }) => {
