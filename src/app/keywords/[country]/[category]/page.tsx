@@ -45,7 +45,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
   const label = categoryLabel(genre);
   const result = await loadKeywordPage(country.code, genre);
   const path = categoryPath(country.code, genre);
-  const title = `Top ${label} App Store Keywords in ${country.label}`;
+  const title = `Top ${label} App Store Keywords in ${countryInText(country)}`;
   const leaders =
     result.status === "ok"
       ? result.data.top
