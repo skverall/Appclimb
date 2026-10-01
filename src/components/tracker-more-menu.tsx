@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Copy, Download, Ellipsis, Wand2 } from "lucide-react";
+import { Columns3, Copy, Download, Ellipsis, Wand2 } from "lucide-react";
 
 /** Secondary tracker actions, kept out of the main toolbar. */
 export function TrackerMoreMenu({
@@ -9,11 +9,14 @@ export function TrackerMoreMenu({
   onBuilder,
   onCopy,
   onExport,
+  onResetColumns,
 }: {
   disabled?: boolean;
   onBuilder: () => void;
   onCopy: () => void;
   onExport: () => void;
+  /** Shown only when the table's column widths were changed. */
+  onResetColumns?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -80,6 +83,15 @@ export function TrackerMoreMenu({
               <small>Keywords, scores, positions</small>
             </span>
           </button>
+          {onResetColumns && (
+            <button type="button" role="menuitem" onClick={run(onResetColumns)}>
+              <Columns3 size={15} aria-hidden="true" />
+              <span>
+                Reset column widths
+                <small>Back to the default table layout</small>
+              </span>
+            </button>
+          )}
         </div>
       )}
     </div>

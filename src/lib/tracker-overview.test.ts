@@ -4,6 +4,7 @@ import {
   addKeywordsToStore,
   addTrackedApp,
   emptyStore,
+  needsPopularityUpgrade,
   rankBucketSeries,
   rankMovers,
   recordRankSnapshot,
@@ -112,5 +113,59 @@ describe("rankMovers", () => {
   it("widens with the window", () => {
     const { up } = rankMovers(store, "42", "US", 30, { today: "2026-10-01" });
     expect(up.map((mover) => mover.keyword)).toEqual(["car dealer", "profit"]);
+  });
+});
+
+describe("needsPopularityUpgrade", () => {
+  const base = {
+    appStoreId: "42",
+    country: "US",
+    keyword: "car dealer",
+    normalizedKeyword: "car dealer",
+    note: "",
+    createdAt: "2026-10-01",
+  };
+  const metrics = {
+    popularity: 92,
+    difficulty: 80,
+    results: 200,
+    saturated: true,
+    topApps: [],
+    position: 1,
+    sampledAt: "2026-10-01T05:45:00Z",
+  };
+  const now = Date.parse("2026-10-01T09:00:00Z");
+
+  it("re-checks old rough estimates so Apple's numbers replace them", () => {
+    expect(
+      needsPopularityUpgrade(
+        { ...base, lastCheckedAt: "2026-10-01T05:45:00Z", currentMetrics: { ...metrics, popularitySource: "estimated" } },
+        now,
+      ),
+    ).toBe(true);
+    // Legacy rows have no source at all.
+    expect(
+      needsPopularityUpgrade({ ...base, lastCheckedAt: "2026-10-01T05:45:00Z", currentMetrics: metrics }, now),
+    ).toBe(true);
+  });
+
+  it("leaves Apple-sourced, fresh, unchecked, and failed rows alone", () => {
+    const at = "2026-10-01T05:45:00Z";
+    expect(
+      needsPopularityUpgrade({ ...base, lastCheckedAt: at, currentMetrics: { ...metrics, popularitySource: "official" } }, now),
+    ).toBe(false);
+    expect(
+      needsPopularityUpgrade({ ...base, lastCheckedAt: at, currentMetrics: { ...metrics, popularitySource: "longtail" } }, now),
+    ).toBe(false);
+    expect(
+      needsPopularityUpgrade(
+        { ...base, lastCheckedAt: "2026-10-01T08:30:00Z", currentMetrics: { ...metrics, popularitySource: "estimated" } },
+        now,
+      ),
+    ).toBe(false);
+    expect(needsPopularityUpgrade({ ...base, lastCheckedAt: null, currentMetrics: null }, now)).toBe(false);
+    expect(
+      needsPopularityUpgrade({ ...base, lastCheckedAt: at, currentMetrics: { ...metrics, unavailable: true } }, now),
+    ).toBe(false);
   });
 });

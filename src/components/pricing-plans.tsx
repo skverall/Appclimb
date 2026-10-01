@@ -1,48 +1,77 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Sparkles } from "lucide-react";
+import { ArrowRight, Check, Lock, Sparkles } from "lucide-react";
 import Link from "next/link";
 
 import { useAccount } from "@/components/account-provider";
-import { PRO_MONTHLY_USD, PRO_YEARLY_USD } from "@/lib/plan";
+import { PLAN_LIMITS, PRO_MONTHLY_USD, PRO_YEARLY_USD } from "@/lib/plan";
 
 type BillingCycle = "monthly" | "yearly";
 
+const free = PLAN_LIMITS.free;
+const pro = PLAN_LIMITS.pro;
+
 const FREE_FEATURES = [
-  "8 new keyword checks per day — no sign-up",
+  `${free.explorerChecksPerDay} new keyword checks per day — no sign-up`,
   "Apple Ads popularity, difficulty evidence & verdict",
-  "12 weeks of Apple popularity history per keyword",
-  "Trending & related searches from Apple's list",
-  "Free sign-in: track 1 app · 25 keywords",
-  "ASO assistant after sign-in — 5 messages/day",
+  `${free.historyWeeks} weeks of Apple popularity history per keyword`,
+  "Trending, related & autocomplete searches",
+  `Free sign-in: track ${free.trackedApps} app · ${free.keywordsPerApp} keywords`,
+  `ASO assistant — ${free.aiMessagesPerDay} messages a day`,
 ];
 
 const PRO_FEATURES = [
   "Unlimited keyword checks",
-  "52 weeks of Apple popularity history",
-  "Unlimited apps & keywords in My Apps",
-  "90 days of rank history",
-  "AI assistant — 200 messages/day",
+  `${pro.historyWeeks} weeks of Apple popularity history`,
+  "Unlimited apps & keywords",
+  `${pro.historyDays} days of rank history`,
+  `ASO assistant — ${pro.aiMessagesPerDay} messages a day`,
   "Cloud sync across devices",
-  "Cancel anytime — Pro runs to period end",
 ];
 
+const YEARLY_PER_MONTH = (PRO_YEARLY_USD / 12).toFixed(2);
+const YEARLY_SAVING = PRO_MONTHLY_USD * 12 - PRO_YEARLY_USD;
+const SAVE_PERCENT = Math.round((YEARLY_SAVING / (PRO_MONTHLY_USD * 12)) * 100);
+
+/** Pro checkout button for server-rendered sections of the pricing page. */
+export function ProCheckoutButton({
+  cycle = "yearly",
+  className = "pr-btn pr-btn--primary",
+  children,
+}: {
+  cycle?: BillingCycle;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const { isPro, openUpgradeWith } = useAccount();
+  if (isPro) {
+    return (
+      <span className={`${className} is-current`}>
+        <Check size={15} aria-hidden="true" /> You&apos;re on Pro
+      </span>
+    );
+  }
+  return (
+    <button type="button" className={className} onClick={() => openUpgradeWith(cycle)}>
+      {children}
+    </button>
+  );
+}
+
 export function PricingPlans() {
-  const { account, isPro, openUpgrade } = useAccount();
-  const [cycle, setCycle] = useState<BillingCycle>("monthly");
-  const price = cycle === "monthly" ? PRO_MONTHLY_USD : PRO_YEARLY_USD;
-  const priceSuffix = cycle === "monthly" ? "/month" : "/year";
-  const perMonth = cycle === "monthly" ? "" : `≈ $${(PRO_YEARLY_USD / 12).toFixed(2)}/month`;
+  const { account, isPro, openUpgradeWith } = useAccount();
+  const [cycle, setCycle] = useState<BillingCycle>("yearly");
+  const yearly = cycle === "yearly";
 
   return (
-    <>
-      <div className="pricing-cycle-toggle" role="tablist" aria-label="Billing cycle">
+    <div className="pr-plans">
+      <div className="pr-cycle" role="tablist" aria-label="Billing cycle">
         <button
           type="button"
           role="tab"
-          aria-selected={cycle === "monthly"}
-          className={cycle === "monthly" ? "is-active" : undefined}
+          aria-selected={!yearly}
+          className={!yearly ? "is-active" : undefined}
           onClick={() => setCycle("monthly")}
         >
           Monthly
@@ -50,68 +79,83 @@ export function PricingPlans() {
         <button
           type="button"
           role="tab"
-          aria-selected={cycle === "yearly"}
-          className={cycle === "yearly" ? "is-active" : undefined}
+          aria-selected={yearly}
+          className={yearly ? "is-active" : undefined}
           onClick={() => setCycle("yearly")}
         >
-          Yearly <span className="pricing-save-chip">save 33%</span>
+          Yearly <span className="pr-save">save {SAVE_PERCENT}%</span>
         </button>
       </div>
 
-      <section className="pricing-grid" aria-label="Plans">
-        <article className="pricing-card">
-          <h2>Free</h2>
-          <p className="pricing-price">
-            $0 <span>forever</span>
+      <section className="pr-grid" aria-label="Plans">
+        <article className="pr-card">
+          <header className="pr-card-head">
+            <h2>Free</h2>
+            <p>For trying ideas and small launches</p>
+          </header>
+          <p className="pr-price">
+            <strong>$0</strong>
+            <span>forever</span>
           </p>
-          <p className="pricing-card-deck">
-            Search keywords as a guest. Sign in free to track one app and use
-            the assistant.
-          </p>
-          <ul className="pricing-features">
+          <p className="pr-price-note">No card. Search without an account.</p>
+          <Link href="/" className="pr-btn pr-btn--ghost">
+            Start free <ArrowRight size={15} aria-hidden="true" />
+          </Link>
+          <p className="pr-list-label">Includes</p>
+          <ul className="pr-features">
             {FREE_FEATURES.map((feature) => (
               <li key={feature}>
                 <Check size={15} aria-hidden="true" /> {feature}
               </li>
             ))}
           </ul>
-          <Link href="/" className="pricing-cta pricing-cta-secondary">
-            Open Keyword Explorer
-          </Link>
         </article>
 
-        <article className="pricing-card pricing-card-featured">
-          <span className="pricing-card-badge">
-            <Sparkles size={12} aria-hidden="true" /> Most popular
+        <article className="pr-card pr-card--pro">
+          <span className="pr-badge">
+            <Sparkles size={12} aria-hidden="true" />
+            {yearly ? `${Math.round(YEARLY_SAVING / PRO_MONTHLY_USD)} months free` : "Recommended"}
           </span>
-          <h2>Pro</h2>
-          <p className="pricing-price">
-            ${price} <span>{priceSuffix}</span>
+          <header className="pr-card-head">
+            <h2>Pro</h2>
+            <p>For indie developers who work on keywords every week</p>
+          </header>
+          <p className="pr-price">
+            <strong>${yearly ? YEARLY_PER_MONTH : PRO_MONTHLY_USD}</strong>
+            <span>/month</span>
           </p>
-          {perMonth && <p className="pricing-per-month">{perMonth}</p>}
-          <p className="pricing-card-deck">
-            Unlimited everything plus cloud sync — less than lunch, versus
-            $89–$4,000/month ASO suites.
+          <p className="pr-price-note">
+            {yearly ? (
+              <>
+                ${PRO_YEARLY_USD} billed yearly · you save ${YEARLY_SAVING}
+              </>
+            ) : (
+              <>Billed monthly · yearly saves {SAVE_PERCENT}%</>
+            )}
           </p>
-          <ul className="pricing-features">
+          {isPro ? (
+            <span className="pr-btn pr-btn--light is-current">
+              <Check size={15} aria-hidden="true" /> You&apos;re on Pro
+            </span>
+          ) : (
+            <button type="button" className="pr-btn pr-btn--light" onClick={() => openUpgradeWith(cycle)}>
+              <Sparkles size={15} aria-hidden="true" />
+              {account.user ? "Upgrade to Pro" : "Get Pro"}
+            </button>
+          )}
+          <p className="pr-secure">
+            <Lock size={12} aria-hidden="true" /> Secure checkout by Paddle · cancel anytime
+          </p>
+          <p className="pr-list-label">Everything in Free, plus</p>
+          <ul className="pr-features">
             {PRO_FEATURES.map((feature) => (
               <li key={feature}>
                 <Check size={15} aria-hidden="true" /> {feature}
               </li>
             ))}
           </ul>
-          {isPro ? (
-            <span className="pricing-cta pricing-cta-current">
-              <Check size={15} aria-hidden="true" /> You&apos;re on Pro
-            </span>
-          ) : (
-            <button type="button" className="pricing-cta pricing-cta-primary" onClick={openUpgrade}>
-              <Sparkles size={15} aria-hidden="true" />
-              {account.user ? "Upgrade to Pro" : "Sign in & upgrade"}
-            </button>
-          )}
         </article>
       </section>
-    </>
+    </div>
   );
 }

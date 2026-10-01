@@ -22,6 +22,7 @@ import { RankingOverview } from "@/components/ranking-overview";
 import { RankingsOverview, type OverviewTotals } from "@/components/tracker-overview";
 import { TrackerMoreMenu } from "@/components/tracker-more-menu";
 import { KeywordMap, type KeywordMapPoint } from "@/components/keyword-map";
+import { useColumnWidths, type ColumnSpec } from "@/components/use-column-widths";
 import { SuggestionsModal } from "@/components/suggestions-modal";
 import { TrackerDetail } from "@/components/tracker-detail";
 import { Sparkline } from "@/components/keyword-charts";
@@ -54,6 +55,7 @@ import {
   formatPosition,
   humanizeItunesError,
   isKeywordStale,
+  needsPopularityUpgrade,
   isRateLimitError,
   keywordKey,
   listKeywordsForApp,
@@ -160,6 +162,21 @@ function TopAppIcons({
   );
 }
 
+/** Keyword table columns; widths are user-resizable (actions takes the slack). */
+const TABLE_COLUMNS: readonly ColumnSpec[] = [
+  { id: "keyword", width: 240, min: 140, label: "Keyword" },
+  { id: "opportunity", width: 118, min: 70, label: "Opportunity" },
+  { id: "popularity", width: 140, min: 90, label: "Popularity" },
+  { id: "difficulty", width: 150, min: 90, label: "Difficulty" },
+  { id: "position", width: 104, min: 70, label: "Position" },
+  { id: "trend", width: 118, min: 80, label: "Rank trend" },
+  { id: "spark", width: 100, min: 60, label: "Spark" },
+  { id: "apps", width: 170, min: 70, label: "Apps" },
+  { id: "updated", width: 150, min: 90, label: "Updated" },
+  { id: "notes", width: 150, min: 70, label: "Notes" },
+];
+const ACTIONS_COLUMN_WIDTH = 72;
+
 export function TrackerView({
   app,
   store,
@@ -178,6 +195,7 @@ export function TrackerView({
   const [statusFilter, setStatusFilter] = useState<KeywordStatusFilter>("all");
   const [historyDays, setHistoryDays] = useState<7 | 30>(30);
   const [density, setDensity] = useState<Density>("comfortable");
+  const columns = useColumnWidths("appclimb:tracker:columns:v1", TABLE_COLUMNS);
   const [sortKey, setSortKey] = useState<SortKey>("opportunity");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [selected, setSelected] = useState<string | null>(null);
@@ -415,7 +433,7 @@ export function TrackerView({
           .filter((row) => {
             if (!row.currentMetrics) return true;
             if (row.currentMetrics.unavailable) return false;
-            return isKeywordStale(row);
+            return isKeywordStale(row) || needsPopularityUpgrade(row);
           })
           .map((row) => row.keyword);
         if (needsCheck.length === 0) return;
@@ -793,6 +811,7 @@ export function TrackerView({
             onBuilder={() => setOptimizerOpen(true)}
             onCopy={() => void copy100Ch()}
             onExport={exportCsv}
+            onResetColumns={columns.customized ? columns.reset : undefined}
           />
         </div>
       </header>
@@ -965,19 +984,15 @@ export function TrackerView({
           ) : (
             <>
               <div className="tracker-table-scroll">
-              <table className="keyword-table tracker-table">
+              <table
+                className={`keyword-table tracker-table${columns.resizing ? " is-resizing" : ""}`}
+                style={{ width: `max(100%, ${columns.total + ACTIONS_COLUMN_WIDTH}px)` }}
+              >
                 <colgroup>
-                  <col style={{ width: "auto", minWidth: 170 }} />
-                  <col style={{ width: 80 }} />
-                  <col style={{ width: 125 }} />
-                  <col style={{ width: 125 }} />
-                  <col style={{ width: 95 }} />
-                  <col style={{ width: 105 }} />
-                  <col style={{ width: 95 }} />
-                  <col style={{ width: 160 }} />
-                  <col style={{ width: 145 }} />
-                  <col style={{ width: 145 }} />
-                  <col style={{ width: 72 }} />
+                  {TABLE_COLUMNS.map((column) => (
+                    <col key={column.id} style={{ width: columns.widths[column.id] }} />
+                  ))}
+                  <col />
                 </colgroup>
                 <thead>
                   <tr>
@@ -985,7 +1000,7 @@ export function TrackerView({
                       <button type="button" onClick={() => toggleSort("keyword")}>
                         Keyword
                       </button>
-                    </th>
+                    <span {...columns.handleProps("keyword")} /></th>
                     <th title="Opportunity (0–100): Apple popularity weighed against difficulty, boosted when your app is close to page one">
                       <button
                         type="button"
@@ -993,7 +1008,7 @@ export function TrackerView({
                       >
                         Opportunity
                       </button>
-                    </th>
+                    <span {...columns.handleProps("opportunity")} /></th>
                     <th title="Apple Ads popularity (1–100); long-tail terms show the ceiling Apple implies">
                       <button
                         type="button"
@@ -1001,7 +1016,7 @@ export function TrackerView({
                       >
                         Popularity
                       </button>
-                    </th>
+                    <span {...columns.handleProps("popularity")} /></th>
                     <th title="Estimated difficulty score (1–100) based on competitor strength in top results">
                       <button
                         type="button"
@@ -1009,7 +1024,7 @@ export function TrackerView({
                       >
                         Difficulty · Est.
                       </button>
-                    </th>
+                    <span {...columns.handleProps("difficulty")} /></th>
                     <th title="Observed rank position in the App Store search results">
                       <button
                         type="button"
@@ -1017,10 +1032,10 @@ export function TrackerView({
                       >
                         Position
                       </button>
-                    </th>
-                    <th title="Rank movement compared to previous day snapshot">Rank trend</th>
-                    <th className="tracker-col-optional tracker-col-spark" title="7-day position trend mini-chart (top is #1)">Spark</th>
-                    <th className="tracker-col-optional tracker-col-apps" title="Top 5 ranking competitor apps on Page 1">Apps</th>
+                    <span {...columns.handleProps("position")} /></th>
+                    <th title="Rank movement compared to previous day snapshot">Rank trend<span {...columns.handleProps("trend")} /></th>
+                    <th className="tracker-col-optional tracker-col-spark" title="7-day position trend mini-chart (top is #1)">Spark<span {...columns.handleProps("spark")} /></th>
+                    <th className="tracker-col-optional tracker-col-apps" title="Top 5 ranking competitor apps on Page 1">Apps<span {...columns.handleProps("apps")} /></th>
                     <th
                       className="tracker-col-optional tracker-col-updated"
                       title="Timestamp of the most recent keyword check"
@@ -1031,8 +1046,8 @@ export function TrackerView({
                       >
                         Updated
                       </button>
-                    </th>
-                    <th className="tracker-col-optional tracker-col-notes" title="Private notes saved locally for this keyword">Notes</th>
+                    <span {...columns.handleProps("updated")} /></th>
+                    <th className="tracker-col-optional tracker-col-notes" title="Private notes saved locally for this keyword">Notes<span {...columns.handleProps("notes")} /></th>
                     <th className="tracker-col-actions" aria-label="Actions" />
                   </tr>
                 </thead>

@@ -63,6 +63,8 @@ export interface AccountContextValue {
    */
   requireAccount: (intent?: AuthIntent) => boolean;
   openUpgrade: () => void;
+  /** Opens checkout with monthly or yearly billing preselected. */
+  openUpgradeWith: (cycle: "monthly" | "yearly") => void;
   signOut: () => Promise<void>;
 }
 
@@ -97,6 +99,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [authOpen, setAuthOpen] = useState(false);
   const [authIntent, setAuthIntent] = useState<AuthIntent>("default");
   const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const [upgradeCycle, setUpgradeCycle] = useState<"monthly" | "yearly">("monthly");
   const [notice, setNotice] = useState<string | null>(null);
   const [syncState, setSyncState] = useState<SyncState>("off");
   const [syncVersion, setSyncVersion] = useState(0);
@@ -359,7 +362,14 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       refresh,
       openAuth,
       requireAccount,
-      openUpgrade: () => setUpgradeOpen(true),
+      openUpgrade: () => {
+        setUpgradeCycle("monthly");
+        setUpgradeOpen(true);
+      },
+      openUpgradeWith: (cycle: "monthly" | "yearly") => {
+        setUpgradeCycle(cycle);
+        setUpgradeOpen(true);
+      },
       signOut,
     }),
     [
@@ -406,6 +416,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       />
       <UpgradeModal
         open={upgradeOpen}
+        initialCycle={upgradeCycle}
         user={account.user}
         onClose={() => setUpgradeOpen(false)}
         onRequireAuth={() => {

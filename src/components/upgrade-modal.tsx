@@ -21,11 +21,13 @@ const PRO_FEATURES = [
 
 export function UpgradeModal({
   open,
+  initialCycle = "monthly",
   user,
   onClose,
   onRequireAuth,
 }: {
   open: boolean;
+  initialCycle?: BillingCycle;
   user: AccountUser | null;
   onClose: () => void;
   onRequireAuth: () => void;
@@ -43,14 +45,14 @@ export function UpgradeModal({
     void (async () => {
       await Promise.resolve();
       if (cancelled) return;
-      setCycle("monthly");
+      setCycle(initialCycle);
       setError(null);
       setBusy(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [open]);
+  }, [open, initialCycle]);
 
   useEffect(() => {
     if (!open) return;

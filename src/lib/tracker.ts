@@ -1102,6 +1102,26 @@ export function isKeywordStale(
   return now - checked > STALE_AFTER_MS;
 }
 
+/** Re-ask Apple about a rough estimate after this long. */
+export const ESTIMATE_RETRY_MS = 60 * 60 * 1000;
+
+/**
+ * True for a keyword whose popularity is only a rough iTunes estimate (from
+ * before Apple's data was available, or a failed lookup) and that has not
+ * been re-checked in the last hour — so a fresh check can replace it with
+ * Apple's score or its long-tail ceiling.
+ */
+export function needsPopularityUpgrade(
+  keyword: TrackedKeyword,
+  now = Date.now(),
+): boolean {
+  const metrics = keyword.currentMetrics;
+  if (!metrics || metrics.unavailable) return false;
+  if (metrics.popularitySource === "official" || metrics.popularitySource === "longtail") return false;
+  const checked = keyword.lastCheckedAt ? Date.parse(keyword.lastCheckedAt) : Number.NaN;
+  return Number.isNaN(checked) || now - checked > ESTIMATE_RETRY_MS;
+}
+
 /** Convert KeywordHistoryPoint-style series for the shared TrendChart. */
 export function snapshotsToChartPoints(
   snapshots: RankSnapshot[],

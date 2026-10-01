@@ -1,37 +1,70 @@
 import type { Metadata } from "next";
-import { ArrowRight, Compass, Search } from "lucide-react";
+import { ArrowRight, Bot, ListChecks, Search, TrendingUp } from "lucide-react";
 import Link from "next/link";
 
+import { GuideToc, MetadataChecker } from "@/components/guide-tools";
+import {
+  ListMix,
+  MetadataAnatomy,
+  PageOneEvidence,
+  PopularityScale,
+  SearchFunnel,
+  VerdictMatrix,
+  WeeklyLoop,
+} from "@/components/guide-visuals";
 import { JsonLd } from "@/components/json-ld";
 import { MarketingShell } from "@/components/marketing-shell";
 import { absoluteUrl } from "@/lib/site";
 
+const PUBLISHED = "2026-07-25";
+const MODIFIED = "2026-10-01";
+
 export const metadata: Metadata = {
   title: "The Practical Guide to App Store Keyword Research",
   description:
-    "A source-aware framework for finding keywords worth ranking for: search, estimate popularity and difficulty, track trends, and iterate.",
+    "How to find App Store keywords you can actually rank for: read Apple's popularity score, judge difficulty from page one, pick with a simple matrix, write metadata that indexes, and track weekly.",
   alternates: {
     canonical: "/guides/keyword-research",
   },
   openGraph: {
     title: "The Practical Guide to App Store Keyword Research",
     description:
-      "Find keywords worth ranking for without paying for data you cannot verify.",
+      "Apple's popularity score, difficulty you can see, a verdict matrix, metadata rules, and a weekly loop — with diagrams and a live metadata checker.",
     url: "/guides/keyword-research",
     type: "article",
-    publishedTime: "2026-07-25",
-    modifiedTime: "2026-08-02",
+    publishedTime: PUBLISHED,
+    modifiedTime: MODIFIED,
   },
 };
 
-const guideSections = [
-  { id: "model", label: "1. Model the search funnel" },
-  { id: "data", label: "2. Know what is public" },
-  { id: "scores", label: "3. Read popularity & difficulty" },
-  { id: "list", label: "4. Build a balanced list" },
-  { id: "track", label: "5. Track and iterate" },
-  { id: "weekly", label: "6. Run the weekly loop" },
+const SECTIONS = [
+  { id: "search", label: "How App Store search works" },
+  { id: "popularity", label: "Read Apple’s popularity score" },
+  { id: "difficulty", label: "Judge difficulty from page one" },
+  { id: "verdict", label: "Pick with the verdict matrix" },
+  { id: "list", label: "Build a balanced list" },
+  { id: "metadata", label: "Write metadata that indexes" },
+  { id: "track", label: "Track and iterate weekly" },
 ] as const;
+
+const STEP_SUMMARIES: Record<(typeof SECTIONS)[number]["id"], string> = {
+  search: "Keywords decide whether you appear; your product page decides whether people install.",
+  popularity: "Apple’s official 1–100 score for each category’s top searches; anything below is long tail.",
+  difficulty: "Look at who holds page one: their ratings, whether the term is in their name, and big brands.",
+  verdict: "Target real demand with a beatable page one; collect long-tail wins; skip what’s dominated.",
+  list: "30–50 terms: a few reach bets, a middle band, and a long tail you can win now.",
+  metadata: "Name, subtitle, and keyword field — no repeated words, no wasted characters.",
+  track: "Check ranks weekly, change one thing at a time, and judge it after one to two weeks.",
+};
+
+const CHEAT_SHEET = [
+  "Only Apple’s popularity score is real demand data — and it is relative, not search volume.",
+  "“≤45 · Long tail” means below Apple’s published list: little traffic, often an easy first rank.",
+  "Difficulty is an estimate: open page one and look at ratings and names before you trust it.",
+  "Start with “Worth targeting” and “Long-tail win”; skip “Dominated” unless it’s your brand.",
+  "Never repeat a word across name, subtitle, and keyword field. Commas, no spaces.",
+  "One metadata change per update; judge it after 1–2 weeks of daily ranks.",
+];
 
 export default function KeywordResearchGuide() {
   return (
@@ -42,63 +75,29 @@ export default function KeywordResearchGuide() {
           "@type": "TechArticle",
           headline: "The Practical Guide to App Store Keyword Research",
           description:
-            "A source-aware framework for finding App Store keywords worth ranking for.",
-          datePublished: "2026-07-25",
-          dateModified: "2026-08-02",
+            "How to find App Store keywords you can actually rank for, with Apple's popularity score, visible difficulty, and a weekly loop.",
+          datePublished: PUBLISHED,
+          dateModified: MODIFIED,
           url: absoluteUrl("/guides/keyword-research"),
           mainEntityOfPage: absoluteUrl("/guides/keyword-research"),
-          author: {
-            "@type": "Organization",
-            name: "AppClimb",
-            url: absoluteUrl("/about"),
-          },
-          publisher: {
-            "@type": "Organization",
-            name: "AppClimb",
-            url: absoluteUrl("/"),
-          },
+          author: { "@type": "Organization", name: "AppClimb", url: absoluteUrl("/about") },
+          publisher: { "@type": "Organization", name: "AppClimb", url: absoluteUrl("/") },
           proficiencyLevel: "Beginner to advanced",
-          about: [
-            "App Store keyword research",
-            "ASO",
-            "keyword popularity",
-            "keyword difficulty",
-          ],
+          about: ["App Store keyword research", "ASO", "keyword popularity", "keyword difficulty"],
         }}
       />
       <JsonLd
         data={{
           "@context": "https://schema.org",
           "@type": "HowTo",
-          name: "How to Perform App Store Keyword Research",
-          description:
-            "A source-aware framework for finding App Store keywords worth ranking for.",
-          step: [
-            {
-              "@type": "HowToStep",
-              name: "Model the search funnel",
-              text: "Understand user search intent and how App Store search leads to app views and installs.",
-              url: absoluteUrl("/guides/keyword-research#model"),
-            },
-            {
-              "@type": "HowToStep",
-              name: "Inspect public signals",
-              text: "Query public iTunes Search results to check total app counts and top incumbent ratings.",
-              url: absoluteUrl("/guides/keyword-research#data"),
-            },
-            {
-              "@type": "HowToStep",
-              name: "Evaluate Popularity & Difficulty",
-              text: "Compare estimated demand against competition barrier to select achievable target terms.",
-              url: absoluteUrl("/guides/keyword-research#scores"),
-            },
-            {
-              "@type": "HowToStep",
-              name: "Track daily rank snapshots",
-              text: "Watch Apple's weekly popularity history and record real daily rank snapshots for your app.",
-              url: absoluteUrl("/guides/keyword-research#track"),
-            },
-          ],
+          name: "How to do App Store keyword research",
+          description: "A seven-step method for finding App Store keywords your app can rank for.",
+          step: SECTIONS.map((section) => ({
+            "@type": "HowToStep",
+            name: section.label,
+            text: STEP_SUMMARIES[section.id],
+            url: absoluteUrl(`/guides/keyword-research#${section.id}`),
+          })),
         }}
       />
       <JsonLd
@@ -106,311 +105,264 @@ export default function KeywordResearchGuide() {
           "@context": "https://schema.org",
           "@type": "BreadcrumbList",
           itemListElement: [
-            {
-              "@type": "ListItem",
-              position: 1,
-              name: "AppClimb",
-              item: absoluteUrl("/"),
-            },
-            {
-              "@type": "ListItem",
-              position: 2,
-              name: "Guides",
-              item: absoluteUrl("/guides/keyword-research"),
-            },
-            {
-              "@type": "ListItem",
-              position: 3,
-              name: "Keyword Research Guide",
-              item: absoluteUrl("/guides/keyword-research"),
-            },
+            { "@type": "ListItem", position: 1, name: "AppClimb", item: absoluteUrl("/") },
+            { "@type": "ListItem", position: 2, name: "Keyword Research Guide", item: absoluteUrl("/guides/keyword-research") },
           ],
         }}
       />
-      <main className="guide-page">
-        <section className="guide-hero marketing-container">
-          <div>
-            <span className="marketing-eyebrow">
-              Definitive field guide · August 2026
-            </span>
+      <main className="gd">
+        <section className="gd-hero marketing-container">
+          <div className="gd-hero-text">
+            <p className="gd-eyebrow">ASO guide · updated October 2026</p>
             <h1>The practical guide to App Store keyword research.</h1>
-            <p>
-              A complete, source-aware method for turning public App Store data
-              into a keyword list your app can actually rank for.
+            <p className="gd-lede">
+              How to find keywords your app can actually rank for — using Apple&rsquo;s own popularity
+              data, difficulty you can check with your own eyes, and a loop that takes ten minutes a week.
             </p>
-            <div className="article-meta">
-              <span>By the AppClimb product team</span>
-              <span>12 min read</span>
-              <span>Last updated August 2, 2026</span>
-            </div>
-          </div>
-          <div className="guide-hero-card">
-            <Compass aria-hidden="true" />
-            <strong>Core principle</strong>
-            <p>
-              Pick keywords by balancing estimated demand against estimated
-              difficulty — and always prefer a term whose numbers you can
-              verify over a precise-looking number with no source.
+            <p className="gd-meta">
+              <span>By the AppClimb team</span>
+              <span>10 min read</span>
+              <span>7 steps</span>
             </p>
-          </div>
-        </section>
-
-        <div className="guide-layout marketing-container">
-          <nav className="guide-toc" aria-label="Guide sections">
-            <strong>In this guide</strong>
-            {guideSections.map((section) => (
-              <a key={section.id} href={`#${section.id}`}>
-                {section.label}
+            <div className="gd-hero-actions">
+              <a href="#search" className="gd-btn gd-btn--primary gd-btn--lg">
+                Start reading <ArrowRight size={16} aria-hidden="true" />
               </a>
-            ))}
-            <Link href="/">
-              Open the explorer <ArrowRight size={14} aria-hidden="true" />
-            </Link>
-          </nav>
-
-          <article className="article-body guide-body">
-            <p className="article-answer">
-              App Store keyword research is the search for terms that sit in
-              the sweet spot: popular enough that ranking for them brings
-              installs, but not so contested that a small app has no chance.
-              Because true search volume is private to Apple, good research
-              relies on estimates it can verify — and on a repeatable process
-              that turns today&apos;s snapshot into tomorrow&apos;s decision.
-            </p>
-
-            <section id="model">
-              <span className="guide-step">Step 1</span>
-              <h2>Model the search funnel</h2>
-              <p>
-                Before picking keywords, understand the journey one search
-                creates:
-              </p>
-              <ul className="guide-stage-list">
-                <li>
-                  <strong>Query</strong> — a shopper types a term; the App
-                  Store decides which apps are relevant.
-                </li>
-                <li>
-                  <strong>Impression</strong> — your app appears in results;
-                  relevance of title, subtitle, and keyword field decides this.
-                </li>
-                <li>
-                  <strong>Tap</strong> — the result convinces the shopper to
-                  open the product page (icon, title, rating, screenshots).
-                </li>
-                <li>
-                  <strong>Install</strong> — the page converts. Weak conversion
-                  here is a listing problem, not a keyword problem.
-                </li>
-              </ul>
-              <p>
-                Keyword research optimizes the first two steps. If your
-                impressions are healthy but installs are weak, fix the listing
-                before adding more keywords — otherwise you are filling a leaky
-                funnel.
-              </p>
-            </section>
-
-            <section id="data">
-              <span className="guide-step">Step 2</span>
-              <h2>Know what data is public</h2>
-              <p>
-                Everything below is available for free from Apple&apos;s public
-                interfaces — and everything else is not:
-              </p>
-              <ul className="guide-check-list">
-                <li>
-                  <CheckIcon /> Which apps rank for a keyword, in order
-                  (iTunes Search API, top 200).
-                </li>
-                <li>
-                  <CheckIcon /> Result density: how many apps compete, and
-                  whether the list hits the 200-app cap.
-                </li>
-                <li>
-                  <CheckIcon /> Incumbent strength: ratings count and average
-                  rating of the top results.
-                </li>
-                <li>
-                  <CheckIcon /> Related phrases from app metadata and genres.
-                </li>
-              </ul>
-              <div className="article-callout">
-                <strong>What is NOT public</strong>
-                <p>
-                  Real search volume, impression share, and competitive
-                  keyword spend exist only inside Apple&apos;s paid Search Ads
-                  API. Any tool claiming free precise volume is modeling — the
-                  only question is whether it tells you.
-                </p>
-              </div>
-              <p>
-                This is why{" "}
-                <Link href="/">
-                  AppClimb&apos;s keyword explorer
-                </Link>{" "}
-                labels its scores as estimates and always shows the underlying
-                evidence next to the number.
-              </p>
-            </section>
-
-            <section id="scores">
-              <span className="guide-step">Step 3</span>
-              <h2>Read popularity and difficulty</h2>
-              <p>
-                Two directional scores summarize each keyword:
-              </p>
-              <ul>
-                <li>
-                  <strong>Popularity (0–100)</strong> — estimated demand. How
-                  much competition pressure and top-result strength suggest the
-                  term is actively searched. A saturated result list with
-                  strong incumbents implies an active term.
-                </li>
-                <li>
-                  <strong>Difficulty (0–100)</strong> — estimated barrier. How
-                  hard it looks to reach the top results: how many apps
-                  compete, how many ratings the incumbents hold, and whether
-                  mega-brands dominate the first page.
-                </li>
-              </ul>
-              <p>How to read the combination:</p>
-              <div className="guide-question-grid">
-                <div>
-                  <strong>High popularity + low difficulty</strong>
-                  <p>Best case — but rare and contested by everyone.</p>
-                </div>
-                <div>
-                  <strong>High popularity + high difficulty</strong>
-                  <p>
-                    Only chase if you have an unfair advantage (unique brand,
-                    huge rating base).
-                  </p>
-                </div>
-                <div>
-                  <strong>Low popularity + low difficulty</strong>
-                  <p>
-                    Long-tail territory: few searches, but you can rank quickly
-                    and they convert well.
-                  </p>
-                </div>
-                <div>
-                  <strong>Low popularity + high difficulty</strong>
-                  <p>
-                    Skip. A term nobody searches that is also hard is pure
-                    waste.
-                  </p>
-                </div>
-              </div>
-              <p>
-                Scores are directional, not oracle numbers. Countries and
-                seasons shift them — which is why tracking beats one-time
-                analysis.
-              </p>
-            </section>
-
-            <section id="list">
-              <span className="guide-step">Step 4</span>
-              <h2>Build a balanced list</h2>
-              <p>A healthy keyword list mixes reach and safety:</p>
-              <ol>
-                <li>
-                  <strong>Start with your product&apos;s core nouns.</strong>{" "}
-                  What would a user type to find your app? Search each one and
-                  record the scores.
-                </li>
-                <li>
-                  <strong>Add category phrases.</strong>{" "}
-                  Your genre plus the
-                  core noun (&quot;meditation timer&quot;, &quot;invoice
-                  scanner&quot;).
-                </li>
-                <li>
-                  <strong>Harvest related keywords.</strong> Open the top apps
-                  for a strong term — their titles and genres are your
-                  suggestion engine.
-                </li>
-                <li>
-                  <strong>Check competitors&apos; titles.</strong> Terms your
-                  competitors rank for that you are missing.
-                </li>
-                <li>
-                  <strong>Localize.</strong> Run the same research per
-                  storefront; keywords that are easy in the US can be crowded
-                  in Germany and vice versa.
-                </li>
-              </ol>
-              <p>
-                Aim for a working list of 30–50 terms: a few high-reach bets, a
-                middle band, and a long tail you expect to win fast.
-              </p>
-            </section>
-
-            <section id="track">
-              <span className="guide-step">Step 5</span>
-              <h2>Track and iterate</h2>
-              <p>
-                A keyword decision is only as good as its trend. For terms Apple
-                publishes, AppClimb shows Apple&apos;s own weekly popularity
-                history (12 weeks free, 52 on Pro). Your app&apos;s rank is
-                checked on demand and saved as one real snapshot per day —
-                nothing is backfilled.
-              </p>
-              <ul>
-                <li>
-                  Re-check your list after every metadata or release update —
-                  relevance changes move rankings.
-                </li>
-                <li>
-                  Watch popularity drift: a term can cool off in weeks.
-                </li>
-                <li>
-                  Watch difficulty drift: a new mega-app can land in the top 10
-                  and change the game overnight.
-                </li>
-                <li>
-                  Keep history even for dropped keywords — they often cycle
-                  back.
-                </li>
-              </ul>
-            </section>
-
-            <section id="weekly">
-              <span className="guide-step">Step 6</span>
-              <h2>Run the weekly loop</h2>
-              <ol>
-                <li>Refresh your tracked keywords (one pass, a few minutes).</li>
-                <li>Note any term whose popularity or difficulty moved by 10+ points.</li>
-                <li>Check the top apps behind the changed terms — the why is usually visible.</li>
-                <li>Pick one metadata change (title, subtitle, or keyword field) with the strongest evidence.</li>
-                <li>Ship it, wait a week, compare the trend. Keep what worked.</li>
-              </ol>
-              <p>
-                The loop is deliberately small. Consistency beats occasional
-                deep-dives, and real history beats any one-time audit.
-              </p>
-            </section>
-
-            <div className="marketing-final-cta">
-              <h2>Start with one search.</h2>
-              <p>
-                Free plan with honest limits, estimates labeled honestly.
-              </p>
-              <Link href="/" className="marketing-primary-action large">
-                <Search size={17} aria-hidden="true" /> Open the keyword explorer
+              <Link href="/" className="gd-btn gd-btn--lg">
+                <Search size={16} aria-hidden="true" /> Try a keyword
               </Link>
             </div>
+          </div>
+          <ol className="gd-hero-steps" aria-label="The method in seven steps">
+            {SECTIONS.map((section, index) => (
+              <li key={section.id}>
+                <a href={`#${section.id}`}>
+                  <span>{index + 1}</span>
+                  <div>
+                    <strong>{section.label}</strong>
+                    <small>{STEP_SUMMARIES[section.id]}</small>
+                  </div>
+                </a>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <div className="gd-layout marketing-container">
+          <aside className="gd-aside">
+            <GuideToc sections={SECTIONS} />
+            <Link href="/" className="gd-aside-cta">
+              <Search size={15} aria-hidden="true" />
+              <span>
+                <strong>Check a keyword</strong>
+                <small>Apple popularity, difficulty, verdict</small>
+              </span>
+            </Link>
+          </aside>
+
+          <article className="gd-body">
+            <p className="gd-answer">
+              App Store keyword research is the hunt for search terms people really type that your app can
+              reach page one for. Apple now publishes an official popularity score for each category&rsquo;s
+              most-searched terms, so demand no longer has to be guessed. Difficulty still does, which is
+              why you check it against the apps that hold page one today.
+            </p>
+
+            <section id="search" className="gd-step">
+              <p className="gd-step-num">Step 1</p>
+              <h2>How App Store search works</h2>
+              <p>
+                Every install from search goes through four steps. Keyword work wins the first two: being
+                relevant enough to appear, and high enough to be seen. The last two are your product
+                page&rsquo;s job.
+              </p>
+              <SearchFunnel />
+              <p>
+                If people see your app but don&rsquo;t install it, more keywords won&rsquo;t help. Fix the
+                icon, screenshots, and reviews first, then come back to keywords.
+              </p>
+            </section>
+
+            <section id="popularity" className="gd-step">
+              <p className="gd-step-num">Step 2</p>
+              <h2>Read Apple&rsquo;s popularity score</h2>
+              <p>
+                Apple Ads publishes, every week and for every storefront, the most-searched terms in each
+                category with a popularity score from 1 to 100. It&rsquo;s the only demand number that
+                comes from Apple, and AppClimb shows it on every keyword, with up to a year of weekly
+                history.
+              </p>
+              <PopularityScale />
+              <ul className="gd-points">
+                <li>
+                  <strong>It&rsquo;s relative.</strong>{" "}70 means far more searches than 40, but Apple
+                  doesn&rsquo;t say how many. Any tool showing a precise &ldquo;search volume&rdquo; is
+                  modelling it.
+                </li>
+                <li>
+                  <strong>The long tail is honest, not missing.</strong>{" "}A term below Apple&rsquo;s list is
+                  shown as &ldquo;≤45&rdquo;: at or below the category&rsquo;s lowest published score. Low
+                  traffic, but often the easiest first ranks.
+                </li>
+                <li>
+                  <strong>Watch the history.</strong>{" "}Seasonal terms look dead in summer and huge in
+                  December. A year of weekly data shows the pattern before you commit.
+                </li>
+              </ul>
+              <p className="gd-try">
+                See what people search in your category this week:{" "}
+                <Link href="/keywords">top App Store searches by country and category</Link>.
+              </p>
+            </section>
+
+            <section id="difficulty" className="gd-step">
+              <p className="gd-step-num">Step 3</p>
+              <h2>Judge difficulty from page one</h2>
+              <p>
+                Nobody outside Apple knows exactly how ranking works, so difficulty is always an estimate.
+                Make it a good one by looking at the evidence: the apps that rank for the term today.
+              </p>
+              <PageOneEvidence />
+              <ul className="gd-points">
+                <li>
+                  <strong>Rating weight, by position.</strong>{" "}Thousands of ratings at #1–#3 are harder to
+                  pass than the same total spread lower down.
+                </li>
+                <li>
+                  <strong>The term in their name.</strong>{" "}When most of page one has the exact term in the
+                  app name, Apple sees strong relevance. You&rsquo;ll need it in yours too.
+                </li>
+                <li>
+                  <strong>Big brands and brand searches.</strong>{" "}If people type a term to find one specific
+                  app, nobody else wins it. AppClimb marks those as dominated.
+                </li>
+                <li>
+                  <strong>The weakest app on page one.</strong>{" "}One app with a few hundred ratings in the top
+                  10 means the door is open, whatever the average says.
+                </li>
+              </ul>
+            </section>
+
+            <section id="verdict" className="gd-step">
+              <p className="gd-step-num">Step 4</p>
+              <h2>Pick with the verdict matrix</h2>
+              <p>
+                Put popularity and difficulty together and every keyword lands in one of four places.
+                AppClimb gives each keyword this verdict, so you can sort a list in seconds.
+              </p>
+              <VerdictMatrix />
+              <p>
+                New apps win fastest in the bottom row: real demand with a beatable page one, and long-tail
+                terms nobody defends. Climbing those earns the ratings and relevance that later unlock the
+                competitive terms.
+              </p>
+            </section>
+
+            <section id="list" className="gd-step">
+              <p className="gd-step-num">Step 5</p>
+              <h2>Build a balanced list</h2>
+              <p>Treat your keywords like a portfolio, not a wish list.</p>
+              <ListMix />
+              <ol className="gd-numbered">
+                <li>
+                  <strong>Start with the words you&rsquo;d use.</strong>{" "}What would someone type to find
+                  your app? Check each one.
+                </li>
+                <li>
+                  <strong>Expand with Apple&rsquo;s own list.</strong>{" "}Related searches and autocomplete
+                  come straight from Apple&rsquo;s published terms, so every idea has real demand behind it.
+                </li>
+                <li>
+                  <strong>Read page one.</strong>{" "}The names and subtitles of apps that rank are a free list
+                  of terms that work in your niche.
+                </li>
+                <li>
+                  <strong>Catch what&rsquo;s rising.</strong>{" "}Terms climbing in your category this month are
+                  cheap to win before everyone notices.
+                </li>
+                <li>
+                  <strong>Repeat per storefront.</strong>{" "}A term that&rsquo;s easy in the US can be crowded in
+                  Germany, and the other way round.
+                </li>
+              </ol>
+            </section>
+
+            <section id="metadata" className="gd-step">
+              <p className="gd-step-num">Step 6</p>
+              <h2>Write metadata that indexes</h2>
+              <p>
+                Apple reads three fields for search. Every word you put there should earn its place.
+              </p>
+              <MetadataAnatomy />
+              <ul className="gd-rules">
+                <li>Put your most important keyword in the app name — it carries the most weight.</li>
+                <li>Never repeat a word across the three fields; a second copy adds nothing.</li>
+                <li>Keyword field: single words, commas, no spaces. Apple combines them into phrases.</li>
+                <li>One of singular or plural is usually enough. Skip “app”, “free”, and your category.</li>
+                <li>Many storefronts also index an extra language (the US store reads Spanish (Mexico) too) — more room for words.</li>
+                <li>Name, subtitle, and keywords only change with an app update. Plan them together.</li>
+              </ul>
+              <MetadataChecker />
+            </section>
+
+            <section id="track" className="gd-step">
+              <p className="gd-step-num">Step 7</p>
+              <h2>Track and iterate weekly</h2>
+              <p>
+                A keyword decision is a bet; tracking tells you if it paid. Keep the loop small enough that
+                you actually run it.
+              </p>
+              <WeeklyLoop />
+              <ul className="gd-points">
+                <li>
+                  <strong>Real ranks only.</strong>{" "}Check positions on real days and keep those snapshots.
+                  A smooth line that was filled in for you is a guess, not history.
+                </li>
+                <li>
+                  <strong>One change at a time.</strong>{" "}Change the name and the keyword field together and
+                  you won&rsquo;t know which one worked.
+                </li>
+                <li>
+                  <strong>Give it time.</strong>{" "}Ranks settle over one to two weeks after an update. Judge
+                  the trend, not the first day.
+                </li>
+              </ul>
+            </section>
+
+            <section className="gd-cheat" aria-labelledby="gd-cheat">
+              <h2 id="gd-cheat">
+                <ListChecks size={20} aria-hidden="true" /> The cheat sheet
+              </h2>
+              <ul>
+                {CHEAT_SHEET.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            </section>
+
+            <section className="gd-next" aria-labelledby="gd-next">
+              <h2 id="gd-next">Put it to work</h2>
+              <div className="gd-next-grid">
+                <Link href="/">
+                  <Search size={20} aria-hidden="true" />
+                  <strong>Check a keyword</strong>
+                  <span>Apple popularity, difficulty with its evidence, and a verdict. Free, no sign-up.</span>
+                </Link>
+                <Link href="/keywords">
+                  <TrendingUp size={20} aria-hidden="true" />
+                  <strong>Browse top searches</strong>
+                  <span>Apple&rsquo;s most-searched and rising terms by country and category.</span>
+                </Link>
+                <Link href="/assistant">
+                  <Bot size={20} aria-hidden="true" />
+                  <strong>Ask the assistant</strong>
+                  <span>Keyword ideas checked against Apple data, and metadata that fits the limits.</span>
+                </Link>
+              </div>
+            </section>
           </article>
         </div>
       </main>
     </MarketingShell>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <span aria-hidden="true" style={{ color: "var(--teal-500)", fontWeight: 700 }}>
-      ✓
-    </span>
   );
 }

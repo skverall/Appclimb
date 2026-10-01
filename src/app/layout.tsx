@@ -19,6 +19,8 @@ import "./explorer.css";
 import "./keyword-pages.css";
 import "./tracker-overview.css";
 import "./assistant.css";
+import "./pricing.css";
+import "./guide.css";
 
 /*
  * Typography — same pairing as cardealertracker.app.

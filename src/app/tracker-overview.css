@@ -1144,3 +1144,73 @@ circle.km-dot--outside.is-longtail {
 .km-tooltip b {
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------- Resizable keyword table ---------- */
+
+/* Width comes from the resizable columns (see use-column-widths). */
+.tracker-table th:not(.tracker-col-sticky) {
+  position: relative;
+}
+
+.tracker-table th,
+.tracker-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tracker-table th > button {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+.col-resizer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 2;
+  width: 12px;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.col-resizer::after {
+  content: "";
+  position: absolute;
+  top: 12px;
+  right: 5px;
+  bottom: 12px;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--line-strong);
+  opacity: 0;
+  transition: opacity 0.12s, background 0.12s;
+}
+
+/* Hovering the header reveals every column edge, like a spreadsheet. */
+.tracker-table thead:hover .col-resizer::after {
+  opacity: 1;
+}
+
+.col-resizer:hover::after,
+.col-resizer:focus-visible::after,
+.col-resizer.is-active::after {
+  top: 5px;
+  bottom: 5px;
+  width: 3px;
+  background: var(--teal-500);
+  opacity: 1;
+}
+
+.col-resizer:focus-visible {
+  outline: none;
+}
+
+.tracker-table.is-resizing,
+.tracker-table.is-resizing * {
+  cursor: col-resize !important;
+  user-select: none;
+}
