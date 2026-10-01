@@ -29,6 +29,7 @@ const PRO_FEATURES = [
   `${pro.historyDays} days of rank history`,
   `ASO assistant — ${pro.aiMessagesPerDay} messages a day`,
   "Cloud sync across devices",
+  "Weekly email: what changed for your keywords",
 ];
 
 const YEARLY_PER_MONTH = (PRO_YEARLY_USD / 12).toFixed(2);

@@ -17,7 +17,7 @@ AppClimb helps iOS developers find App Store keywords they can actually rank for
 
 - Guest ($0, no account): 8 new keyword checks/day (re-checking saved keywords is free), Apple popularity with 12 weeks of history, difficulty evidence, verdicts, trending and related searches.
 - Free account ($0): 30 new keyword checks/day, plus rank tracking for 1 app with 25 keywords and the AI assistant (5 messages/day). Data stays local.
-- Pro ($8/month or $64/year): unlimited checks, 52 weeks of Apple popularity history, unlimited tracked apps and keywords, 90 days of rank history, AI assistant 200 messages/day, cloud sync across devices. Billing via Paddle (merchant of record); cancel anytime.
+- Pro ($8/month or $64/year): unlimited checks, 52 weeks of Apple popularity history, unlimited tracked apps and keywords, 90 days of rank history, AI assistant 200 messages/day, cloud sync across devices, a weekly email with rank and popularity changes. Billing via Paddle (merchant of record); cancel anytime.
 
 ## Key pages
 

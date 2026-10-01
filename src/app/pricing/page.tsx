@@ -61,7 +61,7 @@ const FAQ = [
   {
     question: "What does Pro unlock?",
     answer:
-      "Unlimited keyword checks and tracked apps, a full year (52 weeks) of Apple popularity history per keyword, 90 days of rank history, cloud sync across devices, and 200 AI messages/day.",
+      "Unlimited keyword checks and tracked apps, a full year (52 weeks) of Apple popularity history per keyword, 90 days of rank history, cloud sync across devices, a weekly email with what changed for your keywords, and 200 AI messages/day.",
   },
   {
     question: "Why do some keywords show “≤48 · Long tail” instead of a number?",
@@ -137,6 +137,7 @@ const GROUPS: Array<{ title: string; icon: LucideIcon; rows: Row[] }> = [
         pro: text(`${pro.historyDays} days`, { meter: { value: pro.historyDays, max: pro.historyDays } }),
       },
       { label: "Rankings overview, keyword map & movers", free: yes, pro: yes },
+      { label: "Weekly email: rank & popularity changes", free: no, pro: yes },
       { label: "Keyword field builder & CSV export", free: yes, pro: yes },
     ],
   },

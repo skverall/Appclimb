@@ -1,0 +1,50 @@
+name: Weekly · Pro email digest
+
+# Sends Pro users their weekly email (ADR 0007) once Apple has published a
+# new week (the warm job loads it Mon/Wed/Fri). The Worker sends at most one
+# email per user per Apple week, so re-running is safe.
+
+on:
+  schedule:
+    - cron: "0 14 * * 3"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build the emails without sending"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: weekly-digest
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Send in batches
+        env:
+          DIGEST_SECRET: ${{ secrets.DIGEST_SECRET }}
+          DRY: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run && '1' || '0' }}
+        run: |
+          set -u
+          if [ -z "${DIGEST_SECRET}" ]; then
+            echo "DIGEST_SECRET is not set; nothing to do."
+            exit 0
+          fi
+          for round in $(seq 1 20); do
+            status=$(curl --silent --show-error --output /tmp/digest.json \
+              --write-out "%{http_code}" --max-time 120 -X POST \
+              -H "Authorization: Bearer ${DIGEST_SECRET}" \
+              "https://appclimb.app/api/digest/run?limit=10&dry=${DRY}" || echo "000")
+            echo "Round ${round}: HTTP ${status} $(cat /tmp/digest.json)"
+            if [ "${status}" != "200" ]; then exit 1; fi
+            if [ "${DRY}" = "1" ]; then break; fi
+            remaining=$(grep -o '"remaining":[0-9]*' /tmp/digest.json | cut -d: -f2)
+            if [ "${remaining:-0}" = "0" ]; then break; fi
+            sleep 5
+          done

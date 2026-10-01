@@ -24,7 +24,7 @@ Last updated: 2026-10-01
 - Price: USD 8/month, or USD 64/year (≈ USD 5.33/month)
 - Card required: Yes (via Paddle, merchant of record)
 - Account required: Yes
-- Includes: unlimited keyword checks, 52 weeks of Apple popularity history, unlimited apps and keywords in My Apps, 90 days of rank history, AI assistant (200 messages/day), cloud sync across devices, cancel anytime
+- Includes: unlimited keyword checks, 52 weeks of Apple popularity history, unlimited apps and keywords in My Apps, 90 days of rank history, AI assistant (200 messages/day), cloud sync across devices, a weekly email with rank and Apple popularity changes, cancel anytime
 
 ## What you never pay for
 

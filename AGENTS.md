@@ -50,6 +50,10 @@ conflict instead of silently changing direction.
   related, autocomplete, trending). Daily message caps are durable in D1
   (`ai_usage`); `GET /api/chat/usage` reports them. Chats live in
   localStorage.
+- Weekly email (ADR 0007): Pro only, built from the user's synced tracker
+  and Apple's latest week; `POST /api/digest/run` (Bearer `DIGEST_SECRET`)
+  is called by `.github/workflows/weekly-digest.yml`. One email per user per
+  Apple week (`digest_log`); `email_prefs` holds the opt-out.
 - Keyword data honesty rules: popularity is `official` (Apple's score),
   `longtail` (term not in Apple's list → shown as `≤N`, N = genre floor), or
   `estimated` (Apple unreachable; rough iTunes stand-in, labeled `Est.`).

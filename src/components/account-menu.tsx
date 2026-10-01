@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CloudOff, CreditCard, LogIn, LogOut, Sparkles } from "lucide-react";
+import { CloudOff, CreditCard, LogIn, LogOut, Mail, Sparkles } from "lucide-react";
 
 import { useAccount } from "@/components/account-provider";
 import { fetchPortalLinks } from "@/lib/account";
@@ -17,7 +17,46 @@ export function AccountMenu() {
     useAccount();
   const [open, setOpen] = useState(false);
   const [manageBusy, setManageBusy] = useState(false);
+  // Weekly email (Pro): loaded when the menu first opens.
+  const [digest, setDigest] = useState<boolean | null>(null);
+  const [digestBusy, setDigestBusy] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open || !isPro || digest !== null) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/digest/prefs", { cache: "no-store" });
+        const data = (await res.json()) as { enabled?: boolean };
+        if (!cancelled && res.ok && typeof data.enabled === "boolean") setDigest(data.enabled);
+      } catch {
+        // Leave the toggle hidden when the setting can't be read.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, isPro, digest]);
+
+  const toggleDigest = async () => {
+    if (digest === null || digestBusy) return;
+    const next = !digest;
+    setDigestBusy(true);
+    setDigest(next);
+    try {
+      const res = await fetch("/api/digest/prefs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: next }),
+      });
+      if (!res.ok) setDigest(!next);
+    } catch {
+      setDigest(!next);
+    } finally {
+      setDigestBusy(false);
+    }
+  };
 
   // Close the dropdown on outside click.
   useEffect(() => {
@@ -153,6 +192,26 @@ export function AccountMenu() {
             >
               <CreditCard size={15} aria-hidden="true" />
               {manageBusy ? "Loading…" : "Manage subscription"}
+            </button>
+          )}
+
+          {isPro && digest !== null && (
+            <button
+              type="button"
+              role="menuitemcheckbox"
+              aria-checked={digest}
+              className="account-menu-toggle"
+              onClick={() => void toggleDigest()}
+              disabled={digestBusy}
+            >
+              <Mail size={15} aria-hidden="true" />
+              <span>
+                Weekly email
+                <small>Rank and Apple popularity changes</small>
+              </span>
+              <span className={`account-switch${digest ? " is-on" : ""}`} aria-hidden="true">
+                <i />
+              </span>
             </button>
           )}
 

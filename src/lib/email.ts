@@ -24,6 +24,8 @@ export interface SendEmailInput {
   subject: string;
   text: string;
   html?: string;
+  /** Extra headers, e.g. List-Unsubscribe for the weekly digest. */
+  headers?: Record<string, string>;
 }
 
 export interface SendEmailResult {
@@ -48,6 +50,7 @@ export async function sendEmail(creds: ResendCredentials, input: SendEmailInput)
         subject: input.subject,
         text: input.text,
         ...(input.html ? { html: input.html } : {}),
+        ...(input.headers ? { headers: input.headers } : {}),
       }),
       signal: controller.signal,
     });
