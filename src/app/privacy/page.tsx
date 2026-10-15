@@ -13,7 +13,11 @@ export default function PrivacyPage() {
       <main className="legal-page">
         <span className="eyebrow">Legal</span>
         <h1>Privacy principles</h1>
-        <p className="legal-updated">Last updated August 16, 2026</p>
+        <p className="legal-operator">
+          AppClimb is owned and operated by its founder,{" "}
+          <strong>Shokhabbos Makhmudov</strong>.
+        </p>
+        <p className="legal-updated">Last updated October 15, 2026</p>
         <section>
           <h2>Local-first by default</h2>
           <p>

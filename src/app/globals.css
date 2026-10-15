@@ -677,6 +677,11 @@ img {
   color: var(--teal-700);
 }
 
+.legal-page .legal-operator {
+  margin-top: 0;
+  color: var(--ink);
+}
+
 .legal-page .legal-updated {
   margin-top: 0;
   font-size: var(--text-xs);

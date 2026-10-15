@@ -13,7 +13,11 @@ export default function TermsPage() {
       <main className="legal-page">
         <span className="eyebrow">Legal</span>
         <h1>Terms of service</h1>
-        <p className="legal-updated">Last updated August 16, 2026</p>
+        <p className="legal-operator">
+          AppClimb is owned and operated by its founder,{" "}
+          <strong>Shokhabbos Makhmudov</strong>.
+        </p>
+        <p className="legal-updated">Last updated October 15, 2026</p>
         <section>
           <h2>The service</h2>
           <p>
@@ -33,8 +37,9 @@ export default function TermsPage() {
             of record. You can cancel anytime from your account menu; Pro stays
             active until the end of the period you paid for, after which limits
             revert to the free plan. Your synced data remains in your account.
-            Refunds follow the policy on the refunds page and Paddle&apos;s
-            buyer protections.
+            Any Pro payment can be fully refunded if you ask within 14 days
+            of that payment, with no exceptions; see the{" "}
+            <a href="/refunds">refund policy</a>.
           </p>
         </section>
         <section>
