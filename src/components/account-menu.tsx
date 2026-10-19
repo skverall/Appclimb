@@ -17,13 +17,13 @@ export function AccountMenu() {
     useAccount();
   const [open, setOpen] = useState(false);
   const [manageBusy, setManageBusy] = useState(false);
-  // Weekly email (Pro): loaded when the menu first opens.
+  // Weekly email (every signed-in account): loaded when the menu first opens.
   const [digest, setDigest] = useState<boolean | null>(null);
   const [digestBusy, setDigestBusy] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!open || !isPro || digest !== null) return;
+    if (!open || !signedIn || digest !== null) return;
     let cancelled = false;
     void (async () => {
       try {
@@ -37,7 +37,7 @@ export function AccountMenu() {
     return () => {
       cancelled = true;
     };
-  }, [open, isPro, digest]);
+  }, [open, signedIn, digest]);
 
   const toggleDigest = async () => {
     if (digest === null || digestBusy) return;
@@ -201,7 +201,7 @@ export function AccountMenu() {
             </button>
           )}
 
-          {isPro && digest !== null && (
+          {digest !== null && (
             <button
               type="button"
               role="menuitemcheckbox"
@@ -213,7 +213,9 @@ export function AccountMenu() {
               <Mail size={15} aria-hidden="true" />
               <span>
                 Weekly email
-                <small>Rank and Apple popularity changes</small>
+                <small>
+                  {isPro ? "Rank and Apple popularity changes" : "Rising App Store searches from Apple"}
+                </small>
               </span>
               <span className={`account-switch${digest ? " is-on" : ""}`} aria-hidden="true">
                 <i />

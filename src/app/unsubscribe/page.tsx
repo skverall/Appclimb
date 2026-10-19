@@ -45,8 +45,9 @@ export default async function UnsubscribePage({ searchParams }: { searchParams: 
           <>
             <h1>Stop the weekly email?</h1>
             <p>
-              You’ll stop getting AppClimb’s weekly summary of your keyword ranks, Apple
-              popularity changes, and rising searches. Your account and data stay as they are.
+              You’ll stop getting AppClimb’s weekly email with Apple’s popularity changes and
+              rising App Store searches (and, on Pro, your keyword ranks). Your account and data
+              stay as they are.
             </p>
             <form method="post" action="/api/digest/unsubscribe">
               <input type="hidden" name="u" value={u} />

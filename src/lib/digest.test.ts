@@ -2,11 +2,16 @@ import { describe, expect, it } from "vitest";
 
 import {
   buildDigestEmail,
+  buildFreeDigestEmail,
   digestKeywordsFor,
   escapeHtml,
+  pickKeywordMoves,
+  pickRisers,
   rankChange,
   rankPair,
   type DigestApp,
+  type DigestRiser,
+  type FreeDigestInput,
 } from "@/lib/digest";
 import { emptyStore, type RankSnapshot, type TrackerStore } from "@/lib/tracker";
 
@@ -158,5 +163,175 @@ describe("buildDigestEmail", () => {
     expect(email.html).toContain("&lt;b&gt;Evil&lt;/b&gt; &amp; Co");
     expect(email.html).not.toContain("x<script>");
     expect(escapeHtml(`"'`)).toBe("&quot;&#39;");
+  });
+});
+
+function riser(term: string, delta: number, overrides: Partial<DigestRiser> = {}): DigestRiser {
+  return {
+    term,
+    categoryLabel: "Health & Fitness",
+    popularity: 40 + delta,
+    delta,
+    href: `https://appclimb.app/?kw=${encodeURIComponent(term)}&country=US`,
+    ...overrides,
+  };
+}
+
+function freeInput(overrides: Partial<FreeDigestInput> = {}): FreeDigestInput {
+  return {
+    week: "2026-10-11",
+    compareWeek: "2026-10-04",
+    country: "US",
+    risers: [riser("water tracker", 9), riser("step counter", 4)],
+    keywords: [],
+    syncedOn: null,
+    siteUrl: "https://appclimb.app",
+    unsubscribeUrl: "https://appclimb.app/unsubscribe?u=u1&t=tok",
+    ...overrides,
+  };
+}
+
+describe("pickRisers", () => {
+  const mover = (term: string, genre: string, delta: number | null) => ({ term, genre, delta });
+
+  it("takes the biggest gains, at most two per category", () => {
+    const picked = pickRisers([
+      mover("a", "GAMES", 30),
+      mover("b", "GAMES", 25),
+      mover("c", "GAMES", 20),
+      mover("d", "FINANCE", 10),
+      mover("e", "TRAVEL", 12),
+    ]);
+    expect(picked.map((item) => item.term)).toEqual(["a", "b", "e", "d"]);
+  });
+
+  it("drops new and falling terms, keeps tie order, and stops at the limit", () => {
+    const picked = pickRisers(
+      [
+        mover("new", "GAMES", null),
+        mover("down", "GAMES", -4),
+        mover("flat", "GAMES", 0),
+        mover("x", "FINANCE", 5),
+        mover("y", "TRAVEL", 5),
+        mover("z", "SPORTS", 5),
+      ],
+      2,
+    );
+    expect(picked.map((item) => item.term)).toEqual(["x", "y"]);
+  });
+});
+
+describe("pickKeywordMoves", () => {
+  it("keeps Apple-listed keywords once each, biggest moves first", () => {
+    const picked = pickKeywordMoves([
+      { keyword: "habit tracker", country: "US", popularity: 56, popularityChange: 3 },
+      { keyword: "Habit Tracker ", country: "US", popularity: 56, popularityChange: 3 },
+      { keyword: "habit tracker", country: "GB", popularity: 30, popularityChange: null },
+      { keyword: "routine", country: "US", popularity: null, popularityChange: null },
+      { keyword: "mood", country: "US", popularity: 61, popularityChange: -8 },
+      { keyword: "journal", country: "US", popularity: 70, popularityChange: 0 },
+    ]);
+    expect(picked.map((item) => `${item.country}:${item.keyword}`)).toEqual([
+      "US:mood",
+      "US:habit tracker",
+      "US:journal",
+      "GB:habit tracker",
+    ]);
+  });
+});
+
+describe("buildFreeDigestEmail", () => {
+  it("sends nothing without risers or listed keywords", () => {
+    expect(buildFreeDigestEmail(freeInput({ risers: [] }))).toBeNull();
+    expect(
+      buildFreeDigestEmail(
+        freeInput({ risers: [], keywords: [{ keyword: "routine", country: "US", popularity: null, popularityChange: null }] }),
+      ),
+    ).toBeNull();
+  });
+
+  it("lists Apple's risers with their category, the comparison week, and explorer links", () => {
+    const email = buildFreeDigestEmail(freeInput());
+    expect(email).not.toBeNull();
+    if (!email) return;
+    expect(email.subject).toBe("Apple’s latest week: “water tracker” up 9 in popularity");
+    expect(email.text).toContain("AppClimb weekly · Apple data for the week of Oct 11");
+    expect(email.text).toContain("Biggest risers · US App Store");
+    expect(email.text).toContain(
+      "  water tracker · Health & Fitness  49 (+9)  https://appclimb.app/?kw=water%20tracker&country=US",
+    );
+    expect(email.text).toContain("popularity points gained since the week of Oct 4.");
+    expect(email.html).toContain('href="https://appclimb.app/?kw=water%20tracker&amp;country=US"');
+    expect(email.html).toContain("Open the keyword explorer");
+    // No section about the user's own keywords: the server has none.
+    expect(email.text).not.toContain("Your keywords");
+  });
+
+  it("is honest about the data and says what Pro adds, once", () => {
+    const email = buildFreeDigestEmail(freeInput());
+    if (!email) throw new Error("expected an email");
+    // "Search volume" appears only to say popularity isn't it.
+    expect(email.text.match(/search volume/giu)).toEqual(["search volume"]);
+    expect(email.text).toContain("not search volume");
+    expect(email.text.match(/AppClimb Pro syncs your tracker/gu)).toHaveLength(1);
+    expect(email.text).toContain("rank changes from your checks");
+    expect(email.text).toContain("https://appclimb.app/pricing");
+    expect(email.html).toContain('href="https://appclimb.app/pricing"');
+    expect(email.text).toContain("You get this weekly because you have a free AppClimb account.");
+    expect(email.text).toContain("Stop these emails: https://appclimb.app/unsubscribe?u=u1&t=tok");
+    expect(email.html).toContain('href="https://appclimb.app/unsubscribe?u=u1&amp;t=tok"');
+    expect(email.text).not.toContain("on AppClimb Pro.");
+  });
+
+  it("shows a former Pro user's synced keywords without ranks, and leads the subject with them", () => {
+    const email = buildFreeDigestEmail(
+      freeInput({
+        syncedOn: "2026-09-30",
+        keywords: [
+          { keyword: "habit tracker", country: "US", popularity: 56, popularityChange: 3 },
+          { keyword: "journal", country: "US", popularity: 70, popularityChange: 0 },
+          { keyword: "streaks", country: "US", popularity: 33, popularityChange: null },
+          { keyword: "routine", country: "US", popularity: null, popularityChange: null },
+        ],
+      }),
+    );
+    if (!email) throw new Error("expected an email");
+    expect(email.subject).toBe("1 of your keywords moved in Apple’s new week");
+    expect(email.text).toContain("Your keywords · Apple popularity this week");
+    expect(email.text).toContain("  habit tracker  56 (+3)");
+    expect(email.text).toContain("  journal  70 (no change)");
+    expect(email.text).toContain("  streaks  33\n");
+    expect(email.text).not.toContain("routine");
+    expect(email.text).toContain("Keywords from your last cloud sync, Sep 30.");
+    expect(email.text).not.toMatch(/#\d|top 10|top 200/u);
+    // Risers still follow.
+    expect(email.text).toContain("water tracker · Health & Fitness");
+  });
+
+  it("labels storefronts only when synced keywords span several", () => {
+    const email = buildFreeDigestEmail(
+      freeInput({
+        risers: [],
+        keywords: [
+          { keyword: "habit tracker", country: "US", popularity: 56, popularityChange: null },
+          { keyword: "habit tracker", country: "GB", popularity: 30, popularityChange: null },
+        ],
+      }),
+    );
+    if (!email) throw new Error("expected an email");
+    expect(email.subject).toBe("Your keywords in Apple’s week of Oct 11");
+    expect(email.text).toContain("  habit tracker · US  56");
+    expect(email.text).toContain("  habit tracker · GB  30");
+    expect(email.text).not.toContain("Biggest risers");
+  });
+
+  it("escapes terms and categories in the HTML", () => {
+    const email = buildFreeDigestEmail(
+      freeInput({ risers: [riser("<b>x</b>", 3, { categoryLabel: "Food & Drink" })] }),
+    );
+    if (!email) throw new Error("expected an email");
+    expect(email.html).toContain("&lt;b&gt;x&lt;/b&gt;");
+    expect(email.html).toContain("Food &amp; Drink");
+    expect(email.html).not.toContain("<b>x</b>");
   });
 });

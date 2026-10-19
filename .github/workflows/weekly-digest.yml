@@ -1,8 +1,10 @@
-name: Weekly · Pro email digest
+name: Weekly · email digest
 
-# Sends Pro users their weekly email (ADR 0007) once Apple has published a
-# new week (the warm job loads it Mon/Wed/Fri). The Worker sends at most one
-# email per user per Apple week, so re-running is safe.
+# Sends the weekly email (ADR 0007) once Apple has published a new week (the
+# warm job loads it Mon/Wed/Fri): Pro users get their own keywords, free
+# accounts Apple's biggest risers. The Worker sends at most one email per user
+# per Apple week, so re-running is safe. A manual run is a dry run by default
+# and logs counts only.
 
 on:
   schedule:

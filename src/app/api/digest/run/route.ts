@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getDb } from "@/lib/db";
-import { runWeeklyDigest } from "@/lib/digest-server";
+import { previewFreeDigest, runWeeklyDigest } from "@/lib/digest-server";
 import { readResendCredentials } from "@/lib/email";
 import { searchTermDeps } from "@/lib/search-terms-server";
 import { SITE_URL } from "@/lib/site";
@@ -20,6 +20,10 @@ function sameToken(left: string, right: string): boolean {
 /**
  * Weekly digest trigger for the scheduled GitHub workflow. Bearer-protected
  * with DIGEST_SECRET; handles a batch per call and reports `remaining`.
+ * `dry=1` builds without sending or logging and reports counts only (the
+ * workflow log is public). `preview=free` returns this week's free email
+ * with a placeholder unsubscribe link, so it can be read before it goes out;
+ * it holds no user data and the workflow never calls it.
  */
 export async function POST(request: NextRequest) {
   const secret = process.env.DIGEST_SECRET?.trim() ?? "";
@@ -32,6 +36,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
   const params = request.nextUrl.searchParams;
+  if (params.get("preview") === "free") {
+    const email = await previewFreeDigest({ store: searchTermDeps(), siteUrl: SITE_URL });
+    return NextResponse.json({ email });
+  }
   const dryRun = params.get("dry") === "1";
   const resend = readResendCredentials();
   if (!resend && !dryRun) {

@@ -5,6 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { APPLE_ADS_TOKEN_URL, clearAppleAdsTokenCache } from "@/lib/apple-ads";
 import type { DigestEmail } from "@/lib/digest";
 import {
+  digestKindFor,
+  previewFreeDigest,
   readDigestEnabled,
   runWeeklyDigest,
   unsubscribeToken,
@@ -63,13 +65,24 @@ function trackerJson(name: string): string {
 async function addUser(
   db: FakeD1,
   id: string,
-  options: { plan?: "pro" | "free"; status?: string; tracker?: string | null } = {},
+  options: {
+    /** null = no subscription row, like most free accounts. */
+    plan?: "pro" | "free" | null;
+    status?: string;
+    tracker?: string | null;
+    verified?: boolean;
+  } = {},
 ) {
-  await db.prepare("INSERT INTO users (id, email) VALUES (?, ?)").bind(id, `${id}@example.com`).run();
   await db
-    .prepare("INSERT INTO subscriptions (user_id, plan, status) VALUES (?, ?, ?)")
-    .bind(id, options.plan ?? "pro", options.status ?? "active")
+    .prepare("INSERT INTO users (id, email, email_verified_at) VALUES (?, ?, ?)")
+    .bind(id, `${id}@example.com`, options.verified === false ? null : "2026-09-01 10:00:00")
     .run();
+  if (options.plan !== null) {
+    await db
+      .prepare("INSERT INTO subscriptions (user_id, plan, status) VALUES (?, ?, ?)")
+      .bind(id, options.plan ?? "pro", options.status ?? "active")
+      .run();
+  }
   if (options.tracker !== null) {
     await db
       .prepare("INSERT INTO sync_blobs (user_id, blob_key, revision, json) VALUES (?, 'tracker', 1, ?)")
@@ -144,15 +157,19 @@ describe("runWeeklyDigest", () => {
     expect(outbox).toHaveLength(1);
   });
 
-  it("skips free, lapsed, opted-out, and unsynced users", async () => {
+  it("skips opted-out and unsynced Pro users, and holds free accounts without Apple data", async () => {
     await addUser(db, "free", { plan: "free", status: "free" });
     await addUser(db, "paused", { status: "paused" });
     await addUser(db, "off");
     await writeDigestEnabled(db, "off", false);
     await addUser(db, "nosync", { tracker: null });
     const result = await run();
-    expect(result).toMatchObject({ eligible: 0, sent: 0 });
+    // Free and lapsed accounts get the free email, which needs Apple's week.
+    expect(result).toMatchObject({ eligible: 0, pro: 0, free: 0, freeHeld: 2, sent: 0 });
     expect(outbox).toHaveLength(0);
+    // Held accounts aren't logged, so a later run can still email them.
+    const { results } = await db.prepare("SELECT user_id FROM digest_log").all();
+    expect(results).toEqual([]);
   });
 
   it("logs empty trackers as skipped and retries failed sends", async () => {
@@ -199,14 +216,27 @@ async function testCreds() {
 
 /** Fake Apple Ads: two published weeks plus weekly history for tracked terms. */
 async function appleStore(): Promise<StoreDeps> {
-  const row = (term: string, popularity: number) => ({
+  const row = (term: string, popularity: number, genre = "HEALTH_FITNESS") => ({
     searchTerm: term,
-    genre: "HEALTH_FITNESS",
+    genre,
     searchPopularity1to100: popularity,
     rankInGenre: 100 - popularity,
   });
   const weeks: Record<string, Array<Record<string, unknown>>> = {
-    "2026-09-20": [row("habit tracker", 56), row("water tracker", 51), row("step counter", 70)],
+    "2026-09-20": [
+      row("habit tracker", 56),
+      row("water tracker", 51),
+      row("step counter", 70),
+      row("budget app", 45, "FINANCE"),
+      row("flight tracker", 60, "TRAVEL"),
+    ],
+    "2026-09-13": [
+      row("habit tracker", 53),
+      row("water tracker", 49),
+      row("step counter", 70),
+      row("budget app", 30, "FINANCE"),
+      row("flight tracker", 61, "TRAVEL"),
+    ],
     "2026-08-23": [row("habit tracker", 57), row("water tracker", 44), row("step counter", 70)],
   };
   const history = [
@@ -242,5 +272,140 @@ describe("runWeeklyDigest with Apple data", () => {
     expect(text).toContain("water tracker  51 (+7)  https://appclimb.app/keywords/us/health-fitness/water-tracker");
     expect(text).not.toContain("step counter");
     expect(html).toContain("Health &amp; Fitness");
+  });
+});
+
+describe("digestKindFor", () => {
+  const now = NOW.getTime();
+  const base = { email_verified_at: "2026-09-01", plan: null, status: null, current_period_end: null, json: null };
+
+  it("gives Pro users with a synced tracker the Pro email", () => {
+    expect(digestKindFor({ ...base, plan: "pro", status: "active", json: "{}" }, now)).toBe("pro");
+    expect(digestKindFor({ ...base, plan: "pro", status: "active", json: null }, now)).toBeNull();
+  });
+
+  it("gives verified free, canceled, and lapsed accounts the free email", () => {
+    expect(digestKindFor(base, now)).toBe("free");
+    expect(digestKindFor({ ...base, plan: "free", status: "free" }, now)).toBe("free");
+    expect(digestKindFor({ ...base, plan: "pro", status: "paused", json: "{}" }, now)).toBe("free");
+    expect(
+      digestKindFor({ ...base, plan: "pro", status: "canceled", current_period_end: "2026-09-01T00:00:00Z" }, now),
+    ).toBe("free");
+    // Canceled but still paid up: still Pro.
+    expect(
+      digestKindFor(
+        { ...base, plan: "pro", status: "canceled", current_period_end: "2026-10-20T00:00:00Z", json: "{}" },
+        now,
+      ),
+    ).toBe("pro");
+  });
+
+  it("never emails an unverified free address", () => {
+    expect(digestKindFor({ ...base, email_verified_at: null }, now)).toBeNull();
+  });
+});
+
+describe("runWeeklyDigest for free accounts", () => {
+  it("emails verified free accounts Apple's risers once per week, with one-click unsubscribe", async () => {
+    await addUser(db, "f1", { plan: null, tracker: null });
+    await addUser(db, "f2", { plan: "free", status: "free", tracker: null });
+    await addUser(db, "unverified", { plan: null, tracker: null, verified: false });
+    await addUser(db, "quiet", { plan: null, tracker: null });
+    await writeDigestEnabled(db, "quiet", false);
+    const store = await appleStore();
+
+    const first = await run({ store });
+    expect(first).toMatchObject({ week: "2026-09-20", eligible: 2, pro: 0, free: 2, sent: 2, failed: 0, remaining: 0 });
+    expect(first.freeHeld).toBeUndefined();
+    expect(outbox.map((item) => item.to)).toEqual(["f1@example.com", "f2@example.com"]);
+    const { email, headers } = outbox[0];
+    expect(email.subject).toBe("Apple’s latest week: “budget app” up 15 in popularity");
+    expect(email.text).toContain("Biggest risers · US App Store");
+    expect(email.text).toContain("  budget app · Finance  45 (+15)  https://appclimb.app/?kw=budget%20app&country=US");
+    expect(email.text).toContain("  habit tracker · Health & Fitness  56 (+3)");
+    expect(email.text).toContain("  water tracker · Health & Fitness  51 (+2)");
+    // Falling and unchanged terms aren't risers.
+    expect(email.text).not.toContain("flight tracker");
+    expect(email.text).not.toContain("step counter");
+    expect(email.text).toContain("since the week of Sep 13.");
+    expect(email.text).toContain("You get this weekly because you have a free AppClimb account.");
+    expect(email.text).toContain("https://appclimb.app/unsubscribe?u=f1&t=");
+    expect(headers["List-Unsubscribe"]).toContain("/api/digest/unsubscribe?u=f1&t=");
+    expect(headers["List-Unsubscribe-Post"]).toBe("List-Unsubscribe=One-Click");
+
+    const again = await run({ store });
+    expect(again).toMatchObject({ eligible: 0, sent: 0 });
+    expect(outbox).toHaveLength(2);
+  });
+
+  it("sends Pro and free emails in one run, batched by id", async () => {
+    await addUser(db, "a-free", { plan: null, tracker: null });
+    await addUser(db, "b-pro");
+    await addUser(db, "c-free", { plan: null, tracker: null });
+    const store = await appleStore();
+    expect(await run({ store, limit: 2 })).toMatchObject({ eligible: 3, pro: 1, free: 2, sent: 2, remaining: 1 });
+    expect(await run({ store, limit: 2 })).toMatchObject({ eligible: 1, sent: 1, remaining: 0 });
+    expect(outbox.map((item) => [item.to, item.email.text.includes("free AppClimb account")])).toEqual([
+      ["a-free@example.com", true],
+      ["b-pro@example.com", false],
+      ["c-free@example.com", true],
+    ]);
+  });
+
+  it("uses a former Pro user's synced keywords for Apple's numbers, never their frozen ranks", async () => {
+    await addUser(db, "lapsed", { status: "paused" });
+    await db.prepare("UPDATE sync_blobs SET updated_at = '2026-09-30 09:00:00' WHERE user_id = 'lapsed'").run();
+    const result = await run({ store: await appleStore() });
+    expect(result).toMatchObject({ pro: 0, free: 1, sent: 1 });
+    const { email } = outbox[0];
+    expect(email.subject).toBe("1 of your keywords moved in Apple’s new week");
+    expect(email.text).toContain("Your keywords · Apple popularity this week");
+    expect(email.text).toContain("  habit tracker  56 (+3)");
+    expect(email.text).toContain("Keywords from your last cloud sync, Sep 30.");
+    expect(email.text).not.toMatch(/#12|#18|top 10/u);
+    expect(email.text).toContain("free AppClimb account");
+  });
+
+  it("dry runs count free emails without sending or logging", async () => {
+    await addUser(db, "f1", { plan: null, tracker: null });
+    await addUser(db, "p1");
+    const store = await appleStore();
+    const dry = await run({ store, dryRun: true });
+    expect(dry).toMatchObject({ eligible: 2, pro: 1, free: 1, built: 2, sent: 0, skipped: 0 });
+    expect(outbox).toHaveLength(0);
+    const { results } = await db.prepare("SELECT user_id FROM digest_log").all();
+    expect(results).toEqual([]);
+  });
+
+  it("holds free accounts when Apple's previous week is missing, then sends", async () => {
+    await addUser(db, "f1", { plan: null, tracker: null });
+    const apple = await appleStore();
+    const original = apple.fetchImpl as unknown as (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+    const store: StoreDeps = {
+      ...apple,
+      fetchImpl: (async (input: RequestInfo | URL, init?: RequestInit) =>
+        String(init?.body ?? "").includes("2026-09-13")
+          ? Response.json({ result: { rows: [] } })
+          : original(input, init)) as never,
+    };
+    expect(await run({ store })).toMatchObject({ eligible: 0, free: 0, freeHeld: 1, sent: 0 });
+    expect(outbox).toHaveLength(0);
+
+    resetSearchTermMemory();
+    await db.prepare("DELETE FROM search_term_weeks WHERE week = '2026-09-13'").run();
+    expect(await run({ store: await appleStore() })).toMatchObject({ free: 1, sent: 1 });
+  });
+});
+
+describe("previewFreeDigest", () => {
+  it("builds this week's free email with a placeholder unsubscribe link", async () => {
+    const email = await previewFreeDigest({ store: await appleStore(), siteUrl: "https://appclimb.app" });
+    expect(email?.subject).toBe("Apple’s latest week: “budget app” up 15 in popularity");
+    expect(email?.text).toMatch(/Stop these emails: https:\/\/appclimb\.app\/unsubscribe$/u);
+    expect(email?.text).not.toContain("Your keywords");
+  });
+
+  it("is empty without Apple data", async () => {
+    expect(await previewFreeDigest({ store: null, siteUrl: "https://appclimb.app" })).toBeNull();
   });
 });

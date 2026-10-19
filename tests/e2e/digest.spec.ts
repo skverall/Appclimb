@@ -63,3 +63,40 @@ test("Pro users can switch the weekly email off from the account menu", async ({
   await expect(toggle).toHaveAttribute("aria-checked", "false");
   expect(posts).toEqual([{ enabled: false }]);
 });
+
+test("free users see the weekly email toggle too", async ({ page }) => {
+  await page.route("**/api/me", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        user: { id: "u2", email: "free@example.com", name: "Free" },
+        plan: "free",
+        subscription: null,
+      }),
+    }),
+  );
+  const posts: unknown[] = [];
+  await page.route("**/api/digest/prefs", async (route) => {
+    if (route.request().method() === "POST") {
+      posts.push(route.request().postDataJSON());
+      await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ enabled: false }) });
+      return;
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ configured: true, enabled: true, eligible: true }),
+    });
+  });
+
+  await page.goto("/pricing");
+  await page.locator(".account-menu-trigger").click();
+  const toggle = page.getByRole("menuitemcheckbox", { name: /Weekly email/ });
+  await expect(toggle).toContainText("Rising App Store searches from Apple");
+  await expect(toggle).toHaveAttribute("aria-checked", "true");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-checked", "false");
+  expect(posts).toEqual([{ enabled: false }]);
+});

@@ -1,6 +1,6 @@
 # ADR 0007 — A weekly email for Pro users
 
-**Status:** Accepted (2026-10-02)
+**Status:** Accepted (2026-10-02); extended to free accounts (2026-10-19)
 
 **Context**
 
@@ -40,3 +40,48 @@ browser; only a signed-in Pro user's data is synced to D1 (ADR 0004).
   quietly.
 - The email is only as fresh as the user's last rank check; it cannot check
   ranks itself because Apple blocks Worker IPs for the iTunes Search API.
+
+## Amendment (2026-10-19): free accounts get a weekly email too
+
+**Context**
+
+Free accounts got nothing after sign-up, so most never came back, while
+60% of active visitors hit the daily check limit. The server knows almost
+nothing about a free account: its email, an optional name, and the sign-up
+and last-seen dates. Its tracker stays in the browser. Only a former Pro
+user can still have a synced tracker in `sync_blobs` (it isn't deleted when
+Pro ends).
+
+**Decision**
+
+- Every verified, signed-up account that isn't Pro gets a short weekly
+  email: the week's biggest risers in Apple's published search terms
+  (US storefront, latest week vs the week before, up to 8 terms, at most 2
+  per category, each linked to the explorer), one honest line on what Pro
+  adds (synced tracking; this email then shows the user's own rank and
+  popularity changes), and the same honesty footer.
+- A former Pro user whose synced tracker is still stored also gets Apple's
+  popularity this week for those keywords. Ranks in that tracker stopped
+  updating when sync stopped, so they are never shown.
+- Pro users without a synced tracker still get no email; nothing changes
+  for Pro.
+- Same opt-out as Pro (`email_prefs`, the account-menu toggle now shown to
+  every signed-in user, the unsubscribe link, RFC 8058 headers) and the same
+  one-email-per-Apple-week rule (`digest_log`). Unverified addresses are
+  never emailed.
+- When Apple's latest week or the week before isn't available, free
+  accounts are held (reported as `freeHeld`, not logged) and get the email
+  on a later run in the same week.
+- `POST /api/digest/run?preview=free` returns this week's free email with
+  a placeholder unsubscribe link, so the founder can read it before it goes
+  out. It holds no user data; the workflow never calls it.
+
+**Consequences**
+
+- The first Wednesday run after deploy emails every verified free account
+  that hasn't opted out. Accounts that signed up before this change were
+  not told about the email at sign-up; the email says why it arrives and
+  unsubscribes in one click.
+- The free email is the same for every free account (apart from former Pro
+  users' keywords), so a storefront picker or per-category choice would be
+  the next step if it proves useful.

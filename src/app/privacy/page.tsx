@@ -17,7 +17,7 @@ export default function PrivacyPage() {
           AppClimb is owned and operated by its founder,{" "}
           <strong>Shokhabbos Makhmudov</strong>.
         </p>
-        <p className="legal-updated">Last updated October 15, 2026</p>
+        <p className="legal-updated">Last updated October 19, 2026</p>
         <section>
           <h2>Local-first by default</h2>
           <p>
@@ -35,9 +35,24 @@ export default function PrivacyPage() {
             Signing in is required only for app tracking and the assistant. An
             account stores only: your email address,
             an optional display name, a Google subject id when you use Google
-            sign-in, hashed session tokens, your subscription status, and — if
-            you enable Pro cloud sync — your own synced keyword data. We store
-            nothing else about you.
+            sign-in, hashed session tokens, your subscription status, your
+            weekly email setting and the weeks it was sent, and — if you enable
+            Pro cloud sync — your own synced keyword data. We store nothing
+            else about you.
+          </p>
+        </section>
+        <section>
+          <h2>Email</h2>
+          <p>
+            We email you sign-in links when you ask for one, and a weekly email
+            while you have an account. For a free account the weekly email is
+            built only from Apple&apos;s public search-term data; your email
+            address is the only personal data it uses. For Pro, it also uses
+            your synced keyword data. If you had Pro and synced keywords, those
+            stay in your account, and the weekly email keeps showing
+            Apple&apos;s popularity for them (not your ranks). Every weekly
+            email has a one-click unsubscribe link, and you can switch it off
+            in the account menu.
           </p>
         </section>
         <section>
@@ -67,6 +82,8 @@ export default function PrivacyPage() {
             Apple&apos;s iTunes Search API. Apple&apos;s handling of those
             requests is governed by Apple&apos;s own privacy policy. Google
             processes sign-ins only when you choose to sign in with Google.
+            Emails are delivered by Resend, which receives your email address
+            and the message for that purpose.
           </p>
         </section>
         <p className="legal-note">

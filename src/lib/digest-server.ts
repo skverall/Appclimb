@@ -1,16 +1,20 @@
-// Weekly email for Pro users (ADR 0007): the I/O part. Finds Pro users who
-// keep the email on, reads their synced tracker from D1, joins Apple's
-// latest week, and sends through Resend. One email per user per Apple week.
+// Weekly email (ADR 0007): the I/O part. Finds signed-up users who keep the
+// email on: Pro users get their synced tracker joined with Apple's latest
+// week; free accounts get Apple's biggest risers of the week. Sends through
+// Resend, one email per user per Apple week.
 
 import { lastCompleteUtcWeek } from "@/lib/apple-ads";
 import {
   buildDigestEmail,
+  buildFreeDigestEmail,
   digestKeywordsFor,
+  pickRisers,
   type DigestApp,
   type DigestEmail,
+  type DigestRiser,
 } from "@/lib/digest";
 import { sendEmail, type ResendCredentials } from "@/lib/email";
-import { categoryLabel, termPath } from "@/lib/keyword-pages";
+import { categoryLabel, explorerLink, termPath } from "@/lib/keyword-pages";
 import { isProEntitled } from "@/lib/plan";
 import {
   datasetGenreFor,
@@ -87,10 +91,31 @@ export async function writeDigestEnabled(db: D1Database, userId: string, enabled
 interface Candidate {
   id: string;
   email: string;
-  plan: string;
-  status: string;
+  email_verified_at: string | null;
+  plan: string | null;
+  status: string | null;
   current_period_end: string | null;
-  json: string;
+  /** Synced tracker; only Pro users can sync, so free accounts have one only if they had Pro. */
+  json: string | null;
+  synced_at: string | null;
+}
+
+type Recipient = Candidate & { kind: "pro" | "free" };
+
+/**
+ * Which email a user gets: Pro needs a synced tracker to build from; a free
+ * account needs a verified address, since nobody asked for this email by
+ * typing it in. Everyone else gets none.
+ */
+export function digestKindFor(
+  user: Pick<Candidate, "email_verified_at" | "plan" | "status" | "current_period_end" | "json">,
+  now: number,
+): "pro" | "free" | null {
+  const subscription = user.plan
+    ? { plan: user.plan, status: user.status ?? "", current_period_end: user.current_period_end }
+    : null;
+  if (isProEntitled(subscription, now)) return user.json !== null ? "pro" : null;
+  return user.email_verified_at ? "free" : null;
 }
 
 export interface DigestRunOptions {
@@ -111,6 +136,14 @@ export interface DigestRunOptions {
 export interface DigestRunResult {
   week: string;
   eligible: number;
+  /** Eligible users by email kind. */
+  pro: number;
+  free: number;
+  /**
+   * Free accounts left for a later run because Apple's week (or the week
+   * before it) isn't available; they stay unlogged, so nothing is lost.
+   */
+  freeHeld?: number;
   sent: number;
   skipped: number;
   failed: number;
@@ -126,6 +159,47 @@ async function digestWeek(store: StoreDeps | null, now: Date): Promise<string> {
     if (dataset) return dataset.week;
   }
   return lastCompleteUtcWeek(now).start;
+}
+
+/**
+ * Storefront of the free email's risers. The server doesn't know a free
+ * user's storefront (their tracker stays in the browser), so it uses the
+ * one the site defaults to and says so in the email.
+ */
+const MARKET_COUNTRY = "US";
+
+export interface MarketWeek {
+  week: string;
+  compareWeek: string;
+  country: string;
+  risers: DigestRiser[];
+}
+
+/** This week's biggest risers across Apple's published categories, vs the week before. */
+export async function marketWeek(store: StoreDeps | null, siteUrl: string): Promise<MarketWeek | null> {
+  if (!store) return null;
+  const current = await latestDataset(store, MARKET_COUNTRY).catch(() => null);
+  const previous = current ? await datasetWeeksBefore(store, current, 1).catch(() => null) : null;
+  if (!current || !previous) return null;
+  const risers = pickRisers(moversFrom(current, previous, { limit: 500 }).rising).map((term) => ({
+    term: term.term,
+    categoryLabel: categoryLabel(term.genre),
+    popularity: term.popularity,
+    delta: term.delta ?? 0,
+    href: `${siteUrl}${explorerLink(term.term, MARKET_COUNTRY)}`,
+  }));
+  if (risers.length === 0) return null;
+  return { week: current.week, compareWeek: previous.week, country: MARKET_COUNTRY, risers };
+}
+
+function trackerFrom(json: string): TrackerStore {
+  return loadTrackerStore({
+    getItem: () => json,
+    setItem: () => {},
+    removeItem: () => {},
+    key: () => null,
+    length: 0,
+  } as unknown as Storage);
 }
 
 async function appsFor(
@@ -186,8 +260,55 @@ async function appsFor(
 }
 
 /**
- * Send this week's emails to up to `limit` Pro users who haven't had one
- * for the current Apple week.
+ * A free account's email. Ranks from a former Pro user's synced tracker are
+ * frozen since their last sync, so only Apple's numbers for those keywords
+ * are used, never the ranks.
+ */
+async function freeEmailFor(
+  user: Candidate,
+  market: MarketWeek,
+  options: DigestRunOptions,
+  datasets: Map<string, { current: TermDataset | null; previous: TermDataset | null }>,
+  unsubscribe: string,
+): Promise<DigestEmail | null> {
+  const apps = user.json ? await appsFor(trackerFrom(user.json), options.store, options.siteUrl, datasets) : [];
+  return buildFreeDigestEmail({
+    ...market,
+    keywords: apps.flatMap((app) =>
+      app.keywords.map((keyword) => ({
+        keyword: keyword.keyword,
+        country: app.country,
+        popularity: keyword.popularity,
+        popularityChange: keyword.popularityChange,
+      })),
+    ),
+    syncedOn: user.json ? (user.synced_at?.slice(0, 10) ?? null) : null,
+    siteUrl: options.siteUrl,
+    unsubscribeUrl: unsubscribe,
+  });
+}
+
+/**
+ * This week's free email as a never-signed-up reader would get it, with a
+ * placeholder unsubscribe link: a dry run you can read. No user data.
+ */
+export async function previewFreeDigest(
+  options: Pick<DigestRunOptions, "store" | "siteUrl">,
+): Promise<DigestEmail | null> {
+  const market = await marketWeek(options.store, options.siteUrl);
+  if (!market) return null;
+  return buildFreeDigestEmail({
+    ...market,
+    keywords: [],
+    syncedOn: null,
+    siteUrl: options.siteUrl,
+    unsubscribeUrl: `${options.siteUrl}/unsubscribe`,
+  });
+}
+
+/**
+ * Send this week's emails to up to `limit` users (Pro and free) who haven't
+ * had one for the current Apple week.
  */
 export async function runWeeklyDigest(options: DigestRunOptions): Promise<DigestRunResult> {
   const now = options.now ?? new Date();
@@ -195,22 +316,34 @@ export async function runWeeklyDigest(options: DigestRunOptions): Promise<Digest
   const week = await digestWeek(options.store, now);
   const { results } = await options.db
     .prepare(
-      `SELECT u.id, u.email, s.plan, s.status, s.current_period_end, b.json
+      `SELECT u.id, u.email, u.email_verified_at, s.plan, s.status, s.current_period_end,
+              b.json, b.updated_at AS synced_at
        FROM users u
-       JOIN subscriptions s ON s.user_id = u.id
-       JOIN sync_blobs b ON b.user_id = u.id AND b.blob_key = 'tracker'
+       LEFT JOIN subscriptions s ON s.user_id = u.id
+       LEFT JOIN sync_blobs b ON b.user_id = u.id AND b.blob_key = 'tracker'
        LEFT JOIN email_prefs p ON p.user_id = u.id
        LEFT JOIN digest_log d ON d.user_id = u.id AND d.week = ?
-       WHERE s.plan = 'pro' AND COALESCE(p.weekly_digest, 1) = 1 AND d.user_id IS NULL
+       WHERE COALESCE(p.weekly_digest, 1) = 1 AND d.user_id IS NULL
        ORDER BY u.id`,
     )
     .bind(week)
     .all<Candidate>();
-  const eligible = (results ?? []).filter((row) => isProEntitled(row, now.getTime()));
+  const recipients: Recipient[] = [];
+  for (const row of results ?? []) {
+    const kind = digestKindFor(row, now.getTime());
+    if (kind) recipients.push({ ...row, kind });
+  }
+  const freeCount = recipients.filter((user) => user.kind === "free").length;
+  // Free emails are built from Apple's week alone; without it they wait.
+  const market = freeCount > 0 ? await marketWeek(options.store, options.siteUrl) : null;
+  const eligible = market ? recipients : recipients.filter((user) => user.kind === "pro");
   const batch = eligible.slice(0, limit);
   const result: DigestRunResult = {
     week,
     eligible: eligible.length,
+    pro: recipients.length - freeCount,
+    free: market ? freeCount : 0,
+    ...(freeCount > 0 && !market ? { freeHeld: freeCount } : {}),
     sent: 0,
     skipped: 0,
     failed: 0,
@@ -221,17 +354,18 @@ export async function runWeeklyDigest(options: DigestRunOptions): Promise<Digest
   const today = now.toISOString().slice(0, 10);
 
   for (const user of batch) {
-    const tracker = loadTrackerStore({
-      getItem: () => user.json,
-      setItem: () => {},
-      removeItem: () => {},
-      key: () => null,
-      length: 0,
-    } as unknown as Storage);
-    const apps = await appsFor(tracker, options.store, options.siteUrl, datasets);
     const token = await unsubscribeToken(options.secret, user.id);
     const unsubscribe = unsubscribeUrl(options.siteUrl, user.id, token);
-    const email = buildDigestEmail({ week, today, apps, siteUrl: options.siteUrl, unsubscribeUrl: unsubscribe });
+    const email =
+      user.kind === "free" && market
+        ? await freeEmailFor(user, market, options, datasets, unsubscribe)
+        : buildDigestEmail({
+            week,
+            today,
+            apps: await appsFor(trackerFrom(user.json ?? "{}"), options.store, options.siteUrl, datasets),
+            siteUrl: options.siteUrl,
+            unsubscribeUrl: unsubscribe,
+          });
 
     if (options.dryRun) {
       if (email) result.built = (result.built ?? 0) + 1;

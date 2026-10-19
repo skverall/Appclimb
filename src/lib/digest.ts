@@ -1,6 +1,7 @@
-// Weekly email for Pro users (ADR 0007): the pure part. Turns a user's synced
-// tracker plus Apple's latest week into a short, honest email. No I/O here,
-// so every rule is unit-tested.
+// Weekly email (ADR 0007): the pure part. Pro users get their synced tracker
+// plus Apple's latest week; free accounts, whose keywords never leave the
+// browser, get the week's biggest risers in Apple's published search terms.
+// No I/O here, so every rule is unit-tested.
 
 import type { RankSnapshot, TrackedKeyword, TrackerStore } from "@/lib/tracker";
 
@@ -8,6 +9,11 @@ import type { RankSnapshot, TrackedKeyword, TrackerStore } from "@/lib/tracker";
 const STALE_RANK_DAYS = 7;
 const MAX_APPS = 5;
 const MAX_ROWS = 5;
+/** Free email: risers shown, and at most this many from one category. */
+const FREE_RISERS = 8;
+const FREE_RISERS_PER_CATEGORY = 2;
+/** Free email: a former Pro user's synced keywords shown. */
+const FREE_KEYWORDS = 8;
 
 export interface DigestKeyword {
   keyword: string;
@@ -55,6 +61,44 @@ export interface DigestEmail {
   subject: string;
   text: string;
   html: string;
+}
+
+/** A term from Apple's published lists that gained popularity since the week before. */
+export interface DigestRiser {
+  term: string;
+  categoryLabel: string;
+  popularity: number;
+  /** Popularity gained since the comparison week. */
+  delta: number;
+  href: string;
+}
+
+/** Apple's popularity this week for one keyword a former Pro user synced. */
+export interface FreeDigestKeyword {
+  keyword: string;
+  country: string;
+  /** Null when the term is below Apple's published list. */
+  popularity: number | null;
+  popularityChange: number | null;
+}
+
+export interface FreeDigestInput {
+  /** Apple week the numbers belong to (Sunday, YYYY-MM-DD). */
+  week: string;
+  /** The week the risers are compared with. */
+  compareWeek: string;
+  /** Storefront the risers come from. */
+  country: string;
+  risers: DigestRiser[];
+  /**
+   * Keywords from the user's last cloud sync. Empty for most free accounts:
+   * only a former Pro user can have synced keywords on the server.
+   */
+  keywords: FreeDigestKeyword[];
+  /** Day of that last sync (YYYY-MM-DD). */
+  syncedOn: string | null;
+  siteUrl: string;
+  unsubscribeUrl: string;
 }
 
 /** The last snapshot and the one closest to a week before it. */
@@ -195,6 +239,72 @@ function subjectFor(summaries: AppSummary[], week: string): string {
   return `${subject}your week of ${formatDay(week)} on the App Store`;
 }
 
+const SECTION_TITLE_STYLE =
+  "font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#6b777d;margin:16px 0 6px;";
+const NOTE_STYLE = "font-size:12px;color:#6b777d;margin:6px 0 0;";
+const HONESTY = "Popularity is Apple Ads’ relative 1–100 score, not search volume.";
+const PRO_LINE =
+  "AppClimb Pro syncs your tracker, and then this email covers your own apps every week: rank changes from your checks and Apple popularity for each keyword you track.";
+
+interface EmailRow {
+  left: string;
+  right: string;
+  /** Small grey label after `left`, e.g. the category. */
+  note?: string;
+  href?: string;
+}
+
+/** A titled two-column table, in both the text and the HTML part. */
+function pushRows(text: string[], html: string[], title: string, rows: readonly EmailRow[]): void {
+  if (rows.length === 0) return;
+  text.push("", title);
+  html.push(`<p style="${SECTION_TITLE_STYLE}">${escapeHtml(title)}</p>`);
+  html.push('<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">');
+  for (const row of rows) {
+    const label = row.note ? `${row.left} · ${row.note}` : row.left;
+    text.push(`  ${label}  ${row.right}${row.href ? `  ${row.href}` : ""}`);
+    const left = row.href
+      ? `<a href="${escapeHtml(row.href)}" style="color:#0b5f5a;text-decoration:none;">${escapeHtml(row.left)}</a>`
+      : escapeHtml(row.left);
+    const note = row.note ? ` <span style="font-size:12px;color:#8a969b;">· ${escapeHtml(row.note)}</span>` : "";
+    html.push(
+      `<tr><td style="padding:6px 0;border-top:1px solid #eef1f2;font-size:14px;color:#17272d;">${left}${note}</td>` +
+        `<td style="padding:6px 0;border-top:1px solid #eef1f2;font-size:14px;color:#3c4a50;text-align:right;white-space:nowrap;">${escapeHtml(row.right)}</td></tr>`,
+    );
+  }
+  html.push("</table>");
+}
+
+interface EmailShell {
+  subtitle: string;
+  sections: readonly string[];
+  cta: { label: string; href: string };
+  /** HTML between the button and the footer. */
+  afterCta?: string;
+  footer: string;
+  /** Why the reader gets this email. */
+  reason: string;
+  unsubscribeUrl: string;
+}
+
+function renderHtml(shell: EmailShell): string {
+  return `
+  <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f6f8f9;padding:28px 12px;">
+    <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e3e8ea;border-radius:16px;padding:28px;">
+      <p style="font-size:15px;font-weight:700;color:#0c8e88;margin:0 0 4px;">AppClimb weekly</p>
+      <p style="font-size:13px;color:#6b777d;margin:0;">${escapeHtml(shell.subtitle)}</p>
+      ${shell.sections.join("\n      ")}
+      <p style="margin:28px 0 0;">
+        <a href="${escapeHtml(shell.cta.href)}" style="display:inline-block;background:#0c8e88;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 22px;border-radius:10px;">${escapeHtml(shell.cta.label)}</a>
+      </p>${shell.afterCta ? `\n      ${shell.afterCta}` : ""}
+      <p style="font-size:12px;color:#8a969b;line-height:1.6;margin:24px 0 0;">
+        ${escapeHtml(shell.footer)}<br/>
+        ${escapeHtml(shell.reason)} <a href="${escapeHtml(shell.unsubscribeUrl)}" style="color:#6b777d;">Stop these emails</a>.
+      </p>
+    </div>
+  </div>`;
+}
+
 /**
  * Build the weekly email, or null when there is nothing worth sending
  * (no tracked keywords at all).
@@ -235,39 +345,27 @@ export function buildDigestEmail(input: DigestInput): DigestEmail | null {
       html.push(`<p style="font-size:13px;color:#a8561b;margin:0 0 12px;">${escapeHtml(note)}</p>`);
     }
 
-    const rows = (title: string, items: DigestKeyword[], render: (item: DigestKeyword) => [string, string]) => {
-      if (items.length === 0) return;
-      text.push("", title);
-      html.push(`<p style="font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#6b777d;margin:16px 0 6px;">${escapeHtml(title)}</p>`);
-      html.push('<table role="presentation" cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;">');
-      for (const item of items) {
-        const [left, right] = render(item);
-        text.push(`  ${left}  ${right}`);
-        html.push(
-          `<tr><td style="padding:6px 0;border-top:1px solid #eef1f2;font-size:14px;color:#17272d;">${escapeHtml(left)}</td>` +
-            `<td style="padding:6px 0;border-top:1px solid #eef1f2;font-size:14px;color:#3c4a50;text-align:right;white-space:nowrap;">${escapeHtml(right)}</td></tr>`,
-        );
-      }
-      html.push("</table>");
-    };
-
-    rows("Climbing", summary.climbers, (item) => [
-      item.keyword,
-      `${position(item.previousPosition)} → ${position(item.position)}`,
-    ]);
-    rows("Falling", summary.fallers, (item) => [
-      item.keyword,
-      `${position(item.previousPosition)} → ${position(item.position)}`,
-    ]);
-    rows("Apple popularity this week", summary.popularity, (item) => [
-      item.keyword,
-      `${item.popularity ?? "—"} (${signed(item.popularityChange ?? 0)})`,
-    ]);
+    const moves = (items: DigestKeyword[]): EmailRow[] =>
+      items.map((item) => ({
+        left: item.keyword,
+        right: `${position(item.previousPosition)} → ${position(item.position)}`,
+      }));
+    pushRows(text, html, "Climbing", moves(summary.climbers));
+    pushRows(text, html, "Falling", moves(summary.fallers));
+    pushRows(
+      text,
+      html,
+      "Apple popularity this week",
+      summary.popularity.map((item) => ({
+        left: item.keyword,
+        right: `${item.popularity ?? "—"} (${signed(item.popularityChange ?? 0)})`,
+      })),
+    );
 
     if (app.rising.length > 0) {
       const title = `Rising in ${app.categoryLabel ?? "your category"} (4 weeks)`;
       text.push("", title);
-      html.push(`<p style="font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#6b777d;margin:16px 0 6px;">${escapeHtml(title)}</p><p style="margin:0;line-height:2;">`);
+      html.push(`<p style="${SECTION_TITLE_STYLE}">${escapeHtml(title)}</p><p style="margin:0;line-height:2;">`);
       for (const term of app.rising) {
         text.push(`  ${term.term}  ${term.popularity} (${signed(term.delta)})  ${term.href}`);
         html.push(
@@ -280,31 +378,159 @@ export function buildDigestEmail(input: DigestInput): DigestEmail | null {
   }
 
   const open = `${input.siteUrl}/`;
-  const honesty =
-    "Popularity is Apple Ads’ relative 1–100 score, not search volume. Ranks come from your own checks in AppClimb.";
+  const honesty = `${HONESTY} Ranks come from your own checks in AppClimb.`;
+  const reason = "You get this weekly because you’re on AppClimb Pro.";
+  text.push(`Open your tracker: ${open}`, "", honesty, reason, `Stop these emails: ${input.unsubscribeUrl}`);
+
+  const body = renderHtml({
+    subtitle: `Apple data for the week of ${weekLabel}`,
+    sections: html,
+    cta: { label: "Open your tracker", href: open },
+    footer: honesty,
+    reason,
+    unsubscribeUrl: input.unsubscribeUrl,
+  });
+  return { subject, text: text.join("\n"), html: body };
+}
+
+/**
+ * The week's biggest risers, at most `perCategory` from one category so one
+ * busy category can't fill the email. Ties keep their input order (moversFrom
+ * breaks them by rank gain, then popularity).
+ */
+export function pickRisers<T extends { genre: string; delta: number | null }>(
+  rising: readonly T[],
+  limit = FREE_RISERS,
+  perCategory = FREE_RISERS_PER_CATEGORY,
+): T[] {
+  const picked: T[] = [];
+  const perGenre = new Map<string, number>();
+  const gains = rising
+    .filter((mover) => (mover.delta ?? 0) > 0)
+    .sort((left, right) => (right.delta ?? 0) - (left.delta ?? 0));
+  for (const mover of gains) {
+    if (picked.length >= limit) break;
+    const count = perGenre.get(mover.genre) ?? 0;
+    if (count >= perCategory) continue;
+    perGenre.set(mover.genre, count + 1);
+    picked.push(mover);
+  }
+  return picked;
+}
+
+/**
+ * A former Pro user's synced keywords that Apple lists this week, once each,
+ * biggest popularity moves first.
+ */
+export function pickKeywordMoves(
+  keywords: readonly FreeDigestKeyword[],
+  limit = FREE_KEYWORDS,
+): Array<FreeDigestKeyword & { popularity: number }> {
+  const seen = new Set<string>();
+  const listed: Array<FreeDigestKeyword & { popularity: number }> = [];
+  for (const keyword of keywords) {
+    if (keyword.popularity === null) continue;
+    const key = `${keyword.country}:${keyword.keyword.trim().toLocaleLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    listed.push({ ...keyword, popularity: keyword.popularity });
+  }
+  return listed
+    .sort(
+      (left, right) =>
+        Math.abs(right.popularityChange ?? 0) - Math.abs(left.popularityChange ?? 0) ||
+        right.popularity - left.popularity,
+    )
+    .slice(0, limit);
+}
+
+/**
+ * The weekly email for a free account: Apple's biggest risers this week
+ * (and, for a former Pro user, Apple's numbers for their synced keywords),
+ * plus one line on what Pro adds. Null when there is nothing to show.
+ */
+export function buildFreeDigestEmail(input: FreeDigestInput): DigestEmail | null {
+  const listed = pickKeywordMoves(input.keywords, Number.POSITIVE_INFINITY);
+  const keywords = listed.slice(0, FREE_KEYWORDS);
+  const risers = input.risers.slice(0, FREE_RISERS);
+  if (keywords.length === 0 && risers.length === 0) return null;
+  const weekLabel = formatDay(input.week);
+  const moved = listed.filter((keyword) => (keyword.popularityChange ?? 0) !== 0).length;
+  const subject =
+    moved > 0
+      ? `${moved} of your keywords moved in Apple’s new week`
+      : risers.length > 0
+        ? `Apple’s latest week: “${risers[0].term}” up ${risers[0].delta} in popularity`
+        : `Your keywords in Apple’s week of ${weekLabel}`;
+
+  const text: string[] = [`AppClimb weekly · Apple data for the week of ${weekLabel}`];
+  const html: string[] = [];
+
+  if (keywords.length > 0) {
+    const severalCountries = new Set(keywords.map((keyword) => keyword.country)).size > 1;
+    pushRows(
+      text,
+      html,
+      "Your keywords · Apple popularity this week",
+      keywords.map((keyword) => ({
+        left: keyword.keyword,
+        note: severalCountries ? keyword.country : undefined,
+        right:
+          keyword.popularityChange === null
+            ? `${keyword.popularity}`
+            : keyword.popularityChange === 0
+              ? `${keyword.popularity} (no change)`
+              : `${keyword.popularity} (${signed(keyword.popularityChange)})`,
+      })),
+    );
+    const from = input.syncedOn
+      ? `Keywords from your last cloud sync, ${formatDay(input.syncedOn)}.`
+      : "Keywords from your last cloud sync.";
+    text.push(from);
+    html.push(`<p style="${NOTE_STYLE}">${escapeHtml(from)}</p>`);
+  }
+
+  if (risers.length > 0) {
+    pushRows(
+      text,
+      html,
+      `Biggest risers · ${input.country} App Store`,
+      risers.map((riser) => ({
+        left: riser.term,
+        note: riser.categoryLabel,
+        right: `${riser.popularity} (${signed(riser.delta)})`,
+        href: riser.href,
+      })),
+    );
+    const how = `From Apple’s published top searches in each category: popularity points gained since the week of ${formatDay(input.compareWeek)}.`;
+    text.push(how);
+    html.push(`<p style="${NOTE_STYLE}">${escapeHtml(how)}</p>`);
+  }
+
+  const open = `${input.siteUrl}/`;
+  const pricing = `${input.siteUrl}/pricing`;
+  const reason = "You get this weekly because you have a free AppClimb account.";
+  const check = "Check any of them for your app (difficulty, Apple’s history, a verdict)";
+  html.push(`<p style="font-size:14px;color:#3c4a50;margin:24px 0 0;">${escapeHtml(check)}:</p>`);
   text.push(
-    `Open your tracker: ${open}`,
     "",
-    honesty,
-    "You get this weekly because you’re on AppClimb Pro.",
+    `${check}: ${open}`,
+    "",
+    `${PRO_LINE} ${pricing}`,
+    "",
+    HONESTY,
+    reason,
     `Stop these emails: ${input.unsubscribeUrl}`,
   );
 
-  const body = `
-  <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:#f6f8f9;padding:28px 12px;">
-    <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid #e3e8ea;border-radius:16px;padding:28px;">
-      <p style="font-size:15px;font-weight:700;color:#0c8e88;margin:0 0 4px;">AppClimb weekly</p>
-      <p style="font-size:13px;color:#6b777d;margin:0;">Apple data for the week of ${escapeHtml(weekLabel)}</p>
-      ${html.join("\n      ")}
-      <p style="margin:28px 0 0;">
-        <a href="${escapeHtml(open)}" style="display:inline-block;background:#0c8e88;color:#ffffff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 22px;border-radius:10px;">Open your tracker</a>
-      </p>
-      <p style="font-size:12px;color:#8a969b;line-height:1.6;margin:24px 0 0;">
-        ${escapeHtml(honesty)}<br/>
-        You get this weekly because you’re on AppClimb Pro. <a href="${escapeHtml(input.unsubscribeUrl)}" style="color:#6b777d;">Stop these emails</a>.
-      </p>
-    </div>
-  </div>`;
-
+  const body = renderHtml({
+    subtitle: `Apple data for the week of ${weekLabel}`,
+    sections: html,
+    cta: { label: "Open the keyword explorer", href: open },
+    afterCta: `<p style="font-size:13px;color:#3c4a50;line-height:1.5;margin:20px 0 0;padding:12px 14px;background:#f2f8f7;border-radius:10px;">${escapeHtml(PRO_LINE)} <a href="${escapeHtml(pricing)}" style="color:#0b5f5a;">See Pro</a></p>`,
+    footer: HONESTY,
+    reason,
+    unsubscribeUrl: input.unsubscribeUrl,
+  });
   return { subject, text: text.join("\n"), html: body };
 }
