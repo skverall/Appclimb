@@ -28,7 +28,7 @@ import { TrackerDetail } from "@/components/tracker-detail";
 import { Sparkline } from "@/components/keyword-charts";
 import { useAccount } from "@/components/account-provider";
 import { proEnabled } from "@/lib/flags";
-import { SUPPORTED_COUNTRIES } from "@/lib/aso";
+import { assessOpportunity, SUPPORTED_COUNTRIES } from "@/lib/aso";
 import { useToast } from "@/components/toast";
 import { AsoOptimizerModal } from "@/components/aso-optimizer-modal";
 import { optimizeKeywordField } from "@/lib/aso-optimizer";
@@ -684,6 +684,8 @@ export function TrackerView({
             longTail: metrics.popularitySource === "longtail",
             difficulty: metrics.difficulty,
             position: metrics.position,
+            verdict: assessOpportunity(metrics).verdict,
+            opportunity: opportunityScore(metrics),
           },
         ];
       }),

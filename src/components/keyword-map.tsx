@@ -1,38 +1,35 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { ChartScatter, LayoutList, Lightbulb } from "lucide-react";
 
 import { useElementSize } from "@/components/use-element-size";
-import { DEMAND_POPULARITY_FLOOR, TARGET_DIFFICULTY_MAX } from "@/lib/aso";
+import { DEMAND_POPULARITY_FLOOR, LONGTAIL_DIFFICULTY_MAX, TARGET_DIFFICULTY_MAX } from "@/lib/aso";
+import {
+  groupKeywordMap,
+  mapSummary,
+  popularityLabel,
+  rankBand as bandOf,
+  rankLabel,
+  type KeywordMapEntry,
+} from "@/lib/keyword-map";
 
-export interface KeywordMapPoint {
-  keyword: string;
-  normalizedKeyword: string;
-  popularity: number;
-  /** Long-tail popularity is a ceiling; drawn hollow. */
-  longTail: boolean;
-  difficulty: number;
-  position: number | null;
-}
-
-/** Same bands as the rankings overview. */
-function bandOf(position: number | null): "top10" | "top50" | "top200" | "outside" {
-  if (position === null || position > 200) return "outside";
-  if (position <= 10) return "top10";
-  if (position <= 50) return "top50";
-  return "top200";
-}
+export type KeywordMapPoint = KeywordMapEntry;
 
 // Splits match the verdict logic: no demand at or below the popularity
 // floor, a beatable first page at or below the target difficulty.
 const X_SPLIT = DEMAND_POPULARITY_FLOOR;
 const Y_SPLIT = TARGET_DIFFICULTY_MAX;
+/** Left half: a long-tail term is a win only at or below this difficulty. */
+const Y_SPLIT_LEFT = LONGTAIL_DIFFICULTY_MAX;
+/** Spreads long-tail dots across their band without clumping. */
+const GOLDEN = 0.618033988749895;
 
 const QUADRANTS = [
-  { tone: "bad", label: "Skip", side: "left", row: "top" },
+  { tone: "bad", label: "Low demand", side: "left", row: "top" },
   { tone: "warn", label: "Competitive", side: "right", row: "top" },
-  { tone: "calm", label: "Easy niche", side: "left", row: "bottom" },
-  { tone: "good", label: "Sweet spot", side: "right", row: "bottom" },
+  { tone: "calm", label: "Long tail", side: "left", row: "bottom" },
+  { tone: "good", label: "Worth targeting", side: "right", row: "bottom" },
 ] as const;
 
 const LABEL_FONT_SIZE = 11.5;
@@ -70,7 +67,7 @@ const overlaps = (a: Box, b: Box) => a.x1 < b.x2 && a.x2 > b.x1 && a.y1 < b.y2 &
  * Scatter of tracked keywords: Apple popularity (x) against difficulty (y),
  * colored by where the app ranks. Click a dot to open the keyword.
  */
-export function KeywordMap({
+function KeywordMapChart({
   points,
   onSelect,
 }: {
@@ -98,17 +95,33 @@ export function KeywordMap({
     top: plot.top + strip + DOT_RADIUS + 4,
     bottom: plot.bottom - strip - DOT_RADIUS - 4,
   };
-  const [xMin, xMax] = axisDomain(points.map((point) => point.popularity), X_SPLIT);
+  // Apple publishes no popularity below its top 500, only a ceiling. Long-tail
+  // terms therefore sit in the low-demand half, spread across a band, rather
+  // than at their ceiling — which would put them among real demand.
+  const longTail = points.filter((point) => point.longTail);
+  const hasLongTail = longTail.length > 0;
+  const official = points.filter((point) => !point.longTail).map((point) => point.popularity);
+  const [fitMin, xMax] = axisDomain(official.length > 0 ? official : [X_SPLIT], X_SPLIT);
+  const xMin = hasLongTail ? Math.max(0, Math.min(fitMin, X_SPLIT - 20)) : fitMin;
   const [yMin, yMax] = axisDomain(points.map((point) => point.difficulty), Y_SPLIT);
   const x = (value: number) => data.left + ((value - xMin) / (xMax - xMin || 1)) * (data.right - data.left);
   const y = (value: number) => data.bottom - ((value - yMin) / (yMax - yMin || 1)) * (data.bottom - data.top);
   const splitX = x(X_SPLIT);
   const splitY = y(Y_SPLIT);
+  const splitYLeft = y(Y_SPLIT_LEFT);
+  const bandLo = xMin + 2;
+  const bandHi = X_SPLIT - 2;
+  const longTailSlot = new Map(
+    [...longTail]
+      .sort((left, right) => left.normalizedKeyword.localeCompare(right.normalizedKeyword))
+      .map((point, index) => [point.normalizedKeyword, bandLo + ((index * GOLDEN) % 1) * (bandHi - bandLo)]),
+  );
+  const px = (point: KeywordMapPoint) => x(longTailSlot.get(point.normalizedKeyword) ?? point.popularity);
 
   const labelFont = `600 ${LABEL_FONT_SIZE}px ${fontFamily}`;
   const quadrantFont = `700 ${QUADRANT_FONT_SIZE}px ${fontFamily}`;
   const obstacles: Box[] = points.map((point) => {
-    const cx = x(point.popularity);
+    const cx = px(point);
     const cy = y(point.difficulty);
     const r = DOT_RADIUS + 2;
     return { x1: cx - r, y1: cy - r, x2: cx + r, y2: cy + r };
@@ -144,7 +157,7 @@ export function KeywordMap({
     const text = point.keyword.length > 24 ? `${point.keyword.slice(0, 23)}…` : point.keyword;
     const w = textWidth(text, labelFont, 6.6);
     const h = 13;
-    const cx = x(point.popularity);
+    const cx = px(point);
     const cy = y(point.difficulty);
     const r = DOT_RADIUS;
     const candidates: Box[] = [
@@ -171,16 +184,14 @@ export function KeywordMap({
   }
 
   const active = points.find((point) => point.normalizedKeyword === hover) ?? null;
-  const activeX = active ? x(active.popularity) : 0;
+  const activeX = active ? px(active) : 0;
   const activeY = active ? y(active.difficulty) : 0;
-  const hasLongTail = points.some((point) => point.longTail);
   // Ranked dots draw last so they sit on top.
   const drawOrder = [...order].reverse();
 
   return (
-    <section className="km" aria-labelledby="km-title">
-      <div className="km-head">
-        <h2 id="km-title">Keyword map</h2>
+    <div className="km-chart-view">
+      <div className="km-chart-head">
         <ul className="km-legend" aria-label="Dot color: where your app ranks">
           <li>
             <i className="km-key km-key--top10" /> Top 10
@@ -209,12 +220,13 @@ export function KeywordMap({
           role="img"
           aria-label={`Keyword map: ${points.length} keywords by popularity and difficulty`}
         >
-          <rect className="km-q km-q--bad" x={plot.left} y={plot.top} width={splitX - plot.left} height={splitY - plot.top} />
+          <rect className="km-q km-q--bad" x={plot.left} y={plot.top} width={splitX - plot.left} height={splitYLeft - plot.top} />
           <rect className="km-q km-q--warn" x={splitX} y={plot.top} width={plot.right - splitX} height={splitY - plot.top} />
-          <rect className="km-q km-q--calm" x={plot.left} y={splitY} width={splitX - plot.left} height={plot.bottom - splitY} />
+          <rect className="km-q km-q--calm" x={plot.left} y={splitYLeft} width={splitX - plot.left} height={plot.bottom - splitYLeft} />
           <rect className="km-q km-q--good" x={splitX} y={splitY} width={plot.right - splitX} height={plot.bottom - splitY} />
           <line className="km-split" x1={splitX} x2={splitX} y1={plot.top} y2={plot.bottom} />
-          <line className="km-split" x1={plot.left} x2={plot.right} y1={splitY} y2={splitY} />
+          <line className="km-split" x1={plot.left} x2={splitX} y1={splitYLeft} y2={splitYLeft} />
+          <line className="km-split" x1={splitX} x2={plot.right} y1={splitY} y2={splitY} />
           {quadrantLabels.map((quadrant) => (
             <text
               key={quadrant.tone}
@@ -234,11 +246,16 @@ export function KeywordMap({
               {value}
             </text>
           ))}
-          {[xMin, X_SPLIT, xMax].map((value) => (
+          {(hasLongTail ? [X_SPLIT, xMax] : [xMin, X_SPLIT, xMax]).map((value) => (
             <text key={`x${value}`} className="km-tick" x={x(value)} y={plot.bottom + 15} textAnchor="middle">
               {value}
             </text>
           ))}
+          {hasLongTail && (
+            <text className="km-tick" x={(x(bandLo) + x(bandHi)) / 2} y={plot.bottom + 15} textAnchor="middle">
+              Below Apple&rsquo;s top 500
+            </text>
+          )}
           <text
             className="km-axis-label"
             x={(plot.left + plot.right) / 2}
@@ -258,7 +275,7 @@ export function KeywordMap({
           </text>
 
           {drawOrder.map((point) => {
-            const cx = x(point.popularity);
+            const cx = px(point);
             const cy = y(point.difficulty);
             const isActive = hover === point.normalizedKeyword;
             const label = labels.get(point.normalizedKeyword);
@@ -293,17 +310,181 @@ export function KeywordMap({
           >
             <strong>{active.keyword}</strong>
             <span>
-              Popularity <b>{active.longTail ? `≤${active.popularity}` : active.popularity}</b>
+              Popularity <b>{popularityLabel(active)}</b>
             </span>
             <span>
               Difficulty <b>{active.difficulty}</b>
             </span>
             <span>
-              Your rank <b>{active.position === null ? ">200" : `#${active.position}`}</b>
+              Your rank <b>{rankLabel(active.position)}</b>
             </span>
           </div>
         )}
       </div>
+      {hasLongTail && (
+        <p className="km-note">
+          Hollow dots are below Apple&rsquo;s top 500 searches. Apple doesn&rsquo;t publish their popularity, so they
+          sit in the low-demand half and their left–right spread carries no meaning. Hover any dot for its numbers.
+        </p>
+      )}
+    </div>
+  );
+}
+
+const GROUP_PREVIEW = 6;
+const VIEW_KEY = "appclimb:keyword-map:view";
+
+type MapView = "groups" | "chart";
+
+/** Tracked keywords grouped by verdict, each group with what to do next. */
+function KeywordMapBoard({
+  points,
+  onSelect,
+}: {
+  points: KeywordMapPoint[];
+  onSelect: (normalizedKeyword: string) => void;
+}) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const groups = groupKeywordMap(points);
+  const hasLongTail = points.some((point) => point.longTail);
+
+  return (
+    <div className="kmb">
+      <p className="kmb-summary">
+        <Lightbulb size={16} aria-hidden="true" />
+        <span>{mapSummary(points)}</span>
+      </p>
+      <div className="kmb-grid">
+        {groups.map((group) => {
+          const open = expanded.has(group.id);
+          const visible = open ? group.entries : group.entries.slice(0, GROUP_PREVIEW);
+          const hidden = group.entries.length - visible.length;
+          const titleId = `kmb-${group.id}`;
+          return (
+            <section key={group.id} className={`kmb-group kmb-group--${group.tone}`} aria-labelledby={titleId}>
+              <header className="kmb-group-head">
+                <i className="kmb-group-dot" aria-hidden="true" />
+                <h3 id={titleId}>{group.title}</h3>
+                <span className="kmb-count">{group.entries.length}</span>
+              </header>
+              <p className="kmb-action">{group.action}</p>
+              <ul className="kmb-list">
+                {visible.map((entry) => (
+                  <li key={entry.normalizedKeyword}>
+                    <button type="button" className="kmb-row" onClick={() => onSelect(entry.normalizedKeyword)}>
+                      <span className="kmb-name">{entry.keyword}</span>
+                      <span className="kmb-meta">
+                        <span>
+                          Popularity <b>{popularityLabel(entry)}</b>
+                        </span>
+                        <span aria-hidden="true"> · </span>
+                        <span>
+                          Difficulty <b>{entry.difficulty}</b>
+                        </span>
+                      </span>
+                      <span className={`kmb-rank kmb-rank--${bandOf(entry.position)}`}>
+                        {rankLabel(entry.position)}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {group.entries.length > GROUP_PREVIEW && (
+                <button
+                  type="button"
+                  className="kmb-more"
+                  aria-expanded={open}
+                  onClick={() =>
+                    setExpanded((previous) => {
+                      const next = new Set(previous);
+                      if (next.has(group.id)) next.delete(group.id);
+                      else next.add(group.id);
+                      return next;
+                    })
+                  }
+                >
+                  {open ? "Show fewer" : `Show ${hidden} more`}
+                </button>
+              )}
+            </section>
+          );
+        })}
+      </div>
+      <div className="kmb-legend">
+        <span>Your rank:</span>
+        <span className="kmb-rank kmb-rank--top10">#1–10</span>
+        <span className="kmb-rank kmb-rank--top50">#11–50</span>
+        <span className="kmb-rank kmb-rank--top200">#51–200</span>
+        <span className="kmb-rank kmb-rank--outside">Not in top 200</span>
+        {hasLongTail && (
+          <span className="kmb-legend-note">≤N: below Apple&rsquo;s top 500, so popularity is a ceiling</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Where each tracked keyword stands. Groups (the default) say what to do
+ * with every keyword; the chart plots popularity against difficulty.
+ */
+export function KeywordMap({
+  points,
+  onSelect,
+}: {
+  points: KeywordMapPoint[];
+  onSelect: (normalizedKeyword: string) => void;
+}) {
+  const [view, setView] = useState<MapView>("groups");
+  useEffect(() => {
+    let stored: string | null = null;
+    try {
+      stored = window.localStorage.getItem(VIEW_KEY);
+    } catch {
+      // Storage blocked: keep the default view.
+    }
+    if (stored !== "chart") return;
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (!cancelled) setView("chart");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (points.length === 0) return null;
+
+  const choose = (next: MapView) => {
+    setView(next);
+    try {
+      window.localStorage.setItem(VIEW_KEY, next);
+    } catch {
+      // Remembering the view is a convenience only.
+    }
+  };
+
+  return (
+    <section className="km" aria-labelledby="km-title">
+      <div className="km-head">
+        <div className="km-title">
+          <h2 id="km-title">Keyword map</h2>
+          <p>What to do with each keyword, from Apple&rsquo;s popularity and how hard the first page is.</p>
+        </div>
+        <div className="km-views" role="group" aria-label="Keyword map view">
+          <button type="button" aria-pressed={view === "groups"} onClick={() => choose("groups")}>
+            <LayoutList size={14} aria-hidden="true" /> Groups
+          </button>
+          <button type="button" aria-pressed={view === "chart"} onClick={() => choose("chart")}>
+            <ChartScatter size={14} aria-hidden="true" /> Chart
+          </button>
+        </div>
+      </div>
+      {view === "groups" ? (
+        <KeywordMapBoard points={points} onSelect={onSelect} />
+      ) : (
+        <KeywordMapChart points={points} onSelect={onSelect} />
+      )}
     </section>
   );
 }

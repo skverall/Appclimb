@@ -638,7 +638,12 @@ test("tracker layout has no overflow and stays usable at 1024px", async ({
   await expect(overview.getByText("In the top 200")).toBeVisible();
   await expect(overview.getByText("of 7", { exact: true })).toBeVisible();
   await expect(overview.getByRole("group", { name: "History period" })).toBeVisible();
+  // The keyword map opens on its grouped view; the chart is one click away.
+  const map = page.getByRole("region", { name: "Keyword map" });
+  await expect(map.getByRole("button", { name: "Groups" })).toHaveAttribute("aria-pressed", "true");
+  await map.getByRole("button", { name: "Chart" }).click();
   await expect(page.getByRole("img", { name: /Keyword map: 7 keywords/ })).toBeVisible();
+  await map.getByRole("button", { name: "Groups" }).click();
   await expect(
     page.getByRole("heading", { name: /Best Position History/i }),
   ).toBeVisible();
@@ -813,6 +818,42 @@ test("upgrade modal fits and stays usable at 375px", async ({ page }) => {
   await expect(cta).toBeInViewport();
   await dialog.locator("label", { hasText: "Yearly" }).click();
   await expect(dialog.getByText(/4 months free/i)).toBeVisible();
+});
+
+test("keyword map groups every keyword by what to do and remembers the chart view", async ({
+  page,
+}) => {
+  await mockItunes(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: /Try a sample app/i }).click();
+  await expect(page.locator(".tracker-table tbody tr")).toHaveCount(7, {
+    timeout: 30_000,
+  });
+
+  const map = page.getByRole("region", { name: "Keyword map" });
+  await expect(map.locator(".kmb-summary")).not.toBeEmpty();
+  const titles = await map.locator(".kmb-group h3").allTextContents();
+  expect(titles.length).toBeGreaterThan(0);
+  for (const title of titles) {
+    expect(["Worth targeting", "Long-tail wins", "Competitive", "Low demand", "Dominated"]).toContain(title);
+  }
+  // Every tracked keyword lands in exactly one group.
+  const counts = await map.locator(".kmb-count").allTextContents();
+  expect(counts.reduce((sum, value) => sum + Number(value), 0)).toBe(7);
+
+  // A row opens that keyword.
+  const first = map.locator(".kmb-row").first();
+  const name = ((await first.locator(".kmb-name").textContent()) ?? "").trim();
+  await first.click();
+  await expect(page.getByRole("heading", { name, exact: true })).toBeVisible({ timeout: 5_000 });
+  await page.getByRole("button", { name: /Close keyword detail/i }).click();
+
+  // The chart view is remembered across visits.
+  await map.getByRole("button", { name: "Chart" }).click();
+  await expect(page.getByRole("img", { name: /Keyword map: 7 keywords/ })).toBeVisible();
+  await page.reload();
+  await page.getByRole("button", { name: /Tracked Apps/ }).click();
+  await expect(page.getByRole("img", { name: /Keyword map: 7 keywords/ })).toBeVisible({ timeout: 30_000 });
 });
 
 test("tracker app sidebar navigation works at 375px", async ({ page }) => {
