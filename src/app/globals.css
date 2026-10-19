@@ -6404,3 +6404,33 @@ img {
 .auth-upgrade-instead:hover {
   text-decoration: underline;
 }
+
+/* Add App: a full one-app plan, said before the pick */
+.tracker-limit-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--amber-200);
+  border-radius: var(--radius-md);
+  background: var(--amber-50);
+  color: var(--ink);
+  font-size: var(--text-xs);
+  line-height: var(--leading-snug);
+}
+
+.tracker-limit-note svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--amber-700);
+}
+
+.tracker-limit-note p {
+  margin: 0;
+}
+
+.tracker-limit-note button {
+  color: var(--teal-700);
+  font-weight: var(--weight-semibold);
+  text-decoration: underline;
+}

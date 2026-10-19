@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
-import { Loader2, Search, Sparkles, X } from "lucide-react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { Info, Loader2, Search, Sparkles, X } from "lucide-react";
 
 import { useModalFocus } from "@/components/use-modal-focus";
 import { SUPPORTED_COUNTRIES } from "@/lib/aso";
@@ -22,6 +22,8 @@ export function AddAppModal({
   onSelect,
   onQuickStart,
   quickStartBusy = false,
+  replaceName = null,
+  onUpgrade,
 }: {
   open: boolean;
   defaultCountry?: string;
@@ -29,6 +31,13 @@ export function AddAppModal({
   existingKeys: ReadonlySet<string>;
   onClose: () => void;
   onSelect: (app: CatalogApp, country: string) => void;
+  /**
+   * On a one-app plan that is full: the tracked app a new pick replaces.
+   * The modal says so up front instead of surprising the user after a pick.
+   */
+  replaceName?: string | null;
+  /** Opens the upgrade dialog from the limit notice. */
+  onUpgrade?: () => void;
   /** One-click sample app; hidden when not provided. */
   onQuickStart?: (country: string) => void;
   quickStartBusy?: boolean;
@@ -43,6 +52,8 @@ export function AddAppModal({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+  /** The last term+country searched, so typing and Enter don't query Apple twice. */
+  const lastSearchRef = useRef("");
 
   useEffect(() => {
     if (!open) return;
@@ -54,6 +65,7 @@ export function AddAppModal({
       setQuery("");
       setResults([]);
       setError(null);
+      lastSearchRef.current = "";
       inputRef.current?.focus();
     })();
     return () => {
@@ -76,12 +88,7 @@ export function AddAppModal({
     };
   }, []);
 
-  if (!open) return null;
-
-  const starterTracked = existingKeys.has(`${STARTER_APP_ID}:${country}`);
-
-  const search = async () => {
-    const term = query.trim();
+  const runSearch = useCallback(async (term: string, market: string) => {
     if (term.length < 2) {
       setError("Enter an app name, App Store URL, or numeric App Store ID.");
       return;
@@ -89,16 +96,20 @@ export function AddAppModal({
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
+    lastSearchRef.current = `${market}|${term}`;
     setBusy(true);
     setError(null);
     try {
-      const apps = await resolveAppCandidates(term, country, {
+      const apps = await resolveAppCandidates(term, market, {
         signal: controller.signal,
       });
       if (controller.signal.aborted) return;
       setResults(apps);
       if (apps.length === 0) {
-        setError("No apps found for that query in the selected storefront.");
+        const label = SUPPORTED_COUNTRIES.find((item) => item.code === market)?.label ?? market;
+        setError(
+          `No apps match “${term}” in the ${label} App Store. Check the spelling, paste the app’s App Store link, or switch the country if the app isn’t sold there.`,
+        );
       }
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return;
@@ -107,7 +118,26 @@ export function AddAppModal({
     } finally {
       if (!controller.signal.aborted) setBusy(false);
     }
-  };
+  }, []);
+
+  // Results appear while typing. Names wait for a pause (Apple rate-limits
+  // bursts); a pasted URL or numeric ID resolves almost at once.
+  useEffect(() => {
+    if (!open) return;
+    const term = query.trim();
+    if (term.length < 3) return;
+    const direct = /^\d{6,}$/u.test(term) || /apps\.apple\.com|itunes\.apple\.com/iu.test(term);
+    const timer = window.setTimeout(() => {
+      if (lastSearchRef.current === `${country}|${term}`) return;
+      void runSearch(term, country);
+    }, direct ? 150 : 550);
+    return () => window.clearTimeout(timer);
+  }, [open, query, country, runSearch]);
+
+  if (!open) return null;
+
+  const starterTracked = existingKeys.has(`${STARTER_APP_ID}:${country}`);
+  const search = () => runSearch(query.trim(), country);
 
   return (
     <div className="tracker-modal-backdrop" role="presentation" onClick={onClose}>
@@ -178,6 +208,25 @@ export function AddAppModal({
             </button>
           </form>
 
+          {replaceName && (
+            <div className="tracker-limit-note" role="note">
+              <Info size={15} aria-hidden="true" />
+              <p>
+                The free plan tracks 1 app, and you&rsquo;re tracking <b>{replaceName}</b>. Pick an app below to
+                replace it
+                {onUpgrade ? (
+                  <>
+                    {", or "}
+                    <button type="button" onClick={onUpgrade}>
+                      go Pro to track both
+                    </button>
+                  </>
+                ) : null}
+                .
+              </p>
+            </div>
+          )}
+
           {error && (
             <div className="keyword-error" role="alert">
               {error}
@@ -206,7 +255,9 @@ export function AddAppModal({
                       aria-label={
                         already
                           ? `${app.name} already tracked in ${country}`
-                          : `Add ${app.name}`
+                          : replaceName
+                            ? `Replace ${replaceName} with ${app.name}`
+                            : `Add ${app.name}`
                       }
                     >
                       {app.iconUrl ? (
@@ -232,7 +283,7 @@ export function AddAppModal({
                         <small className="tracker-app-id">ID {app.appStoreId}</small>
                       </span>
                       <span className="tracker-app-result-action">
-                        {already ? "Added" : "+ Add"}
+                        {already ? "Added" : replaceName ? "Replace" : "+ Add"}
                       </span>
                     </button>
                   </li>

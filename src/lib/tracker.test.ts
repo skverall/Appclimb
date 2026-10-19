@@ -46,6 +46,8 @@ import {
   bestPositionSeries,
   myRankings,
   STARTER_APP_ID,
+  appsCountingTowardLimit,
+  isSampleApp,
   STARTER_APP_NAME,
   STARTER_KEYWORDS,
   TRACKER_STORAGE_KEY,
@@ -1590,3 +1592,25 @@ describe("calculateAppHealthSummary", () => {
   });
 });
 
+describe("sample app and the tracked-app limit", () => {
+  const base = {
+    name: "App",
+    bundleId: "x",
+    developer: "Dev",
+    genre: "Utilities",
+    iconUrl: "",
+    storeUrl: "",
+    country: "US",
+    addedAt: "2026-10-19T00:00:00.000Z",
+  };
+
+  it("never counts the sample app, in any storefront", () => {
+    const sample = { ...base, appStoreId: STARTER_APP_ID };
+    const own = { ...base, appStoreId: "123" };
+    expect(isSampleApp(sample)).toBe(true);
+    expect(isSampleApp(own)).toBe(false);
+    expect(
+      appsCountingTowardLimit({ apps: [sample, { ...sample, country: "DE" }, own] }).map((app) => app.appStoreId),
+    ).toEqual(["123"]);
+  });
+});

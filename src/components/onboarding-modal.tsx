@@ -45,7 +45,7 @@ export function OnboardingModal({
         <header className="tracker-modal-header">
           <div>
             <h2 id={titleId}>Welcome to AppClimb</h2>
-            <p>You&apos;re signed in. Here&apos;s the fastest way to value.</p>
+            <p>Three steps, about a minute, to see where your app ranks.</p>
           </div>
           <button
             type="button"
@@ -65,7 +65,7 @@ export function OnboardingModal({
               </span>
               <div>
                 <strong>Add your app</strong>
-                <span>By name, App Store URL, or numeric App Store ID.</span>
+                <span>Type its name, or paste its App Store link.</span>
               </div>
             </li>
             <li>
@@ -74,7 +74,7 @@ export function OnboardingModal({
               </span>
               <div>
                 <strong>Pick keywords</strong>
-                <span>Take the metadata suggestions or paste your own list.</span>
+                <span>We suggest them from your app&rsquo;s title and category — or paste your own.</span>
               </div>
             </li>
             <li>
@@ -82,10 +82,10 @@ export function OnboardingModal({
                 <Search size={15} aria-hidden="true" />
               </span>
               <div>
-                <strong>Watch position &amp; scores</strong>
+                <strong>See where you rank</strong>
                 <span>
-                  Official Apple Ads popularity, estimated difficulty, and rank in
-                  the first 200 public results.
+                  Your position in the first 200 results, Apple&rsquo;s popularity, and how hard each first page is
+                  — checked every time you open the app.
                 </span>
               </div>
             </li>
@@ -100,8 +100,8 @@ export function OnboardingModal({
           ) : (
             <p className="onboarding-sync-note">
               <CloudUpload size={15} aria-hidden="true" />
-              Your data stays in this browser. Upgrade to Pro to sync it across
-              devices.
+              The free plan tracks 1 app and 25 keywords, saved in this browser. Pro syncs them to every device
+              and lifts the limits.
             </p>
           )}
 

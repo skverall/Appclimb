@@ -368,6 +368,16 @@ export function addTrackedApp(
   };
 }
 
+/** The sample app is a demo: it never uses up a plan's tracked-app slot. */
+export function isSampleApp(app: Pick<TrackedApp, "appStoreId">): boolean {
+  return app.appStoreId === STARTER_APP_ID;
+}
+
+/** Tracked apps that count toward the plan's app limit (everything but the sample). */
+export function appsCountingTowardLimit(store: Pick<TrackerStore, "apps">): TrackedApp[] {
+  return store.apps.filter((app) => !isSampleApp(app));
+}
+
 /** Remove an app and every keyword/snapshot scoped to it. */
 export function removeTrackedApp(
   store: TrackerStore,

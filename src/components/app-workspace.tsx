@@ -31,6 +31,8 @@ import {
   addKeywordsToStore,
   addTrackedApp,
   analyzeWithRetry,
+  appsCountingTowardLimit,
+  isSampleApp,
   appKey,
   applyAnalysisToStore,
   buildKeywordSuggestions,
@@ -112,8 +114,14 @@ export function AppWorkspace() {
   const trackingAllowed = accessReady && canTrackApps(role, accountsLive);
   const isGuest = accessReady && accountsLive && !signedIn;
 
+  // The sample app is a demo and never uses up the free slot.
   const atAppLimit = () =>
-    appLimit !== null && storeRef.current.apps.length >= appLimit;
+    appLimit !== null && appsCountingTowardLimit(storeRef.current).length >= appLimit;
+  /** On a one-app plan, the app a new pick would replace. */
+  const replaceTarget = (): TrackedApp | null => {
+    if (appLimit !== 1 || !atAppLimit()) return null;
+    return appsCountingTowardLimit(storeRef.current)[0] ?? null;
+  };
 
   useEffect(() => {
     storeRef.current = store;
@@ -197,6 +205,10 @@ export function AppWorkspace() {
     );
   }, [store]);
 
+  // Shown in Add App before a pick, so a full one-app plan is never a surprise.
+  const limitedApps = appsCountingTowardLimit(store);
+  const replaceName =
+    appLimit === 1 && limitedApps.length >= 1 ? (limitedApps[0]?.name ?? null) : null;
   const existingAppKeys = useMemo(
     () => new Set(store.apps.map((app) => appKey(app.appStoreId, app.country))),
     [store.apps],
@@ -234,8 +246,9 @@ export function AppWorkspace() {
     if (!activeApp) return;
     if (!requireAccount("track")) return;
     // A storefront variant of a tracked app is a new tracked entry: it counts
-    // against the plan's tracked-app limit just like any other add path.
-    if (atAppLimit()) {
+    // against the plan's tracked-app limit just like any other add path
+    // (except for the sample, which never counts).
+    if (!isSampleApp(activeApp) && atAppLimit()) {
       openUpgrade("apps");
       return;
     }
@@ -303,9 +316,20 @@ export function AppWorkspace() {
       return;
     }
     if (atAppLimit()) {
-      setAddAppOpen(false);
-      openUpgrade("apps");
-      return;
+      const current = replaceTarget();
+      if (!current) {
+        setAddAppOpen(false);
+        openUpgrade("apps");
+        return;
+      }
+      // One-app plan: swapping apps is allowed; say what gets removed first.
+      const ok = window.confirm(
+        `Replace “${current.name}” with “${catalog.name}”?\n\n` +
+          `“${current.name}” and its keywords and rank history are removed from this browser. ` +
+          "Pro tracks both.",
+      );
+      if (!ok) return;
+      persist(removeTrackedApp(storeRef.current, current.appStoreId, current.country));
     }
     setAddAppOpen(false);
     setBootstrapping(true);
@@ -372,11 +396,7 @@ export function AppWorkspace() {
       setAddAppOpen(false);
       return;
     }
-    if (atAppLimit()) {
-      setAddAppOpen(false);
-      openUpgrade("apps");
-      return;
-    }
+    // The sample never counts toward the plan's app limit.
     setAddAppOpen(false);
     setBootstrapping(true);
     setBootstrapLabel(`Loading ${STARTER_APP_NAME} from the App Store…`);
@@ -1020,6 +1040,11 @@ export function AppWorkspace() {
       <AddAppModal
         open={addAppOpen}
         existingKeys={existingAppKeys}
+        replaceName={replaceName}
+        onUpgrade={() => {
+          setAddAppOpen(false);
+          openUpgrade("apps");
+        }}
         onClose={() => setAddAppOpen(false)}
         onSelect={(app, country) => {
           void handleSelectCatalogApp(app, country);
@@ -1032,6 +1057,17 @@ export function AppWorkspace() {
         open={Boolean(pendingSuggestions)}
         appName={pendingSuggestions?.app.name ?? ""}
         suggestions={pendingSuggestions?.suggestions ?? []}
+        keywordLimit={keywordLimit}
+        room={
+          keywordLimit === null || !pendingSuggestions
+            ? null
+            : Math.max(
+                0,
+                keywordLimit -
+                  listKeywordsForApp(store, pendingSuggestions.app.appStoreId, pendingSuggestions.app.country)
+                    .length,
+              )
+        }
         onClose={() => setPendingSuggestions(null)}
         onConfirm={(keywords) => {
           void handleConfirmSuggestions(keywords);

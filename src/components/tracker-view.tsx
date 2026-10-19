@@ -1070,6 +1070,9 @@ export function TrackerView({
                   {filteredSorted.map((row) => {
                     const key = row.normalizedKeyword;
                     const isBusy = busyKeys.has(key);
+                    // Added but not checked yet: say so instead of showing ">200".
+                    const awaitingCheck = !row.currentMetrics;
+                    const checkingNow = (isBusy || suspendAutoRefresh) && awaitingCheck;
                     const metrics = row.currentMetrics;
                     const snaps = snapshotsFor(
                       store,
@@ -1127,7 +1130,7 @@ export function TrackerView({
                           )}
                         </td>
                         <td>
-                          {isBusy && !metrics ? (
+                          {checkingNow ? (
                             <em className="keyword-pending">Checking…</em>
                           ) : metrics && metrics.popularity > 0 ? (
                             <span className="metric-with-source">
@@ -1159,8 +1162,12 @@ export function TrackerView({
                         </td>
                         <td>
                           <div className="tracker-position-cell">
-                            {isBusy && !metrics ? (
+                            {checkingNow ? (
                               <span className="tracker-position">…</span>
+                            ) : awaitingCheck ? (
+                              <em className="keyword-pending" title="Not checked yet">
+                                Not checked
+                              </em>
                             ) : pos === 1 ? (
                               <span className="tracker-position tracker-pos-badge tracker-pos-badge--crown" title="Ranked #1 on the App Store!">
                                 <Crown size={12} aria-hidden="true" /> #1
@@ -1195,11 +1202,13 @@ export function TrackerView({
                             className={`rank-trend rank-trend--${trend.kind}`}
                             title={`Rank movement: ${trend.label}`}
                           >
-                            {metrics?.unavailable && metrics.popularity === 0
-                              ? "Unavailable"
-                              : snaps.length < 2
-                                ? "New"
-                                : trend.label}
+                            {awaitingCheck
+                              ? "—"
+                              : metrics?.unavailable && metrics.popularity === 0
+                                ? "Unavailable"
+                                : snaps.length < 2
+                                  ? "New"
+                                  : trend.label}
                           </span>
                         </td>
                         <td className="tracker-col-optional tracker-col-spark keyword-trend-cell">
@@ -1369,6 +1378,8 @@ export function TrackerView({
         open={suggestionsOpen}
         appName={app.name}
         suggestions={suggestions}
+        keywordLimit={keywordLimit}
+        room={keywordLimit === null ? null : Math.max(0, keywordLimit - keywords.length)}
         onClose={() => setSuggestionsOpen(false)}
         onConfirm={(list) => {
           const { store: next, added, capped } = addKeywordsToStore(

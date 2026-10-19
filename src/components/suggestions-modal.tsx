@@ -14,12 +14,18 @@ export function SuggestionsModal({
   suggestions,
   onClose,
   onConfirm,
+  keywordLimit = null,
+  room = null,
 }: {
   open: boolean;
   appName: string;
   suggestions: SuggestionRow[];
   onClose: () => void;
   onConfirm: (keywords: string[]) => void;
+  /** Keywords per app on the current plan; null = unlimited. */
+  keywordLimit?: number | null;
+  /** Keyword slots this app has left on the current plan; null = unlimited. */
+  room?: number | null;
 }) {
   const titleId = useId();
   const modalRef = useRef<HTMLDivElement>(null);
@@ -125,6 +131,15 @@ export function SuggestionsModal({
               {selected.size} selected · {suggestions.length} suggested
             </span>
           </div>
+
+          {room !== null && keywordLimit !== null && selected.size > room && (
+            <div className="tracker-limit-note" role="note">
+              <p>
+                The free plan tracks {keywordLimit} keywords per app, so only {room} more{" "}
+                {room === 1 ? "fits" : "fit"} — the first {room} you selected will be added.
+              </p>
+            </div>
+          )}
 
           {suggestions.length === 0 ? (
             <div className="keyword-empty">

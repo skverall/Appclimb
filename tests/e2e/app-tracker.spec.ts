@@ -516,6 +516,94 @@ test("free plan cannot exceed the 1-app limit by tracking extra storefronts", as
   await expect(page.locator(".tracker-app-pill-list .tracker-app-pill")).toHaveCount(1);
 });
 
+/** A signed-in free account (1 app, 25 keywords) with no official popularity. */
+async function mockFreeAccount(page: import("@playwright/test").Page) {
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        configured: true,
+        user: { id: "user-free-2", email: "free2@example.com", name: null },
+        plan: "free",
+        subscription: null,
+      }),
+    });
+  });
+  await page.route("**/api/popularity", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ configured: true, country: "US", results: [] }),
+    });
+  });
+  await page.addInitScript(() => {
+    window.localStorage.setItem("appclimb:onboarded:v1", "user-free-2");
+  });
+}
+
+test("the sample app doesn't use up the free plan's one app", async ({ page }) => {
+  await mockItunes(page);
+  await mockFreeAccount(page);
+  await page.goto("/");
+  // With no apps yet, Tracked Apps opens Add App straight away.
+  await page.getByRole("button", { name: /Tracked Apps/ }).click();
+  await page.getByRole("dialog", { name: "Add App" }).getByRole("button", { name: /Try sample app/i }).click();
+  await expect(page.getByRole("heading", { name: /Car Dealer Tracker: Profit/i })).toBeVisible({
+    timeout: 15_000,
+  });
+
+  // The user's own app still fits: no limit notice, no upgrade wall.
+  await page.getByRole("button", { name: /Add App/i }).first().click();
+  const add = page.getByRole("dialog", { name: "Add App" });
+  await expect(add.getByText(/The free plan tracks 1 app/)).toHaveCount(0);
+  await page.getByLabel("Search for an app").fill("Calm Focus");
+  await page.getByRole("button", { name: /Add Calm Focus/i }).click({ timeout: 10_000 });
+  await expect(page.getByRole("dialog", { name: /Keyword suggestions/i })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("dialog", { name: /Upgrade to Pro/i })).toHaveCount(0);
+});
+
+test("a full free plan says so before the pick and offers to replace the app", async ({ page }) => {
+  await mockItunes(page);
+  await mockFreeAccount(page);
+  await page.goto("/");
+
+  await page.getByRole("button", { name: /Add App/i }).first().click();
+  // Results appear while typing; no Search click needed.
+  await page.getByLabel("Search for an app").fill("Calm Focus");
+  await page.getByRole("button", { name: /Add Calm Focus/i }).click({ timeout: 10_000 });
+  await page.getByRole("button", { name: /Add selected/i }).click();
+  await expect(page.getByRole("heading", { name: "Calm Focus" })).toBeVisible({ timeout: 20_000 });
+
+  await page.getByRole("button", { name: /Add App/i }).first().click();
+  const add = page.getByRole("dialog", { name: "Add App" });
+  await expect(add.getByText(/The free plan tracks 1 app, and you’re tracking/)).toBeVisible();
+  await expect(add.getByRole("button", { name: /go Pro to track both/ })).toBeVisible();
+
+  await page.getByLabel("Search for an app").fill("Invoice Scanner");
+  const replace = page.getByRole("button", { name: /Replace Calm Focus with Invoice Scanner Pro/ });
+  await expect(replace).toBeVisible({ timeout: 10_000 });
+
+  // Declining keeps everything as it was.
+  page.once("dialog", (dialog) => void dialog.dismiss());
+  await replace.click();
+  await expect(add).toBeVisible();
+  await expect(page.locator(".tracker-app-pill-list .tracker-app-pill")).toHaveCount(1);
+
+  // Accepting swaps the app, and its keywords go with it.
+  page.once("dialog", (dialog) => {
+    expect(dialog.message()).toContain("Replace “Calm Focus” with “Invoice Scanner Pro”?");
+    void dialog.accept();
+  });
+  await replace.click();
+  await expect(page.getByRole("dialog", { name: /Keyword suggestions/i })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("dialog", { name: /Upgrade to Pro/i })).toHaveCount(0);
+  await page.getByRole("button", { name: /Add selected/i }).click();
+  await expect(page.getByRole("heading", { name: "Invoice Scanner Pro" })).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator(".tracker-app-pill-list .tracker-app-pill")).toHaveCount(1);
+  await expect(page.locator(".tracker-app-pill-list")).not.toContainText("Calm Focus");
+});
+
 test("mobile layout keeps tracker actions reachable", async ({ page }) => {
   await mockItunes(page);
   await page.setViewportSize({ width: 390, height: 844 });
