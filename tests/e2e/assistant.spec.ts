@@ -355,6 +355,12 @@ test("upgrading mid-session unlocks the composer gate", async ({ page }) => {
   });
   await page.goto("/assistant?checkout=success");
 
+  // The welcome dialog confirms Pro once the account reports it.
+  const welcome = page.getByRole("dialog", { name: /Welcome to AppClimb Pro/i });
+  await expect(welcome.getByText(/Pro is active/i)).toBeVisible({ timeout: 10_000 });
+  await welcome.getByRole("button", { name: /Start using Pro/i }).click();
+  await expect(welcome).toHaveCount(0);
+
   await expect(page.getByText(/used up/i)).toHaveCount(0);
   await expect(page.getByLabel("Message the ASO assistant")).toBeVisible();
 

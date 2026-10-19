@@ -75,6 +75,18 @@ export const PRO_YEARLY_USD = 64;
 /** Founder cap — no plan may exceed this monthly price (ADR 0004). */
 export const MAX_PRICE_USD_PER_MONTH = 10;
 
+/** Yearly price spread over 12 months, as shown on plan cards ("5.33"). */
+export const PRO_YEARLY_PER_MONTH_USD = (PRO_YEARLY_USD / 12).toFixed(2);
+/** Dollars a yearly subscriber saves against 12 monthly payments. */
+export const PRO_YEARLY_SAVING_USD = PRO_MONTHLY_USD * 12 - PRO_YEARLY_USD;
+/** The same saving as a rounded percentage of a year of monthly billing. */
+export const PRO_YEARLY_SAVE_PERCENT = Math.round((PRO_YEARLY_SAVING_USD / (PRO_MONTHLY_USD * 12)) * 100);
+/** The same saving expressed as free months. */
+export const PRO_YEARLY_MONTHS_FREE = Math.round(PRO_YEARLY_SAVING_USD / PRO_MONTHLY_USD);
+
+/** Full refund window for any Pro payment, as stated on /refunds. */
+export const REFUND_WINDOW_DAYS = 14;
+
 export const PLAN_NAMES: Record<PlanId, string> = {
   free: "Free",
   pro: "Pro",

@@ -66,12 +66,13 @@ export interface MagicLinkResult {
   error?: string;
 }
 
-export async function requestMagicLink(email: string): Promise<MagicLinkResult> {
+/** `next` is the same-origin path the emailed link returns to after sign-in. */
+export async function requestMagicLink(email: string, next?: string): Promise<MagicLinkResult> {
   try {
     const res = await fetch("/api/auth/magic-link", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify(next ? { email, next } : { email }),
       signal: AbortSignal.timeout(10_000),
     });
     const data = (await res.json().catch(() => ({}))) as { error?: string; configured?: boolean };

@@ -11,6 +11,7 @@ import {
   isBotUserAgent,
   queryAnalyticsSummary,
   querySignupFunnel,
+  queryUpgradeTriggers,
   recordEvent,
   recordPageview,
   sanitizeReferrer,
@@ -489,5 +490,39 @@ describe("product event tracking (signup funnel)", () => {
       appTracked: 0,
       assistantUsed: 0,
     });
+  });
+});
+
+describe("upgrade triggers", () => {
+  it("pairs dialog opens with checkouts per reason, most opened first", async () => {
+    const prepareMock = vi.fn().mockReturnValue({
+      bind: vi.fn().mockReturnValue({
+        all: vi.fn().mockResolvedValue({
+          results: [
+            { name: "upgrade_opened", reason: "checks", visitors: 6 },
+            { name: "checkout_opened", reason: "checks", visitors: 2 },
+            { name: "upgrade_opened", reason: "untagged", visitors: 9 },
+            { name: "checkout_opened", reason: "untagged", visitors: 3 },
+            { name: "upgrade_opened", reason: "history", visitors: 1 },
+            { name: "checkout_opened", reason: "sync", visitors: 1 },
+          ],
+        }),
+      }),
+    });
+    const rows = await queryUpgradeTriggers({ prepare: prepareMock } as unknown as D1Database, "30d");
+    expect(rows).toEqual([
+      { reason: "untagged", opened: 9, checkouts: 3 },
+      { reason: "checks", opened: 6, checkouts: 2 },
+      { reason: "history", opened: 1, checkouts: 0 },
+      { reason: "sync", opened: 0, checkouts: 1 },
+    ]);
+  });
+
+  it("returns an empty list when the query fails", async () => {
+    const prepareMock = vi.fn().mockImplementation(() => {
+      throw new Error("no table yet");
+    });
+    const rows = await queryUpgradeTriggers({ prepare: prepareMock } as unknown as D1Database, "today");
+    expect(rows).toEqual([]);
   });
 });

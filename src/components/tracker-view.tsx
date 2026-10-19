@@ -218,7 +218,7 @@ export function TrackerView({
   const autoRefreshDone = useRef<string | null>(null);
   const storeRef = useRef(store);
 
-  const { account, accountsLive } = useAccount();
+  const { account, accountsLive, openUpgrade } = useAccount();
   const limitsOn = proEnabled() || accountsLive;
   const keywordLimit = limitsOn ? account.limits.keywordsPerApp : null;
 
@@ -417,6 +417,19 @@ export function TrackerView({
     },
     [app.appStoreId, app.country, onStoreChange, showToast],
   );
+
+  /** Refresh newly added keywords; past the free cap, say so and offer Pro now. */
+  const handleAddedKeywords = (added: string[], capped: boolean) => {
+    const capMessage = `Free plan tracks up to ${keywordLimit} keywords per app. Upgrade to Pro for unlimited keywords.`;
+    if (capped) openUpgrade("keywords");
+    if (added.length > 0) {
+      void refreshKeywords(added).then(() => {
+        if (capped) setError(capMessage);
+      });
+    } else if (capped) {
+      setError(capMessage);
+    }
+  };
 
   useEffect(() => {
     if (suspendAutoRefresh) return;
@@ -1346,19 +1359,7 @@ export function TrackerView({
           );
           onStoreChange(next);
           setAddKeywordsOpen(false);
-          if (added.length > 0) {
-            void refreshKeywords(added.map((row) => row.keyword)).then(() => {
-              if (capped) {
-                setError(
-                  `Free plan tracks up to ${keywordLimit} keywords per app. Upgrade to Pro for unlimited keywords.`,
-                );
-              }
-            });
-          } else if (capped) {
-            setError(
-              `Free plan tracks up to ${keywordLimit} keywords per app. Upgrade to Pro for unlimited keywords.`,
-            );
-          }
+          handleAddedKeywords(added.map((row) => row.keyword), capped);
         }}
       />
 
@@ -1377,19 +1378,7 @@ export function TrackerView({
           );
           onStoreChange(next);
           setSuggestionsOpen(false);
-          if (added.length > 0) {
-            void refreshKeywords(added.map((row) => row.keyword)).then(() => {
-              if (capped) {
-                setError(
-                  `Free plan tracks up to ${keywordLimit} keywords per app. Upgrade to Pro for unlimited keywords.`,
-                );
-              }
-            });
-          } else if (capped) {
-            setError(
-              `Free plan tracks up to ${keywordLimit} keywords per app. Upgrade to Pro for unlimited keywords.`,
-            );
-          }
+          handleAddedKeywords(added.map((row) => row.keyword), capped);
         }}
       />
 

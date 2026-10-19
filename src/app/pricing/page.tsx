@@ -25,7 +25,14 @@ import {
   HistoryIllustration,
   LimitMeter,
 } from "@/components/pricing-visuals";
-import { GUEST_EXPLORER_CHECKS_PER_DAY, PLAN_LIMITS, PRO_MONTHLY_USD, PRO_YEARLY_USD } from "@/lib/plan";
+import {
+  GUEST_EXPLORER_CHECKS_PER_DAY,
+  PLAN_LIMITS,
+  PRO_MONTHLY_USD,
+  PRO_YEARLY_PER_MONTH_USD,
+  PRO_YEARLY_USD,
+  REFUND_WINDOW_DAYS,
+} from "@/lib/plan";
 import { absoluteUrl } from "@/lib/site";
 
 export const metadata = {
@@ -43,7 +50,7 @@ export const metadata = {
 
 const free = PLAN_LIMITS.free;
 const pro = PLAN_LIMITS.pro;
-const YEARLY_PER_MONTH = (PRO_YEARLY_USD / 12).toFixed(2);
+const YEARLY_PER_MONTH = PRO_YEARLY_PER_MONTH_USD;
 /** Entry price of a typical ASO suite, per month (founder research). */
 const SUITE_MONTHLY_USD = 89;
 
@@ -67,6 +74,10 @@ const FAQ = [
     question: "Why do some keywords show “≤48 · Long tail” instead of a number?",
     answer:
       "Apple publishes popularity for the 500 most-searched terms in each category. For anything below that list, the honest answer is “at or below the lowest published score” — so that's what we show, on every plan. Difficulty is always labeled as an estimate. Nothing is ever relabeled as search volume.",
+  },
+  {
+    question: "Is there a free trial?",
+    answer: `The free plan is the trial — the real tool, no clock, no card. When you upgrade, every Pro payment comes with a ${REFUND_WINDOW_DAYS}-day money-back guarantee: ask within ${REFUND_WINDOW_DAYS} days for a full refund, no reason needed.`,
   },
   {
     question: "Can I cancel?",
@@ -244,8 +255,8 @@ const TRUST = [
   },
   {
     icon: RotateCcw,
-    title: "Cancel in two clicks",
-    body: "From the account menu, anytime. Pro stays on until the period you paid for ends.",
+    title: `${REFUND_WINDOW_DAYS}-day money-back guarantee`,
+    body: `A full refund of any payment within ${REFUND_WINDOW_DAYS} days, no reason needed. Cancel anytime from the account menu.`,
   },
 ];
 
@@ -318,7 +329,7 @@ export default function PricingPage() {
               <Check size={14} aria-hidden="true" /> No card for Free
             </li>
             <li>
-              <Check size={14} aria-hidden="true" /> Cancel anytime
+              <Check size={14} aria-hidden="true" /> {REFUND_WINDOW_DAYS}-day money-back guarantee
             </li>
           </ul>
         </section>

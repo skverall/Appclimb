@@ -595,6 +595,11 @@ test("a mid-session downgrade stops sync but preserves local data", async ({
   // The subscription lapses mid-session: the account refresh reports free.
   plan = "free";
   await page.goto("/?checkout=success");
+  // The welcome dialog keeps waiting for Pro that never comes; close it.
+  const welcome = page.getByRole("dialog", { name: /Welcome to AppClimb Pro/i });
+  await expect(welcome.getByText(/Activating your plan/i)).toBeVisible();
+  await page.getByRole("button", { name: /Close welcome to Pro dialog/i }).click();
+  await expect(welcome).toHaveCount(0);
   await expect(page.getByText(/Tracked Apps/i).first()).toBeVisible();
 
   // The sync-status row disappears for a non-Pro plan and local data remains.
@@ -647,8 +652,11 @@ test("pricing and upgrade copy stay honest and next-step", async ({ page }) => {
   await expect(dialog.getByText(/52 weeks of Apple popularity history/i)).toBeVisible();
   await expect(dialog.getByText(/90 days of rank history/i)).toBeVisible();
   await expect(dialog.getByText(/200 AI assistant messages \/ day/i)).toBeVisible();
-  // The CTA names the action and the price.
-  await expect(
-    dialog.getByRole("button", { name: /Upgrade — \$8\/month/i }),
-  ).toBeVisible();
+  await expect(dialog.getByText(/14-day money-back guarantee/i)).toBeVisible();
+  // Yearly is preselected; the CTA names the action and the price.
+  await expect(dialog.getByRole("radio", { name: /Yearly/ })).toBeChecked();
+  await expect(dialog.getByRole("button", { name: /Get Pro — \$64\/year/i })).toBeVisible();
+  await dialog.locator("label", { hasText: "Monthly" }).click();
+  await expect(dialog.getByRole("radio", { name: /Monthly/ })).toBeChecked();
+  await expect(dialog.getByRole("button", { name: /Get Pro — \$8\/month/i })).toBeVisible();
 });

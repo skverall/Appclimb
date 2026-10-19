@@ -6,9 +6,18 @@ import Link from "next/link";
 
 import { useAccount } from "@/components/account-provider";
 import { trackAppEvent } from "@/lib/analytics-client";
-import { GUEST_EXPLORER_CHECKS_PER_DAY, PLAN_LIMITS, PRO_MONTHLY_USD, PRO_YEARLY_USD } from "@/lib/plan";
-
-type BillingCycle = "monthly" | "yearly";
+import {
+  GUEST_EXPLORER_CHECKS_PER_DAY,
+  PLAN_LIMITS,
+  PRO_MONTHLY_USD,
+  PRO_YEARLY_MONTHS_FREE,
+  PRO_YEARLY_PER_MONTH_USD,
+  PRO_YEARLY_SAVE_PERCENT,
+  PRO_YEARLY_SAVING_USD,
+  PRO_YEARLY_USD,
+  REFUND_WINDOW_DAYS,
+} from "@/lib/plan";
+import type { BillingCycle } from "@/lib/upgrade";
 
 const free = PLAN_LIMITS.free;
 const pro = PLAN_LIMITS.pro;
@@ -32,9 +41,9 @@ const PRO_FEATURES = [
   "Weekly email: what changed for your keywords",
 ];
 
-const YEARLY_PER_MONTH = (PRO_YEARLY_USD / 12).toFixed(2);
-const YEARLY_SAVING = PRO_MONTHLY_USD * 12 - PRO_YEARLY_USD;
-const SAVE_PERCENT = Math.round((YEARLY_SAVING / (PRO_MONTHLY_USD * 12)) * 100);
+const YEARLY_PER_MONTH = PRO_YEARLY_PER_MONTH_USD;
+const YEARLY_SAVING = PRO_YEARLY_SAVING_USD;
+const SAVE_PERCENT = PRO_YEARLY_SAVE_PERCENT;
 
 /** Pro checkout button for server-rendered sections of the pricing page. */
 export function ProCheckoutButton({
@@ -120,7 +129,7 @@ export function PricingPlans() {
         <article className="pr-card pr-card--pro">
           <span className="pr-badge">
             <Sparkles size={12} aria-hidden="true" />
-            {yearly ? `${Math.round(YEARLY_SAVING / PRO_MONTHLY_USD)} months free` : "Recommended"}
+            {yearly ? `${PRO_YEARLY_MONTHS_FREE} months free` : "Recommended"}
           </span>
           <header className="pr-card-head">
             <h2>Pro</h2>
@@ -150,7 +159,8 @@ export function PricingPlans() {
             </button>
           )}
           <p className="pr-secure">
-            <Lock size={12} aria-hidden="true" /> Secure checkout by Paddle · cancel anytime
+            <Lock size={12} aria-hidden="true" /> Secure checkout by Paddle · {REFUND_WINDOW_DAYS}-day money-back
+            guarantee
           </p>
           <p className="pr-list-label">Everything in Free, plus</p>
           <ul className="pr-features">

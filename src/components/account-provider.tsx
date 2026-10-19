@@ -14,6 +14,7 @@ import { X } from "lucide-react";
 
 import { AuthModal } from "@/components/auth-modal";
 import { UpgradeModal } from "@/components/upgrade-modal";
+import { WelcomeProModal, type WelcomeProStatus } from "@/components/welcome-pro-modal";
 import {
   anonymousAccount,
   fetchAccountState,
@@ -38,10 +39,17 @@ import {
   trackerLocalJson,
 } from "@/lib/sync-engine";
 import { SYNC_CHANGE_EVENT, type SyncBlobKey } from "@/lib/sync-client";
+import {
+  isUpgradeReason,
+  savePendingUpgrade,
+  takePendingUpgrade,
+  type BillingCycle,
+  type UpgradeReason,
+} from "@/lib/upgrade";
 
 export type SyncState = "off" | "syncing" | "synced" | "error";
 
-export type { AuthIntent, AccessRole };
+export type { AuthIntent, AccessRole, UpgradeReason };
 
 export interface AccountContextValue {
   account: AccountState;
@@ -62,9 +70,15 @@ export interface AccountContextValue {
    * and they are a guest, opens sign-in and returns false.
    */
   requireAccount: (intent?: AuthIntent) => boolean;
-  openUpgrade: () => void;
-  /** Opens checkout with monthly or yearly billing preselected. */
-  openUpgradeWith: (cycle: "monthly" | "yearly") => void;
+  /**
+   * Opens the upgrade dialog. `reason` names the limit the visitor met, so the
+   * dialog leads with it; safe to pass straight to `onClick` (events are ignored).
+   */
+  openUpgrade: (reason?: UpgradeReason) => void;
+  /** Opens the upgrade dialog with monthly or yearly billing preselected. */
+  openUpgradeWith: (cycle: BillingCycle, reason?: UpgradeReason) => void;
+  /** True while the upgrade or post-checkout welcome dialog is showing. */
+  upgradeFlowActive: boolean;
   signOut: () => Promise<void>;
 }
 
@@ -99,7 +113,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const [authOpen, setAuthOpen] = useState(false);
   const [authIntent, setAuthIntent] = useState<AuthIntent>("default");
   const [upgradeOpen, setUpgradeOpen] = useState(false);
-  const [upgradeCycle, setUpgradeCycle] = useState<"monthly" | "yearly">("monthly");
+  const [upgradeCycle, setUpgradeCycle] = useState<BillingCycle>("yearly");
+  const [upgradeReason, setUpgradeReason] = useState<UpgradeReason>("default");
+  const [welcomeStatus, setWelcomeStatus] = useState<WelcomeProStatus | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [syncState, setSyncState] = useState<SyncState>("off");
   const [syncVersion, setSyncVersion] = useState(0);
@@ -215,25 +231,24 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     if (typeof window === "undefined") return;
     let cancelled = false;
     // The Paddle webhook can arrive a beat after the checkout redirect lands.
-    // Poll /api/me for a short window so the plan chip flips to Pro without a
-    // manual reload, then fall back to a full refresh if it stays stale.
-    // Attempts happen at ~0s, ~1.3s, ~2.6s, ~5.2s, ~10.4s within 12 seconds.
-    const waitForPro = async (email: string) => {
-      for (let attempt = 0; attempt < 6 && !cancelled; attempt += 1) {
+    // Poll /api/me so the welcome dialog and plan chip flip to Pro without a
+    // reload; after ~40 seconds the dialog says activation is delayed. This
+    // effect runs once per page load, so account updates never cancel it.
+    const waitForPro = async () => {
+      const delays = [1200, 1600, 2400, 3200, 4800, 6400, 8000, 10000];
+      for (let attempt = 0; attempt <= delays.length && !cancelled; attempt += 1) {
         const state = await fetchAccountState();
         if (cancelled) return;
-        const upgraded = Boolean(email) && state.user?.email === email && state.plan === "pro";
         setAccount(state);
         setLoading(false);
-        if (upgraded) return;
-        await new Promise((resolve) =>
-          window.setTimeout(resolve, attempt === 0 ? 1300 : 1300 * attempt),
-        );
+        if (state.user && state.plan === "pro") {
+          setWelcomeStatus((current) => (current ? "active" : current));
+          return;
+        }
+        if (attempt === delays.length) break;
+        await new Promise((resolve) => window.setTimeout(resolve, delays[attempt]));
       }
-      if (!cancelled) {
-        setNotice("Your upgrade is active. Refreshing…");
-        window.location.reload();
-      }
+      if (!cancelled) setWelcomeStatus((current) => (current ? "delayed" : current));
     };
 
     void (async () => {
@@ -245,13 +260,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
 
       if (checkout === "success") {
         trackAppEvent("checkout_completed", null, { onceEver: "default" });
-        setNotice("Welcome to Pro! Your upgrade is being activated.");
+        setWelcomeStatus("activating");
         cleanUrlParams("checkout");
-        const email = account.user?.email ?? "";
-        void refresh().then(() => {
-          if (cancelled) return;
-          void waitForPro(email);
-        });
+        void waitForPro();
       } else if (auth === "ok") {
         setNotice("Signed in.");
         cleanUrlParams("auth");
@@ -267,7 +278,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [refresh, account.user?.email]);
+  }, [refresh]);
 
   /**
    * Sign out and remove account-scoped workspace data from this device.
@@ -326,6 +337,36 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const live = accountsAreLive(proEnabled(), account.configured);
   const role = resolveAccessRole({ signedIn, isPro });
 
+  const showUpgrade = useCallback(
+    (cycle: BillingCycle, rawReason: unknown) => {
+      const reason: UpgradeReason = isUpgradeReason(rawReason) ? rawReason : "default";
+      if (isPro) {
+        setNotice("You’re already on Pro — every limit is lifted.");
+        return;
+      }
+      trackAppEvent("upgrade_opened", { cycle, reason }, { oncePerDay: reason });
+      setUpgradeCycle(cycle);
+      setUpgradeReason(reason);
+      setUpgradeOpen(true);
+    },
+    [isPro],
+  );
+
+  // A guest who chose a plan signed in first: reopen the dialog where they
+  // left it (Google redirects and magic links both land back here).
+  useEffect(() => {
+    if (loading || !signedIn) return;
+    const pending = takePendingUpgrade(window.localStorage);
+    if (!pending || isPro) return;
+    let cancelled = false;
+    void Promise.resolve().then(() => {
+      if (!cancelled) showUpgrade(pending.cycle, pending.reason);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, signedIn, isPro, showUpgrade]);
+
   const openAuth = useCallback((intent: AuthIntent = "default") => {
     trackAppEvent("signup_intent_shown", { intent }, { oncePerDay: intent });
     setAuthIntent(intent);
@@ -363,16 +404,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       refresh,
       openAuth,
       requireAccount,
-      openUpgrade: () => {
-        trackAppEvent("upgrade_opened", { cycle: "monthly" }, { oncePerDay: "default" });
-        setUpgradeCycle("monthly");
-        setUpgradeOpen(true);
-      },
-      openUpgradeWith: (cycle: "monthly" | "yearly") => {
-        trackAppEvent("upgrade_opened", { cycle }, { oncePerDay: "default" });
-        setUpgradeCycle(cycle);
-        setUpgradeOpen(true);
-      },
+      openUpgrade: (reason?: UpgradeReason) => showUpgrade("yearly", reason),
+      openUpgradeWith: (cycle: BillingCycle, reason?: UpgradeReason) => showUpgrade(cycle, reason),
+      upgradeFlowActive: upgradeOpen || welcomeStatus !== null,
       signOut,
     }),
     [
@@ -385,6 +419,9 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       refresh,
       openAuth,
       requireAccount,
+      showUpgrade,
+      upgradeOpen,
+      welcomeStatus,
       signOut,
       syncState,
       syncVersion,
@@ -416,16 +453,29 @@ export function AccountProvider({ children }: { children: ReactNode }) {
           setAuthOpen(false);
           setAuthIntent("default");
         }}
+        onUpgradeInstead={() => {
+          setAuthOpen(false);
+          setAuthIntent("default");
+          showUpgrade("yearly", "checks");
+        }}
       />
       <UpgradeModal
         open={upgradeOpen}
         initialCycle={upgradeCycle}
+        reason={upgradeReason}
         user={account.user}
         onClose={() => setUpgradeOpen(false)}
-        onRequireAuth={() => {
+        onRequireAuth={(pending) => {
+          savePendingUpgrade(window.localStorage, pending);
           setUpgradeOpen(false);
           openAuth("upgrade");
         }}
+      />
+      <WelcomeProModal
+        open={welcomeStatus !== null}
+        status={welcomeStatus ?? "activating"}
+        email={account.user?.email ?? null}
+        onClose={() => setWelcomeStatus(null)}
       />
     </AccountContext.Provider>
   );

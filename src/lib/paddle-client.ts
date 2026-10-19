@@ -25,6 +25,9 @@ export function proPriceIds(): ProPriceIds {
   };
 }
 
+/** Window event fired when the buyer closes the Paddle overlay unpaid. */
+export const PADDLE_CHECKOUT_CLOSED_EVENT = "appclimb:paddle-checkout-closed";
+
 let paddlePromise: Promise<Paddle | undefined> | null = null;
 
 function getPaddle(): Promise<Paddle | undefined> {
@@ -32,6 +35,11 @@ function getPaddle(): Promise<Paddle | undefined> {
     paddlePromise = initializePaddle({
       token: process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN ?? "",
       environment: paddleEnvironment(),
+      eventCallback: (event) => {
+        if (event.name === "checkout.closed") {
+          window.dispatchEvent(new Event(PADDLE_CHECKOUT_CLOSED_EVENT));
+        }
+      },
     });
   }
   return paddlePromise;

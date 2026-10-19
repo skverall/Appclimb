@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState } from "react";
-import { Loader2, Mail, X } from "lucide-react";
+import { Loader2, Mail, Sparkles, X } from "lucide-react";
 
 import { useModalFocus } from "@/components/use-modal-focus";
 import { requestMagicLink } from "@/lib/account";
@@ -14,12 +14,15 @@ export function AuthModal({
   intent = "default",
   onClose,
   onSuccess,
+  onUpgradeInstead,
 }: {
   open: boolean;
   intent?: AuthIntent;
   onClose: () => void;
   /** Called after a magic-link email is sent or Google redirect begins. */
   onSuccess?: () => void;
+  /** At the daily limit, offers Pro as the alternative to a free account. */
+  onUpgradeInstead?: () => void;
 }) {
   const titleId = useId();
   const modalRef = useRef<HTMLDivElement>(null);
@@ -59,7 +62,11 @@ export function AuthModal({
   if (!open) return null;
 
   const copy = AUTH_COPY[intent] ?? AUTH_COPY.default;
-  const googleHref = "/api/auth/google";
+  // Come back to the page the visitor signed in from, not the homepage.
+  const returnPath = typeof window === "undefined" ? "/" : window.location.pathname;
+  const googleHref =
+    returnPath && returnPath !== "/" ? `/api/auth/google?next=${encodeURIComponent(returnPath)}` : "/api/auth/google";
+  const upgrading = intent === "upgrade";
 
   const sendMagicLink = async () => {
     if (busy) return;
@@ -70,7 +77,7 @@ export function AuthModal({
     }
     setBusy(true);
     setError(null);
-    const result = await requestMagicLink(value);
+    const result = await requestMagicLink(value, returnPath !== "/" ? returnPath : undefined);
     setBusy(false);
     if (!result.ok) {
       setError(result.error ?? "Could not send the sign-in email.");
@@ -93,6 +100,16 @@ export function AuthModal({
       >
         <header className="tracker-modal-header">
           <div>
+            {upgrading && (
+              <ol className="auth-steps" aria-label="Upgrade steps">
+                <li className="is-current">
+                  <span>1</span> Sign in
+                </li>
+                <li>
+                  <span>2</span> Secure checkout
+                </li>
+              </ol>
+            )}
             <h2 id={titleId}>{copy.title}</h2>
             <p>{copy.subtitle}</p>
           </div>
@@ -113,7 +130,8 @@ export function AuthModal({
               <strong>Check your inbox</strong>
               <span>
                 We sent a sign-in link to <b>{email.trim()}</b>. It expires in 15
-                minutes. Click it to finish signing in.
+                minutes. Click it to finish signing in
+                {upgrading ? " — checkout opens right after, with the plan you picked." : "."}
               </span>
               <button type="button" className="tracker-button-secondary" onClick={onClose}>
                 Done
@@ -189,11 +207,19 @@ export function AuthModal({
                 </div>
               )}
 
-              <ul className="auth-benefits">
-                <li>{`${PLAN_LIMITS.free.explorerChecksPerDay} keyword checks a day instead of ${GUEST_EXPLORER_CHECKS_PER_DAY}`}</li>
-                <li>Track 1 app &amp; 25 keywords — free, no card</li>
-                <li>ASO assistant: 5 messages a day</li>
-              </ul>
+              {!upgrading && (
+                <ul className="auth-benefits">
+                  <li>{`${PLAN_LIMITS.free.explorerChecksPerDay} keyword checks a day instead of ${GUEST_EXPLORER_CHECKS_PER_DAY}`}</li>
+                  <li>Track 1 app &amp; 25 keywords — free, no card</li>
+                  <li>ASO assistant: 5 messages a day</li>
+                </ul>
+              )}
+
+              {intent === "limit" && onUpgradeInstead && (
+                <button type="button" className="auth-upgrade-instead" onClick={onUpgradeInstead}>
+                  <Sparkles size={14} aria-hidden="true" /> Or skip limits entirely with Pro
+                </button>
+              )}
 
               <p className="auth-footnote">
                 No password needed. Keyword Explorer works without an account.

@@ -426,10 +426,14 @@ test("limit banner clears when the day rolls over", async ({ page }) => {
   const banner = page.getByText(/used today's 8 guest checks/);
   await expect(banner).toBeVisible();
 
-  // A further attempt stays blocked while the cap is genuinely exhausted.
+  // A further attempt stays blocked while the cap is genuinely exhausted,
+  // offers the free account right away, and keeps what was typed.
   await page.getByRole("combobox", { name: "Search keywords" }).fill("yoga");
   await page.getByRole("button", { name: "Analyze", exact: true }).click();
   await expect(page.locator(ROW)).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: /Get 30 keyword checks a day, free/ })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("combobox", { name: "Search keywords" })).toHaveValue("yoga");
 
   // Midnight passes while the tab stays open: the counter now belongs to
   // yesterday, so the stale banner must clear on the next interaction and a
@@ -443,6 +447,7 @@ test("limit banner clears when the day rolls over", async ({ page }) => {
       JSON.stringify({ day: yesterday, count: 8 }),
     );
   });
+  await page.getByRole("combobox", { name: "Search keywords" }).fill("");
   await page.getByRole("combobox", { name: "Search keywords" }).fill("yoga");
 
   await expect(banner).toHaveCount(0);
@@ -858,6 +863,9 @@ test("an upgrade mid-session lifts the explorer quota gate", async ({
 
   // The gate banner clears and analysis works without limit.
   await expect(page.getByText(/used today's 8 guest checks/)).toHaveCount(0);
+  const welcomePro = page.getByRole("dialog", { name: /Welcome to AppClimb Pro/i });
+  await expect(welcomePro.getByText(/Pro is active/i)).toBeVisible({ timeout: 10_000 });
+  await welcomePro.getByRole("button", { name: /Start using Pro/i }).click();
   const closeWelcome = page.getByRole("button", { name: /Close welcome dialog/i });
   try {
     await closeWelcome.waitFor({ state: "visible", timeout: 3_000 });

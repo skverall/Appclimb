@@ -20,6 +20,7 @@ import "./keyword-pages.css";
 import "./tracker-overview.css";
 import "./assistant.css";
 import "./pricing.css";
+import "./upgrade.css";
 import "./guide.css";
 
 /*

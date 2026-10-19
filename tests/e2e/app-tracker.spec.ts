@@ -510,9 +510,9 @@ test("free plan cannot exceed the 1-app limit by tracking extra storefronts", as
   // second entry and point the user at Pro instead of silently exceeding the
   // 1-app limit.
   await page.getByLabel("Track this app in another storefront").selectOption("DE");
-  await expect(
-    page.getByRole("heading", { name: /Upgrade to Pro/i }),
-  ).toBeVisible();
+  const upgrade = page.getByRole("dialog", { name: /Upgrade to Pro/i });
+  await expect(upgrade).toBeVisible();
+  await expect(upgrade.getByRole("heading", { name: /Track every app you ship/i })).toBeVisible();
   await expect(page.locator(".tracker-app-pill-list .tracker-app-pill")).toHaveCount(1);
 });
 
@@ -805,9 +805,14 @@ test("upgrade modal fits and stays usable at 375px", async ({ page }) => {
     expect(box.x + box.width).toBeLessThanOrEqual(375);
   }
 
-  // The plan toggle is reachable and switchable at this width.
-  await page.getByRole("tab", { name: /\$64 \/ year/i }).click();
-  await expect(page.getByText(/save 33%/i)).toBeVisible();
+  // The plan picker is reachable and switchable at this width, and the
+  // checkout button stays on screen.
+  await dialog.locator("label", { hasText: "Monthly" }).click();
+  await expect(dialog.getByRole("radio", { name: /Monthly/ })).toBeChecked();
+  const cta = dialog.getByRole("button", { name: /Get Pro — \$8\/month/i });
+  await expect(cta).toBeInViewport();
+  await dialog.locator("label", { hasText: "Yearly" }).click();
+  await expect(dialog.getByText(/4 months free/i)).toBeVisible();
 });
 
 test("tracker app sidebar navigation works at 375px", async ({ page }) => {

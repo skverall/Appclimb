@@ -62,6 +62,7 @@ export interface AnalyticsSummary {
   aiTraffic: AiTrafficSummary;
   userAnalytics: UserAnalyticsSummary;
   signupFunnel: SignupFunnelSummary;
+  upgradeTriggers: UpgradeTriggerRow[];
   countries: Array<{
     code: string;
     name: string;
@@ -533,24 +534,18 @@ const FUNNEL_FIELDS: Record<AppEventName, keyof SignupFunnelSummary> = {
   assistant_used: "assistantUsed",
 };
 
+/** First `YYYY-MM-DD` (UTC) included in an analytics range. */
+function rangeStartDate(range: "today" | "7d" | "30d", now: Date = new Date()): string {
+  const days = range === "7d" ? 7 : range === "30d" ? 30 : 0;
+  return new Date(now.getTime() - days * 86400000).toISOString().slice(0, 10);
+}
+
 /** Unique visitors per funnel event inside the analytics range. */
 export async function querySignupFunnel(
   db: D1Database,
   range: "today" | "7d" | "30d" = "7d",
 ): Promise<SignupFunnelSummary> {
-  const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
-
-  let startDateStr = todayStr;
-  if (range === "7d") {
-    startDateStr = new Date(now.getTime() - 7 * 86400000)
-      .toISOString()
-      .slice(0, 10);
-  } else if (range === "30d") {
-    startDateStr = new Date(now.getTime() - 30 * 86400000)
-      .toISOString()
-      .slice(0, 10);
-  }
+  const startDateStr = rangeStartDate(range);
 
   const zero: SignupFunnelSummary = {
     signupIntents: 0,
@@ -587,6 +582,48 @@ export async function querySignupFunnel(
     console.error("Failed to query signup funnel:", err);
   }
   return zero;
+}
+
+export interface UpgradeTriggerRow {
+  /** Why the upgrade dialog opened (`meta.reason`); "untagged" before reasons existed. */
+  reason: string;
+  /** Unique visitors who saw the dialog for this reason. */
+  opened: number;
+  /** Unique visitors who went on to open Paddle checkout from it. */
+  checkouts: number;
+}
+
+/** Upgrade dialog opens and checkouts per trigger, most opened first. */
+export async function queryUpgradeTriggers(
+  db: D1Database,
+  range: "today" | "7d" | "30d" = "7d",
+): Promise<UpgradeTriggerRow[]> {
+  try {
+    const { results } = await db
+      .prepare(
+        `SELECT name,
+                COALESCE(json_extract(meta, '$.reason'), 'untagged') AS reason,
+                count(DISTINCT visitor_hash) AS visitors
+         FROM analytics_events
+         WHERE date >= ? AND name IN ('upgrade_opened', 'checkout_opened')
+         GROUP BY name, reason`,
+      )
+      .bind(rangeStartDate(range))
+      .all<{ name: string; reason: string | null; visitors: number }>();
+
+    const rows = new Map<string, UpgradeTriggerRow>();
+    for (const row of results ?? []) {
+      const reason = String(row.reason ?? "untagged").slice(0, 32) || "untagged";
+      const entry = rows.get(reason) ?? { reason, opened: 0, checkouts: 0 };
+      if (row.name === "upgrade_opened") entry.opened += Number(row.visitors) || 0;
+      else if (row.name === "checkout_opened") entry.checkouts += Number(row.visitors) || 0;
+      rows.set(reason, entry);
+    }
+    return [...rows.values()].sort((a, b) => b.opened - a.opened || b.checkouts - a.checkouts);
+  } catch (err) {
+    console.error("Failed to query upgrade triggers:", err);
+    return [];
+  }
 }
 
 /** Record a pageview in D1 */
@@ -977,6 +1014,7 @@ export async function queryAnalyticsSummary(
     totalVisitors > 0 ? Math.round((newUsersInRange / totalVisitors) * 1000) / 10 : 0;
 
   const signupFunnel = await querySignupFunnel(db, range);
+  const upgradeTriggers = await queryUpgradeTriggers(db, range);
 
   return {
     range,
@@ -999,6 +1037,7 @@ export async function queryAnalyticsSummary(
       recentUsers,
     },
     signupFunnel,
+    upgradeTriggers,
     countries,
     referrers,
     pages,

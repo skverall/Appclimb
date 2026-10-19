@@ -66,8 +66,8 @@ export const AUTH_COPY: Record<AuthIntent, { title: string; subtitle: string }> 
     subtitle: `Guests get ${GUEST_EXPLORER_CHECKS_PER_DAY} a day. A free account raises that to ${PLAN_LIMITS.free.explorerChecksPerDay}, tracks 1 app, and adds the ASO assistant. No card needed.`,
   },
   upgrade: {
-    title: "Sign in to upgrade",
+    title: "Sign in to finish upgrading",
     subtitle:
-      "Create a free account first, then subscribe to Pro for unlimited checks and cloud sync.",
+      "Pro attaches to your account, so sign in first. Checkout opens right after, with the plan you picked.",
   },
 };

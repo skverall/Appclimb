@@ -1001,7 +1001,7 @@ export function AiChatConversation({
                 </p>
               </div>
               {proOn && (
-                <button type="button" className="tracker-button-primary" onClick={openUpgrade}>
+                <button type="button" className="tracker-button-primary" onClick={() => openUpgrade("assistant")}>
                   Upgrade for more
                 </button>
               )}
@@ -1068,7 +1068,7 @@ export function AiChatConversation({
                     {AI_MODEL_LABEL} + Apple Ads data
                   </span>
                   {proOn && aiLimit !== null && remainingDay !== null && remainingDay <= 1 && (
-                    <button type="button" className="ai-chat-upgrade-link" onClick={openUpgrade}>
+                    <button type="button" className="ai-chat-upgrade-link" onClick={() => openUpgrade("assistant")}>
                       Upgrade for more
                     </button>
                   )}

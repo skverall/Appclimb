@@ -4,6 +4,7 @@ import { createMagicLink, isValidEmail, normalizeEmail } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { buildMagicLinkEmail, readResendCredentials, sendEmail } from "@/lib/email";
 import { clientIpFromHeaders, createRateLimiter } from "@/lib/rate-limit";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,7 +46,12 @@ export async function POST(request: NextRequest) {
 
   const normalized = normalizeEmail(email);
   const { token } = await createMagicLink(db, normalized);
-  const url = `${request.nextUrl.origin}/api/auth/verify?token=${encodeURIComponent(token)}`;
+  // Return the visitor to the page they signed in from (validated path only).
+  const rawNext = (body as { next?: unknown }).next;
+  const next = safeRedirectPath(typeof rawNext === "string" ? rawNext : null, "");
+  const url =
+    `${request.nextUrl.origin}/api/auth/verify?token=${encodeURIComponent(token)}` +
+    (next && next !== "/" ? `&next=${encodeURIComponent(next)}` : "");
   const message = buildMagicLinkEmail(url);
 
   const sent = await sendEmail(resend, { to: normalized, ...message });

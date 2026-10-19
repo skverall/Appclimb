@@ -118,6 +118,12 @@ export function AccountMenu() {
 
   return (
     <div className="account-menu" ref={rootRef}>
+      {!isPro && (
+        <button type="button" className="account-go-pro" onClick={() => openUpgrade()}>
+          <Sparkles size={13} aria-hidden="true" />
+          <span>Go Pro</span>
+        </button>
+      )}
       <button
         type="button"
         className="account-menu-trigger"

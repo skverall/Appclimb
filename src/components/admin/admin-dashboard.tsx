@@ -28,6 +28,19 @@ import {
 import { isLocalAdminOptedOut, setLocalAdminOptOut } from "@/components/analytics-beacon";
 import type { AnalyticsSummary } from "@/lib/analytics";
 
+
+/** Human names for `upgrade_opened` reasons (see src/lib/upgrade.ts). */
+const UPGRADE_TRIGGER_LABELS: Record<string, string> = {
+  default: "Menu, header, pricing",
+  checks: "Daily check limit",
+  apps: "Tracked-app limit",
+  keywords: "Keyword cap",
+  history: "52-week history lock",
+  sync: "Cloud sync pill",
+  assistant: "Assistant limit",
+  untagged: "Before triggers were tagged",
+};
+
 export function AdminDashboard() {
   const [range, setRange] = useState<"today" | "7d" | "30d">("7d");
   const [data, setData] = useState<AnalyticsSummary | null>(null);
@@ -325,6 +338,31 @@ export function AdminDashboard() {
                 );
               });
             })()}
+            {(data.upgradeTriggers?.length ?? 0) > 0 && (
+              <div className="admin-funnel-group">
+                <span className="admin-funnel-group-title">Upgrade dialog by trigger → checkout</span>
+                <div className="admin-funnel-grid">
+                  {(() => {
+                    const rows = data.upgradeTriggers ?? [];
+                    const top = Math.max(...rows.map((row) => row.opened), 1);
+                    return rows.map((row) => (
+                      <div key={row.reason} className="admin-funnel-step">
+                        <span className="admin-funnel-label">{UPGRADE_TRIGGER_LABELS[row.reason] ?? row.reason}</span>
+                        <div className="admin-funnel-bar-wrap">
+                          <div
+                            className="admin-funnel-bar"
+                            style={{ width: `${Math.max((row.opened / top) * 100, row.opened > 0 ? 6 : 0)}%` }}
+                          />
+                        </div>
+                        <strong className="admin-funnel-val">
+                          {row.opened} → {row.checkouts}
+                        </strong>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Timeline Chart */}

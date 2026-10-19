@@ -102,6 +102,7 @@ export function AppWorkspace() {
     signOut,
     syncState,
     syncVersion,
+    upgradeFlowActive,
   } = useAccount();
   const proOn = proEnabled();
   const limitsOn = proOn || accountsLive;
@@ -235,7 +236,7 @@ export function AppWorkspace() {
     // A storefront variant of a tracked app is a new tracked entry: it counts
     // against the plan's tracked-app limit just like any other add path.
     if (atAppLimit()) {
-      openUpgrade();
+      openUpgrade("apps");
       return;
     }
     const {
@@ -303,7 +304,7 @@ export function AppWorkspace() {
     }
     if (atAppLimit()) {
       setAddAppOpen(false);
-      openUpgrade();
+      openUpgrade("apps");
       return;
     }
     setAddAppOpen(false);
@@ -373,7 +374,7 @@ export function AppWorkspace() {
     }
     if (atAppLimit()) {
       setAddAppOpen(false);
-      openUpgrade();
+      openUpgrade("apps");
       return;
     }
     setAddAppOpen(false);
@@ -607,7 +608,7 @@ export function AppWorkspace() {
               <button
                 type="button"
                 className="tracker-sync-status-pill is-local"
-                onClick={openUpgrade}
+                onClick={() => openUpgrade("sync")}
                 title="Data saved in local browser storage. Upgrade to Pro for Cloud Sync across devices."
               >
                 <CloudOff size={13} aria-hidden="true" />
@@ -1006,7 +1007,8 @@ export function AppWorkspace() {
       </aside>
 
       <OnboardingModal
-        open={onboardingOpen}
+        // Waits behind the upgrade or welcome-to-Pro dialog instead of stacking.
+        open={onboardingOpen && !upgradeFlowActive}
         isPro={isPro}
         onAddApp={() => {
           dismissOnboarding();

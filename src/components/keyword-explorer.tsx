@@ -175,6 +175,18 @@ export function KeywordExplorer({
     }
   };
 
+  // Meeting the limit mid-search opens the next step right away (a free
+  // account for guests, Pro for free accounts) instead of a silent no-op.
+  // Throttled so "Analyze a list" past the limit prompts once, not per row.
+  const limitPromptAtRef = useRef(0);
+  const promptAtLimit = useCallback(() => {
+    const now = Date.now();
+    if (now - limitPromptAtRef.current < 15_000) return;
+    limitPromptAtRef.current = now;
+    if (isGuest) openAuth("limit");
+    else if (signedIn && !isPro) openUpgradeWith("yearly", "checks");
+  }, [isGuest, signedIn, isPro, openAuth, openUpgradeWith]);
+
   useEffect(() => {
     if (limitHit && !isPro) {
       const role = isGuest ? "guest" : "free";
@@ -250,8 +262,13 @@ export function KeywordExplorer({
       if (!alreadyTracked) {
         const gate = consumeDayUsage(window.localStorage, EXPLORER_DAY_KEY, explorerLimit);
         consumed = gate.consumed;
-        // The limit banner explains what happened and offers Pro.
-        if (!gate.allowed) return;
+        // The limit banner explains what happened; the prompt offers the way on.
+        if (!gate.allowed) {
+          // Keep what the visitor typed so it is there after they sign in.
+          if (options.open !== false) setQuery(clean);
+          promptAtLimit();
+          return;
+        }
       }
 
       setBusy((previous) => new Set(previous).add(key));
@@ -296,7 +313,7 @@ export function KeywordExplorer({
         });
       }
     },
-    [busy, country, explorerLimit, isGuest],
+    [busy, country, explorerLimit, isGuest, promptAtLimit],
   );
 
   const submitSearch = useCallback(
@@ -793,6 +810,16 @@ export function KeywordExplorer({
                 {freeChecks}/day with a free account
               </button>
             )}
+            {signedIn && !isPro && remaining !== null && remaining <= 5 && remaining > 0 && (
+              <button
+                type="button"
+                className="ex-link"
+                onClick={() => openUpgradeWith("yearly", "checks")}
+              >
+                <Sparkles size={14} aria-hidden="true" />
+                Unlimited with Pro
+              </button>
+            )}
             <button type="button" className="ex-link" onClick={() => setBulkOpen(true)} disabled={busy.size > 0}>
               <ListPlus size={14} aria-hidden="true" />
               Analyze a list
@@ -841,7 +868,7 @@ export function KeywordExplorer({
               >
                 Get {Math.max(0, freeChecks - usedToday)} more checks free
               </button>
-              <button type="button" className="ex-btn ex-btn--ghost" onClick={() => openUpgradeWith("yearly")}>
+              <button type="button" className="ex-btn ex-btn--ghost" onClick={() => openUpgradeWith("yearly", "checks")}>
                 Or go unlimited with Pro
               </button>
             </div>
@@ -855,7 +882,7 @@ export function KeywordExplorer({
               You&apos;ve used today&apos;s <strong>{explorerLimit} checks</strong>. They reset
               tomorrow — re-checking keywords already in your list is always free.
             </span>
-            <button type="button" className="ex-btn ex-btn--primary" onClick={() => openUpgradeWith("yearly")}>
+            <button type="button" className="ex-btn ex-btn--primary" onClick={() => openUpgradeWith("yearly", "checks")}>
               {`Unlimited with Pro · $${(PRO_YEARLY_USD / 12).toFixed(2)}/mo`}
             </button>
           </div>
@@ -1287,7 +1314,7 @@ export function KeywordExplorer({
                     historyDays={historyDays}
                     historyWeeks={historyWeeks}
                     canSeeFullHistory={isPro}
-                    onUpgrade={openUpgrade}
+                    onUpgrade={() => openUpgrade("history")}
                     onClose={() => setSelected(null)}
                     onRefresh={() => void analyze(selected, { open: true, reorder: false })}
                     onAnalyze={(keyword) => void analyze(keyword)}
