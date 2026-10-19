@@ -3,15 +3,26 @@
 // browser, get the week's biggest risers in Apple's published search terms.
 // No I/O here, so every rule is unit-tested.
 
+import {
+  matchesStorefrontScript,
+  moversFrom,
+  normalizeTerm,
+  type TermDataset,
+  type TermHistoryPoint,
+  type TermMover,
+} from "@/lib/search-terms";
 import type { RankSnapshot, TrackedKeyword, TrackerStore } from "@/lib/tracker";
 
 /** Ranks older than this are called out as stale in the email. */
 const STALE_RANK_DAYS = 7;
 const MAX_APPS = 5;
 const MAX_ROWS = 5;
-/** Free email: risers shown, and at most this many from one category. */
+/** Free email: risers and newcomers shown, and at most this many from one category. */
 const FREE_RISERS = 8;
-const FREE_RISERS_PER_CATEGORY = 2;
+const FREE_NEWCOMERS = 6;
+const FREE_PER_CATEGORY = 2;
+/** Weeks of Apple history carried per riser (for its mini chart). */
+export const RISER_HISTORY_WEEKS = 8;
 /** Free email: a former Pro user's synced keywords shown. */
 const FREE_KEYWORDS = 8;
 
@@ -68,8 +79,24 @@ export interface DigestRiser {
   term: string;
   categoryLabel: string;
   popularity: number;
+  /** Apple's popularity in the comparison week (the week before). */
+  previousPopularity: number;
   /** Popularity gained since the comparison week. */
   delta: number;
+  /**
+   * Apple's weekly popularity over the last RISER_HISTORY_WEEKS weeks up to
+   * this one, oldest first. Weeks the term wasn't published are absent, and
+   * the list is empty when Apple's history couldn't be loaded.
+   */
+  history: TermHistoryPoint[];
+  href: string;
+}
+
+/** A term in Apple's lists this week that wasn't in any of them the week before. */
+export interface DigestNewcomer {
+  term: string;
+  categoryLabel: string;
+  popularity: number;
   href: string;
 }
 
@@ -90,6 +117,7 @@ export interface FreeDigestInput {
   /** Storefront the risers come from. */
   country: string;
   risers: DigestRiser[];
+  newcomers: DigestNewcomer[];
   /**
    * Keywords from the user's last cloud sync. Empty for most free accounts:
    * only a former Pro user can have synced keywords on the server.
@@ -393,6 +421,20 @@ export function buildDigestEmail(input: DigestInput): DigestEmail | null {
   return { subject, text: text.join("\n"), html: body };
 }
 
+/** The first `limit` items, at most `perCategory` from one category. */
+function spreadByCategory<T extends { genre: string }>(items: readonly T[], limit: number, perCategory: number): T[] {
+  const picked: T[] = [];
+  const perGenre = new Map<string, number>();
+  for (const item of items) {
+    if (picked.length >= limit) break;
+    const count = perGenre.get(item.genre) ?? 0;
+    if (count >= perCategory) continue;
+    perGenre.set(item.genre, count + 1);
+    picked.push(item);
+  }
+  return picked;
+}
+
 /**
  * The week's biggest risers, at most `perCategory` from one category so one
  * busy category can't fill the email. Ties keep their input order (moversFrom
@@ -401,21 +443,43 @@ export function buildDigestEmail(input: DigestInput): DigestEmail | null {
 export function pickRisers<T extends { genre: string; delta: number | null }>(
   rising: readonly T[],
   limit = FREE_RISERS,
-  perCategory = FREE_RISERS_PER_CATEGORY,
+  perCategory = FREE_PER_CATEGORY,
 ): T[] {
-  const picked: T[] = [];
-  const perGenre = new Map<string, number>();
   const gains = rising
     .filter((mover) => (mover.delta ?? 0) > 0)
     .sort((left, right) => (right.delta ?? 0) - (left.delta ?? 0));
-  for (const mover of gains) {
-    if (picked.length >= limit) break;
-    const count = perGenre.get(mover.genre) ?? 0;
-    if (count >= perCategory) continue;
-    perGenre.set(mover.genre, count + 1);
-    picked.push(mover);
-  }
-  return picked;
+  return spreadByCategory(gains, limit, perCategory);
+}
+
+/**
+ * Risers and newcomers for the free email from Apple's latest week and the
+ * week before. Terms written in a script the storefront doesn't use are
+ * left out. A newcomer must be missing from every category's list the week
+ * before, so a term that only changed category isn't "new".
+ */
+export function marketMovers(
+  current: TermDataset,
+  previous: TermDataset,
+): { risers: TermMover[]; newcomers: TermMover[] } {
+  const movers = moversFrom(current, previous, { limit: current.rows.length });
+  const fits = (mover: TermMover) => matchesStorefrontScript(mover.term, current.country);
+  const newcomers = movers.newcomers
+    .filter((mover) => fits(mover) && !previous.byTerm.has(normalizeTerm(mover.term)))
+    .sort((left, right) => right.popularity - left.popularity);
+  return {
+    risers: pickRisers(movers.rising.filter(fits)),
+    newcomers: spreadByCategory(newcomers, FREE_NEWCOMERS, FREE_PER_CATEGORY),
+  };
+}
+
+/** A term's Apple history cut to the `weeks` weeks ending with `throughWeek`. */
+export function recentHistory(
+  points: readonly TermHistoryPoint[],
+  throughWeek: string,
+  weeks = RISER_HISTORY_WEEKS,
+): TermHistoryPoint[] {
+  const from = shiftDay(throughWeek, -7 * (weeks - 1));
+  return points.filter((point) => point.week >= from && point.week <= throughWeek);
 }
 
 /**

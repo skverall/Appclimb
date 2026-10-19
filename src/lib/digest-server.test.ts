@@ -229,6 +229,8 @@ async function appleStore(): Promise<StoreDeps> {
       row("step counter", 70),
       row("budget app", 45, "FINANCE"),
       row("flight tracker", 60, "TRAVEL"),
+      row("подружка", 59, "SHOPPING"),
+      row("tax refund", 50, "FINANCE"),
     ],
     "2026-09-13": [
       row("habit tracker", 53),
@@ -236,6 +238,7 @@ async function appleStore(): Promise<StoreDeps> {
       row("step counter", 70),
       row("budget app", 30, "FINANCE"),
       row("flight tracker", 61, "TRAVEL"),
+      row("подружка", 40, "SHOPPING"),
     ],
     "2026-08-23": [row("habit tracker", 57), row("water tracker", 44), row("step counter", 70)],
   };
@@ -324,7 +327,8 @@ describe("runWeeklyDigest for free accounts", () => {
     expect(email.text).toContain("  budget app · Finance  45 (+15)  https://appclimb.app/?kw=budget%20app&country=US");
     expect(email.text).toContain("  habit tracker · Health & Fitness  56 (+3)");
     expect(email.text).toContain("  water tracker · Health & Fitness  51 (+2)");
-    // Falling and unchanged terms aren't risers.
+    // Falling and unchanged terms aren't risers, nor are terms in a script US shoppers don't use.
+    expect(email.text).not.toContain("подружка");
     expect(email.text).not.toContain("flight tracker");
     expect(email.text).not.toContain("step counter");
     expect(email.text).toContain("since the week of Sep 13.");
@@ -399,13 +403,40 @@ describe("runWeeklyDigest for free accounts", () => {
 
 describe("previewFreeDigest", () => {
   it("builds this week's free email with a placeholder unsubscribe link", async () => {
-    const email = await previewFreeDigest({ store: await appleStore(), siteUrl: "https://appclimb.app" });
+    const { email } = await previewFreeDigest({ store: await appleStore(), siteUrl: "https://appclimb.app" });
     expect(email?.subject).toBe("Apple’s latest week: “budget app” up 15 in popularity");
     expect(email?.text).toMatch(/Stop these emails: https:\/\/appclimb\.app\/unsubscribe$/u);
     expect(email?.text).not.toContain("Your keywords");
   });
 
+  it("returns the Apple data behind it: last week's score, recent history, and newcomers", async () => {
+    const { market } = await previewFreeDigest({ store: await appleStore(), siteUrl: "https://appclimb.app" });
+    expect(market).toMatchObject({ week: "2026-09-20", compareWeek: "2026-09-13", country: "US" });
+    expect(market?.risers.map((item) => [item.term, item.previousPopularity, item.popularity, item.delta])).toEqual([
+      ["budget app", 30, 45, 15],
+      ["habit tracker", 53, 56, 3],
+      ["water tracker", 49, 51, 2],
+    ]);
+    expect(market?.risers[1].history).toEqual([
+      { week: "2026-09-13", popularity: 53 },
+      { week: "2026-09-20", popularity: 56 },
+    ]);
+    // Apple has no history rows for it in this fake: an empty chart, not a made-up one.
+    expect(market?.risers[0].history).toEqual([]);
+    expect(market?.newcomers).toEqual([
+      {
+        term: "tax refund",
+        categoryLabel: "Finance",
+        popularity: 50,
+        href: "https://appclimb.app/?kw=tax%20refund&country=US",
+      },
+    ]);
+  });
+
   it("is empty without Apple data", async () => {
-    expect(await previewFreeDigest({ store: null, siteUrl: "https://appclimb.app" })).toBeNull();
+    expect(await previewFreeDigest({ store: null, siteUrl: "https://appclimb.app" })).toEqual({
+      market: null,
+      email: null,
+    });
   });
 });

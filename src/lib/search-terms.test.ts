@@ -6,6 +6,7 @@ import {
   historyDelta,
   inferDatasetGenre,
   lookupTerm,
+  matchesStorefrontScript,
   moversFrom,
   normalizeHistory,
   packRows,
@@ -195,5 +196,27 @@ describe("history", () => {
     expect(historyDelta(history)).toBe(6);
     expect(historyDelta(history.slice(-2))).toBe(3);
     expect(historyDelta(history.slice(-1))).toBeNull();
+  });
+});
+
+describe("matchesStorefrontScript", () => {
+  it("allows Latin everywhere, with accents, digits and punctuation", () => {
+    expect(matchesStorefrontScript("habit tracker", "US")).toBe(true);
+    expect(matchesStorefrontScript("café finder", "US")).toBe(true);
+    expect(matchesStorefrontScript("über", "DE")).toBe(true);
+    expect(matchesStorefrontScript("7-minute workout!", "us")).toBe(true);
+    expect(matchesStorefrontScript("tiktok", "JP")).toBe(true);
+  });
+
+  it("allows a storefront's own scripts and rejects others", () => {
+    expect(matchesStorefrontScript("подружка", "US")).toBe(false);
+    expect(matchesStorefrontScript("подружка", "RU")).toBe(true);
+    expect(matchesStorefrontScript("微信", "US")).toBe(false);
+    expect(matchesStorefrontScript("微信", "RU")).toBe(false);
+    expect(matchesStorefrontScript("ポケモン go", "JP")).toBe(true);
+    expect(matchesStorefrontScript("카카오톡", "KR")).toBe(true);
+    expect(matchesStorefrontScript("카카오톡", "JP")).toBe(false);
+    expect(matchesStorefrontScript("हिंदी news", "IN")).toBe(true);
+    expect(matchesStorefrontScript("whatsapp مسنجر", "GB")).toBe(false);
   });
 });

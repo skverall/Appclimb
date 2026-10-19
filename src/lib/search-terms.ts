@@ -101,6 +101,32 @@ export function normalizeTerm(term: string): string {
   return term.trim().toLocaleLowerCase().replace(/\s+/gu, " ");
 }
 
+/**
+ * Scripts a storefront's own searches are written in besides Latin, which
+ * every storefront allows (brand names are Latin everywhere).
+ */
+const STOREFRONT_SCRIPTS: Record<string, RegExp> = {
+  RU: /\p{Script=Cyrillic}/u,
+  JP: /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}]/u,
+  KR: /[\p{Script=Hangul}\p{Script=Han}]/u,
+  IN: /[\p{Script=Devanagari}\p{Script=Bengali}\p{Script=Gujarati}\p{Script=Gurmukhi}\p{Script=Kannada}\p{Script=Malayalam}\p{Script=Oriya}\p{Script=Tamil}\p{Script=Telugu}]/u,
+};
+
+/**
+ * Whether a term is written in a script the storefront's shoppers use.
+ * Apple's lists carry some searches typed in other scripts (a Cyrillic
+ * term in the US Shopping list, say); they're real but not useful advice
+ * for that storefront.
+ */
+export function matchesStorefrontScript(term: string, country: string): boolean {
+  const local = STOREFRONT_SCRIPTS[country.toUpperCase()];
+  for (const char of term) {
+    if (!/\p{L}/u.test(char) || /\p{Script=Latin}/u.test(char)) continue;
+    if (!local?.test(char)) return false;
+  }
+  return true;
+}
+
 export interface TermRow {
   term: string;
   genre: DatasetGenre;

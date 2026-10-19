@@ -22,8 +22,9 @@ function sameToken(left: string, right: string): boolean {
  * with DIGEST_SECRET; handles a batch per call and reports `remaining`.
  * `dry=1` builds without sending or logging and reports counts only (the
  * workflow log is public). `preview=free` returns this week's free email
- * with a placeholder unsubscribe link, so it can be read before it goes out;
- * it holds no user data and the workflow never calls it.
+ * with a placeholder unsubscribe link, plus the Apple data behind it, so it
+ * can be read before it goes out; it holds no user data and the workflow
+ * never calls it.
  */
 export async function POST(request: NextRequest) {
   const secret = process.env.DIGEST_SECRET?.trim() ?? "";
@@ -37,8 +38,7 @@ export async function POST(request: NextRequest) {
   }
   const params = request.nextUrl.searchParams;
   if (params.get("preview") === "free") {
-    const email = await previewFreeDigest({ store: searchTermDeps(), siteUrl: SITE_URL });
-    return NextResponse.json({ email });
+    return NextResponse.json(await previewFreeDigest({ store: searchTermDeps(), siteUrl: SITE_URL }));
   }
   const dryRun = params.get("dry") === "1";
   const resend = readResendCredentials();

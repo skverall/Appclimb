@@ -5,14 +5,17 @@ import {
   buildFreeDigestEmail,
   digestKeywordsFor,
   escapeHtml,
+  marketMovers,
   pickKeywordMoves,
   pickRisers,
   rankChange,
   rankPair,
+  recentHistory,
   type DigestApp,
   type DigestRiser,
   type FreeDigestInput,
 } from "@/lib/digest";
+import { buildDataset, type TermRow } from "@/lib/search-terms";
 import { emptyStore, type RankSnapshot, type TrackerStore } from "@/lib/tracker";
 
 function snap(date: string, position: number | null): RankSnapshot {
@@ -171,7 +174,9 @@ function riser(term: string, delta: number, overrides: Partial<DigestRiser> = {}
     term,
     categoryLabel: "Health & Fitness",
     popularity: 40 + delta,
+    previousPopularity: 40,
     delta,
+    history: [],
     href: `https://appclimb.app/?kw=${encodeURIComponent(term)}&country=US`,
     ...overrides,
   };
@@ -183,6 +188,7 @@ function freeInput(overrides: Partial<FreeDigestInput> = {}): FreeDigestInput {
     compareWeek: "2026-10-04",
     country: "US",
     risers: [riser("water tracker", 9), riser("step counter", 4)],
+    newcomers: [],
     keywords: [],
     syncedOn: null,
     siteUrl: "https://appclimb.app",
@@ -218,6 +224,66 @@ describe("pickRisers", () => {
       2,
     );
     expect(picked.map((item) => item.term)).toEqual(["x", "y"]);
+  });
+});
+
+describe("marketMovers", () => {
+  const row = (term: string, genre: TermRow["genre"], popularity: number): TermRow => ({ term, genre, popularity });
+
+  it("drops terms in a script the storefront doesn't use, from risers and newcomers", () => {
+    const previous = buildDataset("US", "2026-09-27", [
+      row("подружка", "SHOPPING", 40),
+      row("cinnabon", "FOOD_DRINK", 60),
+    ]);
+    const current = buildDataset("US", "2026-10-04", [
+      row("подружка", "SHOPPING", 59),
+      row("cinnabon", "FOOD_DRINK", 71),
+      row("微信", "SOCIAL_NETWORKING", 70),
+      row("café finder", "FOOD_DRINK", 50),
+    ]);
+    const { risers, newcomers } = marketMovers(current, previous);
+    expect(risers.map((item) => item.term)).toEqual(["cinnabon"]);
+    expect(newcomers.map((item) => item.term)).toEqual(["café finder"]);
+    // The same Cyrillic term is a real riser in the Russian storefront.
+    const ru = marketMovers({ ...current, country: "RU" }, { ...previous, country: "RU" });
+    expect(ru.risers.map((item) => item.term)).toEqual(["подружка", "cinnabon"]);
+  });
+
+  it("counts a term as new only when no category listed it the week before", () => {
+    const previous = buildDataset("US", "2026-09-27", [row("budget planner", "BUSINESS", 44)]);
+    const current = buildDataset("US", "2026-10-04", [
+      row("budget planner", "FINANCE", 46),
+      row("tax refund", "FINANCE", 52),
+      row("tax return", "FINANCE", 51),
+      row("irs", "FINANCE", 61),
+      row("flight deals", "TRAVEL", 40),
+    ]);
+    const { risers, newcomers } = marketMovers(current, previous);
+    expect(risers).toEqual([]);
+    // Most popular first, at most two per category.
+    expect(newcomers.map((item) => item.term)).toEqual(["irs", "tax refund", "flight deals"]);
+  });
+});
+
+describe("recentHistory", () => {
+  it("keeps the weeks ending with this one, oldest first", () => {
+    const points = [
+      { week: "2026-08-09", popularity: 30 },
+      { week: "2026-08-16", popularity: 31 },
+      { week: "2026-09-20", popularity: 40 },
+      { week: "2026-09-27", popularity: 44 },
+      { week: "2026-10-04", popularity: 50 },
+      { week: "2026-10-11", popularity: 52 },
+    ];
+    // Eight weeks ending Oct 4 start Aug 16.
+    expect(recentHistory(points, "2026-10-04").map((point) => point.week)).toEqual([
+      "2026-08-16",
+      "2026-09-20",
+      "2026-09-27",
+      "2026-10-04",
+    ]);
+    expect(recentHistory(points, "2026-10-04", 2).map((point) => point.week)).toEqual(["2026-09-27", "2026-10-04"]);
+    expect(recentHistory([], "2026-10-04")).toEqual([]);
   });
 });
 

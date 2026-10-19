@@ -60,6 +60,14 @@ Pro ends).
   per category, each linked to the explorer), one honest line on what Pro
   adds (synced tracking; this email then shows the user's own rank and
   popularity changes), and the same honesty footer.
+- Terms written in a script the storefront's shoppers don't use (a
+  Cyrillic term in Apple's US Shopping list, say) are left out of risers
+  and newcomers here, and of the Pro email's category risers.
+- The data behind the free email also carries, per riser, last week's
+  popularity and up to 8 weeks of Apple history (from `search_term_history`;
+  empty, never invented, when unavailable), plus up to 6 terms new to
+  Apple's lists this week (in no category's list the week before), for the
+  richer layout the founder is designing.
 - A former Pro user whose synced tracker is still stored also gets Apple's
   popularity this week for those keywords. Ranks in that tracker stopped
   updating when sync stopped, so they are never shown.

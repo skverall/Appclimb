@@ -8,9 +8,11 @@ import {
   buildDigestEmail,
   buildFreeDigestEmail,
   digestKeywordsFor,
-  pickRisers,
+  marketMovers,
+  recentHistory,
   type DigestApp,
   type DigestEmail,
+  type DigestNewcomer,
   type DigestRiser,
 } from "@/lib/digest";
 import { sendEmail, type ResendCredentials } from "@/lib/email";
@@ -19,9 +21,11 @@ import { isProEntitled } from "@/lib/plan";
 import {
   datasetGenreFor,
   historyDelta,
+  matchesStorefrontScript,
   moversFrom,
   normalizeTerm,
   type TermDataset,
+  type TermHistoryPoint,
 } from "@/lib/search-terms";
 import {
   datasetWeeksBefore,
@@ -173,23 +177,46 @@ export interface MarketWeek {
   compareWeek: string;
   country: string;
   risers: DigestRiser[];
+  newcomers: DigestNewcomer[];
 }
 
-/** This week's biggest risers across Apple's published categories, vs the week before. */
+/**
+ * The biggest risers in Apple's latest published week across its
+ * categories (vs the week before) with their recent Apple history, plus
+ * terms new to Apple's lists. Null without both weeks or without risers.
+ */
 export async function marketWeek(store: StoreDeps | null, siteUrl: string): Promise<MarketWeek | null> {
   if (!store) return null;
   const current = await latestDataset(store, MARKET_COUNTRY).catch(() => null);
   const previous = current ? await datasetWeeksBefore(store, current, 1).catch(() => null) : null;
   if (!current || !previous) return null;
-  const risers = pickRisers(moversFrom(current, previous, { limit: 500 }).rising).map((term) => ({
-    term: term.term,
-    categoryLabel: categoryLabel(term.genre),
-    popularity: term.popularity,
-    delta: term.delta ?? 0,
-    href: `${siteUrl}${explorerLink(term.term, MARKET_COUNTRY)}`,
-  }));
-  if (risers.length === 0) return null;
-  return { week: current.week, compareWeek: previous.week, country: MARKET_COUNTRY, risers };
+  const movers = marketMovers(current, previous);
+  if (movers.risers.length === 0) return null;
+  // History only draws the risers' charts; without it the email still goes.
+  const histories = await termHistories(store, current, movers.risers.map((term) => term.term)).catch(
+    () => new Map<string, TermHistoryPoint[]>(),
+  );
+  const href = (term: string) => `${siteUrl}${explorerLink(term, MARKET_COUNTRY)}`;
+  return {
+    week: current.week,
+    compareWeek: previous.week,
+    country: MARKET_COUNTRY,
+    risers: movers.risers.map((term) => ({
+      term: term.term,
+      categoryLabel: categoryLabel(term.genre),
+      popularity: term.popularity,
+      previousPopularity: term.popularity - (term.delta ?? 0),
+      delta: term.delta ?? 0,
+      history: recentHistory(histories.get(normalizeTerm(term.term)) ?? [], current.week),
+      href: href(term.term),
+    })),
+    newcomers: movers.newcomers.map((term) => ({
+      term: term.term,
+      categoryLabel: categoryLabel(term.genre),
+      popularity: term.popularity,
+      href: href(term.term),
+    })),
+  };
 }
 
 function trackerFrom(json: string): TrackerStore {
@@ -229,7 +256,12 @@ async function appsFor(
     const rising =
       current && genre
         ? moversFrom(current, data?.previous ?? null, { genre, limit: 15 })
-            .rising.filter((term) => !tracked.has(normalizeTerm(term.term)) && (term.delta ?? 0) > 0)
+            .rising.filter(
+              (term) =>
+                !tracked.has(normalizeTerm(term.term)) &&
+                (term.delta ?? 0) > 0 &&
+                matchesStorefrontScript(term.term, app.country),
+            )
             .slice(0, 5)
             .map((term) => ({
               term: term.term,
@@ -289,21 +321,23 @@ async function freeEmailFor(
 }
 
 /**
- * This week's free email as a never-signed-up reader would get it, with a
- * placeholder unsubscribe link: a dry run you can read. No user data.
+ * This week's free email as a free account without synced keywords would
+ * get it, with a placeholder unsubscribe link, plus the Apple data it is
+ * built from: a dry run you can read. No user data.
  */
 export async function previewFreeDigest(
   options: Pick<DigestRunOptions, "store" | "siteUrl">,
-): Promise<DigestEmail | null> {
+): Promise<{ market: MarketWeek | null; email: DigestEmail | null }> {
   const market = await marketWeek(options.store, options.siteUrl);
-  if (!market) return null;
-  return buildFreeDigestEmail({
+  if (!market) return { market: null, email: null };
+  const email = buildFreeDigestEmail({
     ...market,
     keywords: [],
     syncedOn: null,
     siteUrl: options.siteUrl,
     unsubscribeUrl: `${options.siteUrl}/unsubscribe`,
   });
+  return { market, email };
 }
 
 /**
