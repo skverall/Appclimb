@@ -54,20 +54,23 @@ Pro ends).
 
 **Decision**
 
-- Every verified, signed-up account that isn't Pro gets a short weekly
-  email: the week's biggest risers in Apple's published search terms
-  (US storefront, latest week vs the week before, up to 8 terms, at most 2
-  per category, each linked to the explorer), one honest line on what Pro
-  adds (synced tracking; this email then shows the user's own rank and
-  popularity changes), and the same honesty footer.
+- Every verified, signed-up account that isn't Pro gets a weekly email
+  built from Apple's published search terms (US storefront, latest week vs
+  the week before; `src/lib/digest-free.ts`, layout approved by the founder
+  on 2026-10-19): a header with how many terms rose and fell, the top
+  riser with a chart of its published weeks (up to 8, from
+  `search_term_history`; no chart under 2 weeks, never interpolated), the
+  next risers ranked 2–8 (one per category, linked to their term pages),
+  up to 6 terms that entered a category's list (explorer links; repeats of
+  a riser or of a more popular newcomer dropped), a category pulse (terms
+  rising vs falling; the 3 most improved and 2 most declined categories),
+  a block on what Pro adds with clearly labelled example rows and prices
+  from `plan.ts`, and the honesty footer naming the two weeks compared.
 - Terms written in a script the storefront's shoppers don't use (a
   Cyrillic term in Apple's US Shopping list, say) are left out of risers
   and newcomers here, and of the Pro email's category risers.
-- The data behind the free email also carries, per riser, last week's
-  popularity and up to 8 weeks of Apple history (from `search_term_history`;
-  empty, never invented, when unavailable), plus up to 6 terms new to
-  Apple's lists this week (in no category's list the week before), for the
-  richer layout the founder is designing.
+- If Apple can't be reached for a riser's history, the history already in
+  D1 is used; the email never waits on it.
 - A former Pro user whose synced tracker is still stored also gets Apple's
   popularity this week for those keywords. Ranks in that tracker stopped
   updating when sync stopped, so they are never shown.
@@ -81,8 +84,10 @@ Pro ends).
   accounts are held (reported as `freeHeld`, not logged) and get the email
   on a later run in the same week.
 - `POST /api/digest/run?preview=free` returns this week's free email with
-  a placeholder unsubscribe link, so the founder can read it before it goes
-  out. It holds no user data; the workflow never calls it.
+  a placeholder unsubscribe link and the Apple data behind it (`&format=html`
+  returns just the page), so the founder can read it before it goes out.
+  A manual dry run of the workflow saves that page as the
+  `free-email-preview` artifact. It holds no user data.
 
 **Consequences**
 

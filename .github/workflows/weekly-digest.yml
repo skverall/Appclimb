@@ -3,8 +3,9 @@ name: Weekly · email digest
 # Sends the weekly email (ADR 0007) once Apple has published a new week (the
 # warm job loads it Mon/Wed/Fri): Pro users get their own keywords, free
 # accounts Apple's biggest risers. The Worker sends at most one email per user
-# per Apple week, so re-running is safe. A manual run is a dry run by default
-# and logs counts only.
+# per Apple week, so re-running is safe. A manual run is a dry run by default:
+# it logs counts only and saves this week's free email as the
+# free-email-preview artifact.
 
 on:
   schedule:
@@ -50,3 +51,23 @@ jobs:
             if [ "${remaining:-0}" = "0" ]; then break; fi
             sleep 5
           done
+      - name: Save this week's free email (dry run)
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run
+        env:
+          DIGEST_SECRET: ${{ secrets.DIGEST_SECRET }}
+        run: |
+          set -u
+          if [ -z "${DIGEST_SECRET}" ]; then exit 0; fi
+          # Public Apple data and a placeholder unsubscribe link only: no user data.
+          curl --silent --show-error --fail --max-time 120 -X POST \
+            -H "Authorization: Bearer ${DIGEST_SECRET}" \
+            "https://appclimb.app/api/digest/run?preview=free&format=html" \
+            --output free-email-preview.html \
+            || { rm -f free-email-preview.html; echo "No free email to preview this week."; }
+      - name: Upload the preview
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run && hashFiles('free-email-preview.html') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: free-email-preview
+          path: free-email-preview.html
+          retention-days: 7

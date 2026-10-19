@@ -6,15 +6,17 @@
 import { lastCompleteUtcWeek } from "@/lib/apple-ads";
 import {
   buildDigestEmail,
-  buildFreeDigestEmail,
   digestKeywordsFor,
-  marketMovers,
-  recentHistory,
   type DigestApp,
   type DigestEmail,
-  type DigestNewcomer,
-  type DigestRiser,
 } from "@/lib/digest";
+import {
+  buildFreeDigestEmail,
+  marketMovers,
+  recentHistory,
+  weekPulse,
+  type FreeDigestMarket,
+} from "@/lib/digest-free";
 import { sendEmail, type ResendCredentials } from "@/lib/email";
 import { categoryLabel, explorerLink, termPath } from "@/lib/keyword-pages";
 import { isProEntitled } from "@/lib/plan";
@@ -172,18 +174,13 @@ async function digestWeek(store: StoreDeps | null, now: Date): Promise<string> {
  */
 const MARKET_COUNTRY = "US";
 
-export interface MarketWeek {
-  week: string;
-  compareWeek: string;
-  country: string;
-  risers: DigestRiser[];
-  newcomers: DigestNewcomer[];
-}
+export type MarketWeek = FreeDigestMarket;
 
 /**
- * The biggest risers in Apple's latest published week across its
- * categories (vs the week before) with their recent Apple history, plus
- * terms new to Apple's lists. Null without both weeks or without risers.
+ * Apple's latest published week for the free email, compared with the week
+ * before: the biggest risers with their recent Apple history, terms new to
+ * a category's list, and how many terms rose and fell in each category.
+ * Null without both weeks or without risers.
  */
 export async function marketWeek(store: StoreDeps | null, siteUrl: string): Promise<MarketWeek | null> {
   if (!store) return null;
@@ -192,15 +189,23 @@ export async function marketWeek(store: StoreDeps | null, siteUrl: string): Prom
   if (!current || !previous) return null;
   const movers = marketMovers(current, previous);
   if (movers.risers.length === 0) return null;
-  // History only draws the risers' charts; without it the email still goes.
-  const histories = await termHistories(store, current, movers.risers.map((term) => term.term)).catch(
-    () => new Map<string, TermHistoryPoint[]>(),
-  );
+  // History only draws the spotlight's chart. When Apple can't be reached,
+  // keep what D1 already has rather than losing every term's history.
+  const terms = movers.risers.map((term) => term.term);
+  const histories = await termHistories(store, current, terms)
+    .catch(() => termHistories(store, current, terms, { live: false }))
+    .catch(() => new Map<string, TermHistoryPoint[]>());
   const href = (term: string) => `${siteUrl}${explorerLink(term, MARKET_COUNTRY)}`;
+  const { rose, fell, pulse } = weekPulse(current, previous);
   return {
     week: current.week,
     compareWeek: previous.week,
     country: MARKET_COUNTRY,
+    termCount: current.rows.length,
+    categoryCount: new Set(current.rows.map((row) => row.genre)).size,
+    rose,
+    fell,
+    pulse: pulse.map(({ categoryLabel: label, rising, falling }) => ({ categoryLabel: label, rising, falling })),
     risers: movers.risers.map((term) => ({
       term: term.term,
       categoryLabel: categoryLabel(term.genre),
@@ -209,6 +214,7 @@ export async function marketWeek(store: StoreDeps | null, siteUrl: string): Prom
       delta: term.delta ?? 0,
       history: recentHistory(histories.get(normalizeTerm(term.term)) ?? [], current.week),
       href: href(term.term),
+      pageHref: `${siteUrl}${termPath(MARKET_COUNTRY, term.genre, term.term)}`,
     })),
     newcomers: movers.newcomers.map((term) => ({
       term: term.term,
@@ -312,6 +318,7 @@ async function freeEmailFor(
         country: app.country,
         popularity: keyword.popularity,
         popularityChange: keyword.popularityChange,
+        href: `${options.siteUrl}${explorerLink(keyword.keyword, app.country)}`,
       })),
     ),
     syncedOn: user.json ? (user.synced_at?.slice(0, 10) ?? null) : null,

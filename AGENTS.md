@@ -51,12 +51,13 @@ conflict instead of silently changing direction.
   (`ai_usage`); `GET /api/chat/usage` reports them. Chats live in
   localStorage.
 - Weekly email (ADR 0007): Pro users get one built from their synced
-  tracker and Apple's latest week; verified free accounts get Apple's
-  biggest week-over-week risers (US storefront, the server has no free
-  keyword data) plus one line on Pro. `POST /api/digest/run` (Bearer
-  `DIGEST_SECRET`; `dry=1` counts only, `preview=free` returns the free
-  email) is called by `.github/workflows/weekly-digest.yml`. One email per
-  user per Apple week (`digest_log`); `email_prefs` holds the opt-out.
+  tracker and Apple's latest week (`src/lib/digest.ts`); verified free
+  accounts get Apple's week for the US storefront, since the server has no
+  free keyword data (`src/lib/digest-free.ts`). `POST /api/digest/run`
+  (Bearer `DIGEST_SECRET`; `dry=1` counts only, `preview=free[&format=html]`
+  returns the free email) is called by `.github/workflows/weekly-digest.yml`.
+  One email per user per Apple week (`digest_log`); `email_prefs` holds the
+  opt-out.
 - Keyword data honesty rules: popularity is `official` (Apple's score),
   `longtail` (term not in Apple's list → shown as `≤N`, N = genre floor), or
   `estimated` (Apple unreachable; rough iTunes stand-in, labeled `Est.`).

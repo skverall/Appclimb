@@ -322,17 +322,30 @@ describe("runWeeklyDigest for free accounts", () => {
     expect(first.freeHeld).toBeUndefined();
     expect(outbox.map((item) => item.to)).toEqual(["f1@example.com", "f2@example.com"]);
     const { email, headers } = outbox[0];
-    expect(email.subject).toBe("Apple’s latest week: “budget app” up 15 in popularity");
-    expect(email.text).toContain("Biggest risers · US App Store");
-    expect(email.text).toContain("  budget app · Finance  45 (+15)  https://appclimb.app/?kw=budget%20app&country=US");
-    expect(email.text).toContain("  habit tracker · Health & Fitness  56 (+3)");
-    expect(email.text).toContain("  water tracker · Health & Fitness  51 (+2)");
+    expect(email.subject).toBe("“budget app” jumped 15 points — your App Store week");
+    expect(email.html).toContain(
+      "4 searches rose and 1 fell on the US App Store. 3 categories had more risers than fallers.",
+    );
+    expect(email.text).toContain("7 top searches across 4 categories, compared with the week before.");
+    expect(email.text).toContain("▲ 4 searches rose · ▼ 1 searches fell · +15 biggest jump");
+    expect(email.text).toContain("“budget app” · Finance · US App Store\n45 (▲ 15 from 30)");
+    expect(email.text).toContain("Check “budget app” for your app: https://appclimb.app/?kw=budget%20app&country=US");
+    // One riser per category: water tracker (+2) loses to habit tracker (+3) in Health & Fitness.
+    expect(email.text).toContain(
+      "  2. habit tracker · Health & Fitness  56 (▲ 3, was 53)  https://appclimb.app/keywords/us/health-fitness/habit-tracker",
+    );
+    expect(email.text).not.toContain("water tracker");
     // Falling and unchanged terms aren't risers, nor are terms in a script US shoppers don't use.
     expect(email.text).not.toContain("подружка");
     expect(email.text).not.toContain("flight tracker");
     expect(email.text).not.toContain("step counter");
-    expect(email.text).toContain("since the week of Sep 13.");
-    expect(email.text).toContain("You get this weekly because you have a free AppClimb account.");
+    expect(email.text).toContain("  tax refund · Finance  50  https://appclimb.app/?kw=tax%20refund&country=US");
+    expect(email.text).toContain(
+      "  Health & Fitness  ▲ 2 ▼ 0 (One of 3 categories with more terms rising than falling)",
+    );
+    expect(email.text).toContain("  Travel  ▲ 0 ▼ 1");
+    expect(email.text).toContain("for the weeks of Sep 13 and Sep 20.");
+    expect(email.text).toContain("You get this weekly because you have a free AppClimb account."); 
     expect(email.text).toContain("https://appclimb.app/unsubscribe?u=f1&t=");
     expect(headers["List-Unsubscribe"]).toContain("/api/digest/unsubscribe?u=f1&t=");
     expect(headers["List-Unsubscribe-Post"]).toBe("List-Unsubscribe=One-Click");
@@ -362,11 +375,12 @@ describe("runWeeklyDigest for free accounts", () => {
     const result = await run({ store: await appleStore() });
     expect(result).toMatchObject({ pro: 0, free: 1, sent: 1 });
     const { email } = outbox[0];
-    expect(email.subject).toBe("1 of your keywords moved in Apple’s new week");
-    expect(email.text).toContain("Your keywords · Apple popularity this week");
-    expect(email.text).toContain("  habit tracker  56 (+3)");
-    expect(email.text).toContain("Keywords from your last cloud sync, Sep 30.");
-    expect(email.text).not.toMatch(/#12|#18|top 10/u);
+    expect(email.subject).toBe("1 of your keywords moved — your App Store week");
+    expect(email.text).toContain("YOUR KEYWORDS · from your last cloud sync, Sep 30");
+    expect(email.text).toContain("  habit tracker · US App Store · was 53  56 (▲ 3)");
+    expect(email.html).toContain('href="https://appclimb.app/?kw=habit%20tracker&amp;country=US"');
+    // The tracker's ranks (#18 → #12) are frozen since the last sync: never shown.
+    expect(email.text.slice(0, email.text.indexOf("✦ WITH APPCLIMB PRO"))).not.toMatch(/#\d|top 10/u);
     expect(email.text).toContain("free AppClimb account");
   });
 
@@ -404,19 +418,33 @@ describe("runWeeklyDigest for free accounts", () => {
 describe("previewFreeDigest", () => {
   it("builds this week's free email with a placeholder unsubscribe link", async () => {
     const { email } = await previewFreeDigest({ store: await appleStore(), siteUrl: "https://appclimb.app" });
-    expect(email?.subject).toBe("Apple’s latest week: “budget app” up 15 in popularity");
+    expect(email?.subject).toBe("“budget app” jumped 15 points — your App Store week");
     expect(email?.text).toMatch(/Stop these emails: https:\/\/appclimb\.app\/unsubscribe$/u);
     expect(email?.text).not.toContain("Your keywords");
   });
 
-  it("returns the Apple data behind it: last week's score, recent history, and newcomers", async () => {
+  it("returns the Apple data behind it: counts, pulse, last week's score, history, and newcomers", async () => {
     const { market } = await previewFreeDigest({ store: await appleStore(), siteUrl: "https://appclimb.app" });
-    expect(market).toMatchObject({ week: "2026-09-20", compareWeek: "2026-09-13", country: "US" });
+    expect(market).toMatchObject({
+      week: "2026-09-20",
+      compareWeek: "2026-09-13",
+      country: "US",
+      termCount: 7,
+      categoryCount: 4,
+      rose: 4,
+      fell: 1,
+    });
+    expect(market?.pulse).toEqual([
+      { categoryLabel: "Health & Fitness", rising: 2, falling: 0 },
+      { categoryLabel: "Finance", rising: 1, falling: 0 },
+      { categoryLabel: "Shopping", rising: 1, falling: 0 },
+      { categoryLabel: "Travel", rising: 0, falling: 1 },
+    ]);
     expect(market?.risers.map((item) => [item.term, item.previousPopularity, item.popularity, item.delta])).toEqual([
       ["budget app", 30, 45, 15],
       ["habit tracker", 53, 56, 3],
-      ["water tracker", 49, 51, 2],
     ]);
+    expect(market?.risers[0].pageHref).toBe("https://appclimb.app/keywords/us/finance/budget-app");
     expect(market?.risers[1].history).toEqual([
       { week: "2026-09-13", popularity: 53 },
       { week: "2026-09-20", popularity: 56 },
@@ -430,6 +458,33 @@ describe("previewFreeDigest", () => {
         popularity: 50,
         href: "https://appclimb.app/?kw=tax%20refund&country=US",
       },
+    ]);
+  });
+
+  it("keeps the history D1 already has when Apple can't be reached", async () => {
+    await db
+      .prepare(
+        "INSERT INTO search_term_history (country, term, through_week, payload, fetched_at) VALUES ('US', 'habit tracker', '2026-09-20', ?, '2026-09-21T00:00:00Z')",
+      )
+      .bind(JSON.stringify([["2026-09-06", 50], ["2026-09-13", 53], ["2026-09-20", 56]]))
+      .run();
+    const apple = await appleStore();
+    const original = apple.fetchImpl as unknown as (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+    let refused = 0;
+    const store: StoreDeps = {
+      ...apple,
+      // Weekly lists load; the history request for terms not in D1 fails.
+      fetchImpl: (async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (!String(init?.body ?? "").includes('"field":"searchTerm"')) return original(input, init);
+        refused += 1;
+        return new Response("unavailable", { status: 500 });
+      }) as never,
+    };
+    const { market } = await previewFreeDigest({ store, siteUrl: "https://appclimb.app" });
+    expect(refused).toBeGreaterThan(0);
+    expect(market?.risers.map((item) => [item.term, item.history.length])).toEqual([
+      ["budget app", 0],
+      ["habit tracker", 3],
     ]);
   });
 

@@ -1,30 +1,14 @@
-// Weekly email (ADR 0007): the pure part. Pro users get their synced tracker
-// plus Apple's latest week; free accounts, whose keywords never leave the
-// browser, get the week's biggest risers in Apple's published search terms.
-// No I/O here, so every rule is unit-tested.
+// Weekly email for Pro users (ADR 0007): the pure part. Turns a user's synced
+// tracker plus Apple's latest week into a short, honest email. The free
+// accounts' email is in digest-free.ts. No I/O here, so every rule is
+// unit-tested.
 
-import {
-  matchesStorefrontScript,
-  moversFrom,
-  normalizeTerm,
-  type TermDataset,
-  type TermHistoryPoint,
-  type TermMover,
-} from "@/lib/search-terms";
 import type { RankSnapshot, TrackedKeyword, TrackerStore } from "@/lib/tracker";
 
 /** Ranks older than this are called out as stale in the email. */
 const STALE_RANK_DAYS = 7;
 const MAX_APPS = 5;
 const MAX_ROWS = 5;
-/** Free email: risers and newcomers shown, and at most this many from one category. */
-const FREE_RISERS = 8;
-const FREE_NEWCOMERS = 6;
-const FREE_PER_CATEGORY = 2;
-/** Weeks of Apple history carried per riser (for its mini chart). */
-export const RISER_HISTORY_WEEKS = 8;
-/** Free email: a former Pro user's synced keywords shown. */
-const FREE_KEYWORDS = 8;
 
 export interface DigestKeyword {
   keyword: string;
@@ -74,61 +58,6 @@ export interface DigestEmail {
   html: string;
 }
 
-/** A term from Apple's published lists that gained popularity since the week before. */
-export interface DigestRiser {
-  term: string;
-  categoryLabel: string;
-  popularity: number;
-  /** Apple's popularity in the comparison week (the week before). */
-  previousPopularity: number;
-  /** Popularity gained since the comparison week. */
-  delta: number;
-  /**
-   * Apple's weekly popularity over the last RISER_HISTORY_WEEKS weeks up to
-   * this one, oldest first. Weeks the term wasn't published are absent, and
-   * the list is empty when Apple's history couldn't be loaded.
-   */
-  history: TermHistoryPoint[];
-  href: string;
-}
-
-/** A term in Apple's lists this week that wasn't in any of them the week before. */
-export interface DigestNewcomer {
-  term: string;
-  categoryLabel: string;
-  popularity: number;
-  href: string;
-}
-
-/** Apple's popularity this week for one keyword a former Pro user synced. */
-export interface FreeDigestKeyword {
-  keyword: string;
-  country: string;
-  /** Null when the term is below Apple's published list. */
-  popularity: number | null;
-  popularityChange: number | null;
-}
-
-export interface FreeDigestInput {
-  /** Apple week the numbers belong to (Sunday, YYYY-MM-DD). */
-  week: string;
-  /** The week the risers are compared with. */
-  compareWeek: string;
-  /** Storefront the risers come from. */
-  country: string;
-  risers: DigestRiser[];
-  newcomers: DigestNewcomer[];
-  /**
-   * Keywords from the user's last cloud sync. Empty for most free accounts:
-   * only a former Pro user can have synced keywords on the server.
-   */
-  keywords: FreeDigestKeyword[];
-  /** Day of that last sync (YYYY-MM-DD). */
-  syncedOn: string | null;
-  siteUrl: string;
-  unsubscribeUrl: string;
-}
-
 /** The last snapshot and the one closest to a week before it. */
 export function rankPair(
   snapshots: readonly RankSnapshot[],
@@ -146,7 +75,7 @@ export function rankPair(
   return { latest, previous };
 }
 
-function shiftDay(day: string, days: number): string {
+export function shiftDay(day: string, days: number): string {
   const date = new Date(`${day}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
@@ -191,7 +120,7 @@ export function digestKeywordsFor(
   return { keywords, lastCheckedDate, previousDate };
 }
 
-function formatDay(day: string): string {
+export function formatDay(day: string): string {
   const date = new Date(`${day}T00:00:00Z`);
   if (Number.isNaN(date.getTime())) return day;
   return date.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
@@ -202,7 +131,7 @@ function position(value: number | null | undefined): string {
   return value === null ? ">200" : `#${value}`;
 }
 
-function signed(value: number): string {
+export function signed(value: number): string {
   return value > 0 ? `+${value}` : `−${Math.abs(value)}`;
 }
 
@@ -269,10 +198,7 @@ function subjectFor(summaries: AppSummary[], week: string): string {
 
 const SECTION_TITLE_STYLE =
   "font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#6b777d;margin:16px 0 6px;";
-const NOTE_STYLE = "font-size:12px;color:#6b777d;margin:6px 0 0;";
-const HONESTY = "Popularity is Apple Ads’ relative 1–100 score, not search volume.";
-const PRO_LINE =
-  "AppClimb Pro syncs your tracker, and then this email covers your own apps every week: rank changes from your checks and Apple popularity for each keyword you track.";
+export const HONESTY = "Popularity is Apple Ads’ relative 1–100 score, not search volume.";
 
 interface EmailRow {
   left: string;
@@ -415,184 +341,6 @@ export function buildDigestEmail(input: DigestInput): DigestEmail | null {
     sections: html,
     cta: { label: "Open your tracker", href: open },
     footer: honesty,
-    reason,
-    unsubscribeUrl: input.unsubscribeUrl,
-  });
-  return { subject, text: text.join("\n"), html: body };
-}
-
-/** The first `limit` items, at most `perCategory` from one category. */
-function spreadByCategory<T extends { genre: string }>(items: readonly T[], limit: number, perCategory: number): T[] {
-  const picked: T[] = [];
-  const perGenre = new Map<string, number>();
-  for (const item of items) {
-    if (picked.length >= limit) break;
-    const count = perGenre.get(item.genre) ?? 0;
-    if (count >= perCategory) continue;
-    perGenre.set(item.genre, count + 1);
-    picked.push(item);
-  }
-  return picked;
-}
-
-/**
- * The week's biggest risers, at most `perCategory` from one category so one
- * busy category can't fill the email. Ties keep their input order (moversFrom
- * breaks them by rank gain, then popularity).
- */
-export function pickRisers<T extends { genre: string; delta: number | null }>(
-  rising: readonly T[],
-  limit = FREE_RISERS,
-  perCategory = FREE_PER_CATEGORY,
-): T[] {
-  const gains = rising
-    .filter((mover) => (mover.delta ?? 0) > 0)
-    .sort((left, right) => (right.delta ?? 0) - (left.delta ?? 0));
-  return spreadByCategory(gains, limit, perCategory);
-}
-
-/**
- * Risers and newcomers for the free email from Apple's latest week and the
- * week before. Terms written in a script the storefront doesn't use are
- * left out. A newcomer must be missing from every category's list the week
- * before, so a term that only changed category isn't "new".
- */
-export function marketMovers(
-  current: TermDataset,
-  previous: TermDataset,
-): { risers: TermMover[]; newcomers: TermMover[] } {
-  const movers = moversFrom(current, previous, { limit: current.rows.length });
-  const fits = (mover: TermMover) => matchesStorefrontScript(mover.term, current.country);
-  const newcomers = movers.newcomers
-    .filter((mover) => fits(mover) && !previous.byTerm.has(normalizeTerm(mover.term)))
-    .sort((left, right) => right.popularity - left.popularity);
-  return {
-    risers: pickRisers(movers.rising.filter(fits)),
-    newcomers: spreadByCategory(newcomers, FREE_NEWCOMERS, FREE_PER_CATEGORY),
-  };
-}
-
-/** A term's Apple history cut to the `weeks` weeks ending with `throughWeek`. */
-export function recentHistory(
-  points: readonly TermHistoryPoint[],
-  throughWeek: string,
-  weeks = RISER_HISTORY_WEEKS,
-): TermHistoryPoint[] {
-  const from = shiftDay(throughWeek, -7 * (weeks - 1));
-  return points.filter((point) => point.week >= from && point.week <= throughWeek);
-}
-
-/**
- * A former Pro user's synced keywords that Apple lists this week, once each,
- * biggest popularity moves first.
- */
-export function pickKeywordMoves(
-  keywords: readonly FreeDigestKeyword[],
-  limit = FREE_KEYWORDS,
-): Array<FreeDigestKeyword & { popularity: number }> {
-  const seen = new Set<string>();
-  const listed: Array<FreeDigestKeyword & { popularity: number }> = [];
-  for (const keyword of keywords) {
-    if (keyword.popularity === null) continue;
-    const key = `${keyword.country}:${keyword.keyword.trim().toLocaleLowerCase()}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    listed.push({ ...keyword, popularity: keyword.popularity });
-  }
-  return listed
-    .sort(
-      (left, right) =>
-        Math.abs(right.popularityChange ?? 0) - Math.abs(left.popularityChange ?? 0) ||
-        right.popularity - left.popularity,
-    )
-    .slice(0, limit);
-}
-
-/**
- * The weekly email for a free account: Apple's biggest risers this week
- * (and, for a former Pro user, Apple's numbers for their synced keywords),
- * plus one line on what Pro adds. Null when there is nothing to show.
- */
-export function buildFreeDigestEmail(input: FreeDigestInput): DigestEmail | null {
-  const listed = pickKeywordMoves(input.keywords, Number.POSITIVE_INFINITY);
-  const keywords = listed.slice(0, FREE_KEYWORDS);
-  const risers = input.risers.slice(0, FREE_RISERS);
-  if (keywords.length === 0 && risers.length === 0) return null;
-  const weekLabel = formatDay(input.week);
-  const moved = listed.filter((keyword) => (keyword.popularityChange ?? 0) !== 0).length;
-  const subject =
-    moved > 0
-      ? `${moved} of your keywords moved in Apple’s new week`
-      : risers.length > 0
-        ? `Apple’s latest week: “${risers[0].term}” up ${risers[0].delta} in popularity`
-        : `Your keywords in Apple’s week of ${weekLabel}`;
-
-  const text: string[] = [`AppClimb weekly · Apple data for the week of ${weekLabel}`];
-  const html: string[] = [];
-
-  if (keywords.length > 0) {
-    const severalCountries = new Set(keywords.map((keyword) => keyword.country)).size > 1;
-    pushRows(
-      text,
-      html,
-      "Your keywords · Apple popularity this week",
-      keywords.map((keyword) => ({
-        left: keyword.keyword,
-        note: severalCountries ? keyword.country : undefined,
-        right:
-          keyword.popularityChange === null
-            ? `${keyword.popularity}`
-            : keyword.popularityChange === 0
-              ? `${keyword.popularity} (no change)`
-              : `${keyword.popularity} (${signed(keyword.popularityChange)})`,
-      })),
-    );
-    const from = input.syncedOn
-      ? `Keywords from your last cloud sync, ${formatDay(input.syncedOn)}.`
-      : "Keywords from your last cloud sync.";
-    text.push(from);
-    html.push(`<p style="${NOTE_STYLE}">${escapeHtml(from)}</p>`);
-  }
-
-  if (risers.length > 0) {
-    pushRows(
-      text,
-      html,
-      `Biggest risers · ${input.country} App Store`,
-      risers.map((riser) => ({
-        left: riser.term,
-        note: riser.categoryLabel,
-        right: `${riser.popularity} (${signed(riser.delta)})`,
-        href: riser.href,
-      })),
-    );
-    const how = `From Apple’s published top searches in each category: popularity points gained since the week of ${formatDay(input.compareWeek)}.`;
-    text.push(how);
-    html.push(`<p style="${NOTE_STYLE}">${escapeHtml(how)}</p>`);
-  }
-
-  const open = `${input.siteUrl}/`;
-  const pricing = `${input.siteUrl}/pricing`;
-  const reason = "You get this weekly because you have a free AppClimb account.";
-  const check = "Check any of them for your app (difficulty, Apple’s history, a verdict)";
-  html.push(`<p style="font-size:14px;color:#3c4a50;margin:24px 0 0;">${escapeHtml(check)}:</p>`);
-  text.push(
-    "",
-    `${check}: ${open}`,
-    "",
-    `${PRO_LINE} ${pricing}`,
-    "",
-    HONESTY,
-    reason,
-    `Stop these emails: ${input.unsubscribeUrl}`,
-  );
-
-  const body = renderHtml({
-    subtitle: `Apple data for the week of ${weekLabel}`,
-    sections: html,
-    cta: { label: "Open the keyword explorer", href: open },
-    afterCta: `<p style="font-size:13px;color:#3c4a50;line-height:1.5;margin:20px 0 0;padding:12px 14px;background:#f2f8f7;border-radius:10px;">${escapeHtml(PRO_LINE)} <a href="${escapeHtml(pricing)}" style="color:#0b5f5a;">See Pro</a></p>`,
-    footer: HONESTY,
     reason,
     unsubscribeUrl: input.unsubscribeUrl,
   });

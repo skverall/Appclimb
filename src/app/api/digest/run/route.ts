@@ -23,8 +23,8 @@ function sameToken(left: string, right: string): boolean {
  * `dry=1` builds without sending or logging and reports counts only (the
  * workflow log is public). `preview=free` returns this week's free email
  * with a placeholder unsubscribe link, plus the Apple data behind it, so it
- * can be read before it goes out; it holds no user data and the workflow
- * never calls it.
+ * can be read before it goes out (`&format=html` returns just the page; the
+ * workflow's dry run saves it as an artifact). It holds no user data.
  */
 export async function POST(request: NextRequest) {
   const secret = process.env.DIGEST_SECRET?.trim() ?? "";
@@ -38,7 +38,12 @@ export async function POST(request: NextRequest) {
   }
   const params = request.nextUrl.searchParams;
   if (params.get("preview") === "free") {
-    return NextResponse.json(await previewFreeDigest({ store: searchTermDeps(), siteUrl: SITE_URL }));
+    const preview = await previewFreeDigest({ store: searchTermDeps(), siteUrl: SITE_URL });
+    if (params.get("format") !== "html") return NextResponse.json(preview);
+    if (!preview.email) {
+      return NextResponse.json({ error: "Apple's latest week isn't available yet." }, { status: 404 });
+    }
+    return new NextResponse(preview.email.html, { headers: { "Content-Type": "text/html; charset=utf-8" } });
   }
   const dryRun = params.get("dry") === "1";
   const resend = readResendCredentials();
