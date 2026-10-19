@@ -8,6 +8,7 @@ import {
   OAUTH_STATE_TTL_SEC,
   readGoogleCredentials,
 } from "@/lib/google";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,9 +20,9 @@ export async function GET(request: NextRequest) {
   }
 
   const state = generateToken(24);
-  const next = request.nextUrl.searchParams.get("next");
+  const next = safeRedirectPath(request.nextUrl.searchParams.get("next"), "");
   // Persist the requested post-login destination alongside the CSRF state.
-  const stateValue = next && next.startsWith("/") && !next.startsWith("//") ? `${state}:${next}` : state;
+  const stateValue = next ? `${state}:${next}` : state;
 
   const authUrl = buildGoogleAuthUrl({
     clientId: creds.clientId,

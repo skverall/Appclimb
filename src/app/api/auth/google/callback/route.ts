@@ -9,6 +9,7 @@ import {
   OAUTH_STATE_COOKIE,
   readGoogleCredentials,
 } from "@/lib/google";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 import { setSessionCookie } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest) {
   if (!code || !returnedState || !cookieStatePart || returnedState !== cookieStatePart) {
     return fail(request, "invalid");
   }
-  const next = nextPart.startsWith("/") && !nextPart.startsWith("//") ? nextPart : "/";
+  const next = safeRedirectPath(nextPart);
 
   const tokens = await exchangeCodeForTokens({
     creds,

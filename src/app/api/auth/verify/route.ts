@@ -2,17 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { consumeMagicLink, createSession, upsertUser } from "@/lib/auth";
 import { getDb } from "@/lib/db";
+import { safeRedirectPath } from "@/lib/safe-redirect";
 import { setSessionCookie } from "@/lib/session";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-/** Only allow same-origin relative redirect targets to avoid open redirects. */
-function safeNext(raw: string | null): string {
-  if (!raw) return "/";
-  if (raw.startsWith("/") && !raw.startsWith("//")) return raw;
-  return "/";
-}
 
 export async function GET(request: NextRequest) {
   const db = getDb();
@@ -21,7 +15,7 @@ export async function GET(request: NextRequest) {
   }
 
   const token = request.nextUrl.searchParams.get("token") ?? "";
-  const next = safeNext(request.nextUrl.searchParams.get("next"));
+  const next = safeRedirectPath(request.nextUrl.searchParams.get("next"));
 
   const email = await consumeMagicLink(db, token);
   if (!email) {
