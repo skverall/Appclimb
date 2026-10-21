@@ -23,6 +23,14 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       {
+        // OpenNext on Workers leaves an empty `:path*` unsubstituted, so the
+        // bare www root needs its own rule (otherwise it lands on `/:path*`).
+        source: "/",
+        has: [{ type: "host", value: "www.appclimb.app" }],
+        destination: "https://appclimb.app/",
+        permanent: true,
+      },
+      {
         // Keep OAuth cookies and CIMD client_id on a single host.
         source: "/:path*",
         has: [{ type: "host", value: "www.appclimb.app" }],
