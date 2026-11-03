@@ -13,8 +13,8 @@ Nothing is submitted to Claude or ChatGPT without the owner's explicit yes.
 | Directory | Status |
 | --- | --- |
 | Official MCP Registry | Published 2026-11-03: `app.appclimb/mcp` 1.0.0, status active |
-| Claude connectors directory | Ready except blockers B3–B4 and owner-only steps |
-| ChatGPT apps (plugins) directory | Package ready in `docs/directory/chatgpt-plugin/`; blocked on B3–B4, OpenAI verification, demo video |
+| Claude connectors directory | Ready except B4 (support contact) and owner-only steps |
+| ChatGPT apps (plugins) directory | Package ready in `docs/directory/chatgpt-plugin/`; open: B4, OpenAI verification, demo video |
 
 ## 1. Official MCP Registry
 
@@ -85,42 +85,31 @@ returns Pro for the configured reviewer email (1,000 agent checks a day,
 52 weeks of history). No subscription row or Paddle data is involved, and it
 ends when the secrets are removed.
 
-**B3. Privacy policy gaps.** ChatGPT requires the policy to cover "categories
-of personal data collected, purposes of use, categories of recipients, data
-retention timelines, and user controls", and the policy must match the code
-(owner rule). Against `src/app/privacy/page.tsx`:
+**B3. Privacy policy — done (2026-11-03).** ChatGPT requires the policy to
+cover "categories of personal data collected, purposes of use, categories of
+recipients, data retention timelines, and user controls", and the policy must
+match the code (owner rule). `/privacy` now has, each checked against the
+code:
 
-- Not disclosed: first-party page analytics. `src/lib/analytics.ts` stores,
-  per page view, the path, referrer, country, device, browser and a visitor
-  hash of IP + user agent + date; product events (for example `auth_started`,
-  `checkout_opened`) are stored the same way. The policy says only "no
-  third-party analytics".
-- No retention periods. There is no clean-up job: accounts, analytics rows,
-  `agent_usage` and `ai_usage` counters are kept indefinitely; OAuth codes and
-  pending requests are deleted on expiry; access tokens live 1 hour, refresh
-  tokens 90 days.
-- No account deletion or data export path, and the only contact is "the
-  GitHub repository".
-
-Draft wording for the owner to approve (adjust the retention numbers to
-what he decides, then implement any clean-up the text promises):
-
-> **Site analytics.** We count visits ourselves, on our own servers, without
-> cookies. For each page view we store the page, the referring site, your
-> country, device type and browser, and a visitor code made by hashing your
-> IP address and browser with the date, so a visitor is counted once a day but
-> cannot be followed from one day to the next. We also record a few product
-> events, such as a sign-up starting or a checkout opening, in the same way.
->
-> **How long we keep data.** Account data is kept while your account exists.
-> Sign-in links expire after [N] minutes. AI-app access tokens expire after one
-> hour and refresh tokens after 90 days unless used. Analytics rows and daily
-> usage counters are kept for [N] months.
->
-> **Your controls.** You can disconnect AI apps and delete API keys on the
-> Connect page, turn off the weekly email in the account menu, and clear local
-> data in your browser. To get a copy of your account data or delete your
-> account, email [support address]; we act on it within 30 days.
+- **Visit counting**: the first-party page analytics (`src/lib/analytics.ts`:
+  page, referrer, country, device, browser, a daily-rotating hash of IP +
+  browser + date; product events the same way; not linked to accounts).
+- **ASO assistant**: messages, recent conversation and the app/keywords in
+  context go to DeepSeek; chats stay in the browser; only a daily count is
+  kept. (This was missing before, against the AI-provider rule.)
+- **Third parties** names Cloudflare (hosting, database), Apple, Google,
+  Resend, Paddle, DeepSeek and Hostinger.
+- **How long we keep data**, enforced by `src/lib/retention.ts` through
+  `.github/workflows/weekly-purge.yml` (Sundays, `POST /api/maintenance/purge`,
+  Bearer `DIGEST_SECRET`): expired sign-in links, sessions and OAuth codes
+  within a week; OAuth tokens after the refresh token expires; revoked API
+  keys after 30 days; usage counters after 90 days; analytics after 12 months.
+  Account data stays until the account is deleted.
+- **Your choices**: self-serve **Delete account** in the account menu
+  (`DELETE /api/account`, `src/lib/account-deletion.ts`). It deletes every
+  row tied to the user in one batch and is refused while a Pro subscription
+  will still bill (cancel first). Paddle webhooks for a deleted user are
+  ignored.
 
 **B4. Support contact.** Both directories ask for one. Until the owner picks
 an address, `https://github.com/skverall/Appclimb/issues` works (public repo,
@@ -156,7 +145,7 @@ Verified.
 | Callback `https://claude.ai/api/mcp/auth_callback` and port-agnostic loopback for Claude Code | Ready: CIMD/DCR accept any https redirect; loopback matched without port (`redirectUriMatches`) |
 | Consent screen shows the redirect host | Ready: `/oauth/consent` shows the return host |
 | Public documentation | Ready: `https://appclimb.app/connect` |
-| Privacy policy URL | URL ready (`https://appclimb.app/privacy`); content gaps in B3 |
+| Privacy policy URL | Ready: `https://appclimb.app/privacy` (B3 done) |
 | Support contact | B4 |
 | Icon | Ready: `public/icons/v2/icon-512.png` (also `icon.svg`); `serverInfo.icons` now set |
 | Test account (fully populated) | Ready: reviewer password sign-in, Pro (B1, B2) |
@@ -263,7 +252,7 @@ both if the owner verifies as the company instead.
 | Website, support, privacy, terms URLs (HTTPS) | Ready (support per B4) |
 | Logo + composer icon (square, ≥48 px) | Ready |
 | Domain verification `/.well-known/openai-apps-challenge` | Route ready; owner pastes the dashboard token: `npx wrangler secret put OPENAI_APPS_CHALLENGE`, then Verify Domain |
-| Privacy policy covers all personal data, retention, controls | Blocked: B3 |
+| Privacy policy covers all personal data, retention, controls | Ready (B3 done) |
 | Reviewer login + password, no MFA/email codes, sample data | Ready (B1, B2); the tools need no sample data, they read Apple's |
 | 5 positive + 3 negative test cases | Drafted below; run them against the reviewer account first |
 | Demo video URL (main use cases across ChatGPT surfaces) | Missing: record a walkthrough in ChatGPT with the reviewer account |

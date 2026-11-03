@@ -18,6 +18,7 @@ import { WelcomeProModal, type WelcomeProStatus } from "@/components/welcome-pro
 import {
   anonymousAccount,
   fetchAccountState,
+  deleteAccountRequest,
   signOutRequest,
   type AccountState,
 } from "@/lib/account";
@@ -80,6 +81,8 @@ export interface AccountContextValue {
   /** True while the upgrade or post-checkout welcome dialog is showing. */
   upgradeFlowActive: boolean;
   signOut: () => Promise<void>;
+  /** Deletes the account after a confirmation, then clears this device's data. */
+  deleteAccount: () => Promise<void>;
 }
 
 const AccountContext = createContext<AccountContextValue | null>(null);
@@ -332,6 +335,28 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     await refresh();
   }, [account.plan, account.user, refresh]);
 
+  /**
+   * Delete the account and everything AppClimb stores for it, then clear this
+   * device's workspace data. Confirmed first, because nothing can be restored.
+   */
+  const deleteAccount = useCallback(async () => {
+    if (account.user === null) return;
+    const ok = window.confirm(
+      "Delete your AppClimb account? This removes your account, synced data, connected AI apps and API keys, " +
+        "and clears this browser's tracked apps and keywords. It cannot be undone.",
+    );
+    if (!ok) return;
+    const result = await deleteAccountRequest();
+    if (!result.ok) {
+      setNotice(result.error);
+      return;
+    }
+    clearLocalWorkspaceData(window.localStorage);
+    setNotice("Your account was deleted.");
+    setSyncVersion((previous) => previous + 1);
+    await refresh();
+  }, [account.user, refresh]);
+
   const signedIn = account.user !== null;
   const isPro = account.plan === "pro";
   const live = accountsAreLive(proEnabled(), account.configured);
@@ -408,6 +433,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       openUpgradeWith: (cycle: BillingCycle, reason?: UpgradeReason) => showUpgrade(cycle, reason),
       upgradeFlowActive: upgradeOpen || welcomeStatus !== null,
       signOut,
+      deleteAccount,
     }),
     [
       account,
@@ -423,6 +449,7 @@ export function AccountProvider({ children }: { children: ReactNode }) {
       upgradeOpen,
       welcomeStatus,
       signOut,
+      deleteAccount,
       syncState,
       syncVersion,
     ],

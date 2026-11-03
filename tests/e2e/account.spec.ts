@@ -205,6 +205,65 @@ test("sign out clears free-plan workspace data after confirmation", async ({
   ).toBeNull();
 });
 
+test("delete account removes the account after confirmation, or explains an active Pro plan", async ({
+  page,
+}) => {
+  let deleted = false;
+  let refuse = true;
+  await page.route("**/api/me", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(
+        deleted
+          ? { configured: true, user: null, plan: "free", subscription: null }
+          : {
+              configured: true,
+              user: { id: "u1", email: "leaving@example.com", name: "Leaving" },
+              plan: "free",
+              subscription: null,
+            },
+      ),
+    });
+  });
+  await page.route("**/api/account", async (route) => {
+    expect(route.request().method()).toBe("DELETE");
+    if (refuse) {
+      await route.fulfill({
+        status: 409,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Your Pro subscription is still active. Cancel it under Manage subscription first, then delete the account." }),
+      });
+      return;
+    }
+    deleted = true;
+    await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) });
+  });
+
+  await page.goto("/");
+  const notNow = page.getByRole("button", { name: /Not now/i });
+  if (await notNow.isVisible().catch(() => false)) {
+    await notNow.click();
+  }
+
+  // A plan that still bills is refused with the reason.
+  await page.getByRole("button", { name: /Free/i }).first().click();
+  page.once("dialog", (dialog) => void dialog.accept());
+  await page.getByRole("menuitem", { name: /Delete account/i }).click();
+  await expect(page.getByText(/Cancel it under Manage subscription first/i).first()).toBeVisible({
+    timeout: 10_000,
+  });
+
+  // Otherwise the account goes and the visitor is signed out.
+  refuse = false;
+  await page.getByRole("button", { name: /Free/i }).first().click();
+  page.once("dialog", (dialog) => void dialog.accept());
+  await page.getByRole("menuitem", { name: /Delete account/i }).click();
+  await expect(page.getByText(/Your account was deleted/i).first()).toBeVisible({ timeout: 10_000 });
+  expect(deleted).toBe(true);
+  dismissExpectedConsoleErrors(page, [/Failed to load resource.*409/]);
+});
+
 test("manage subscription opens the portal links for a canceled Pro plan", async ({
   page,
 }) => {

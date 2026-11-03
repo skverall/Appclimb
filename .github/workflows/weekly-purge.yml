@@ -1,0 +1,39 @@
+name: Weekly · data purge
+
+# Deletes data past the retention periods stated on /privacy
+# (src/lib/retention.ts): expired sign-in links, sessions and agent tokens,
+# usage counters after 90 days, visit analytics after 12 months. The Worker
+# reports row counts only. Uses the same DIGEST_SECRET as the weekly email.
+
+on:
+  schedule:
+    - cron: "17 3 * * 0"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: weekly-purge
+  cancel-in-progress: false
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Purge expired data
+        env:
+          DIGEST_SECRET: ${{ secrets.DIGEST_SECRET }}
+        run: |
+          set -u
+          if [ -z "${DIGEST_SECRET}" ]; then
+            echo "DIGEST_SECRET is not set; nothing to do."
+            exit 0
+          fi
+          status=$(curl --silent --show-error --output /tmp/purge.json \
+            --write-out "%{http_code}" --max-time 120 -X POST \
+            -H "Authorization: Bearer ${DIGEST_SECRET}" \
+            "https://appclimb.app/api/maintenance/purge" || echo "000")
+          echo "HTTP ${status} $(cat /tmp/purge.json)"
+          if [ "${status}" != "200" ]; then exit 1; fi

@@ -35,7 +35,9 @@ the limits, adds 52 weeks of Apple history, and cloud sync.
   baseline; those points are dropped on load). My Apps: real position/metrics
   snapshots in `appclimb:tracker:v1`.
 - **Accounts & Pro (ADR 0004)** — passwordless sign-in (Google OAuth or email
-  magic link), Paddle billing, plan-aware quotas, and Pro cloud sync. Guest
+  magic link), Paddle billing, plan-aware quotas, Pro cloud sync, and
+  self-serve account deletion; a weekly purge enforces the retention periods
+  on `/privacy` (`src/lib/retention.ts`). Guest
   search stays open. Tracking and the assistant require a free account. The
   account chrome appears when `NEXT_PUBLIC_PRO_ENABLED=1` or when
   `GET /api/me` reports `configured: true`.

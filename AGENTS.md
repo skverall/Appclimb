@@ -58,6 +58,12 @@ conflict instead of silently changing direction.
   returns the free email) is called by `.github/workflows/weekly-digest.yml`.
   One email per user per Apple week (`digest_log`); `email_prefs` holds the
   opt-out.
+- Data retention and deletion: `/privacy` states how long data is kept;
+  `src/lib/retention.ts` enforces it through `.github/workflows/weekly-purge.yml`
+  (`POST /api/maintenance/purge`, Bearer `DIGEST_SECRET`), so change both
+  together. Users delete their own account from the account menu
+  (`DELETE /api/account`, `src/lib/account-deletion.ts`); any new table with
+  user data must be added there and to the privacy page.
 - Keyword data honesty rules: popularity is `official` (Apple's score),
   `longtail` (term not in Apple's list → shown as `≤N`, N = genre floor), or
   `estimated` (Apple unreachable; rough iTunes stand-in, labeled `Est.`).

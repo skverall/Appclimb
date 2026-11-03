@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { bearerMatches } from "@/lib/bearer-secret";
 import { getDb } from "@/lib/db";
 import { previewFreeDigest, runWeeklyDigest } from "@/lib/digest-server";
 import { readResendCredentials } from "@/lib/email";
@@ -8,14 +9,6 @@ import { SITE_URL } from "@/lib/site";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-/** Constant-time compare for the cron bearer token. */
-function sameToken(left: string, right: string): boolean {
-  if (!left || left.length !== right.length) return false;
-  let diff = 0;
-  for (let index = 0; index < left.length; index += 1) diff |= left.charCodeAt(index) ^ right.charCodeAt(index);
-  return diff === 0;
-}
 
 /**
  * Weekly digest trigger for the scheduled GitHub workflow. Bearer-protected
@@ -32,8 +25,7 @@ export async function POST(request: NextRequest) {
   if (!secret || !db) {
     return NextResponse.json({ error: "The weekly digest is not configured." }, { status: 503 });
   }
-  const auth = request.headers.get("authorization") ?? "";
-  if (!sameToken(auth.replace(/^Bearer\s+/iu, ""), secret)) {
+  if (!bearerMatches(request.headers.get("authorization"), secret)) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
   }
   const params = request.nextUrl.searchParams;

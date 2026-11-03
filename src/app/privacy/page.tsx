@@ -35,11 +35,12 @@ export default function PrivacyPage() {
             Signing in is required only for app tracking and the assistant. An
             account stores only: your email address,
             an optional display name, a Google subject id when you use Google
-            sign-in, hashed session tokens, your subscription status, your
-            weekly email setting and the weeks it was sent, the AI apps and API
-            keys you connect (hashed tokens, names and dates) with a daily count
-            of their App Store checks, and — if you enable Pro cloud sync — your
-            own synced keyword data. We store nothing else about you.
+            sign-in, hashed session and sign-in tokens, your subscription
+            status, your weekly email setting and the weeks it was sent, the AI
+            apps and API keys you connect (hashed tokens, names and dates),
+            daily counts of your assistant messages and agent App Store checks,
+            and — if you enable Pro cloud sync — your own synced keyword data.
+            We store nothing else about you.
           </p>
         </section>
         <section>
@@ -59,12 +60,38 @@ export default function PrivacyPage() {
         <section>
           <h2>No tracking</h2>
           <p>
-            This site does not run third-party analytics, advertising, or
-            fingerprinting scripts. We do not use cookies for marketing or
-            measurement. One HttpOnly session cookie keeps you signed in; it
-            contains no personal data itself. The hosting provider may keep
-            standard infrastructure logs (for example, for abuse prevention),
-            which are not used to profile visitors.
+            This site does not run third-party analytics or advertising
+            scripts. We do not use cookies for marketing or measurement. One
+            HttpOnly session cookie keeps you signed in; it contains no
+            personal data itself.
+          </p>
+        </section>
+        <section>
+          <h2>Visit counting</h2>
+          <p>
+            We count visits ourselves, on our own servers, without cookies.
+            For each page view we store the page, the referring site, your
+            country, the device type and browser, and a visitor code made by
+            hashing your IP address and browser together with the date. The
+            code lets us count a visitor once a day and changes every day, so
+            a visitor is not followed from one day to the next. Your IP address
+            itself is not stored. A few product events, such as a sign-in starting or the
+            pricing page opening, are recorded the same way. None of this is
+            linked to your account.
+          </p>
+        </section>
+        <section>
+          <h2>ASO assistant</h2>
+          <p>
+            When you use the ASO assistant, your message, the recent
+            conversation, and the app and keywords you are working on (with
+            their scores and ranks) are sent to DeepSeek, the AI provider that
+            writes the replies, together with Apple search-term data the
+            assistant looks up. Your email address and account are not sent.
+            AppClimb does not store your chats on its servers: they stay in
+            your browser. We keep only a daily count of your messages to apply
+            your plan&apos;s limit. DeepSeek&apos;s handling of what it
+            receives is governed by DeepSeek&apos;s own privacy policy.
           </p>
         </section>
         <section>
@@ -93,13 +120,62 @@ export default function PrivacyPage() {
         <section>
           <h2>Third parties</h2>
           <p>
-            When you search a keyword, your browser sends the query directly to
-            Apple&apos;s iTunes Search API. Apple&apos;s handling of those
-            requests is governed by Apple&apos;s own privacy policy. Google
-            processes sign-ins only when you choose to sign in with Google.
-            Emails are delivered by Resend, which receives your email address
-            and the message for that purpose.
+            AppClimb runs on Cloudflare, which hosts the site and its database
+            and may keep standard infrastructure logs (for example, for abuse
+            prevention) that are not used to profile visitors. When you search
+            a keyword, your browser sends the query directly to Apple&apos;s
+            iTunes Search API. Apple&apos;s handling of those requests is
+            governed by Apple&apos;s own privacy policy. Google processes
+            sign-ins only when you choose to sign in with Google. Emails are
+            delivered by Resend, which receives your email address and the
+            message for that purpose. The assistant uses DeepSeek and agent
+            App Store searches use Hostinger, as described above. We do not
+            sell or share personal data with anyone else.
           </p>
+        </section>
+        <section>
+          <h2>How long we keep data</h2>
+          <ul>
+            <li>
+              Account data, including synced keywords and connected AI apps:
+              until you delete your account.
+            </li>
+            <li>
+              Sign-in links work for 15 minutes; sessions last up to 30 days;
+              AI-app access tokens last one hour and refresh tokens 90 days.
+              Each is deleted within a week after it expires or you sign out.
+              The record of a deleted API key is removed after 30 days.
+            </li>
+            <li>Daily message and check counts: 90 days.</li>
+            <li>Visit counts and product events: 12 months.</li>
+            <li>
+              Payment records are kept by Paddle under its own policy.
+            </li>
+          </ul>
+        </section>
+        <section>
+          <h2>Your choices</h2>
+          <ul>
+            <li>
+              Delete your account at any time with <b>Delete account</b> in the
+              account menu. It removes your account and everything stored with
+              it on our servers at once. If you have an active Pro
+              subscription, cancel it under Manage subscription first.
+            </li>
+            <li>
+              Disconnect AI apps and delete API keys on the{" "}
+              <a href="/connect">Connect page</a>.
+            </li>
+            <li>
+              Turn off the weekly email in the account menu or with the link in
+              any weekly email.
+            </li>
+            <li>
+              Signing out removes tracked apps and keyword history from this
+              browser; clearing this site&apos;s data in your browser also
+              removes assistant chats.
+            </li>
+          </ul>
         </section>
         <p className="legal-note">
           If you have questions about this policy, contact us via the GitHub

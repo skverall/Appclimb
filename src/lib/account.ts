@@ -89,6 +89,18 @@ export async function requestMagicLink(email: string, next?: string): Promise<Ma
   }
 }
 
+/** Delete the signed-in account on the server (`DELETE /api/account`). */
+export async function deleteAccountRequest(): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const res = await fetch("/api/account", { method: "DELETE", signal: AbortSignal.timeout(15_000) });
+    if (res.ok) return { ok: true };
+    const data = (await res.json().catch(() => ({}))) as { error?: string };
+    return { ok: false, error: data.error ?? "Could not delete the account. Try again." };
+  } catch {
+    return { ok: false, error: "Network error. Try again." };
+  }
+}
+
 export async function signOutRequest(): Promise<void> {
   try {
     await fetch("/api/auth/signout", { method: "POST" });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CloudOff, CreditCard, LogIn, LogOut, Mail, Sparkles } from "lucide-react";
+import { CloudOff, CreditCard, LogIn, LogOut, Mail, Sparkles, Trash2 } from "lucide-react";
 
 import { useAccount } from "@/components/account-provider";
 import { fetchPortalLinks } from "@/lib/account";
@@ -13,7 +13,7 @@ function initialOf(email: string, name: string | null): string {
 }
 
 export function AccountMenu() {
-  const { account, loading, signedIn, isPro, accountsLive, openAuth, openUpgrade, signOut, syncState } =
+  const { account, loading, signedIn, isPro, accountsLive, openAuth, openUpgrade, signOut, deleteAccount, syncState } =
     useAccount();
   const [open, setOpen] = useState(false);
   const [manageBusy, setManageBusy] = useState(false);
@@ -233,6 +233,17 @@ export function AccountMenu() {
             }}
           >
             <LogOut size={15} aria-hidden="true" /> Sign out
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="account-menu-delete"
+            onClick={() => {
+              setOpen(false);
+              void deleteAccount();
+            }}
+          >
+            <Trash2 size={13} aria-hidden="true" /> Delete account
           </button>
         </div>
       )}

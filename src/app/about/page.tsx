@@ -105,7 +105,8 @@ export default function AboutPage() {
               Keyword search works as a guest; the list stays in this browser.
               A free account unlocks app tracking and the assistant. Pro
               subscribers can sync their own data across devices. There are no
-              analytics scripts or tracking pixels on this site.
+              third-party analytics scripts or tracking pixels on this site; we
+              count visits ourselves, without cookies.
             </p>
           </article>
         </section>
@@ -140,7 +141,7 @@ export default function AboutPage() {
               Apple Ads popularity with weekly history, trending and related
               searches from Apple&apos;s own list, difficulty with its evidence,
               a verdict on every keyword, and rank tracking for your app. Free
-              to search; optional Pro at $8/month. No tracking scripts, ever.
+              to search; optional Pro at $8/month. No third-party tracking scripts, ever.
             </p>
             <div className="marketing-hero-actions">
               <Link href="/" className="marketing-primary-action large">
