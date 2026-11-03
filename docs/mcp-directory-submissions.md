@@ -12,7 +12,7 @@ Nothing is submitted to Claude or ChatGPT without the owner's explicit yes.
 
 | Directory | Status |
 | --- | --- |
-| Official MCP Registry | `app.appclimb/mcp` (see "1. Official MCP Registry" for the publish state) |
+| Official MCP Registry | Published 2026-11-03: `app.appclimb/mcp` 1.0.0, status active |
 | Claude connectors directory | Ready except blockers B1–B4 and owner-only steps |
 | ChatGPT apps (plugins) directory | Package ready in `docs/directory/chatgpt-plugin/`; blocked on B1–B4, OpenAI verification, demo video |
 
@@ -34,8 +34,10 @@ Publish a new version (bump `version` in `server.json` and `SERVER_INFO` in
 
 ```bash
 KEY=/Volumes/LexarDev/Developer/Keys/appclimb/mcp-registry-ed25519.pem
+# The 32-byte Ed25519 seed is the last 32 bytes of the DER key. (The registry
+# docs' `grep -A3 priv:` breaks on OpenSSL 4, which prints 16 bytes per line.)
 mcp-publisher login http --domain appclimb.app \
-  --private-key "$(/opt/homebrew/bin/openssl pkey -in "$KEY" -noout -text | grep -A3 'priv:' | tail -n +2 | tr -d ' :\n')"
+  --private-key "$(/opt/homebrew/bin/openssl pkey -in "$KEY" -outform DER | tail -c 32 | xxd -p -c 64)"
 mcp-publisher publish
 curl -s "https://registry.modelcontextprotocol.io/v0.1/servers?search=app.appclimb" | head -c 400
 ```
