@@ -1,0 +1,29 @@
+name: appclimb-itunes
+
+services:
+  proxy:
+    build: .
+    image: appclimb-itunes:1
+    container_name: appclimb-itunes
+    restart: unless-stopped
+    env_file: .env
+    read_only: true
+    mem_limit: 256m
+    networks:
+      - ingress
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  ingress:
+    external: true
+    name: hortiops_default

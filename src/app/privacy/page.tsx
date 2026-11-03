@@ -17,7 +17,7 @@ export default function PrivacyPage() {
           AppClimb is owned and operated by its founder,{" "}
           <strong>Shokhabbos Makhmudov</strong>.
         </p>
-        <p className="legal-updated">Last updated October 19, 2026</p>
+        <p className="legal-updated">Last updated November 3, 2026</p>
         <section>
           <h2>Local-first by default</h2>
           <p>
@@ -36,9 +36,10 @@ export default function PrivacyPage() {
             account stores only: your email address,
             an optional display name, a Google subject id when you use Google
             sign-in, hashed session tokens, your subscription status, your
-            weekly email setting and the weeks it was sent, and — if you enable
-            Pro cloud sync — your own synced keyword data. We store nothing
-            else about you.
+            weekly email setting and the weeks it was sent, the AI apps and API
+            keys you connect (hashed tokens, names and dates) with a daily count
+            of their App Store checks, and — if you enable Pro cloud sync — your
+            own synced keyword data. We store nothing else about you.
           </p>
         </section>
         <section>
@@ -64,6 +65,20 @@ export default function PrivacyPage() {
             contains no personal data itself. The hosting provider may keep
             standard infrastructure logs (for example, for abuse prevention),
             which are not used to profile visitors.
+          </p>
+        </section>
+        <section>
+          <h2>AI agents (MCP)</h2>
+          <p>
+            If you connect an AI app such as ChatGPT, Claude, Codex or Cursor
+            to AppClimb, it calls AppClimb on your behalf with a token you
+            approved; you can disconnect it at any time on the Connect page.
+            The keywords and app IDs it asks about are looked up on the App
+            Store through a server AppClimb runs for this purpose (hosted by
+            Hostinger), which sees the search terms but not who asked and keeps
+            Apple&apos;s answers in memory for a few hours as a cache. AppClimb
+            does not keep a record of the keywords your agent checks. What the AI app does
+            with the results is governed by that app&apos;s own privacy policy.
           </p>
         </section>
         <section>

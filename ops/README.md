@@ -84,3 +84,30 @@ retained Vercel deployment) are documented in
 including tags `archive/pre-growth-ci-2026-07-28` and
 `archive/pre-aso-tool-2026-08-02` — is the recovery path for prior product
 architectures.
+
+## iTunes proxy for agents (ADR 0008)
+
+Apple rejects Cloudflare Worker IPs on the iTunes Search API, so the MCP
+endpoint (`/mcp`) reaches `/search` and `/lookup` through a small proxy on the
+shared Hostinger VPS. The browser explorer does not use it.
+
+- Code: [`ops/itunes-proxy`](./itunes-proxy) (Node 22, no dependencies).
+- Runs as container `appclimb-itunes` from `/opt/apps/appclimb-itunes`
+  (Compose project `appclimb-itunes`, network `hortiops_default`, 256 MB cap).
+- Public URL: `https://appclimb-itunes.srv1300823.hstgr.cloud` (route in
+  `/opt/hortiops/deploy/Caddyfile`; a backup of the file before the route was
+  added sits next to it as `Caddyfile.pre-appclimb-itunes-*`).
+- Auth: `Authorization: Bearer <PROXY_SECRET>`. The secret lives in
+  `/opt/apps/appclimb-itunes/.env` (mode 600), locally in
+  `/Volumes/LexarDev/Developer/Keys/appclimb/itunes-proxy-secret`, and as the
+  Worker secrets `ITUNES_PROXY_URL` and `ITUNES_PROXY_SECRET` (production and
+  staging).
+- Health: `curl https://appclimb-itunes.srv1300823.hstgr.cloud/health`
+  (cache size, hits, misses, upstream errors, throttled requests).
+- Update: copy `server.mjs`, `Dockerfile`, `docker-compose.yml` to
+  `/opt/apps/appclimb-itunes/`, then `docker compose up -d --build` there.
+- Rotate the secret: write a new value to the VPS `.env` and both Worker
+  secrets, then `docker compose up -d` (agent checks fail between the two
+  steps).
+- If it is down, agent App Store tools return a clear error; Apple-data tools
+  and the website are unaffected.

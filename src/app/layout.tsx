@@ -22,6 +22,7 @@ import "./assistant.css";
 import "./pricing.css";
 import "./upgrade.css";
 import "./guide.css";
+import "./connect.css";
 
 /*
  * Typography — same pairing as cardealertracker.app.

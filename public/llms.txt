@@ -19,6 +19,10 @@ AppClimb helps iOS developers find App Store keywords they can actually rank for
 - Free account ($0): 30 new keyword checks/day, plus rank tracking for 1 app with 25 keywords and the AI assistant (5 messages/day). Data stays local.
 - Pro ($8/month or $64/year): unlimited checks, 52 weeks of Apple popularity history, unlimited tracked apps and keywords, 90 days of rank history, AI assistant 200 messages/day, cloud sync across devices, a weekly email with rank and popularity changes. Billing via Paddle (merchant of record); cancel anytime.
 
+## Use AppClimb from an AI agent (MCP)
+
+AppClimb runs a remote MCP server at https://appclimb.app/mcp (Streamable HTTP, OAuth sign-in with a free AppClimb account, or a personal API key as a Bearer token). Tools: analyze_keywords, get_keyword_popularity, find_related_keywords, autocomplete_keywords, get_trending_keywords, search_apps, get_app_keyword_ideas, check_app_rankings, build_keyword_field, get_account. Setup for ChatGPT, Claude, Claude Code, Codex and Cursor: https://appclimb.app/connect
+
 ## Key pages
 
 - Keyword explorer: https://appclimb.app/
@@ -31,6 +35,7 @@ AppClimb helps iOS developers find App Store keywords they can actually rank for
 - AppTweak free alternative: https://appclimb.app/blog/apptweak-free-alternative
 - Apple Ads popularity explained: https://appclimb.app/blog/apple-search-ads-popularity-score-explained
 - Field notes: https://appclimb.app/blog
+- Connect an AI agent (MCP server): https://appclimb.app/connect
 - Pricing: https://appclimb.app/pricing
 - Machine-readable plan spec: https://appclimb.app/pricing.md
 - Full LLM knowledge bundle: https://appclimb.app/llms-full.txt

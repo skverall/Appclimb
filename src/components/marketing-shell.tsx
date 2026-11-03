@@ -122,6 +122,7 @@ export function MarketingFooter() {
           <Link href="/assistant">ASO Assistant</Link>
           <Link href="/guides/keyword-research">ASO Guide</Link>
           <Link href="/tools/keyword-field-checker">Keyword field checker</Link>
+          <Link href="/connect">Connect your AI agent (MCP)</Link>
           <Link href="/blog">Field Notes</Link>
         </div>
         <div>

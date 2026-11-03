@@ -51,6 +51,15 @@ export const PUBLIC_PAGES = [
     lastModified: SITE_UPDATED,
   },
   {
+    path: "/connect",
+    title: "Connect AppClimb to your AI agent (MCP)",
+    description:
+      "AppClimb's MCP server for ChatGPT, Claude, Claude Code, Codex and Cursor: Apple popularity, difficulty with evidence, verdicts and rankings for your agent.",
+    changeFrequency: "monthly" as const,
+    priority: 0.8,
+    lastModified: SITE_UPDATED,
+  },
+  {
     path: "/blog",
     title: "AppClimb Field Notes",
     description:
