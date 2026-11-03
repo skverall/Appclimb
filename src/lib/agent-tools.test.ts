@@ -15,7 +15,7 @@ const SUBJECT = "user:user-1";
 const LATEST_WEEK = "2026-10-25";
 const MIGRATIONS = loadAllMigrationsSql();
 const BUSY = "The App Store is rate-limiting searches right now. Wait about a minute and retry the remaining keywords.";
-const FREE_LIMIT = `The Free plan includes 30 App Store checks a day and today's are used up. They reset at 00:00 UTC; Pro is unlimited: ${ORIGIN}/pricing`;
+const FREE_LIMIT = `The Free plan includes 30 App Store checks a day and today's are used up. They reset at 00:00 UTC. Plan details: ${ORIGIN}/pricing`;
 const PRO_LIMIT = `Today's fair-use limit of ${AGENT_PRO_DAILY_CHECKS} App Store checks is used up. It resets at 00:00 UTC.`;
 const OOPS = "Something went wrong on AppClimb's side. Try again in a moment.";
 
@@ -887,7 +887,7 @@ describe("get_account", () => {
         resets: "00:00 UTC",
         apple_history_weeks: 12,
         storefronts: SUPPORTED_COUNTRIES.map((country) => country.code),
-        upgrade_url: `${ORIGIN}/pricing`,
+        plans_url: `${ORIGIN}/pricing`,
       },
     });
   });
@@ -901,7 +901,7 @@ describe("get_account", () => {
       app_store_checks_left_today: AGENT_PRO_DAILY_CHECKS,
       apple_history_weeks: 52,
     });
-    expect(result.structured.upgrade_url).toBeUndefined();
+    expect(result.structured.plans_url).toBeUndefined();
   });
 
   it("never reports a negative balance", async () => {

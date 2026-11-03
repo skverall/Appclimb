@@ -39,6 +39,10 @@ the limits, adds 52 weeks of Apple history, and cloud sync.
   search stays open. Tracking and the assistant require a free account. The
   account chrome appears when `NEXT_PUBLIC_PRO_ENABLED=1` or when
   `GET /api/me` reports `configured: true`.
+- **Agent access (ADR 0008)** — remote MCP server at `/mcp`, setup on
+  `/connect`. Listed in the official MCP Registry from `server.json`;
+  Claude/ChatGPT directory status and submission texts are in
+  [docs/mcp-directory-submissions.md](./docs/mcp-directory-submissions.md).
 - **Marketing pages** — `/app-store-keywords`, `/guides/keyword-research`,
   `/blog` (+ 4 notes), `/about`, `/pricing`, `/privacy`, `/terms`, `/refunds`.
 

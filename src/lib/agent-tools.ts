@@ -134,7 +134,7 @@ export const AGENT_TOOLS: AgentToolDefinition[] = [
   tool(
     "get_keyword_popularity",
     "Apple keyword popularity",
-    "Apple's official popularity (1–100 relative score from Apple Ads, not search volume) for up to 25 exact search terms, with the change over 4 and 12 weeks and, optionally, Apple's weekly history (12 weeks on Free, 52 on Pro). Terms Apple does not publish are long tail: popularity is at or below the returned ceiling. Free; does not use daily checks.",
+    "Apple's official popularity (1–100 relative score from Apple Ads, not search volume) for up to 25 exact search terms, with the change over 4 and 12 weeks and, optionally, Apple's weekly history (12 or 52 weeks, depending on the account's plan). Terms Apple does not publish are long tail: popularity is at or below the returned ceiling. Free; does not use daily checks.",
     {
       keywords: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 25 },
       country: COUNTRY_PARAM,
@@ -295,7 +295,7 @@ function searchFailedMessage(error: unknown): string {
 function limitMessage(ctx: AgentToolContext, limit: number): string {
   return ctx.plan === "pro"
     ? `Today's fair-use limit of ${limit} App Store checks is used up. It resets at 00:00 UTC.`
-    : `The ${PLAN_NAMES[ctx.plan]} plan includes ${limit} App Store checks a day and today's are used up. They reset at 00:00 UTC; Pro is unlimited: ${ctx.origin}/pricing`;
+    : `The ${PLAN_NAMES[ctx.plan]} plan includes ${limit} App Store checks a day and today's are used up. They reset at 00:00 UTC. Plan details: ${ctx.origin}/pricing`;
 }
 
 async function takeChecks(ctx: AgentToolContext, wanted: number): Promise<{ granted: number; limit: number }> {
@@ -661,7 +661,7 @@ async function account(ctx: AgentToolContext): Promise<AgentToolResult> {
       resets: "00:00 UTC",
       apple_history_weeks: limits.historyWeeks,
       storefronts: COUNTRY_CODES,
-      upgrade_url: ctx.plan === "pro" ? undefined : `${ctx.origin}/pricing`,
+      plans_url: ctx.plan === "pro" ? undefined : `${ctx.origin}/pricing`,
     },
   };
 }

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "app.appclimb/mcp",
+  "title": "AppClimb",
+  "description": "App Store keyword research: Apple popularity, difficulty with evidence, verdicts and app rankings.",
+  "version": "1.0.0",
+  "websiteUrl": "https://appclimb.app/connect",
+  "repository": {
+    "url": "https://github.com/skverall/Appclimb",
+    "source": "github"
+  },
+  "icons": [
+    {
+      "src": "https://appclimb.app/icons/v2/icon-512.png",
+      "mimeType": "image/png",
+      "sizes": ["512x512"]
+    },
+    {
+      "src": "https://appclimb.app/icons/v2/icon.svg",
+      "mimeType": "image/svg+xml",
+      "sizes": ["any"]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://appclimb.app/mcp"
+    }
+  ]
+}

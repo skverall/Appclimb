@@ -129,7 +129,7 @@ export function AgentAccessPanel() {
           {state.plan === "free" ? (
             <>
               {" "}
-              · <a href="/pricing">Pro is unlimited</a>
+              · <a href="/pricing">Pro allows 1,000 a day</a>
             </>
           ) : null}
         </p>

@@ -217,6 +217,16 @@ test("crawl and agent discovery endpoints are public and coherent", async ({
     const response = await request.get(endpoint);
     expect(response.ok(), `${endpoint} should return 200`).toBe(true);
   }
+
+  // The MCP Registry fetches this proof with no redirects and wants plain text.
+  const registryProof = await request.get("/.well-known/mcp-registry-auth", {
+    maxRedirects: 0,
+  });
+  expect(registryProof.status()).toBe(200);
+  expect(registryProof.headers()["content-type"]).toContain("text/plain");
+  expect(await registryProof.text()).toMatch(
+    /^v=MCPv1; k=ed25519; p=[A-Za-z0-9+/]{43}=\n$/,
+  );
 });
 
 test("every canonical sitemap page returns a successful document", async ({

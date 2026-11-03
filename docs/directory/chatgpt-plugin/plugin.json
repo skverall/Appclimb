@@ -1,0 +1,35 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "appclimb",
+  "version": "1.0.0",
+  "description": "App Store keyword research for iOS apps: Apple's official popularity, difficulty with evidence, a verdict per keyword, live rankings, and the 100-character keyword field.",
+  "author": {
+    "name": "Shokhabbos Makhmudov",
+    "url": "https://appclimb.app"
+  },
+  "homepage": "https://appclimb.app/connect",
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "AppClimb",
+        "shortDescription": "App Store keyword research",
+        "longDescription": "AppClimb helps iOS developers find App Store keywords their app can actually rank for, using Apple's own data.\n\nWhat you can ask for:\n- Keyword ideas for your app, read from its App Store listing, each with Apple's popularity score.\n- A full check of up to 10 keywords: Apple's official popularity (1-100, from Apple Ads), an estimated difficulty (1-99) with the evidence behind it from the live top 10, a verdict (Worth targeting, Long-tail win, Competitive, Low demand or Dominated) with the reason, the apps ranking now, and your app's current rank.\n- Where your app ranks today for up to 25 keywords (positions 1-200).\n- Related searches, autocomplete and trending searches from the terms Apple publishes each week, with up to a year of Apple's weekly popularity history.\n- A ready 100-character keyword field for App Store Connect, without words already in your title or subtitle.\n\nWho it is for: indie iOS developers and small app teams doing App Store Optimization (ASO).\n\nLimitations: popularity is Apple's relative 1-100 score, not search volume. Terms Apple does not publish only get a ceiling. Difficulty is an estimate and always comes with its evidence. Live App Store checks use the AppClimb account's daily allowance; the Apple popularity tools do not. All tools are read-only: AppClimb never changes anything in App Store Connect or in your account. Requires an AppClimb account (sign in with Google or an email link).",
+        "developerName": "Shokhabbos Makhmudov",
+        "category": "Developer Tools",
+        "capabilities": ["Read"],
+        "websiteURL": "https://appclimb.app",
+        "supportURL": "https://github.com/skverall/Appclimb/issues",
+        "privacyPolicyURL": "https://appclimb.app/privacy",
+        "termsOfServiceURL": "https://appclimb.app/terms",
+        "defaultPrompt": [
+          "Find App Store keywords my app can realistically rank for.",
+          "Analyze 'habit tracker' and 'daily planner' for the US App Store.",
+          "Which App Store searches are trending in Health & Fitness this month?"
+        ],
+        "brandColor": "#08787D",
+        "logo": "./assets/logo.png",
+        "composerIcon": "./assets/composer-icon.png"
+      }
+    }
+  }
+}

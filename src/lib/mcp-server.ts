@@ -23,6 +23,10 @@ export const SERVER_INFO = {
   title: "AppClimb",
   version: "1.0.0",
   websiteUrl: "https://appclimb.app/connect",
+  icons: [
+    { src: "https://appclimb.app/icons/v2/icon-512.png", mimeType: "image/png", sizes: ["512x512"] },
+    { src: "https://appclimb.app/icons/v2/icon.svg", mimeType: "image/svg+xml", sizes: ["any"] },
+  ],
 };
 
 export const SERVER_INSTRUCTIONS = [
