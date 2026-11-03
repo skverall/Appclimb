@@ -7,6 +7,7 @@ import { MarketingShell } from "@/components/marketing-shell";
 import { clientDisplayName, getAuthorizationRequest } from "@/lib/agent-auth";
 import { SESSION_COOKIE, getSessionByToken } from "@/lib/auth";
 import { getDb } from "@/lib/db";
+import { readReviewLoginConfig } from "@/lib/review-login";
 
 export const dynamic = "force-dynamic";
 
@@ -83,7 +84,11 @@ export default async function ConsentPage({ searchParams }: { searchParams: Sear
           email={session.user.email}
         />
       ) : (
-        <AgentSignIn nextPath={`/oauth/consent?request=${encodeURIComponent(pending.id)}`} clientName={clientName} />
+        <AgentSignIn
+          nextPath={`/oauth/consent?request=${encodeURIComponent(pending.id)}`}
+          clientName={clientName}
+          reviewLogin={readReviewLoginConfig() !== null}
+        />
       );
     }
   }

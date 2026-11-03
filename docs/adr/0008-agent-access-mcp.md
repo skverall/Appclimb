@@ -42,6 +42,11 @@ chat.
   existing Google / magic-link flow. Headless agents can use personal API
   keys created on `/connect`. Only SHA-256 hashes of codes and tokens are
   stored.
+- App-directory reviewers (Claude, ChatGPT) must sign in with a password and
+  no email link, so one reviewer account can sign in with a password on
+  `/oauth/consent` (`src/lib/review-login.ts`). It exists only while the
+  `REVIEW_LOGIN_EMAIL` / `REVIEW_LOGIN_PASSWORD_HASH` secrets are set, is Pro
+  while configured, and is never email-verified (no weekly email).
 - Quotas: an App Store check (one keyword analyzed or rank-checked, or one
   app read) draws on a durable per-user daily counter (`agent_usage`):
   the plan's explorer allowance (30/day free) and a 1,000/day fair-use cap on

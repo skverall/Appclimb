@@ -42,7 +42,9 @@ the limits, adds 52 weeks of Apple history, and cloud sync.
 - **Agent access (ADR 0008)** — remote MCP server at `/mcp`, setup on
   `/connect`. Listed in the official MCP Registry from `server.json`;
   Claude/ChatGPT directory status and submission texts are in
-  [docs/mcp-directory-submissions.md](./docs/mcp-directory-submissions.md).
+  [docs/mcp-directory-submissions.md](./docs/mcp-directory-submissions.md),
+  including the one password sign-in for directory reviewers
+  (`src/lib/review-login.ts`, off unless its secrets are set).
 - **Marketing pages** — `/app-store-keywords`, `/guides/keyword-research`,
   `/blog` (+ 4 notes), `/about`, `/pricing`, `/privacy`, `/terms`, `/refunds`.
 

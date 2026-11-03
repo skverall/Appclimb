@@ -4,6 +4,7 @@
  * is responsible for keeping the `subscriptions` row up to date.
  */
 import { isProEntitled, type PlanId } from "./plan";
+import { isReviewAccount } from "./review-login";
 
 export interface SubscriptionRecord {
   user_id: string;
@@ -31,6 +32,8 @@ export async function getSubscription(
 export async function getPlanForUser(db: D1Database, userId: string): Promise<PlanId> {
   const sub = await getSubscription(db, userId);
   if (sub && isProEntitled(sub)) return "pro";
+  // The app-directory reviewer account must not run out of checks mid-review.
+  if (await isReviewAccount(db, userId)) return "pro";
   return "free";
 }
 

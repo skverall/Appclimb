@@ -13,8 +13,8 @@ Nothing is submitted to Claude or ChatGPT without the owner's explicit yes.
 | Directory | Status |
 | --- | --- |
 | Official MCP Registry | Published 2026-11-03: `app.appclimb/mcp` 1.0.0, status active |
-| Claude connectors directory | Ready except blockers B1–B4 and owner-only steps |
-| ChatGPT apps (plugins) directory | Package ready in `docs/directory/chatgpt-plugin/`; blocked on B1–B4, OpenAI verification, demo video |
+| Claude connectors directory | Ready except blockers B3–B4 and owner-only steps |
+| ChatGPT apps (plugins) directory | Package ready in `docs/directory/chatgpt-plugin/`; blocked on B3–B4, OpenAI verification, demo video |
 
 ## 1. Official MCP Registry
 
@@ -46,27 +46,44 @@ If login fails, check the proof from outside: the registry fetches it from
 Google Cloud with no redirects, a 10 s timeout and a 4 KB limit, so a
 Cloudflare bot rule or WAF challenge on `/.well-known/*` breaks it.
 
-## 2. Blockers for both directories (owner decisions)
+## 2. Blockers for both directories
 
-**B1. Reviewer test account without email links.** Both directories require
-reviewer credentials for a fully populated account. ChatGPT is explicit: it
-must work "without MFA approval, email or SMS codes, magic links". AppClimb
-signs in only with Google or an email magic link, so a reviewer cannot get in.
-Options:
+**B1. Reviewer test account without email links — done (2026-11-03).** Both
+directories require reviewer credentials for a fully populated account, and
+ChatGPT's must work "without MFA approval, email or SMS codes, magic links".
+AppClimb otherwise signs in only with Google or an email link, so there is a
+password sign-in for exactly one reviewer account (`src/lib/review-login.ts`,
+`POST /api/auth/review-login`):
 
-1. Recommended: a reviewer password sign-in, enabled only for one email set
-   in Worker secrets (`REVIEW_LOGIN_EMAIL`, `REVIEW_LOGIN_PASSWORD_HASH`),
-   rate-limited, shown on `/oauth/consent` only when those secrets exist. It is a
-   small, security-sensitive code change, so it needs the owner's yes.
-2. A dedicated Google account for reviewers. Creating it is the owner's step,
-   and Google often asks a new-device login to "verify it's you", which fails
-   review.
+- On by two Worker secrets, `REVIEW_LOGIN_EMAIL` and
+  `REVIEW_LOGIN_PASSWORD_HASH` (PBKDF2-SHA256, 100,000 iterations). With
+  either missing, the route answers 404 and the form is not rendered.
+- `/oauth/consent` shows a collapsed "App directory reviewer? Sign in with a
+  password" link under the normal sign-in. It signs the reviewer in and
+  returns to the same consent request.
+- 10 attempts per 15 minutes per IP, same-origin requests only, a wrong email
+  is refused before any hashing.
+- The account is created on first sign-in and never marked email-verified, so
+  it gets no weekly email.
 
-**B2. Pro for the reviewer account.** A free account has 30 App Store checks
-a day; five test cases with `analyze_keywords` can use them up. The reviewer
-account should be Pro, which today means a `subscriptions` row in production
-D1 (`status` active, far-future period end). That is a manual production
-write, so it needs the owner's yes.
+Credentials: `/Volumes/LexarDev/Developer/Keys/appclimb/directory-reviewer.txt`
+(email and password; paste them only into the portals' private reviewer
+fields). Rotate or set them:
+
+```bash
+PW=$(mktemp) && openssl rand -base64 24 | tr -d '\n' > "$PW"   # copy it into the Keys file
+node scripts/hash-review-password.mjs < "$PW" | npx wrangler secret put REVIEW_LOGIN_PASSWORD_HASH
+printf 'review@appclimb.app' | npx wrangler secret put REVIEW_LOGIN_EMAIL
+rm "$PW"
+```
+
+To switch it off after the reviews: `npx wrangler secret delete REVIEW_LOGIN_PASSWORD_HASH`.
+
+**B2. Pro for the reviewer account — done (2026-11-03).** A free account has
+30 App Store checks a day; five test cases can use them up. `getPlanForUser`
+returns Pro for the configured reviewer email (1,000 agent checks a day,
+52 weeks of history). No subscription row or Paddle data is involved, and it
+ends when the secrets are removed.
 
 **B3. Privacy policy gaps.** ChatGPT requires the policy to cover "categories
 of personal data collected, purposes of use, categories of recipients, data
@@ -142,7 +159,7 @@ Verified.
 | Privacy policy URL | URL ready (`https://appclimb.app/privacy`); content gaps in B3 |
 | Support contact | B4 |
 | Icon | Ready: `public/icons/v2/icon-512.png` (also `icon.svg`); `serverInfo.icons` now set |
-| Test account (fully populated) | Blocked: B1, B2 |
+| Test account (fully populated) | Ready: reviewer password sign-in, Pro (B1, B2) |
 | Tested every tool as a custom connector / MCP Inspector | Owner confirms in the portal (tools were run live on 2026-11-03) |
 | Seven compliance acknowledgments | Owner, in the portal |
 
@@ -204,11 +221,11 @@ Anthropic-held client credentials are needed.
 **Data handling**: The underlying API is AppClimb's own (see the note under
 section 2). No personal health data. No sponsored content.
 
-**Test & launch instructions** (fill in once B1/B2 are done):
+**Test & launch instructions** (credentials from the Keys file above):
 
 ```text
 1. In Claude, add the connector and click Connect. You are sent to appclimb.app/oauth/consent.
-2. Sign in with the reviewer account: [email] / [password] (Pro plan, no MFA, no email link).
+2. Below the normal sign-in, open "App directory reviewer? Sign in with a password" and sign in with: [email] / [password]. The account is on Pro; no MFA, no email link.
 3. Click "Allow" to approve Claude. You return to Claude, connected.
 4. Try: "Use AppClimb to find keywords the app Duolingo could rank for in the US", "Analyze 'habit tracker' and 'meditation' in the US", "Which App Store searches are trending in Health & Fitness?", "Where does Duolingo rank for 'learn spanish' and 'language learning'?", "Build a keyword field from: habit tracker, daily routine, streaks, goals; title 'Streaks', subtitle 'Habit tracker & to-do list'".
 5. get_account shows the plan and the App Store checks left today. All tools are read-only.
@@ -247,9 +264,9 @@ both if the owner verifies as the company instead.
 | Logo + composer icon (square, ≥48 px) | Ready |
 | Domain verification `/.well-known/openai-apps-challenge` | Route ready; owner pastes the dashboard token: `npx wrangler secret put OPENAI_APPS_CHALLENGE`, then Verify Domain |
 | Privacy policy covers all personal data, retention, controls | Blocked: B3 |
-| Reviewer login + password, no MFA/email codes, sample data | Blocked: B1, B2 |
+| Reviewer login + password, no MFA/email codes, sample data | Ready (B1, B2); the tools need no sample data, they read Apple's |
 | 5 positive + 3 negative test cases | Drafted below; run them against the reviewer account first |
-| Demo video URL (main use cases across ChatGPT surfaces) | Missing: record after B1 |
+| Demo video URL (main use cases across ChatGPT surfaces) | Missing: record a walkthrough in ChatGPT with the reviewer account |
 | OpenAI individual/business verification | Owner |
 | Commerce declaration | None: the plugin sells nothing |
 | Countries | Omit (no restriction) unless the owner wants a list |

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Loader2, Mail, ShieldCheck } from "lucide-react";
+import { Check, KeyRound, Loader2, Mail, ShieldCheck } from "lucide-react";
 
 import { requestMagicLink } from "@/lib/account";
 
@@ -14,7 +14,95 @@ const CAN_DO = [
 
 const CANNOT_DO = ["See or change billing", "Change your account or email", "Read your tracked apps"];
 
-export function AgentSignIn({ nextPath, clientName }: { nextPath: string; clientName: string }) {
+/**
+ * Email + password sign-in for the one app-directory reviewer account
+ * (src/lib/review-login.ts). Rendered only when that account is configured.
+ */
+function ReviewerSignIn({ nextPath }: { nextPath: string }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const signIn = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/auth/review-login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim(), password, next: nextPath }),
+      });
+      const data = (await response.json().catch(() => ({}))) as { next?: string; error?: string };
+      if (!response.ok || !data.next) {
+        setBusy(false);
+        setError(data.error ?? "Could not sign in.");
+        return;
+      }
+      window.location.assign(data.next);
+    } catch {
+      setBusy(false);
+      setError("Network error. Try again.");
+    }
+  };
+
+  return (
+    <details className="agent-consent-reviewer">
+      <summary>App directory reviewer? Sign in with a password</summary>
+      <form
+        className="auth-email-form"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void signIn();
+        }}
+      >
+        <label className="auth-email-field">
+          <span>Reviewer email</span>
+          <input
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            autoComplete="username"
+            maxLength={254}
+            required
+            disabled={busy}
+          />
+        </label>
+        <label className="auth-email-field">
+          <span>Password</span>
+          <input
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            autoComplete="current-password"
+            maxLength={256}
+            required
+            disabled={busy}
+          />
+        </label>
+        <button type="submit" className="tracker-button-secondary" disabled={busy}>
+          {busy ? <Loader2 className="spin" size={15} aria-hidden="true" /> : <KeyRound size={15} aria-hidden="true" />}
+          {busy ? "Signing in…" : "Sign in"}
+        </button>
+        {error && (
+          <p className="agent-consent-error" role="alert">
+            {error}
+          </p>
+        )}
+      </form>
+    </details>
+  );
+}
+
+export function AgentSignIn({
+  nextPath,
+  clientName,
+  reviewLogin = false,
+}: {
+  nextPath: string;
+  clientName: string;
+  reviewLogin?: boolean;
+}) {
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [sent, setSent] = useState(false);
@@ -91,6 +179,7 @@ export function AgentSignIn({ nextPath, clientName }: { nextPath: string; client
           </p>
         )}
       </form>
+      {reviewLogin && <ReviewerSignIn nextPath={nextPath} />}
     </div>
   );
 }

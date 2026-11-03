@@ -404,3 +404,24 @@
   color: var(--ink-muted);
   font-size: var(--text-xs);
 }
+
+.agent-consent-reviewer {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.agent-consent-reviewer summary {
+  width: fit-content;
+  color: var(--ink-muted);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.agent-consent-reviewer[open] summary {
+  margin-bottom: 12px;
+}
+
+.agent-consent-reviewer .tracker-button-secondary {
+  justify-content: center;
+  height: var(--control-h-lg);
+}
